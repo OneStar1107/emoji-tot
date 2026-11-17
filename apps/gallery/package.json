@@ -1,5 +1,5 @@
 {
-  "name": "@emojibot-studio/demo",
+  "name": "@emojibot-studio/gallery",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -15,5 +15,6 @@
   },
   "devDependencies": {
     "vite": "^6.0.0"
-  }
+  },
+  "description": "Browse every emotion id, every drawing style, and copy the snippet that reproduces it"
 }

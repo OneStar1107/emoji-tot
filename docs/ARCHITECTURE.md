@@ -61,30 +61,38 @@ fork 会带上全部历史与上游文件结构，之后每次上游更新都变
 
 emotion-ball 的卖点是无构建接入。但融合后画法来自 aora 引擎（必须走模块系统）。
 折中：
-- `apps/demo` 用 Vite，本地开发体验好；
+- `apps/gallery` 用 Vite，本地开发体验好；
 - aora 的 `@aora-bot/element` 自带 CDN 构建（`dist/aora-bot.js`），
   「一行 script」的路径依然存在，见 README 的接入段落（后续补 `examples/cdn.html`）。
 
 ### ADR-5 静态渲染进 CI
 
-`renderStaticSvg` 无 DOM 无计时器，输出确定。`apps/demo/scripts/preview.mjs` 在 Node 里
+`renderStaticSvg` 无 DOM 无计时器，输出确定。`apps/gallery/scripts/preview.mjs` 在 Node 里
 把 51 个 id 渲染成 SVG，任何状态渲染失败都会让脚本退出码非零。
 这样「表情坏了」不需要开浏览器就能发现。
 
 ## 4. 分层
 
 ```
-@aora-bot/engine          （npm 依赖，画法与模拟）
+@aora-bot/engine             （npm 依赖，画法与模拟）
         ↑
-@emojibot-studio/protocol  （本仓库，纯逻辑，零依赖）
+@emojibot-studio/protocol    （本仓库，纯逻辑，零依赖）
         ↑
-apps/demo                 （本仓库，UI）
+apps/gallery · apps/desktop  （本仓库，两个宿主）
 ```
 
-protocol 不认识引擎，也不认识 DOM。demo 把两者接起来：协议决定 state，引擎负责画。
+protocol 不认识引擎，也不认识 DOM。宿主把两者接起来：协议决定 state，引擎负责画。
+
+两个宿主的接法不同，这是有意的：
+
+- **gallery** 用 Vite，import 引擎与协议，网格里的 51 张图由 `renderStaticSvg` 在浏览器里画；
+- **desktop** 不打包渲染进程：主进程 `require` 协议包（所以 protocol 同时产出 ESM 与 CommonJS），
+  渲染进程用 `<script type="module">` 加载引擎的单文件构建（`vendor/aora-bot.js`，从 npm 包原样复制）。
 
 ## 5. 已知代价
 
 - **两套 id 表**：上游与本仓库各一份，靠 parity 测试对齐。上游重构目录时测试会失败，需要人工跟。
 - **引擎版本锁定**：`@aora-bot/engine` 目前钉 0.2.0。上游发 0.3 时先跑 parity 与 preview，再升。
-- **画法参数未透出**：demo 只暴露 style 与 variant，引擎的 `styleOptions` 还没做面板。
+- **画法参数未透出**：gallery 只暴露 style 与 shape，引擎的 `styleOptions` 还没做面板。
+- **静态图的配色靠改字符串**：静态渲染把 ink 写成 `prefers-color-scheme` 媒体查询，
+  页面钉死配色时只能重写这段查询。这是上游输出的形状决定的，升级时要复查。

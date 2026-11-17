@@ -12,6 +12,6 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter @emojibot-studio/demo dev"
+    "dev": "pnpm --filter @emojibot-studio/gallery dev"
   }
 }

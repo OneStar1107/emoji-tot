@@ -28,7 +28,7 @@ id 按十年分段，接不认识的 id 也不会白屏——它知道大概是�
 
 ```
 packages/protocol/   零运行时依赖：协议表、解析、多会话仲裁、事件桥
-apps/demo/           单页演示：输入一个 id，球就变脸；含无头渲染冒烟与状态墙
+apps/gallery/        展示馆：51 个状态 × 3 种画法，点开一个就拿到能跑的代码
 apps/desktop/        桌面宠物：透明置顶窗口 + 托盘 + 右键菜单，读一个文件驱动
 ```
 
@@ -36,8 +36,8 @@ apps/desktop/        桌面宠物：透明置顶窗口 + 托盘 + 右键菜单�
 
 ```bash
 pnpm install
-pnpm --filter @emojibot-studio/demo dev      # 打开 http://localhost:5173
-node apps/demo/scripts/preview.mjs          # 无头验证 51 个状态，生成 out/preview.html
+pnpm --filter @emojibot-studio/gallery dev      # 打开 http://localhost:5173
+node apps/gallery/scripts/preview.mjs          # 无头验证 51 个状态，生成 out/preview.html
 pnpm --filter @emojibot-studio/protocol test # 27 个测试，含与上游逐行比对
 ```
 
@@ -49,14 +49,17 @@ pnpm --filter @emojibot-studio/protocol test # 27 个测试，含与上游逐行
   失败必须马上看见；不紧急的事件仍然排队，避免连续事件把脸刷成闪烁。
 - **画法来自引擎**：同一份 state 出 vector / pixel / kaomoji 三种画法，52 个 id 全部有静态渲染。
 - **无浏览器也能验证**：`preview.mjs` 在 Node 里把 51 个状态渲染成 SVG 并排成墙。
+- **展示馆不用手抄代码**：点开任意一张卡片，得到可以直接粘进项目的两行。
+  切换画法时 51 张静态图一起重画；「反色」钉死页面配色，静态图跟着重写媒体
+  查询（用 CSS invert 会把腮红和感叹号一起反掉）。
 - **桌面端读文件就够**：透明置顶窗口 + 托盘 + 右键菜单，外部只写 `state.json`。
   坏 JSON 不会让脸消失（保留当前表情），裸 id、JSON 串、JSON 对象三种写法都收。
 
 ## 还没做
 
-- 展示馆（浏览全部状态与画法、调参数、复制接入代码）
 - 贴边收起、鼠标穿透、Codex 类联动
-- 发布准备（CI、首个 release）
+- 参数面板（`styleOptions` 还没透出）
+- CI、首个 release
 
 ## 许可
 

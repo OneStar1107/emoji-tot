@@ -8,7 +8,20 @@ importers:
 
   .: {}
 
-  apps/demo:
+  apps/desktop:
+    dependencies:
+      '@emojibot-studio/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      electron:
+        specifier: ^33.0.0
+        version: 33.4.11
+      electron-builder:
+        specifier: ^25.1.8
+        version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
+
+  apps/gallery:
     dependencies:
       '@aora-bot/element':
         specifier: 0.2.0
@@ -23,19 +36,6 @@ importers:
       vite:
         specifier: ^6.0.0
         version: 6.4.6(@types/node@20.19.43)
-
-  apps/desktop:
-    dependencies:
-      '@emojibot-studio/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-    devDependencies:
-      electron:
-        specifier: ^33.0.0
-        version: 33.4.11
-      electron-builder:
-        specifier: ^25.1.8
-        version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
 
   packages/protocol:
     devDependencies:
