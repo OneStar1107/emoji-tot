@@ -7,7 +7,7 @@
  */
 import { THEME_MANIFEST, isThemeInstalled, loadTheme } from '@aora-bot/engine';
 import { renderStaticSvg } from '@aora-bot/engine/static';
-import { t } from './i18n';
+import { getLang, t } from './i18n';
 
 function pinSvg(svg: string): string {
   return svg.replaceAll('@media (prefers-color-scheme: dark)', '@media all');
@@ -25,7 +25,7 @@ export function createThemes(): HTMLElement {
         (t) => `<button type="button" class="theme-card" data-theme="${t.id}">
           <span class="theme-art" data-art="${t.id}"></span>
           <span class="theme-name">${t.name.zh}<small>${t.name.en}</small></span>
-          <span class="theme-meta">${t.shapes.length} shapes · ${t.cast.length} cast</span>
+          <span class="theme-meta">${t.shapes.length} ${getLang() === 'zh' ? '形状' : 'shapes'} · ${t.cast.length} ${getLang() === 'zh' ? '角色' : 'cast'}</span>
         </button>`,
       ).join('')}
     </section>
