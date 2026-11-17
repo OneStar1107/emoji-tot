@@ -48,7 +48,7 @@ export const FAMILIES: readonly { id: string; zh: string; en: string }[] = [
 type Row = [string, string, string, string, string, string, string, string, string, string];
 
 const RAW: Row[] = [
-  ['bot', 'bot', 'bot', 'round', 'circle', 'black', '', 'idle', 'pulse', '默认的演示角色。黑底白字的一个圆，什么表情都从它开始。'],
+  ['tot', 'tot', 'tot', 'round', 'circle', 'black', '', 'idle', 'pulse', '默认的演示角色。黑底白字的一个圆，什么表情都从它开始。'],
   ['dan', '蛋仔', 'Eggy', 'round', 'egg', 'cream', '', 'happy', 'wobble', '上窄下宽的蛋形，站稳了就是一副好脾气。'],
   ['fangtang', '方糖', 'Cube', 'square', 'squircle', 'white', 'spots', 'happy', 'pop', '方圆带一点斑，甜是慢慢化开的。'],
   ['guodong', '果冻', 'Jelly', 'round', 'blob', 'cyan', '', 'playful', 'wobble', '软圆，站着不动也在轻轻颤。'],
@@ -62,7 +62,7 @@ const RAW: Row[] = [
   ['lizi', '梨子', 'Pear', 'fruit', 'pear', 'green', 'leaf', 'shy', 'wobble', '上小下大，天生适合被捧在手心。'],
   ['xinbao', '心宝', 'Hearty', 'form', 'heart', 'pink', 'blush', 'excited', 'bounce', '心形，跳得比说话快。'],
   ['youling', '幽灵', 'Ghosty', 'form', 'ghost', 'white', 'patch', 'playful', 'float', '半圆顶波浪底，不是吓人只是透明。'],
-  ['jiqiren', '机器人', 'Beep', 'form', 'bot', 'gray', 'antenna', 'working', 'pulse', '圆角方身加天线，按一下会响。'],
+  ['jiqiren', '机器人', 'Beep', 'form', 'tot', 'gray', 'antenna', 'working', 'pulse', '圆角方身加天线，按一下会响。'],
 ];
 
 export const CAST: readonly CastMember[] = RAW.map(([id, zh, en, family, body, color, trait, face, motion, desc]) => ({
@@ -91,7 +91,7 @@ export function castByFamily(family: string): readonly CastMember[] {
 }
 
 /** The member a fresh open starts on. */
-export const DEFAULT_CAST = 'bot';
+export const DEFAULT_CAST = 'tot';
 
 /** Cross two members into a new genome. Deterministic for a given seed. */
 export function breed(a: CastMember, b: CastMember, seed: number): CastMember {

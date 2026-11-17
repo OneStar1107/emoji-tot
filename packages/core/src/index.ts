@@ -1,5 +1,5 @@
 /**
- * @emojibot/core — a compositional character engine.
+ * @emojitot/core — a compositional character engine.
  *
  * Written for this project, MIT licensed, no dependency on any upstream
  * engine. A character is a genome: a body from a family of formulas, a colour,
@@ -24,7 +24,7 @@ export { SHAPES, SHAPE_IDS, getShape, shapePreview } from './shapes.js';
 export type { ShapeSpec } from './shapes.js';
 
 /*
- * The custom element lives at `@emojibot/core/element`, not here: it extends
+ * The custom element lives at `@emojitot/core/element`, not here: it extends
  * HTMLElement, so importing it from Node (tests, static export) would throw
  * before a single function ran. Keeping it on its own entry means the engine
  * stays usable everywhere and the element only loads where there is a DOM.

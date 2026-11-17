@@ -4,7 +4,7 @@
  * No framework: the views return DOM, and swapping them is `replaceChildren`.
  * That is enough for four pages and keeps the bundle to the engine alone.
  */
-import { defineBall } from '@emojibot/core/element';
+import { defineBall } from '@emojitot/core/element';
 import { createConsole } from './console';
 import { createWall } from './wall';
 import { createScene } from './scene';

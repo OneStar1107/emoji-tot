@@ -14,8 +14,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderStaticSvg } from '@aora-bot/engine/static';
-import { EMOTIONS, parseAgentMessage, stateForEmotion } from '@emojibot/protocol';
+import { renderStaticSvg } from '@aora-tot/engine/static';
+import { EMOTIONS, parseAgentMessage, stateForEmotion } from '@emojitot/protocol';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(here, '../../../out');
@@ -60,7 +60,7 @@ for (const [input, expected] of probes) {
 }
 
 const html = `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>EmojiBot Studio — 状态墙</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>EmojiTot Studio — 状态墙</title>
 <style>
   :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, "PingFang SC", sans-serif; }
   body { margin: 0; padding: 24px; background: light-dark(#fafafa, #121212); color: light-dark(#1a1a1a, #eee); }
@@ -76,7 +76,7 @@ const html = `<!doctype html>
 </style></head>
 <body>
 <h1>状态墙 · ${cards.length} 个 id</h1>
-<p>由 <code>@aora-bot/engine/static</code> 在 Node 里渲染，无 DOM、无浏览器。标记 <i>event</i> 的是「事件」而非「状态」，不会被后续状态挤掉。</p>
+<p>由 <code>@aora-tot/engine/static</code> 在 Node 里渲染，无 DOM、无浏览器。标记 <i>event</i> 的是「事件」而非「状态」，不会被后续状态挤掉。</p>
 <div class="wall">${cards.join('')}</div>
 </body></html>`;
 

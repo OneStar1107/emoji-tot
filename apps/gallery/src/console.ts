@@ -7,23 +7,23 @@
  * through the custom element, so the editor is not limited by what an
  * attribute can express; the element is what the snippet hands you.
  */
-import { castMember, renderCast } from '@emojibot/core';
+import { castMember, renderCast } from '@emojitot/core';
 import { createDrawer } from './drawer';
 import { backgroundClass, look, onLookChange, setLook } from './store';
 
 function hero(size = 260): string {
-  const id = look.cast || 'bot';
+  const id = look.cast || 'tot';
   return renderCast({ id, state: look.state, size, style: look.finish });
 }
 
 function snippet(): string {
-  const id = look.cast || 'bot';
+  const id = look.cast || 'tot';
   const finish = look.finish === 'flat' ? ' finish="flat"' : '';
-  return `<emojibot-ball cast="${id}"${finish} state="${look.state}"></emojibot-ball>`;
+  return `<emojitot-ball cast="${id}"${finish} state="${look.state}"></emojitot-ball>`;
 }
 
 function genome(): string {
-  const id = look.cast || 'bot';
+  const id = look.cast || 'tot';
   const member = castMember(id);
   return JSON.stringify({ cast: id, state: look.state, finish: look.finish, body: member?.body }, null, 2);
 }

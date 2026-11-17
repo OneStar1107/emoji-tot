@@ -1,5 +1,5 @@
 /**
- * EmojiBot as a desktop pet.
+ * EmojiTot as a desktop pet.
  *
  * A frameless, transparent, always-on-top window holding one character, plus
  * a tray icon and a context menu. Three behaviours matter:
@@ -122,7 +122,7 @@ let pointerTimer = null;
 let clickThrough = true;
 let agentWatch = {};
 /** The cast member the pet wears; persisted in prefs.json. */
-let castId = 'bot';
+let castId = 'tot';
 /** The engine's cast table, loaded as ESM from the vendored copy. */
 let CORE = null;
 
@@ -721,7 +721,7 @@ function createTray() {
     ? nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
     : nativeImage.createEmpty();
   tray = new Tray(icon);
-  tray.setToolTip('EmojiBot');
+  tray.setToolTip('EmojiTot');
   tray.setContextMenu(buildMenu());
   tray.on('click', toggleVisible);
 }
@@ -781,7 +781,7 @@ if (process.argv.includes('--dev')) {
 
 /* ------------------------------------------------------------------ boot */
 
-app.setName('EmojiBot');
+app.setName('EmojiTot');
 
 /*
  * Software rendering, deliberately. The window is one small SVG ball, so CPU
@@ -816,7 +816,7 @@ if (!gotTheLock) {
     if (process.platform === 'darwin') app.dock?.hide();
     await loadCore();
     const stored = readJson(prefsPath(), {});
-    castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'bot';
+    castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'tot';
     createWindow();
     if (win) win.webContents.on('did-finish-load', () => win.webContents.send('cast:changed', castId));
     createTray();

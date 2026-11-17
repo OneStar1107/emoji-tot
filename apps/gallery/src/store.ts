@@ -6,7 +6,7 @@
  * motion, so selecting a member copies its genes into the editor; editing any
  * gene marks the character as custom.
  */
-import { DEFAULT_CAST, castMember } from '@emojibot/core';
+import { DEFAULT_CAST, castMember } from '@emojitot/core';
 
 export type BackgroundId = 'plain' | 'grid' | 'dots' | 'night' | 'paper';
 

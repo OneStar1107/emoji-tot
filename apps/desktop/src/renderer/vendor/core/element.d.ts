@@ -1,4 +1,4 @@
-export declare class EmojiBotBall extends HTMLElement {
+export declare class EmojiTotBall extends HTMLElement {
     #private;
     static get observedAttributes(): string[];
     constructor();

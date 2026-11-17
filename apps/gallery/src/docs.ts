@@ -6,8 +6,8 @@
  * from the engine rather than typed, so a state added today appears here today
  * — the alternative is a doc that quietly lies.
  */
-import { BODIES, CAST, FACES, FACE_META, FAMILIES, breed, castMember, renderCast } from '@emojibot/core';
-import { EMOTIONS } from '@emojibot/protocol';
+import { BODIES, CAST, FACES, FACE_META, FAMILIES, breed, castMember, renderCast } from '@emojitot/core';
+import { EMOTIONS } from '@emojitot/protocol';
 
 function section(name: string, body: string): string {
   return `<section class="doc-section"><h2>${name}</h2>${body}</section>`;
@@ -62,9 +62,9 @@ export function createDocs(): HTMLElement {
       <pre class="snippet"><code>breed(castMember('lizi'), castMember('yinghua'), 7)
 // → ${sample.name.zh} · ${sample.body} · ${sample.color}</code></pre>`;
 
-  const callDoc = `<pre class="snippet"><code>&lt;emojibot-ball cast="lizi" finish="sticker" state="happy"&gt;&lt;/emojibot-ball&gt;
+  const callDoc = `<pre class="snippet"><code>&lt;emojitot-ball cast="lizi" finish="sticker" state="happy"&gt;&lt;/emojitot-ball&gt;
 
-import { renderCast, faceMeta, facesInGroup } from '@emojibot/core';
+import { renderCast, faceMeta, facesInGroup } from '@emojitot/core';
 
 renderCast({ id: 'lizi', state: 'happy', size: 96 });
 faceMeta('sleeping');        // { id, name: '睡眠', group: 'life', desc: '闭眼成细线…' }

@@ -226,7 +226,7 @@ export function renderCharacter(options: RenderOptions): string {
   let shell = '';
   let over = '';
 
-  // Signature add-ons (a pear's stem, a bot's antenna) belong to the species:
+  // Signature add-ons (a pear's stem, a tot's antenna) belong to the species:
   // they are drawn from the body's own colour family, never as a separate trait.
   const tone = (kind?: 'body' | 'shade' | 'light') =>
     kind === 'shade' ? shade(bodyHex, -0.32) : kind === 'light' ? shade(bodyHex, 0.32) : bodyHex;
@@ -324,7 +324,7 @@ export function renderCharacter(options: RenderOptions): string {
   }
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="emoji-bot">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="emoji-tot">`,
     defs,
     behind,
     shell,

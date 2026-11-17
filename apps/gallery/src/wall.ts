@@ -10,7 +10,7 @@
  * Every tile is a real render from the engine, produced once and left as
  * static SVG: the wall never runs a frame loop.
  */
-import { CAST, FACE_META, FAMILIES, MOTION_ZH, castMember, facesInGroup, renderCast } from '@emojibot/core';
+import { CAST, FACE_META, FAMILIES, MOTION_ZH, castMember, facesInGroup, renderCast } from '@emojitot/core';
 import { look, onLookChange, selectCast } from './store';
 import { t } from './i18n';
 
