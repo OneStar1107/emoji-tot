@@ -19,7 +19,7 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "studio.emojibot.desktop",
+    "appId": "studio.emojitot.desktop",
     "productName": "EmojiTot",
     "files": [
       "src/**/*",
