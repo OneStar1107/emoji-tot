@@ -5,33 +5,27 @@
   --line: light-dark(#e6e6ea, #2a2a30);
   --page: light-dark(#ffffff, #101013);
   --card: light-dark(#f4f4f6, #16161a);
+  --stage: light-dark(#f7f7f9, #17171b);
   --accent: light-dark(#16161a, #f4f4f5);
   font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 14px;
 }
 
 /*
- * One look everywhere: white body, black features.
- *
- * The ball's colour is not a theme decision — the app icon, the gallery grid
- * and the desktop pet all show the same white ball, so the element is pinned
- * to the dark ink branch and never follows the page.
+ * One look everywhere: white body, black features. The ball's colour is not a
+ * theme decision — the app icon, the grid and the desktop pet all show the
+ * same white ball, so the element is pinned to the dark ink branch.
  */
 html { color-scheme: light; }
 html[data-mono="light"] { color-scheme: light; }
 html[data-mono="dark"] { color-scheme: dark; }
 
-/*
- * A white ball on a white card has no edge. The shadow is not decoration: it
- * is what makes the silhouette readable, and it is the only piece of styling
- * the character needs from its host.
- */
 aora-bot,
-.card svg {
-  /* Two shadows: a tight one that reads as an outline on pale cards, and a
-     soft one that lifts the ball off the surface. */
-  filter: drop-shadow(0 0 1.5px rgb(0 0 0 / 0.22)) drop-shadow(0 2px 5px rgb(0 0 0 / 0.14));
+.card svg,
+.theme-art svg {
   color-scheme: dark;
+  /* A white ball on a pale surface has no edge; this is what draws it. */
+  filter: drop-shadow(0 0 1.5px rgb(0 0 0 / 0.22)) drop-shadow(0 2px 5px rgb(0 0 0 / 0.14));
 }
 
 * { box-sizing: border-box; }
@@ -45,36 +39,51 @@ body {
   flex-direction: column;
 }
 
+/* ---------- shell ---------- */
+
 .bar {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 24px;
-  background: color-mix(in srgb, var(--page) 88%, transparent);
-  backdrop-filter: blur(12px);
+  gap: 20px;
+  padding: 10px 24px;
+  background: color-mix(in srgb, var(--page) 90%, transparent);
+  backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
 
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.01em; }
-.bar-right { display: flex; align-items: center; gap: 16px; }
-.count { font-size: 12px; color: var(--muted); }
-
-main { flex: 1; width: 100%; max-width: 1240px; margin: 0 auto; padding: 20px 24px 40px; }
-
-.filters {
+.brand {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
+  gap: 9px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: inherit;
+  text-decoration: none;
 }
 
-.group { display: flex; gap: 6px; flex-wrap: wrap; }
+.nav { display: flex; gap: 4px; flex: 1; }
+
+.nav a {
+  padding: 5px 11px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.nav a:hover { color: var(--ink); background: var(--card); }
+.nav a[aria-current="true"] { color: var(--ink); background: var(--card); font-weight: 600; }
+
+.bar-right { display: flex; align-items: center; gap: 14px; }
+
+main { flex: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: 20px 24px 44px; }
+
+.view-title { margin: 0 0 4px; font-size: 18px; }
+.lead { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
 
 button, select {
   font: inherit;
@@ -91,82 +100,192 @@ button, select {
 button:hover, select:hover { border-color: var(--muted); }
 button:active { transform: scale(0.98); }
 button[aria-pressed="true"] { border-color: var(--ink); font-weight: 600; }
+button.primary { background: var(--ink); color: var(--page); border-color: var(--ink); font-weight: 600; }
 button.ghost { background: transparent; }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 10px;
+.group { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.snippet {
+  margin: 0;
+  padding: 9px 11px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-x: auto;
+  white-space: pre;
 }
+
+/* ---------- console ---------- */
+
+.console {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.35fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 880px) {
+  .console { grid-template-columns: 1fr; }
+}
+
+.stage-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--stage);
+}
+
+/* The stage backgrounds are tokens, not pictures: the ball has to read on all of them. */
+.stage.bg-plain { background: var(--stage); }
+.stage.bg-grid {
+  background-image: linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.stage.bg-dots {
+  background-image: radial-gradient(var(--muted) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: 0 0;
+}
+.stage.bg-night {
+  background: radial-gradient(circle at 30% 20%, #26263a, #0d0d14 70%);
+  border-color: #26263a;
+}
+.stage.bg-paper {
+  background: #fbf7ef;
+  background-image: radial-gradient(#00000008 1px, transparent 1px);
+  background-size: 6px 6px;
+}
+
+.stage-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.actions { display: flex; gap: 6px; }
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.row > span { flex: none; width: 42px; }
+.row > select, .row > input { flex: 1; min-width: 0; }
+
+.params { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.param > span { width: 76px; }
+.param input[type="range"] { accent-color: var(--ink); }
+.param output { width: 40px; text-align: right; font-family: ui-monospace, monospace; font-size: 11px; color: var(--ink); }
+.param input.check { width: 16px; height: 16px; accent-color: var(--ink); }
+.hint { margin: 0; font-size: 12px; color: var(--muted); }
+
+/* ---------- wall ---------- */
+
+.filters { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.count { font-size: 12px; color: var(--muted); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
 
 .card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   padding: 12px 8px 9px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 12px;
-  cursor: pointer;
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.card:hover {
-  transform: translateY(-2px);
-  border-color: var(--muted);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 0.08);
-}
-
+.card:hover { transform: translateY(-2px); border-color: var(--muted); box-shadow: 0 6px 18px rgb(0 0 0 / 0.08); }
 .card[aria-selected="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-
 .card svg { display: block; width: 64px; height: 64px; }
-
-/* The static renderer picks its ink with a media query rather than a CSS
-   variable, so a pinned page cannot steer it. main.ts rewrites that query
-   instead, which keeps every accent colour exact — an invert would flip the
-   blush and the glints too. */
-
-.card-id { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; font-weight: 600; }
+.card-id { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; }
 .card-name { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.3; }
 
 .detail {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  width: min(420px, calc(100vw - 40px));
+  width: min(430px, calc(100vw - 40px));
   display: flex;
   gap: 14px;
   padding: 14px;
-  background: var(--card);
+  background: var(--page);
   border: 1px solid var(--line);
   border-radius: 14px;
   box-shadow: 0 18px 48px rgb(0 0 0 / 0.18);
 }
 
 .detail[hidden] { display: none; }
-
 .detail-preview { flex: none; display: grid; place-items: center; }
-
 .detail-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-
 .detail-body h2 { margin: 0; font-size: 14px; }
 .detail-body p { margin: 0; font-size: 12px; color: var(--muted); }
+.detail-actions { display: flex; gap: 8px; }
 
-.snippet {
-  margin: 4px 0;
-  padding: 8px 10px;
-  background: var(--page);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  font-size: 11px;
-  line-height: 1.5;
-  overflow-x: auto;
-  white-space: pre;
+/* ---------- themes ---------- */
+
+.view-title + .lead { margin-bottom: 20px; }
+
+.theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  text-align: left;
+  background: var(--card);
+  border-radius: 14px;
 }
 
-.detail-actions { display: flex; gap: 8px; }
+.theme-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 96px;
+  border-radius: 10px;
+  background: var(--stage);
+}
+
+.theme-art svg { width: 56px; height: 56px; }
+.theme-name { font-size: 14px; font-weight: 600; display: flex; flex-direction: column; gap: 1px; }
+.theme-name small { font-weight: 400; color: var(--muted); font-size: 11px; }
+.theme-meta { font-size: 11px; color: var(--muted); }
+.theme-card.loaded { border-color: var(--ink); }
+
+/* ---------- docs ---------- */
+
+.docs { max-width: 760px; }
+.docs-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.docs h1 { margin: 0; font-size: 20px; }
+.docs section { margin-top: 26px; }
+.docs h2 { margin: 0 0 6px; font-size: 14px; }
+.docs p { margin: 0 0 10px; color: var(--muted); font-size: 13px; line-height: 1.65; }
+.docs a { color: inherit; }
+
+/* ---------- misc ---------- */
 
 .switch { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
 .switch input { width: 14px; height: 14px; margin: 0; accent-color: var(--ink); cursor: pointer; }

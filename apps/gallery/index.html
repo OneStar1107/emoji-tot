@@ -3,18 +3,23 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>EmojiBot Gallery — 51 个表情，一个两位数</title>
-<meta name="description" content="浏览 EmojiBot 的全部表情状态、画法与形状，复制可以跑的接入代码。" />
+<title>EmojiBot — 一个两位数，一个会表达的角色</title>
+<meta name="description" content="71 个角色、3 种画法、18 种颜色、7 套主题，全部由一个两位数 emotionId 驱动。可调参数、复制代码、直接接入。" />
 <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
 <header class="bar">
-  <div class="brand">
-    <aora-bot shape="circle" color="black" size="34" state="idle" paused></aora-bot>
-    <span>EmojiBot Gallery</span>
-  </div>
+  <a class="brand" href="#/console">
+    <aora-bot shape="circle" color="black" size="30" state="idle" paused></aora-bot>
+    <span>EmojiBot</span>
+  </a>
+  <nav class="nav" id="nav">
+    <a href="#/console" data-route="console">控制台</a>
+    <a href="#/gallery" data-route="gallery">表情馆</a>
+    <a href="#/themes" data-route="themes">主题</a>
+    <a href="#/docs" data-route="docs">文档</a>
+  </nav>
   <div class="bar-right">
-    <span class="count" id="count"></span>
     <label class="switch">
       <input type="checkbox" id="mono" />
       <span>深色背景</span>
@@ -22,36 +27,7 @@
   </div>
 </header>
 
-<main>
-  <section class="filters" aria-label="筛选">
-    <div class="group" id="segments"></div>
-    <div class="group">
-      <select id="style" aria-label="画法">
-        <option value="vector">vector</option>
-        <option value="pixel">pixel</option>
-        <option value="kaomoji">kaomoji</option>
-      </select>
-      <select id="shape" aria-label="形状"></select>
-    </div>
-  </section>
-
-  <section class="grid" id="grid" aria-live="polite"></section>
-</main>
-
-<aside class="detail" id="detail" hidden>
-  <div class="detail-preview">
-    <aora-bot id="preview" shape="circle" color="black" size="132" state="idle"></aora-bot>
-  </div>
-  <div class="detail-body">
-    <h2 id="detail-title"></h2>
-    <p id="detail-meta"></p>
-    <pre class="snippet"><code id="snippet"></code></pre>
-    <div class="detail-actions">
-      <button type="button" id="copy">复制代码</button>
-      <button type="button" id="close" class="ghost">关闭</button>
-    </div>
-  </div>
-</aside>
+<main id="view"></main>
 
 <footer>
   <span>Powered by <a href="https://github.com/sam70361/aora-bot">Aora Bot</a> ·
