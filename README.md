@@ -7,6 +7,22 @@
 
 > 非商业衍生作品。许可与署名见 [LICENSE](LICENSE)、[NOTICE.md](NOTICE.md)、[CREDITS.md](CREDITS.md)。
 
+![展示馆](docs/screenshots/gallery-dark.png)
+
+<details>
+<summary>点开一张卡片</summary>
+
+![详情](docs/screenshots/gallery-detail.png)
+
+</details>
+
+<details>
+<summary>反色：钉死明暗，不跟随系统</summary>
+
+![反色](docs/screenshots/gallery-light.png)
+
+</details>
+
 ## 三十秒理解
 
 ```js
