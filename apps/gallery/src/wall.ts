@@ -2,34 +2,26 @@
  * The gallery: the cast wall, and the expression wall.
  *
  * Two walls, because there are two things to browse. The cast wall answers
- * "what characters are there" — 134 members in fifteen bodies, filterable by
- * family. The expression wall answers "what does a character look like when it
- * feels something" — all forty-four states of one character, or one state
- * across the whole cast.
+ * "what characters are there" — fifteen, one per hand-written outline. The
+ * expression wall answers "what does a character look like when it feels
+ * something" — all forty-four states, grouped by whether the ball is alive,
+ * feeling, or working.
  *
  * Every tile is a real render from the engine, produced once and left as
- * static SVG: the wall never runs a frame loop, so 134 characters cost 134
- * paths, not 134 animations.
+ * static SVG: the wall never runs a frame loop.
  */
-import { CAST, FAMILIES, MOTION_ZH, castMember, renderCast, renderCharacter } from '@emojibot/core';
-import { EMOTIONS, EMOTION_SEGMENTS, getEmotion, type SegmentId } from '@emojibot/protocol';
+import { CAST, FACE_META, FAMILIES, MOTION_ZH, castMember, facesInGroup, renderCast } from '@emojibot/core';
 import { look, onLookChange, selectCast } from './store';
 import { t } from './i18n';
 
 const THUMB = 108;
 
 function currentSvg(state: string, size = THUMB): string {
-  return renderCharacter({
-    body: look.body,
-    color: look.color,
-    traits: look.traits,
-    state,
-    size,
-  });
+  return renderCast({ id: look.cast || CAST[0].id, state, size, style: look.finish });
 }
 
 function castSvg(id: string, state: string, size = THUMB): string {
-  return renderCast({ id, state, size });
+  return renderCast({ id, state, size, style: look.finish });
 }
 
 function castCard(id: string): string {
@@ -55,7 +47,7 @@ export function createWall(): HTMLElement {
 
   let tab: 'cast' | 'emotion' = 'cast';
   let family = 'all';
-  let segment: 'all' | SegmentId = 'all';
+  let segment: 'all' | 'life' | 'emotion' | 'agent' = 'all';
 
   el.innerHTML = `
     <section class="wall-head">
@@ -81,8 +73,13 @@ export function createWall(): HTMLElement {
         .map((o) => `<button type="button" data-family="${o.id}" aria-pressed="${o.id === family}">${o.label}</button>`)
         .join('');
     } else {
-      const options = [{ id: 'all', label: t('wall.all') }, ...EMOTION_SEGMENTS.map((s) => ({ id: s.id, label: s.name.zh }))];
-      filters.innerHTML = options
+      const groups = [
+        { id: 'all', label: t('wall.all') },
+        { id: 'life', label: '生命周期' },
+        { id: 'emotion', label: '情绪反应' },
+        { id: 'agent', label: '代理工作' },
+      ];
+      filters.innerHTML = groups
         .map((o) => `<button type="button" data-segment="${o.id}" aria-pressed="${o.id === segment}">${o.label}</button>`)
         .join('');
     }
@@ -95,16 +92,9 @@ export function createWall(): HTMLElement {
       grid.innerHTML = list.map((m) => castCard(m.id)).join('');
       return;
     }
-    const list =
-      segment === 'all'
-        ? EMOTIONS
-        : EMOTIONS.filter((d) => {
-            const range = EMOTION_SEGMENTS.find((s) => s.id === segment)!.range;
-            const n = Number(d.id);
-            return n >= range[0] && n <= range[1];
-          });
-    count.textContent = `${list.length} / ${EMOTIONS.length} 个状态`;
-    grid.innerHTML = list.map((d) => stateCard(d.id, d.state, d.name.zh)).join('');
+    const list = segment === 'all' ? FACE_META : facesInGroup(segment);
+    count.textContent = `${list.length} / ${FACE_META.length} 个状态`;
+    grid.innerHTML = list.map((m) => stateCard(m.id, m.id, m.name)).join('');
   }
 
   function paintTabs(): void {
@@ -136,7 +126,7 @@ export function createWall(): HTMLElement {
     }
     const segBtn = target.closest<HTMLElement>('[data-segment]');
     if (segBtn) {
-      segment = segBtn.dataset.segment as 'all' | SegmentId;
+      segment = segBtn.dataset.segment as 'all' | 'life' | 'emotion' | 'agent';
       paintFilters();
       paintGrid();
       return;
@@ -149,10 +139,7 @@ export function createWall(): HTMLElement {
     }
     const state = target.closest<HTMLElement>('[data-state]');
     if (state) {
-      const emotion = getEmotion(state.dataset.id!);
-      if (emotion) {
-        location.hash = `#/console?state=${emotion.state}`;
-      }
+      location.hash = `#/console?state=${state.dataset.state}`;
     }
   });
 

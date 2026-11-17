@@ -7,21 +7,25 @@
  * through the custom element, so the editor is not limited by what an
  * attribute can express; the element is what the snippet hands you.
  */
-import { castMember, renderCharacter } from '@emojibot/core';
+import { castMember, renderCast } from '@emojibot/core';
 import { createDrawer } from './drawer';
-import { backgroundClass, look, onLookChange } from './store';
+import { backgroundClass, look, onLookChange, setLook } from './store';
 
 function hero(size = 260): string {
-  return renderCharacter({ body: look.body, color: look.color, traits: look.traits, state: look.state, size });
+  const id = look.cast || 'bot';
+  return renderCast({ id, state: look.state, size, style: look.finish });
 }
 
 function snippet(): string {
-  const traits = look.traits.length ? ` traits="${look.traits.join(' ')}"` : '';
-  return `<emojibot-ball body="${look.body}" color="${look.color}"${traits} state="${look.state}"></emojibot-ball>`;
+  const id = look.cast || 'bot';
+  const finish = look.finish === 'flat' ? ' finish="flat"' : '';
+  return `<emojibot-ball cast="${id}"${finish} state="${look.state}"></emojibot-ball>`;
 }
 
 function genome(): string {
-  return JSON.stringify({ body: look.body, color: look.color, traits: look.traits, state: look.state }, null, 2);
+  const id = look.cast || 'bot';
+  const member = castMember(id);
+  return JSON.stringify({ cast: id, state: look.state, finish: look.finish, body: member?.body }, null, 2);
 }
 
 export function createConsole(): HTMLElement {
@@ -38,6 +42,9 @@ export function createConsole(): HTMLElement {
           <button type="button" data-act="spin">自旋</button>
           <button type="button" data-act="bounce">弹跳</button>
           <button type="button" data-act="burst">撒花</button>
+          <span class="sep"></span>
+          <button type="button" data-finish="sticker" aria-pressed="true">贴纸</button>
+          <button type="button" data-finish="flat" aria-pressed="false">平涂</button>
         </div>
         <div class="who" id="who"></div>
       </div>
@@ -68,9 +75,15 @@ export function createConsole(): HTMLElement {
     genomeEl.textContent = genome();
     const member = look.cast ? castMember(look.cast) : undefined;
     who.textContent = member ? `${member.name.zh} · ${member.name.en} · ${member.desc}` : '自定义组合';
+    for (const b of el.querySelectorAll<HTMLElement>('[data-finish]')) b.setAttribute('aria-pressed', String(b.dataset.finish === look.finish));
   }
 
   el.addEventListener('click', (event) => {
+    const finishBtn = (event.target as HTMLElement).closest<HTMLElement>('[data-finish]');
+    if (finishBtn) {
+      setLook({ finish: finishBtn.dataset.finish as 'sticker' | 'flat' });
+      return;
+    }
     const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act], #copy, #copy-json');
     if (!target) return;
     const act = target.dataset.act;

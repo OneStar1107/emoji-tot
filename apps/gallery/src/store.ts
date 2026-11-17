@@ -17,6 +17,8 @@ export interface Look {
   color: string;
   traits: string[];
   state: string;
+  /** How the ball is painted: die-cut sticker, or the quiet flat fill. */
+  finish: 'sticker' | 'flat';
   background: BackgroundId;
 }
 
@@ -28,6 +30,7 @@ const DEFAULTS: Look = {
   color: seed.color,
   traits: [...seed.traits],
   state: 'idle',
+  finish: 'sticker',
   background: 'plain',
 };
 

@@ -9,12 +9,25 @@
 export const SHAPE_ZH: Record<string, string> = {
   circle: '圆',
   egg: '蛋',
-  squircle: '圆角方',
+  squircle: '方圆',
+  blob: '软圆',
+  pear: '梨',
+  drop: '水滴',
   star: '星星',
-  heart: '心',
+  gem: '宝石',
+  pill: '面包',
+  flower: '樱花',
+  clover: '四叶',
   cloud: '云',
+  heart: '心',
   ghost: '幽灵',
   bot: '机器人',
+};
+
+/** The two finishes, in the words the console buttons use. */
+export const FINISH_ZH: Record<string, string> = {
+  sticker: '贴纸',
+  flat: '平涂',
 };
 
 export const COLOR_ZH: Record<string, string> = {

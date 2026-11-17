@@ -1,7 +1,7 @@
 {
   "name": "@emojibot/desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "EmojiBot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
   "main": "src/main.js",
   "type": "commonjs",
