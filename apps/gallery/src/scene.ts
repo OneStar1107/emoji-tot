@@ -10,9 +10,10 @@
  * animating forty SVG paths per frame would be a poor use of a browser.
  */
 import { CAST, castMember, renderCast } from '@emojibot/core';
+import { look } from './store';
 import { t } from './i18n';
 
-const HERD = 14;
+const HERD = 12;
 const MOODS = ['idle', 'happy', 'excited', 'shy', 'curious', 'sleeping', 'laughing', 'thinking'];
 
 interface Actor {
@@ -108,7 +109,7 @@ export function createScene(): HTMLElement {
         const mood = kind === 'party' ? 'celebrate' : 'sleeping';
         for (const a of actors) {
           const svg = a.el.querySelector('.actor-svg');
-          if (svg) svg.innerHTML = renderCast({ id: a.id, state: mood, size: 110 });
+          if (svg) svg.innerHTML = renderCast({ id: a.id, state: mood, size: 110 , style: look.finish });
           a.el.classList.add(kind === 'party' ? 'cheer' : 'doze');
           setTimeout(() => a.el.classList.remove('cheer', 'doze'), 2200);
         }
@@ -118,12 +119,12 @@ export function createScene(): HTMLElement {
     const actor = target.closest<HTMLElement>('.actor');
     if (actor) {
       const svg = actor.querySelector('.actor-svg');
-      if (svg) svg.innerHTML = renderCast({ id: actor.dataset.id!, state: 'laughing', size: 110 });
+      if (svg) svg.innerHTML = renderCast({ id: actor.dataset.id!, state: 'laughing', size: 110 , style: look.finish });
       actor.classList.add('poke');
       setTimeout(() => {
         actor.classList.remove('poke');
         const svg2 = actor.querySelector('.actor-svg');
-        if (svg2) svg2.innerHTML = renderCast({ id: actor.dataset.id!, state: 'happy', size: 110 });
+        if (svg2) svg2.innerHTML = renderCast({ id: actor.dataset.id!, state: 'happy', size: 110 , style: look.finish });
       }, 600);
     }
   });
