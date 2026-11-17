@@ -37,7 +37,8 @@ export const CAST = RAW.map(([id, zh, en, family, body, color, trait, face, moti
     family,
     body,
     color,
-    traits: trait ? [trait] : [],
+    // No traits: a character is its silhouette plus its face, nothing bolted on.
+    traits: [],
     face,
     motion,
 }));

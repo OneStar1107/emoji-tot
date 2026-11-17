@@ -2,16 +2,16 @@
 
 # EmojiBot
 
-**A character engine for the desktop and the web — 15 characters from 15 bodies × 26 traits × 12 colours, 44 expressions driven by one two-digit number. Visible in a page, livable on a desktop.**
+**A character engine for the desktop and the web — 15 characters from 15 bodies × hand-written outlines × 12 colours, 44 expressions driven by one two-digit number. Visible in a page, livable on a desktop.**
 
 [Console](https://onestar1107.github.io/emoji-bot/#/console) · [Faces](https://onestar1107.github.io/emoji-bot/#/gallery) · [Scene](https://onestar1107.github.io/emoji-bot/#/scene) · [Docs](https://onestar1107.github.io/emoji-bot/#/docs) · [中文](README.md)
 
 ![Cast](docs/screenshots/hero.png)
 
 > **About**
-> A character engine drawn from formulas: 15 characters from 15 parametric bodies × 26 traits × 12 colours, and 44 expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
+> A character engine drawn from formulas: 15 characters from 15 hand-written outlines × 12 colours, and 44 expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
 >
-> 一个由公式画出来的角色引擎：15 个角色来自 15 种参数化身体 × 26 种特征 × 12 色，44 个表情由一个两位数驱动。桌宠、控制台、站点共用同一套引擎，零图片资源。
+> 一个用 SVG 画出来的角色引擎：15 个角色各有自己手写的闭合轮廓，44 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
 
 </div>
 
@@ -28,14 +28,14 @@ Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all relea
 
 ## What this is
 
-**A character is a genome, not an image.** No spritesheets, no Lottie files, and not one hand-drawn character: a character is `{ body, color, traits, state }`. Bodies come from parametric formulas, traits find their own anchor on the body they sit on, and expressions are a small vocabulary of eyes and mouths. Add a row and there is a new character — that is the difference between a compositional cast and a pre-drawn one.
+**A character is a genome, not an image.** No spritesheets, no Lottie files, and not one hand-drawn character: a character is `{ body, color, face }` — the body is a hand-written closed Bezier outline, the colour picks the ink for the face, and the expression is a small vocabulary of eyes and mouths. Add a row and there is a new character.
 
 | Axis | Count | How |
 | --- | --- | --- |
 | Bodies | 15 | circle, egg, squircle, drop, star, gem, petal, cloud, heart, ghost, bot… all sampled from `r(t)` or a short parametric curve |
-| Traits | 26 | 6 ears, 8 things on top, 5 on the sides, 6 surface markings; each anchors to the body's height and pointiness |
+| Finish | 2 | 6 ears, 8 things on top, 5 on the sides, 6 surface markings; each anchors to the body's height and pointiness |
 | Colours | 12 | flat hexes; the face ink inverts by luminance |
-| Expressions | 44 | 6 eye styles × 7 mouth styles plus lean, indexed by the protocol's state names |
+| Expressions | 44 | 9 eye styles × 10 mouth styles plus lean, indexed by the protocol's state names |
 | Characters | 15 | One per body, each with its own expression and motion |
 | Offspring | unbounded | `breed(a, b, seed)` crosses two genomes; nothing is stored |
 

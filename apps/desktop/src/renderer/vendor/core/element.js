@@ -111,15 +111,22 @@ export class EmojiBotBall extends HTMLElement {
         const color = this.getAttribute('color') ?? 'white';
         const state = this.getAttribute('state') ?? 'idle';
         const size = Number(this.getAttribute('size') ?? 0) || 120;
+        /*
+         * The app's look, not a per-call experiment: die-cut white edge is what
+         * ships. `finish="flat"` still gets the un-edged version for anyone who
+         * wants the quieter one, and `style` is unusable here because it is the
+         * global CSS attribute once this becomes a real element.
+         */
+        const finish = (this.getAttribute('finish') ?? 'sticker');
         const traits = (this.getAttribute('traits') ?? '').split(/\s+/).filter(Boolean);
         let svg;
         try {
             svg = cast
-                ? renderCast({ id: cast, state, size })
-                : renderCharacter({ body, color, state, size, traits });
+                ? renderCast({ id: cast, state, size, style: finish })
+                : renderCharacter({ body, color, state, size, traits, style: finish });
         }
         catch {
-            svg = renderCharacter({ body: 'circle', color, state: 'idle', size });
+            svg = renderCharacter({ body: 'circle', color, state: 'idle', size, style: finish });
         }
         let host = this.#root.querySelector('.ball');
         if (!host) {
