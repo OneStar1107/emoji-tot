@@ -17,6 +17,19 @@ import { getBody } from './body.js';
 import { renderTraits, TRAITS } from './traits.js';
 import { castMember } from './cast.js';
 
+/**
+ * Three ways to draw the same genome.
+ *
+ * They are styles, not characters: the silhouette, the colour and the face
+ * are unchanged, only the finish differs. That is what lets a user pick a
+ * look without re-picking fifteen characters.
+ *
+ * - `flat`    — solid fill, no outline, quiet face. The default.
+ * - `sticker` — thick darker outline, a corner highlight, a couple of sparks.
+ * - `glow`    — radial gradient, a pale outer ring, a soft halo.
+ */
+export type RenderStyle = 'flat' | 'sticker' | 'glow';
+
 export interface RenderOptions {
   /** A body id from BODIES. */
   body?: string;
@@ -29,6 +42,8 @@ export interface RenderOptions {
   size: number;
   /** Outline the body instead of filling it. */
   outline?: boolean;
+  /** Finish. Defaults to flat. */
+  style?: RenderStyle;
 }
 
 /** Render a cast member by id, with an optional expression override. */
@@ -36,6 +51,7 @@ export interface CastRenderOptions {
   id: string;
   state?: string;
   size?: number;
+  style?: RenderStyle;
 }
 
 const DARK_INK = '#1F1F1F';
@@ -58,6 +74,22 @@ export function inkFor(bodyHex: string): string {
   const b = parseInt(hex.slice(4, 6), 16);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance < 0.55 ? LIGHT_INK : DARK_INK;
+}
+
+/** Lighten (positive) or darken (negative) a hex colour by a ratio. */
+function shade(hex: string, ratio: number): string {
+  const h = hex.replace('#', '');
+  const to = (i: number) => {
+    const v = parseInt(h.slice(i, i + 2), 16);
+    const next = ratio >= 0 ? v + (255 - v) * ratio : v * (1 + ratio);
+    return Math.max(0, Math.min(255, Math.round(next))).toString(16).padStart(2, '0');
+  };
+  return `#${to(0)}${to(2)}${to(4)}`;
+}
+
+/** A four-point spark, drawn from the body's colour rather than an asset. */
+function spark(x: number, y: number, r: number, fill: string, opacity: number): string {
+  return `<path d="M${x} ${y - r}Q${x + r * 0.22} ${y - r * 0.22} ${x + r} ${y}Q${x + r * 0.22} ${y + r * 0.22} ${x} ${y + r}Q${x - r * 0.22} ${y + r * 0.22} ${x - r} ${y}Q${x - r * 0.22} ${y - r * 0.22} ${x} ${y - r}Z" fill="${fill}" opacity="${opacity}"/>`;
 }
 
 function eye(style: EyeStyle, x: number, y: number, scale: number, ink: string): string {
@@ -144,16 +176,43 @@ export function renderCharacter(options: RenderOptions): string {
   const surfaces = traits.filter((t) => SURFACE_TRAITS.has(t) && TRAITS[t]);
   const head = traits.filter((t) => !SURFACE_TRAITS.has(t) && TRAITS[t]);
 
-  const bodyFill = options.outline ? 'none' : bodyHex;
-  const bodyStroke = options.outline ? ` stroke="${bodyHex}" stroke-width="2.4"` : '';
+  const style = options.style ?? 'flat';
+  const dark = shade(bodyHex, style === 'flat' ? -0.1 : -0.38);
+  const light = shade(bodyHex, 0.45);
+
+  // Each style contributes its own paint and its own decorations; the layers
+  // under the face and over the silhouette stay identical for all three.
+  let defs = '';
+  let behind = '';
+  let shell = '';
+  let over = '';
+
+  if (options.outline) {
+    shell = `<path d="${body.path}" fill="none" stroke="${bodyHex}" stroke-width="2.4"/>`;
+  } else if (style === 'sticker') {
+    shell = `<path d="${body.path}" fill="${bodyHex}" stroke="${dark}" stroke-width="3.2" stroke-linejoin="round"/>`;
+    over += `<ellipse cx="${body.face.x - 13}" cy="${body.face.y - 15}" rx="7" ry="4.4" fill="#FFFFFF" opacity="0.22" transform="rotate(-28 ${body.face.x - 13} ${body.face.y - 15})"/>`;
+    over += spark(78, 22, 4.6, '#FFFFFF', 0.55) + spark(22, 74, 3.2, '#FFFFFF', 0.35);
+  } else if (style === 'glow') {
+    defs = `<defs><radialGradient id="g${bodyId}" cx="38%" cy="32%" r="78%"><stop offset="0" stop-color="${shade(bodyHex, 0.32)}"/><stop offset="0.62" stop-color="${bodyHex}"/><stop offset="1" stop-color="${shade(bodyHex, -0.22)}"/></radialGradient></defs>`;
+    // The halo follows the silhouette, not a circle: a star inside a round
+    // halo reads as two objects stacked, not as one glowing character.
+    behind = `<path d="${body.path}" fill="none" stroke="${bodyHex}" stroke-width="7" opacity="0.16" transform="translate(50 50) scale(1.1) translate(-50 -50)"/>`;
+    shell = `<path d="${body.path}" fill="url(#g${bodyId})" stroke="${light}" stroke-width="2" stroke-linejoin="round"/>`;
+    over += spark(76, 26, 3.6, light, 0.7);
+  } else {
+    shell = `<path d="${body.path}" fill="${bodyHex}"/>`;
+  }
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="emoji-bot">`,
-    options.outline ? '' : `<path d="${body.path}" fill="${bodyFill}"${bodyStroke}/>`,
-    options.outline ? `<path d="${body.path}" fill="none" stroke="${bodyHex}" stroke-width="2.4"/>` : '',
+    defs,
+    behind,
+    shell,
     renderTraits(surfaces, { ink, fill: bodyHex, body }),
     renderFace(options.state, body.face, ink, body.eyeScale ?? 1),
     renderTraits(head, { ink, fill: bodyHex, body }),
+    over,
     `</svg>`,
   ].join('');
 }
@@ -170,6 +229,7 @@ export function renderCast(options: CastRenderOptions): string {
     traits: member.traits,
     state: options.state ?? member.face ?? 'idle',
     size: options.size ?? 96,
+    style: options.style,
   });
 }
 
