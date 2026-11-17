@@ -6,7 +6,7 @@
   font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-aora-bot {
+emojibot-ball {
   color-scheme: dark;
   /* Same reason as the gallery: a white ball needs an edge on a light desktop. */
   filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.22));
@@ -39,7 +39,7 @@ body:active { cursor: grabbing; }
   place-items: center;
 }
 
-aora-bot {
+emojibot-ball {
   width: var(--ball-size, 120px);
   height: var(--ball-size, 120px);
   flex: none;

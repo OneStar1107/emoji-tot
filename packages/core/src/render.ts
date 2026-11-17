@@ -85,8 +85,11 @@ export function renderCharacter(options: RenderOptions): string {
   const shape = getShape(options.shape);
   const face = faceFor(options.state);
   const colour = colorHex(options.color);
-  const scale = (shape.eyeScale ?? 1) * 1;
-  const { x, y } = shape.face;
+  const scale = (shape.eyeScale ?? 1) * (face.eyeScale ?? 1);
+  // The face leans with the expression; the offset is what makes a state read
+  // as felt rather than stamped on.
+  const x = shape.face.x + (face.dx ?? 0);
+  const y = shape.face.y + (face.dy ?? 0);
   const eyeGap = 9.5 * scale;
 
   const body = options.outline
@@ -100,7 +103,7 @@ export function renderCharacter(options: RenderOptions): string {
 
   const ink = inkFor(colour);
   const eyes = eye(face.eye, x - eyeGap, y, scale, ink) + eye(face.eye, x + eyeGap, y, scale, ink);
-  const mouthPath = mouth(face.mouth, x, y + 12, ink);
+  const mouthPath = mouth(face.mouth, x, y + 12 * (face.mouthScale ?? 1), ink);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${options.size}" height="${options.size}" role="img">${body}${blush}${eyes}${mouthPath}</svg>`;
 }

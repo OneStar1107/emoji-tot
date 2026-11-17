@@ -13,6 +13,19 @@ export interface FaceSpec {
   eye: EyeStyle;
   mouth: MouthStyle;
   blush?: boolean;
+  /**
+   * Where the face leans, in shape units.
+   *
+   * A face pinned to the centre of the body reads as a decal. Leaning it —
+   * back when surprised, down when sad, sideways when confused — is most of
+   * what makes an expression look felt rather than displayed.
+   */
+  dx?: number;
+  dy?: number;
+  /** Extra eye size on top of the shape's own. */
+  eyeScale?: number;
+  /** Extra mouth size. */
+  mouthScale?: number;
 }
 
 export const FACES: Record<string, FaceSpec> = {
@@ -43,22 +56,22 @@ export const FACES: Record<string, FaceSpec> = {
   composing: { eye: 'arc', mouth: 'flat' },
   dragging: { eye: 'wide', mouth: 'wave' },
 
-  happy: { eye: 'arc', mouth: 'smile', blush: true },
-  excited: { eye: 'star', mouth: 'grin', blush: true },
-  laughing: { eye: 'arc', mouth: 'open', blush: true },
-  playful: { eye: 'arc', mouth: 'grin', blush: true },
-  proud: { eye: 'dot', mouth: 'smile' },
-  celebrate: { eye: 'star', mouth: 'open', blush: true },
-  bouncing: { eye: 'arc', mouth: 'smile' },
-  shy: { eye: 'arc', mouth: 'tiny', blush: true },
-  sad: { eye: 'arc', mouth: 'wave' },
-  angry: { eye: 'line', mouth: 'flat' },
-  confused: { eye: 'dot', mouth: 'wave' },
-  suspicious: { eye: 'line', mouth: 'flat' },
-  surprised: { eye: 'wide', mouth: 'o' },
-  scared: { eye: 'wide', mouth: 'wave' },
-  curious: { eye: 'wide', mouth: 'smile' },
-  humming: { eye: 'arc', mouth: 'smile' },
+  happy: { eye: 'arc', mouth: 'smile', blush: true, dy: -1, mouthScale: 1.1 },
+  excited: { eye: 'star', mouth: 'grin', blush: true, dy: -3, eyeScale: 1.15, mouthScale: 1.15 },
+  laughing: { eye: 'arc', mouth: 'open', blush: true, dy: 1, mouthScale: 1.35 },
+  playful: { eye: 'arc', mouth: 'grin', blush: true, dx: -2, dy: -1 },
+  proud: { eye: 'dot', mouth: 'smile', dy: -2, eyeScale: 1.05 },
+  celebrate: { eye: 'star', mouth: 'open', blush: true, dy: -3, eyeScale: 1.2, mouthScale: 1.25 },
+  bouncing: { eye: 'arc', mouth: 'smile', dy: -2 },
+  shy: { eye: 'arc', mouth: 'tiny', blush: true, dy: 2, dx: -2 },
+  sad: { eye: 'arc', mouth: 'wave', dy: 2, eyeScale: 0.95 },
+  angry: { eye: 'line', mouth: 'flat', dy: 2, dx: 1, mouthScale: 0.9 },
+  confused: { eye: 'dot', mouth: 'wave', dx: 3, dy: 1 },
+  suspicious: { eye: 'line', mouth: 'flat', dx: -2 },
+  surprised: { eye: 'wide', mouth: 'o', dy: -2, eyeScale: 1.3, mouthScale: 1.2 },
+  scared: { eye: 'wide', mouth: 'wave', dy: -1, eyeScale: 1.25 },
+  curious: { eye: 'wide', mouth: 'smile', dx: -2, dy: -1, eyeScale: 1.1 },
+  humming: { eye: 'arc', mouth: 'smile', dx: -1, dy: -1 },
 
   alerting: { eye: 'line', mouth: 'open' },
   notifying: { eye: 'wide', mouth: 'smile' },

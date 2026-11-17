@@ -9,18 +9,27 @@ import { faceFor } from './faces.js';
 
 const pet = document.getElementById('pet');
 const bubble = document.getElementById('bubble');
-const ball = document.querySelector('aora-bot');
+const ball = document.querySelector('emojibot-ball');
 const api = window.petAPI;
 
 // Everything below sets properties on the custom element, so it has to exist
 // first. Module scripts are ordered, but making the dependency explicit is
 // cheaper than debugging a race.
-await customElements.whenDefined('aora-bot');
+await customElements.whenDefined('emojibot-ball');
 
 let bubbleTimer = null;
 
+/**
+ * The bubble only speaks while docked.
+ *
+ * A pet standing in the middle of the desktop with a label over its head is
+ * a widget. Docked at an edge it is out of the way and the bubble becomes the
+ * only thing telling you what it is doing, which is when it earns its space.
+ */
+let bubbleAllowed = false;
+
 function say(text) {
-  if (!text) {
+  if (!text || !bubbleAllowed) {
     bubble.dataset.visible = 'false';
     return;
   }
@@ -83,8 +92,7 @@ let actionToken = 0;
 api.onState((message) => {
   actionToken += 1;
   if (message.state) ball.state = message.state;
-  // Kaomoji first: the bubble speaks the same language as the face.
-  const face = faceFor(message.state, message.tips);
+  const face = faceFor(message.state);
   if (face) say(face);
 });
 
@@ -162,13 +170,18 @@ function setBubbleDirection(side) {
 
 setBubbleDirection(null);
 api.onDock((side) => {
-  if (!side) return setBubbleDirection(null);
-  setBubbleDirection(side.replace('-open', ''));
+  bubbleAllowed = !!side;
+  setBubbleDirection(side ? side.replace('-open', '') : null);
+  // Leaving the edge takes the bubble with it, not just its next update.
+  if (!bubbleAllowed) bubble.dataset.visible = 'false';
 });
 
 if (typeof api.debugState === 'function') {
   api.debugState().then((s) => {
-    if (s?.docked) setBubbleDirection(s.docked.replace('-open', ''));
+    if (s?.docked) {
+      bubbleAllowed = true;
+      setBubbleDirection(s.docked.replace('-open', ''));
+    }
   }).catch(() => {});
 }
 

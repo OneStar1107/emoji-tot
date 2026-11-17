@@ -108,15 +108,12 @@ export const STATE_LABEL = {
 };
 
 /**
- * Bubble content: a face, then words.
+ * Bubble content: the face and nothing else.
  *
- * The kaomoji carries the mood and the words carry the meaning — a reader who
- * does not know that `(╬ Ò﹏Ó)` means "angry" does not have to guess. A host
- * that sent its own `tips` replaces the words, not the face.
+ * The words were useful but they made the bubble a caption box; a pet that
+ * comments on itself in prose reads like a notification. The kaomoji alone
+ * carries the mood, and the state's own drawing carries the rest.
  */
-export function faceFor(state, tips) {
-  const face = KAOMOJI[state];
-  const label = tips || STATE_LABEL[state] || STATE_TEXT[state] || '';
-  if (face && label) return `${face}\n${label}`;
-  return face || label;
+export function faceFor(state) {
+  return KAOMOJI[state] ?? '';
 }

@@ -10,5 +10,12 @@ export type { ShapeSpec } from './shapes.js';
 export { FACES, FACE_IDS, faceFor } from './face.js';
 export type { FaceSpec, EyeStyle, MouthStyle } from './face.js';
 export { COLORS, COLOR_IDS, colorHex } from './palette.js';
-export { renderCharacter, renderDataUrl } from './render.js';
+export { renderCharacter, renderDataUrl, inkFor } from './render.js';
 export type { RenderOptions } from './render.js';
+
+/*
+ * The custom element lives at `@emojibot/core/element`, not here: it extends
+ * HTMLElement, so importing it from Node (tests, static export) would throw
+ * before a single function ran. Keeping it on its own entry means the engine
+ * stays usable everywhere and the element only loads where there is a DOM.
+ */

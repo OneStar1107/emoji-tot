@@ -6,11 +6,11 @@
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
-    "copy:protocol": "node scripts/copy-protocol.mjs",
-    "prestart": "node scripts/copy-protocol.mjs",
+    "copy:vendor": "node scripts/copy-vendor.mjs",
+    "prestart": "node scripts/copy-vendor.mjs",
     "start": "electron .",
     "dev": "electron . --dev",
-    "prepack": "node scripts/copy-protocol.mjs",
+    "prepack": "node scripts/copy-vendor.mjs",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },

@@ -9,13 +9,13 @@
 </head>
 <body>
   <div id="pet" title="拖动我 · 右键菜单">
-    <aora-bot shape="circle" color="black" size="120" state="idle"></aora-bot>
+    <emojibot-ball shape="circle" color="white" size="120" state="idle"></emojibot-ball>
   </div>
   <div id="bubble" role="status" aria-live="polite"></div>
 
-  <!-- The engine's single-file build is an ES module; renderer.js waits for
-       the element to be defined rather than assuming script order. -->
-  <script type="module" src="./vendor/aora-bot.js"></script>
+  <!-- Both modules; renderer.js waits for the element to be defined rather
+       than assuming script order. -->
+  <script type="module" src="./vendor/core/element.js"></script>
   <script type="module" src="./renderer.js"></script>
 </body>
 </html>
