@@ -6,8 +6,11 @@
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
+    "copy:protocol": "node scripts/copy-protocol.mjs",
+    "prestart": "node scripts/copy-protocol.mjs",
     "start": "electron .",
     "dev": "electron . --dev",
+    "prepack": "node scripts/copy-protocol.mjs",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
@@ -39,8 +42,5 @@
       "icon": "assets/icon.png",
       "category": "public.app-category.entertainment"
     }
-  },
-  "dependencies": {
-    "@emojibot-studio/protocol": "workspace:*"
   }
 }

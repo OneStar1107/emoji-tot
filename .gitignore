@@ -10,3 +10,4 @@ coverage/
 *.tgz
 out/
 dist-cjs/
+release/
