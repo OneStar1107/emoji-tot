@@ -40,6 +40,40 @@ main {
 
 .ball { position: relative; display: grid; place-items: center; min-height: 300px; }
 
+/*
+ * The character's ink is written as light-dark(#1F1F1F, #FFFFFF), so the
+ * drawing follows `color-scheme`. Pinning the scheme on the page fixes both
+ * at once — and it has to be the page, not the ball: a black circle on a dark
+ * background disappears, so the colour of the character and the colour of
+ * what is behind it cannot be chosen separately.
+ *
+ * The values are set on <html> by the switch in main.ts.
+ */
+html[data-mono="light"] { color-scheme: light; }
+html[data-mono="dark"] { color-scheme: dark; }
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
 .caption {
   position: absolute;
   bottom: 8px;

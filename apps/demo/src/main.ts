@@ -128,6 +128,45 @@ variantSelect.addEventListener('change', () => {
   ball.variant = variantSelect.value;
 });
 
+/**
+ * The "reverse" switch: flip the scheme and pin it.
+ *
+ * The character and the page read the same `color-scheme`: ink is written as
+ * light-dark(ink, face). That coupling is why the switch pins the *page* and
+ * not just the ball — a black circle needs a light page behind it, and pinning
+ * only the ball would hide it in a dark one.
+ *
+ * On means "the opposite of what the system says right now, and keep it":
+ * a dark system gets a light page with the black circle, a light system gets
+ * a dark page with the white one. Off returns to following the system live.
+ */
+const root = document.documentElement;
+const mono = document.querySelector<HTMLInputElement>('#mono')!;
+
+function setMono(on: boolean): void {
+  if (!on) {
+    delete root.dataset.mono;
+  } else {
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.mono = systemDark ? 'light' : 'dark';
+  }
+  try {
+    localStorage.setItem('es.mono', on ? '1' : '0');
+  } catch {
+    // Private mode: the switch still works for this session.
+  }
+}
+
+let monoSaved = false;
+try {
+  monoSaved = localStorage.getItem('es.mono') === '1';
+} catch {
+  monoSaved = false;
+}
+mono.checked = monoSaved;
+setMono(monoSaved);
+mono.addEventListener('change', () => setMono(mono.checked));
+
 fillVariants('vector');
 markActive();
 log(`协议就绪：${EMOTIONS.length} 个 id，四段（生命周期 / 情绪 / 代理工作 / 提示）`);
