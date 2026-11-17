@@ -2,9 +2,9 @@
 
 # EmojiBot
 
-**An expressive character for the desktop and the web — one two-digit number drives 8 shapes and 44 expressions. Visible in a page, livable on a desktop.**
+**A character engine for the desktop and the web — 134 characters from 15 bodies × 26 traits × 12 colours, 44 expressions driven by one two-digit number. Visible in a page, livable on a desktop.**
 
-[Console](https://onestar1107.github.io/emoji-bot/#/console) · [Faces](https://onestar1107.github.io/emoji-bot/#/gallery) · [Scene](https://onestar1107.github.io/emoji-bot/#/scene) · [Themes](https://onestar1107.github.io/emoji-bot/#/themes) · [Docs](https://onestar1107.github.io/emoji-bot/#/docs) · [中文](README.md)
+[Console](https://onestar1107.github.io/emoji-bot/#/console) · [Faces](https://onestar1107.github.io/emoji-bot/#/gallery) · [Scene](https://onestar1107.github.io/emoji-bot/#/scene) · [Docs](https://onestar1107.github.io/emoji-bot/#/docs) · [中文](README.md)
 
 ![Cast](docs/screenshots/hero.png)
 
@@ -14,7 +14,16 @@
 
 ## What this is
 
-**The character is drawn, not shipped as an image.** No spritesheets, no Lottie files: every body is a contour in code (with ears, leaves or antennae as separate parts), every expression is a short curve described by a few numbers, spring-interpolated, written into SVG attributes each frame by one `requestAnimationFrame` loop.
+**A character is a genome, not an image.** No spritesheets, no Lottie files, and no 134 hand-drawn pictures: a character is `{ body, color, traits, state }`. Bodies come from parametric formulas, traits find their own anchor on the body they sit on, and expressions are a small vocabulary of eyes and mouths. Add a row and there is a new character — that is the difference between a compositional cast and a pre-drawn one.
+
+| Axis | Count | How |
+| --- | --- | --- |
+| Bodies | 15 | circle, egg, squircle, drop, star, gem, petal, cloud, heart, ghost, bot… all sampled from `r(t)` or a short parametric curve |
+| Traits | 26 | 6 ears, 8 things on top, 5 on the sides, 6 surface markings; each anchors to the body's height and pointiness |
+| Colours | 12 | flat hexes; the face ink inverts by luminance |
+| Expressions | 44 | 6 eye styles × 7 mouth styles plus lean, indexed by the protocol's state names |
+| Characters | 134 | 13 families, every one with a name in two languages and a sentence |
+| Offspring | unbounded | `breed(a, b, seed)` crosses two genomes; nothing is stored |
 
 Three upstreams, each doing what it is best at:
 
@@ -47,11 +56,10 @@ feed('thinking');              // a bare state name works too
 
 | Page | What is there |
 | --- | --- |
-| **Console** | 8 shapes · 12 colours · 44 expressions · 5 stage backgrounds. Every option is a picture of itself, and the snippet follows every change |
-| **Faces** | All 51 ids on one screen, filtered by decade, click to copy the snippet |
-| **Scene** | Nine agents report; one face shows what the arbiter decided — the "urgent event interrupts the dwell" rule made visible |
-| **Themes** | Seven seasonal sets, loaded on click (code-split), drawing their own shapes |
-| **Docs** | Install, protocol, imperative actions, desktop — Chinese and English |
+| **Console** | Pick one of 134 characters, then adjust body, colour, traits and expression; the component snippet and the JSON genome follow every change |
+| **Faces** | Two walls: the 134-member cast wall (filter by family) and the 44-expression wall; clicking a character jumps to the console |
+| **Scene** | Fourteen characters on one stage, each changing expression on its own timer; click one and it answers; party / sleep / reshuffle |
+| **Docs** | How the engine draws, how a genome is composed, what each digit means, how to call it — generated from code, so it cannot go stale |
 
 ![Scene](docs/screenshots/scene.png)
 

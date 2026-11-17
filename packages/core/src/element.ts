@@ -5,7 +5,7 @@
  * and registers itself. Animation is CSS: a breath on the body and a blink on
  * the lids, both paused when the window is hidden.
  */
-import { renderCharacter } from './render.js';
+import { renderCast, renderCharacter } from './render.js';
 import { colorHex } from './palette.js';
 
 const STYLE = `
@@ -19,7 +19,7 @@ const STYLE = `
 
 export class EmojiBotBall extends HTMLElement {
   static get observedAttributes() {
-    return ['shape', 'color', 'state', 'size'];
+    return ['cast', 'body', 'shape', 'color', 'state', 'size', 'traits'];
   }
 
   #root;
@@ -51,7 +51,19 @@ export class EmojiBotBall extends HTMLElement {
   }
 
   set shape(value: string) {
-    this.setAttribute('shape', String(value));
+    this.setAttribute('body', String(value));
+  }
+
+  set body(value: string) {
+    this.setAttribute('body', String(value));
+  }
+
+  set cast(value: string) {
+    this.setAttribute('cast', String(value));
+  }
+
+  set traits(value: string[] | string) {
+    this.setAttribute('traits', Array.isArray(value) ? value.join(' ') : value);
   }
 
   set color(value: string) {
@@ -91,15 +103,19 @@ export class EmojiBotBall extends HTMLElement {
   }
 
   #draw() {
-    const shape = this.getAttribute('shape') ?? 'circle';
+    const cast = this.getAttribute('cast');
+    const body = this.getAttribute('body') ?? this.getAttribute('shape') ?? 'circle';
     const color = this.getAttribute('color') ?? 'white';
     const state = this.getAttribute('state') ?? 'idle';
     const size = Number(this.getAttribute('size') ?? 0) || 120;
+    const traits = (this.getAttribute('traits') ?? '').split(/\s+/).filter(Boolean);
     let svg;
     try {
-      svg = renderCharacter({ shape, color, state, size });
+      svg = cast
+        ? renderCast({ id: cast, state, size })
+        : renderCharacter({ body, color, state, size, traits });
     } catch {
-      svg = renderCharacter({ shape: 'circle', color, state: 'idle', size });
+      svg = renderCharacter({ body: 'circle', color, state: 'idle', size });
     }
     let host = this.#root.querySelector<HTMLDivElement>('.ball');
     if (!host) {

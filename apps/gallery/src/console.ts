@@ -1,23 +1,27 @@
 /**
- * The studio: one character, its choices below, its code beside.
+ * The studio: one character, its genes below, its code beside.
  *
  * The stage is the largest thing on the page and the snippet sits next to it,
  * because the point of the page is "this is what you get and this is how you
- * ask for it". Every choice is a picture in the drawer; the only text control
- * left is the copy button.
+ * ask for it". The stage draws the character as SVG directly rather than
+ * through the custom element, so the editor is not limited by what an
+ * attribute can express; the element is what the snippet hands you.
  */
-import { defineBall } from '@emojibot/core/element';
+import { castMember, renderCharacter } from '@emojibot/core';
 import { createDrawer } from './drawer';
-import { getLang, t } from './i18n';
-import { backgroundClass, look, onLookChange, setLook } from './store';
-import { BACKGROUND_ZH, zh } from './zh';
+import { backgroundClass, look, onLookChange } from './store';
 
-defineBall();
-
-const BACKGROUNDS = ['plain', 'grid', 'dots', 'night', 'paper'] as const;
+function hero(size = 260): string {
+  return renderCharacter({ body: look.body, color: look.color, traits: look.traits, state: look.state, size });
+}
 
 function snippet(): string {
-  return `<emojibot-ball shape="${look.shape}" color="${look.color}" state="${look.state}"></emojibot-ball>`;
+  const traits = look.traits.length ? ` traits="${look.traits.join(' ')}"` : '';
+  return `<emojibot-ball body="${look.body}" color="${look.color}"${traits} state="${look.state}"></emojibot-ball>`;
+}
+
+function genome(): string {
+  return JSON.stringify({ body: look.body, color: look.color, traits: look.traits, state: look.state }, null, 2);
 }
 
 export function createConsole(): HTMLElement {
@@ -27,69 +31,64 @@ export function createConsole(): HTMLElement {
   el.innerHTML = `
     <section class="studio-main">
       <div class="stage ${backgroundClass()}" id="stage">
-        <emojibot-ball data-hero shape="${look.shape}" color="${look.color}" state="${look.state}" size="240"></emojibot-ball>
+        <div class="hero" data-hero>${hero()}</div>
       </div>
       <div class="stage-bar">
         <div class="actions">
-          <button type="button" data-act="spin">${t('console.spin')}</button>
-          <button type="button" data-act="bounce">${t('console.bounce')}</button>
-          <button type="button" data-act="burst">${t('console.burst')}</button>
+          <button type="button" data-act="spin">自旋</button>
+          <button type="button" data-act="bounce">弹跳</button>
+          <button type="button" data-act="burst">撒花</button>
         </div>
-        <div class="group" id="backgrounds">
-          ${BACKGROUNDS.map(
-            (id) =>
-              `<button type="button" data-bg="${id}" aria-pressed="${look.background === id}">${zh(BACKGROUND_ZH, id, getLang())}</button>`,
-          ).join('')}
-        </div>
+        <div class="who" id="who"></div>
       </div>
     </section>
 
     <aside class="studio-side">
       <div class="code-card">
-        <div class="code-head"><span>${t('console.code')}</span><button type="button" id="copy">${t('console.copy')}</button></div>
+        <div class="code-head"><span>组件</span><button type="button" id="copy">复制</button></div>
         <pre class="snippet"><code data-snippet>${snippet()}</code></pre>
       </div>
-      <div class="params"><p class="hint">${getLang() === 'zh'
-        ? '这个引擎有三个维度：形状、颜色、状态。脸部墨色按身体亮度自动取反，所以不用另外选。'
-        : 'Three dimensions: shape, colour, state. The face ink is derived from the body brightness, so there is nothing to pick.'}</p></div>
+      <div class="code-card">
+        <div class="code-head"><span>基因组</span><button type="button" id="copy-json">复制</button></div>
+        <pre class="snippet"><code data-genome>${genome()}</code></pre>
+      </div>
     </aside>
   `;
 
-  const hero = el.querySelector<HTMLElement & Record<string, unknown>>('[data-hero]')!;
   const stage = el.querySelector<HTMLElement>('#stage')!;
+  const heroEl = el.querySelector<HTMLElement>('[data-hero]')!;
+  const who = el.querySelector<HTMLElement>('#who')!;
   const snippetEl = el.querySelector<HTMLElement>('[data-snippet]')!;
+  const genomeEl = el.querySelector<HTMLElement>('[data-genome]')!;
 
-  function applyHero(): void {
-    hero.setAttribute('shape', look.shape);
-    hero.setAttribute('color', look.color);
-    hero.state = look.state;
+  function apply(): void {
+    heroEl.innerHTML = hero();
     stage.className = `stage ${backgroundClass()}`;
     snippetEl.textContent = snippet();
-    for (const button of el.querySelectorAll<HTMLButtonElement>('#backgrounds button')) {
-      button.setAttribute('aria-pressed', String(button.dataset.bg === look.background));
-    }
+    genomeEl.textContent = genome();
+    const member = look.cast ? castMember(look.cast) : undefined;
+    who.textContent = member ? `${member.name.zh} · ${member.name.en} · ${member.desc}` : '自定义组合';
   }
 
   el.addEventListener('click', (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act], [data-bg], #copy');
+    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act], #copy, #copy-json');
     if (!target) return;
     const act = target.dataset.act;
-    if (act === 'spin') hero.spin?.(1.5);
-    if (act === 'bounce') hero.bounce?.(0.5);
-    if (act === 'burst') hero.burst?.(24);
-    if (target.dataset.bg) {
-      setLook({ background: target.dataset.bg as never });
-      applyHero();
+    if (act) {
+      heroEl.classList.remove('fx-spin', 'fx-bounce', 'fx-burst');
+      void heroEl.offsetWidth;
+      heroEl.classList.add(act === 'spin' ? 'fx-spin' : act === 'bounce' ? 'fx-bounce' : 'fx-burst');
+      return;
     }
-    if (target.id === 'copy') {
-      navigator.clipboard?.writeText(snippetEl.textContent ?? '');
-      target.textContent = t('console.copied');
-      setTimeout(() => (target.textContent = t('console.copy')), 1400);
-    }
+    const text = target.id === 'copy' ? snippetEl.textContent ?? '' : genomeEl.textContent ?? '';
+    navigator.clipboard?.writeText(text);
+    const label = target.textContent;
+    target.textContent = '已复制';
+    setTimeout(() => (target.textContent = label), 1400);
   });
 
-  applyHero();
-  el.append(createDrawer(applyHero));
-  onLookChange(applyHero);
+  apply();
+  el.append(createDrawer(apply));
+  onLookChange(apply);
   return el;
 }

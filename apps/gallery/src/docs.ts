@@ -1,91 +1,76 @@
 /**
- * The docs: how to get a character on a page, and what the ids mean.
+ * The documentation, written for the person who has to ship a character.
  *
- * Deliberately short and in two languages. A reader who wants the full table
- * clicks through to the gallery, where every id is a picture.
+ * Four questions in the order they are asked: what is this, how is a character
+ * built, what do the numbers mean, and how do I call it. The protocol table is
+ * generated from the engine rather than typed, so a state added today appears
+ * here today — the alternative is a doc that quietly lies.
  */
-const COPY = {
-  zh: {
-    title: '文档',
-    intro: '三行代码，一个会表达的角色。协议只有一个字段：一个两位数。',
-    install: '接入',
-    installBody: '用 npm 装，或者直接引 CDN 单文件（自带引擎）。',
-    protocol: '协议',
-    protocolBody:
-      'AI 侧只发一个 id，宿主把它变成表情。id 按十年分段：00–09 生命周期、10–29 情绪、30–49 代理工作、50–59 提示。未知 id 按段回退，不会白屏。',
-    actions: '命令式动作',
-    actionsBody: '除了状态，还有一次性动作：spin 转、bounce 跳、burst 撒花。它们不改变状态，播完就停。',
-    desktop: '桌面端',
-    desktopBody: '同一个球可以贴在任何桌面上。桌面端监听一个文件，写进去一个 id 就会变脸。',
-    links: '更多',
-  },
-  en: {
-    title: 'Docs',
-    intro: 'Three lines, one character that reacts. The protocol is a single field: a two-digit id.',
-    install: 'Install',
-    installBody: 'Install from npm, or load the single CDN file that carries the engine.',
-    protocol: 'Protocol',
-    protocolBody:
-      'The agent sends one id; the host turns it into a face. Ids are grouped by decade: 00–09 lifecycle, 10–29 feeling, 30–49 agent work, 50–59 signalling. An unknown id falls back inside its decade instead of blanking the face.',
-    actions: 'Imperative actions',
-    actionsBody: 'Beyond states there are one-shot actions: spin, bounce, burst. They do not change the state and stop on their own.',
-    desktop: 'Desktop',
-    desktopBody: 'The same ball can live on any desktop. The desktop app watches a file; write an id and it reacts.',
-    links: 'More',
-  },
-};
+import { BODIES, CAST, FACES, TRAIT_IDS, FAMILIES, breed, castMember } from '@emojibot/core';
+import { EMOTIONS, EMOTION_SEGMENTS } from '@emojibot/protocol';
+
+function section(name: string, body: string): string {
+  return `<section class="doc-section"><h2>${name}</h2>${body}</section>`;
+}
+
+function table(head: string[], rows: string[][]): string {
+  return `<table class="doc-table"><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
+    .map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`)
+    .join('')}</tbody></table>`;
+}
 
 export function createDocs(): HTMLElement {
   const el = document.createElement('div');
-  el.className = 'docs';
-  let lang: 'zh' | 'en' = (localStorage.getItem('es.lang') as 'zh' | 'en') ?? 'zh';
+  el.className = 'docs-view';
 
-  function render(): void {
-    const t = COPY[lang];
-    el.innerHTML = `
-      <div class="docs-head">
-        <h1>${t.title}</h1>
-        <div class="group" id="lang">
-          <button type="button" data-lang="zh" aria-pressed="${lang === 'zh'}">中文</button>
-          <button type="button" data-lang="en" aria-pressed="${lang === 'en'}">English</button>
-        </div>
-      </div>
-      <p class="lead">${t.intro}</p>
+  const emotionTable = table(
+    ['id', '状态', '分组', '名称'],
+    EMOTIONS.map((d) => [`#${d.id}`, d.state, EMOTION_SEGMENTS.find((s) => s.id === d.segment)?.name.zh ?? '', d.name.zh]),
+  );
 
-      <section><h2>${t.install}</h2><p>${t.installBody}</p>
-        <pre class="snippet"><code>${lang === 'zh'
-          ? `pnpm add @emojibot/core &nbsp;\n\n<emojibot-ball shape="circle" color="white" state="thinking"></emojibot-ball>`
-          : `pnpm add @emojibot/core &nbsp;\n\n<emojibot-ball shape="circle" color="white" state="thinking"></emojibot-ball>`}</code></pre>
-      </section>
+  const familyTable = table(
+    ['族', '成员数', '身体', '示例'],
+    FAMILIES.map((f) => {
+      const members = CAST.filter((m) => m.family === f.id);
+      const bodies = [...new Set(members.map((m) => m.body))].join(', ');
+      return [`${f.zh} / ${f.en}`, String(members.length), bodies, members.slice(0, 3).map((m) => m.name.zh).join('、')];
+    }),
+  );
 
-      <section><h2>${t.protocol}</h2><p>${t.protocolBody}</p>
-        <pre class="snippet"><code>channel.feed('{"emotionId":"34","tips":"build failed"}');\nchannel.on('change', (e) => (el.state = e.state));</code></pre>
-      </section>
+  const sample = breed(castMember('maomi')!, castMember('yinghua')!, 7);
 
-      <section><h2>${t.actions}</h2><p>${t.actionsBody}</p>
-        <pre class="snippet"><code>el.spin(1.5);\nel.bounce(0.5);\nel.burst(24);</code></pre>
-      </section>
+  const intro = `<p>一个由公式画出来的角色引擎。没有精灵图、没有动画文件：每个身体是一条可计算的轮廓，
+      每张脸是一组眼型与嘴型，每个配件都会根据它所在的身体自动找位置。</p>
+      <p>引擎之上是 ${CAST.length} 个角色、${Object.keys(FACES).length} 个表情、${BODIES.length} 种身体、
+      ${TRAIT_IDS.length} 种特征。桌宠与控制台共用同一套代码。</p>`;
 
-      <section><h2>${t.desktop}</h2><p>${t.desktopBody}</p>
-        <pre class="snippet"><code>echo '{"emotionId":"33"}' &gt; "$APPDATA/EmojiBot/state.json"</code></pre>
-      </section>
+  const genomeDoc = `<p>一个角色由四项组成，没有一项是图片：</p>
+      <ul>
+        <li><b>body</b> — 身体，来自 ${BODIES.length} 条参数化轮廓（${BODIES.slice(0, 6).map((b) => b.id).join(', ')} …）</li>
+        <li><b>color</b> — 12 种实色；脸的颜色按亮度自动取反</li>
+        <li><b>traits</b> — 特征，${TRAIT_IDS.length} 种，会贴着身体找位置</li>
+        <li><b>state</b> — 表情，见下面的协议表</li>
+      </ul>
+      <h3>繁衍</h3>
+      <p>两个角色可以交叉出新的组合，不落库、不留痕：</p>
+      <pre class="snippet"><code>breed(castMember('maomi'), castMember('yinghua'), 7)
+// → ${sample.name.zh} · ${sample.body} · ${sample.color} · ${sample.traits.join(' ')}</code></pre>`;
 
-      <section><h2>${t.links}</h2>
-        <p><a href="https://github.com/sam70361/aora-bot">Aora Bot</a> ·
-           <a href="https://github.com/Aithena/emotion-ball">Emotion Ball</a> ·
-           <a href="https://github.com/OneStar1107/emoji-bot">本项目仓库</a></p>
-      </section>
-    `;
-  }
+  const callDoc = `<pre class="snippet"><code>&lt;emojibot-ball body="circle" color="cream" traits="catEar blush" state="happy"&gt;&lt;/emojibot-ball&gt;
 
-  el.addEventListener('click', (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLElement>('[data-lang]');
-    if (!button) return;
-    lang = button.dataset.lang as 'zh' | 'en';
-    localStorage.setItem('es.lang', lang);
-    render();
-  });
+import { renderCast, renderCharacter, breed } from '@emojibot/core';
 
-  render();
+renderCast({ id: 'maomi', state: 'happy', size: 96 });
+renderCharacter({ body: 'pear', color: 'green', traits: ['sprout'], state: 'idle', size: 96 });</code></pre>
+      <p>特征清单：${TRAIT_IDS.join('、')}。</p>`;
+
+  el.innerHTML = [
+    section('这是什么', intro),
+    section('角色是基因组', genomeDoc),
+    section('角色族', familyTable),
+    section('协议', `<p>两位数的编号就是对外契约：十位代表分组，组间空号是给扩展留的。</p>${emotionTable}`),
+    section('调用', callDoc),
+  ].join('');
+
   return el;
 }

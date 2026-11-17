@@ -1,17 +1,27 @@
 /**
- * @emojibot/core — a small procedural character engine.
+ * @emojibot/core — a compositional character engine.
  *
  * Written for this project, MIT licensed, no dependency on any upstream
- * engine: shapes are hand-drawn paths, faces are a vocabulary of eyes and
- * mouths, and rendering is a pure function that returns SVG.
+ * engine. A character is a genome: a body from a family of formulas, a colour,
+ * and any number of traits that anchor themselves to the body they sit on.
+ * Rendering is a pure function that returns SVG, so the same code serves a
+ * browser, a static export and a test.
  */
-export { SHAPES, SHAPE_IDS, getShape, shapePreview } from './shapes.js';
-export type { ShapeSpec } from './shapes.js';
+export { BODIES, BODY_IDS, getBody, bodyPreview } from './body.js';
+export type { BodySpec, RadialFn } from './body.js';
+export { TRAITS, TRAIT_IDS, EAR_IDS, TOP_IDS, SIDE_IDS, SURFACE_IDS, PAIRED, renderTraits } from './traits.js';
+export type { TraitFn, TraitContext } from './traits.js';
+export { CAST, CAST_IDS, FAMILIES, castMember, castByFamily, breed } from './cast.js';
+export type { CastMember } from './cast.js';
 export { FACES, FACE_IDS, faceFor } from './face.js';
 export type { FaceSpec, EyeStyle, MouthStyle } from './face.js';
 export { COLORS, COLOR_IDS, colorHex } from './palette.js';
-export { renderCharacter, renderDataUrl, inkFor } from './render.js';
-export type { RenderOptions } from './render.js';
+export { renderCharacter, renderCast, renderFace, renderDataUrl, inkFor } from './render.js';
+export type { RenderOptions, CastRenderOptions } from './render.js';
+
+/* The old hand-drawn shapes remain exported for stored preferences. */
+export { SHAPES, SHAPE_IDS, getShape, shapePreview } from './shapes.js';
+export type { ShapeSpec } from './shapes.js';
 
 /*
  * The custom element lives at `@emojibot/core/element`, not here: it extends
