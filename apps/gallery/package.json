@@ -1,5 +1,5 @@
 {
-  "name": "@emojibot/gallery",
+  "name": "@emojitot/gallery",
   "private": true,
   "version": "0.2.0",
   "type": "module",
@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emojibot/protocol": "workspace:*",
-    "@emojibot/core": "workspace:*"
+    "@emojitot/protocol": "workspace:*",
+    "@emojitot/core": "workspace:*"
   },
   "devDependencies": {
     "vite": "^6.0.0"

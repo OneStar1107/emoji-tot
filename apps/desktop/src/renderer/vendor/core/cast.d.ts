@@ -41,6 +41,6 @@ export declare const CAST_IDS: readonly string[];
 export declare function castMember(id: string): CastMember | undefined;
 export declare function castByFamily(family: string): readonly CastMember[];
 /** The member a fresh open starts on. */
-export declare const DEFAULT_CAST = "bot";
+export declare const DEFAULT_CAST = "tot";
 /** Cross two members into a new genome. Deterministic for a given seed. */
 export declare function breed(a: CastMember, b: CastMember, seed: number): CastMember;

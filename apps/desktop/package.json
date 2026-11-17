@@ -1,8 +1,8 @@
 {
-  "name": "@emojibot/desktop",
+  "name": "@emojitot/desktop",
   "private": true,
   "version": "0.2.0",
-  "description": "EmojiBot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
+  "description": "EmojiTot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
@@ -20,7 +20,7 @@
   },
   "build": {
     "appId": "studio.emojibot.desktop",
-    "productName": "EmojiBot",
+    "productName": "EmojiTot",
     "files": [
       "src/**/*",
       "assets/**/*"

@@ -9,7 +9,7 @@
  * The crowd is drawn as static SVG and moved with CSS transforms: forty actors
  * animating forty SVG paths per frame would be a poor use of a browser.
  */
-import { CAST, castMember, renderCast } from '@emojibot/core';
+import { CAST, castMember, renderCast } from '@emojitot/core';
 import { look } from './store';
 import { t } from './i18n';
 

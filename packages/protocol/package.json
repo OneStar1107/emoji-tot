@@ -1,5 +1,5 @@
 {
-  "name": "@emojibot/protocol",
+  "name": "@emojitot/protocol",
   "version": "0.2.0",
   "description": "The two-digit emotion protocol: ids, segments, parsing, arbitration and an event bridge. No runtime dependencies.",
   "license": "MIT",

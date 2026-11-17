@@ -1,5 +1,5 @@
 /**
- * @emojibot/protocol
+ * @emojitot/protocol
  *
  * The two-digit emotion protocol, its parser, a multi-session arbiter and an
  * event bridge. No DOM, no runtime dependencies: the same code runs in a

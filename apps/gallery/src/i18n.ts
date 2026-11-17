@@ -51,7 +51,7 @@ const MESSAGES = {
 
     'docs.title': '文档',
 
-    'footer.license': 'MIT 许可 · 由 @emojibot/core 绘制',
+    'footer.license': 'MIT 许可 · 由 @emojitot/core 绘制',
   },
   en: {
     'nav.console': 'Console',
@@ -97,7 +97,7 @@ const MESSAGES = {
 
     'docs.title': 'Docs',
 
-    'footer.license': 'MIT licensed · drawn by @emojibot/core',
+    'footer.license': 'MIT licensed · drawn by @emojitot/core',
   },
 } as const;
 

@@ -161,9 +161,9 @@ export const BODIES: readonly BodySpec[] = [
     path: 'M18 88V48C18 28 32 12 50 12C68 12 82 28 82 48V88L70 79L58 88L46 79L34 88Z',
     face: { x: 50, y: 46 },
   },
-  // A bot: rounded body, an antenna, a screen-like face.
+  // A tot: rounded body, an antenna, a screen-like face.
   {
-    id: 'bot', family: 'object', height: 0.86,
+    id: 'tot', family: 'object', height: 0.86,
     path: 'M34 30H66Q84 30 84 46V70Q84 86 66 86H34Q16 86 16 70V46Q16 30 34 30Z',
     face: { x: 50, y: 58 },
     parts: [
@@ -177,7 +177,7 @@ export const BODIES: readonly BodySpec[] = [
 export const BODY_ZH: Record<string, string> = {
   circle: '圆', egg: '蛋', squircle: '方圆', blob: '软圆', pear: '梨', drop: '水滴',
   star: '星', gem: '宝石', pill: '面包', flower: '花', clover: '四叶', cloud: '云',
-  heart: '心', ghost: '幽灵', bot: '机器人',
+  heart: '心', ghost: '幽灵', tot: '机器人',
 };
 
 const BY_ID = new Map(BODIES.map((b) => [b.id, b]));

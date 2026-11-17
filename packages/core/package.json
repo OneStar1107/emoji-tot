@@ -1,5 +1,5 @@
 {
-  "name": "@emojibot/core",
+  "name": "@emojitot/core",
   "version": "0.2.0",
   "description": "A small procedural character engine: shapes, faces and SVG, written from scratch.",
   "license": "MIT",

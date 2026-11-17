@@ -1,10 +1,10 @@
 <div align="center">
 
-# EmojiBot
+# EmojiTot
 
 **面向桌面与 Web 的角色引擎 —— 15 个手绘轮廓的角色、44 个带分组与中文名的表情、模切白边画风；网页里看得见，桌面上养得起。**
 
-[控制台](https://onestar1107.github.io/emoji-bot/#/console) · [表情馆](https://onestar1107.github.io/emoji-bot/#/gallery) · [场景](https://onestar1107.github.io/emoji-bot/#/scene) · [文档](https://onestar1107.github.io/emoji-bot/#/docs) · [English](README.en.md)
+[控制台](https://onestar1107.github.io/emoji-tot/#/console) · [表情馆](https://onestar1107.github.io/emoji-tot/#/gallery) · [场景](https://onestar1107.github.io/emoji-tot/#/scene) · [文档](https://onestar1107.github.io/emoji-tot/#/docs) · [English](README.en.md)
 
 ![全家福](docs/screenshots/hero.png)
 
@@ -21,10 +21,10 @@
 
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiBot Setup 0.2.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.2.0/EmojiBot-Setup-0.2.0.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiBot Portable 0.2.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.2.0/EmojiBot-Portable-0.2.0.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot Setup 0.2.0.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.2.0/EmojiTot-Setup-0.2.0.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot Portable 0.2.0.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.2.0/EmojiTot-Portable-0.2.0.exe) | 便携版，双击即用，不写注册表 |
 
-Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-bot/releases)
+Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases)
 
 ## 这是什么
 
@@ -85,12 +85,12 @@ feed('thinking');              // 也可以直接给状态名
 
 - **贴边收起**：拖到屏幕左右边缘松手，球缩进去只留 30%，悬停滑出来。松手时光标就在边缘，所以必须移开过一次才会响应悬停——否则刚放下就被自己弹开。
 - **点击穿透**：窗口默认不拦点击，底下的桌面图标照样能点；指针落到球上才收回输入。
-- **15 个角色**：托盘菜单按族分组挑角色，选中即换外观、招牌表情和招牌动作；默认是黑底白字的 `bot`。
+- **15 个角色**：托盘菜单按族分组挑角色，选中即换外观、招牌表情和招牌动作；默认是黑底白字的 `tot`。
 - **Agent 联动**：菜单可开 DeepSeek Harness / Claude Code / Codex，读各自的状态文件并映射成表情。
-- **一个文件就是接口**：`%APPDATA%/EmojiBot/state.json`（macOS 在 `~/Library/Application Support/EmojiBot/`）。裸 id、JSON 串、JSON 对象都收，坏数据保留当前表情。
+- **一个文件就是接口**：`%APPDATA%/EmojiTot/state.json`（macOS 在 `~/Library/Application Support/EmojiTot/`）。裸 id、JSON 串、JSON 对象都收，坏数据保留当前表情。
 
 ```bash
-echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiBot/state.json"
+echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiTot/state.json"
 ```
 
 ## 快速开始
@@ -105,7 +105,7 @@ pnpm test        # 23 个协议测试
 出安装包：
 
 ```bash
-pnpm --filter @emojibot/desktop dist   # release/ 下出 Windows 安装包
+pnpm --filter @emojitot/desktop dist   # release/ 下出 Windows 安装包
 ```
 
 ## 项目结构

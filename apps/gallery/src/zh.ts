@@ -21,7 +21,7 @@ export const SHAPE_ZH: Record<string, string> = {
   cloud: '云',
   heart: '心',
   ghost: '幽灵',
-  bot: '机器人',
+  tot: '机器人',
 };
 
 /** The two finishes, in the words the console buttons use. */

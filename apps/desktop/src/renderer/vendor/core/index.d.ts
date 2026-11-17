@@ -1,5 +1,5 @@
 /**
- * @emojibot/core — a compositional character engine.
+ * @emojitot/core — a compositional character engine.
  *
  * Written for this project, MIT licensed, no dependency on any upstream
  * engine. A character is a genome: a body from a family of formulas, a colour,

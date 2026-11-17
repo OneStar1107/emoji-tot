@@ -1,10 +1,10 @@
 <div align="center">
 
-# EmojiBot
+# EmojiTot
 
 **A character engine for the desktop and the web — 15 characters from 15 bodies × hand-written outlines × 12 colours, 44 expressions driven by one two-digit number. Visible in a page, livable on a desktop.**
 
-[Console](https://onestar1107.github.io/emoji-bot/#/console) · [Faces](https://onestar1107.github.io/emoji-bot/#/gallery) · [Scene](https://onestar1107.github.io/emoji-bot/#/scene) · [Docs](https://onestar1107.github.io/emoji-bot/#/docs) · [中文](README.md)
+[Console](https://onestar1107.github.io/emoji-tot/#/console) · [Faces](https://onestar1107.github.io/emoji-tot/#/gallery) · [Scene](https://onestar1107.github.io/emoji-tot/#/scene) · [Docs](https://onestar1107.github.io/emoji-tot/#/docs) · [中文](README.md)
 
 ![Cast](docs/screenshots/hero.png)
 
@@ -21,10 +21,10 @@
 
 | File | For |
 | --- | --- |
-| [EmojiBot Setup 0.2.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.2.0/EmojiBot-Setup-0.2.0.exe) | Installer — starts from the Start menu |
-| [EmojiBot Portable 0.2.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.2.0/EmojiBot-Portable-0.2.0.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot Setup 0.2.0.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.2.0/EmojiTot-Setup-0.2.0.exe) | Installer — starts from the Start menu |
+| [EmojiTot Portable 0.2.0.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.2.0/EmojiTot-Portable-0.2.0.exe) | Portable — double-click, writes nothing to the registry |
 
-Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-bot/releases)
+Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases)
 
 ## What this is
 
@@ -32,7 +32,7 @@ Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all relea
 
 | Axis | Count | How |
 | --- | --- | --- |
-| Bodies | 15 | circle, egg, squircle, drop, star, gem, petal, cloud, heart, ghost, bot… all sampled from `r(t)` or a short parametric curve |
+| Bodies | 15 | circle, egg, squircle, drop, star, gem, petal, cloud, heart, ghost, tot… all sampled from `r(t)` or a short parametric curve |
 | Finish | 2 | 6 ears, 8 things on top, 5 on the sides, 6 surface markings; each anchors to the body's height and pointiness |
 | Colours | 12 | flat hexes; the face ink inverts by luminance |
 | Expressions | 44 | 9 eye styles × 10 mouth styles plus lean, indexed by the protocol's state names |
@@ -86,10 +86,10 @@ The same ball can live on any desktop (Windows / macOS):
 - **Edge docking** — drag it to a left or right edge and it tucks away, leaving 30% on screen; hover the sliver and it slides back out. The drop happens with the cursor on the edge, so it only opens after the pointer has left once.
 - **Click-through** — the window never eats a click meant for the desktop behind it; input is taken back only when the pointer is on the ball.
 - **Agent linkage** — DeepSeek Harness, Claude Code and Codex can each drive the face from their own status file.
-- **One file is the whole interface** — `%APPDATA%/EmojiBot/state.json` on Windows, `~/Library/Application Support/EmojiBot/` on macOS. A bare id, a JSON string or a JSON object all work; malformed writes keep the current face.
+- **One file is the whole interface** — `%APPDATA%/EmojiTot/state.json` on Windows, `~/Library/Application Support/EmojiTot/` on macOS. A bare id, a JSON string or a JSON object all work; malformed writes keep the current face.
 
 ```bash
-echo '{"emotionId":"34","tips":"build failed"}' > "$APPDATA/EmojiBot/state.json"
+echo '{"emotionId":"34","tips":"build failed"}' > "$APPDATA/EmojiTot/state.json"
 ```
 
 ## Quick start
@@ -104,7 +104,7 @@ pnpm test        # 27 protocol tests, including a row-by-row comparison with ups
 Package the app:
 
 ```bash
-pnpm --filter @emojibot/desktop dist   # Windows installer lands in release/
+pnpm --filter @emojitot/desktop dist   # Windows installer lands in release/
 ```
 
 ## Layout

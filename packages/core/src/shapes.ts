@@ -57,7 +57,7 @@ export const SHAPES: readonly ShapeSpec[] = [
     face: { x: 50, y: 48 },
   },
   {
-    id: 'bot',
+    id: 'tot',
     body: 'M28 34H72C78 34 82 38 82 44V74C82 80 78 84 72 84H28C22 84 18 80 18 74V44C18 38 22 34 28 34Z',
     face: { x: 50, y: 60 },
     eyeScale: 0.95,

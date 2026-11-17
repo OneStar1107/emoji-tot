@@ -46,7 +46,7 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 3. **脸** —— 两只眼、一张嘴，按状态取词，带 lean 偏移
 4. **轮廓外** —— 耳朵、光环、尾巴（在身体外面，必须压在最上层）
 
-墨色不单独选：`inkFor()` 按身体亮度取反（亮度 < 0.55 用白墨，否则用深墨）。所以「白底黑字」和「黑底白字」是同一个规则的两端，`bot` 就是后者的默认演示。
+墨色不单独选：`inkFor()` 按身体亮度取反（亮度 < 0.55 用白墨，否则用深墨）。所以「白底黑字」和「黑底白字」是同一个规则的两端，`tot` 就是后者的默认演示。
 
 ## 站点
 
@@ -57,12 +57,12 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 ## 构建与发布
 
 ```bash
-pnpm --filter @emojibot/protocol build
-pnpm --filter @emojibot/core build
+pnpm --filter @emojitot/protocol build
+pnpm --filter @emojitot/core build
 node apps/desktop/scripts/copy-vendor.mjs
-pnpm --filter @emojibot/gallery build
+pnpm --filter @emojitot/gallery build
 ```
 
-- 站点：`apps/gallery/dist` 推到 `gh-pages`，`vite base` 必须是 `/emoji-bot/`
+- 站点：`apps/gallery/dist` 推到 `gh-pages`，`vite base` 必须是 `/emoji-tot/`
 - 桌宠：`apps/desktop` 下跑 electron-builder，产物在 `release/`
 - 注入方式：宿主持有 `emotionId` 写进状态文件，或直接调用 `core` 的渲染函数

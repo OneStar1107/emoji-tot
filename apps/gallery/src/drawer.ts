@@ -7,8 +7,8 @@
  * expressions are the current character feeling that expression. Text is only
  * used for the name, and always the Chinese name when the page is in Chinese.
  */
-import { CAST, COLOR_IDS, COLOR_ZH, COLORS, FACES, FAMILIES, castMember, renderCast, renderCharacter } from '@emojibot/core';
-import { EMOTIONS, EMOTION_SEGMENTS } from '@emojibot/protocol';
+import { CAST, COLOR_IDS, COLOR_ZH, COLORS, FACES, FAMILIES, castMember, renderCast, renderCharacter } from '@emojitot/core';
+import { EMOTIONS, EMOTION_SEGMENTS } from '@emojitot/protocol';
 import { look, selectCast, setLook, type BackgroundId } from './store';
 
 const BACKGROUNDS: BackgroundId[] = ['plain', 'grid', 'dots', 'night', 'paper'];

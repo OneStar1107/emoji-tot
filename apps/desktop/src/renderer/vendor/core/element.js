@@ -1,5 +1,5 @@
 /**
- * <emojibot-ball> — the character as a custom element.
+ * <emojitot-ball> — the character as a custom element.
  *
  * The desktop renderer has no build step, so this ships as a plain ES module
  * and registers itself. Animation is CSS: a breath on the body and a blink on
@@ -15,7 +15,7 @@ const STYLE = `
   @media (prefers-reduced-motion: reduce) { .ball { animation: none; } }
   :host([data-paused]) .ball { animation-play-state: paused; }
 `;
-export class EmojiBotBall extends HTMLElement {
+export class EmojiTotBall extends HTMLElement {
     static get observedAttributes() {
         return ['cast', 'body', 'shape', 'color', 'state', 'size', 'traits'];
     }
@@ -140,10 +140,10 @@ export class EmojiBotBall extends HTMLElement {
     }
 }
 /** Register the element once. Safe to call in a browser only. */
-export function defineBall(tag = 'emojibot-ball') {
+export function defineBall(tag = 'emojitot-ball') {
     if (typeof customElements === 'undefined' || customElements.get(tag))
         return;
-    customElements.define(tag, EmojiBotBall);
+    customElements.define(tag, EmojiTotBall);
 }
 /*
  * Registering on import is the whole point of this entry: a page can add one

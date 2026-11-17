@@ -19,10 +19,10 @@ importers:
 
   apps/gallery:
     dependencies:
-      '@emojibot/protocol':
+      '@emojitot/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@emojibot/core':
+      '@emojitot/core':
         specifier: workspace:*
         version: link:../../packages/core
     devDependencies:

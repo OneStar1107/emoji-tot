@@ -1,8 +1,8 @@
 {
-  "name": "emoji-bot",
+  "name": "emoji-tot",
   "private": true,
   "version": "0.2.0",
-  "description": "EmojiBot: an expressive character for the desktop and the web, driven by a two-digit protocol",
+  "description": "EmojiTot: an expressive character for the desktop and the web, driven by a two-digit protocol",
   "type": "commonjs",
   "license": "MIT",
   "pnpm": {

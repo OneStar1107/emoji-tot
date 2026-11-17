@@ -10,13 +10,13 @@ import { castMember, FACE_META } from './vendor/core/index.js';
 
 const pet = document.getElementById('pet');
 const bubble = document.getElementById('bubble');
-const ball = document.querySelector('emojibot-ball');
+const ball = document.querySelector('emojitot-ball');
 const api = window.petAPI;
 
 // Everything below sets properties on the custom element, so it has to exist
 // first. Module scripts are ordered, but making the dependency explicit is
 // cheaper than debugging a race.
-await customElements.whenDefined('emojibot-ball');
+await customElements.whenDefined('emojitot-ball');
 
 let bubbleTimer = null;
 
@@ -164,7 +164,7 @@ const AGENT_MOODS = FACE_META.filter((m) => m.group === 'agent' && m.id !== 'wai
  * and its signature motion plays when the mood ends, so switching the cast
  * changes behaviour, not just paint.
  */
-let member = castMember('bot');
+let member = castMember('tot');
 
 /*
  * A shuffled queue instead of a random pick.
