@@ -223,7 +223,10 @@ api.onCast((id) => {
 });
 
 api.onSize((px) => {
-  ball.setAttribute('size', String(px));
+  // Mid-drag the window is being moved; a size update here would fight the
+  // grab and can leave the ball larger than the window.
+  if (dragging) return;
+  ball.setAttribute('size', String(clampBall(px)));
 });
 
 /*
@@ -261,11 +264,24 @@ if (typeof api.debugState === 'function') {
 // The window is transparent; a frame with no character in it reads as a crash.
 // The ball occupies the square below the bubble strip, so the smaller of the
 // two dimensions is the one that fits.
+/*
+ * The ball is sized from the window, but never unbounded.
+ *
+ * A window that crosses monitors can report a new innerWidth/Height mid-drag;
+ * sizing straight from it made the ball grow and stay grown. Clamping to the
+ * range the menu offers (48..240) keeps a bad measurement from becoming a
+ * giant pet, and the drag guard keeps the size stable while the window moves.
+ */
+function clampBall(px) {
+  return Math.max(48, Math.min(240, Math.round(px)));
+}
+
 function fitBall() {
+  if (dragging) return;
   // 16px of animation margin plus 88px of bubble room on each side; the
   // window is square and the ball is centred, so both axes agree.
   const room = (16 + 88) * 2;
-  const px = Math.max(32, Math.min(window.innerWidth, window.innerHeight) - room);
+  const px = clampBall(Math.min(window.innerWidth, window.innerHeight) - room);
   ball.setAttribute('size', String(px));
   document.documentElement.style.setProperty('--ball-size', `${px}px`);
 }
