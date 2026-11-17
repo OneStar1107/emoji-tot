@@ -63,7 +63,7 @@
 ## 6. 接入方式
 
 ```ts
-import { createEmotionChannel, createArbiter } from '@emotion-studio/protocol';
+import { createEmotionChannel, createArbiter } from '@emojibot-studio/protocol';
 
 // 单来源
 const channel = createEmotionChannel({ initial: '02' });

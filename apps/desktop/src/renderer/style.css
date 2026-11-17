@@ -1,0 +1,65 @@
+/* A transparent window: only the ball and its bubble paint anything. */
+
+:root {
+  color-scheme: light dark;
+  font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  cursor: grab;
+}
+
+body:active { cursor: grabbing; }
+
+/*
+ * The window is taller than the ball: the strip at the top belongs to the
+ * bubble. The ball is sized to the square below it.
+ */
+#pet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: 46px;
+  display: grid;
+  place-items: center;
+}
+
+aora-bot {
+  width: 100%;
+  height: 100%;
+}
+
+#bubble {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, 4px);
+  max-width: 260px;
+  padding: 5px 9px;
+  border-radius: 10px;
+  background: light-dark(#ffffff, #1c1c1c);
+  color: light-dark(#1a1a1a, #f2f2f2);
+  border: 1px solid light-dark(#e4e4e4, #333333);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease, transform 160ms ease;
+  white-space: pre-wrap;
+  word-break: break-word;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 8px));
+}
+
+#bubble[data-visible="true"] {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}

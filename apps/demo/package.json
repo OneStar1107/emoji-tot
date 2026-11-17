@@ -1,5 +1,5 @@
 {
-  "name": "@emotion-studio/demo",
+  "name": "@emojibot-studio/demo",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -11,7 +11,7 @@
   "dependencies": {
     "@aora-bot/element": "0.2.0",
     "@aora-bot/engine": "0.2.0",
-    "@emotion-studio/protocol": "workspace:*"
+    "@emojibot-studio/protocol": "workspace:*"
   },
   "devDependencies": {
     "vite": "^6.0.0"

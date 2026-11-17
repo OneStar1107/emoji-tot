@@ -1,5 +1,5 @@
 {
-  "name": "emotion-studio",
+  "name": "emojibot-studio",
   "private": true,
   "version": "0.1.0",
   "description": "Fused, non-commercial fork of Emotion Ball + Aora Bot + 球球桌宠",
@@ -12,6 +12,6 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter @emotion-studio/demo dev"
+    "dev": "pnpm --filter @emojibot-studio/demo dev"
   }
 }

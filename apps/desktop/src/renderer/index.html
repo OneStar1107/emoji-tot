@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'" />
+<title>EmojiBot</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="pet" title="拖动我 · 右键菜单">
+    <aora-bot shape="circle" color="black" size="120" state="idle"></aora-bot>
+  </div>
+  <div id="bubble" role="status" aria-live="polite"></div>
+
+  <!-- The engine's single-file build is an ES module; renderer.js waits for
+       the element to be defined rather than assuming script order. -->
+  <script type="module" src="./vendor/aora-bot.js"></script>
+  <script type="module" src="./renderer.js"></script>
+</body>
+</html>

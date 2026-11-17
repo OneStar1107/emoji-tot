@@ -13,7 +13,7 @@ import {
   createEmotionChannel,
   getEmotion,
   type EmotionId,
-} from '@emotion-studio/protocol';
+} from '@emojibot-studio/protocol';
 import './style.css';
 
 defineAoraBot();

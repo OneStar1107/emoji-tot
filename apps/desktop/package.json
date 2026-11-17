@@ -1,0 +1,46 @@
+{
+  "name": "@emojibot-studio/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "EmojiBot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "studio.emojibot.desktop",
+    "productName": "EmojiBot",
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "directories": {
+      "output": "../../release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.entertainment"
+    }
+  },
+  "dependencies": {
+    "@emojibot-studio/protocol": "workspace:*"
+  }
+}
