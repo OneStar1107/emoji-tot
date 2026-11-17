@@ -87,13 +87,13 @@ const AGENT_SOURCES = [
   {
     id: 'claude',
     label: 'Claude Code',
-    file: () => path.join(os.homedir(), '.claude', 'emojibot-state.json'),
+    file: () => path.join(os.homedir(), '.claude', 'emojitot-state.json'),
     map: (raw) => (raw && typeof raw.emotionId === 'string' ? raw.emotionId : null),
   },
   {
     id: 'codex',
     label: 'Codex',
-    file: () => path.join(os.homedir(), '.codex', 'emojibot-state.json'),
+    file: () => path.join(os.homedir(), '.codex', 'emojitot-state.json'),
     map: (raw) => (raw && typeof raw.emotionId === 'string' ? raw.emotionId : null),
   },
 ];
@@ -133,7 +133,7 @@ async function loadCore() {
     CORE = await import(pathToFileURL(file).href);
   } catch (error) {
     CORE = null;
-    console.error('[emojibot] cast table unavailable:', error.message);
+    console.error('[emojitot] cast table unavailable:', error.message);
   }
 }
 
