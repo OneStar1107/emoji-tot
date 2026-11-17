@@ -27,7 +27,7 @@ for (const def of EMOTIONS) {
   const state = stateForEmotion(def.id);
   let svg;
   try {
-    svg = renderStaticSvg({ shape: 'mochi', color: 'black', state, size: 96 });
+    svg = renderStaticSvg({ shape: 'circle', color: 'black', state, size: 96 });
   } catch (error) {
     failures++;
     console.error(`✗ ${def.id} ${def.name.zh}: ${error.message}`);
