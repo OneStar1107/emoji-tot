@@ -5,6 +5,8 @@
  * state name from the main process — this file never learns what an id means,
  * so the protocol table has exactly one home.
  */
+import { faceFor } from './faces.js';
+
 const pet = document.getElementById('pet');
 const bubble = document.getElementById('bubble');
 const ball = document.querySelector('aora-bot');
@@ -81,7 +83,9 @@ let actionToken = 0;
 api.onState((message) => {
   actionToken += 1;
   if (message.state) ball.state = message.state;
-  if (message.tips) say(message.tips);
+  // Kaomoji first: the bubble speaks the same language as the face.
+  const face = faceFor(message.state, message.tips);
+  if (face) say(face);
 });
 
 // The main process picks the action, so a poke and the menu agree on what is
@@ -130,6 +134,21 @@ window.setInterval(() => {
 api.onSize((px) => {
   ball.setAttribute('size', String(px));
 });
+
+/*
+ * While docked the bubble has to grow inward, or it would be the part that
+ * hangs off the screen.
+ */
+api.onDock((side) => {
+  if (side) document.body.dataset.docked = side;
+  else delete document.body.dataset.docked;
+});
+
+if (typeof api.debugState === 'function') {
+  api.debugState().then((s) => {
+    if (s?.docked) document.body.dataset.docked = s.docked.startsWith('left') ? 'left' : 'right';
+  }).catch(() => {});
+}
 
 // The window is transparent; a frame with no character in it reads as a crash.
 // The ball occupies the square below the bubble strip, so the smaller of the

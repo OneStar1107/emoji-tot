@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld('petAPI', {
     ipcRenderer.on('state:action', handler);
     return () => ipcRenderer.removeListener('state:action', handler);
   },
+  /** Which edge the ball is docked to, or null. */
+  onDock: (listener) => {
+    const handler = (_event, side) => listener(side);
+    ipcRenderer.on('dock:changed', handler);
+    return () => ipcRenderer.removeListener('dock:changed', handler);
+  },
+
   /** Present only when the main process runs with --dev. */
   debugState: () => ipcRenderer.invoke('debug:state'),
 

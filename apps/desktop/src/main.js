@@ -279,6 +279,7 @@ function dock(side) {
   dockArmed = false;
   win.setPosition(x, y);
   startHoverWatch();
+  notifyDock();
   refreshMenus();
 }
 
@@ -293,6 +294,7 @@ function undock() {
   dockArmed = false;
   win.setPosition(x, y);
   stopHoverWatch();
+  notifyDock();
   savePrefs();
   refreshMenus();
 }
@@ -331,6 +333,7 @@ function startHoverWatch() {
       if (dockOpen) {
         dockOpen = false;
         win.setPosition(closedX, wy);
+        notifyDock();
       }
       return;
     }
@@ -350,6 +353,9 @@ function stopHoverWatch() {
 
 function startDrag(point) {
   if (!win) return;
+  // Re-entrant drags happen when a click-through toggle makes the window
+  // re-hit-test; ignoring the second press keeps the offset honest.
+  if (dragTimer) clearInterval(dragTimer);
   const [wx, wy] = win.getPosition();
   dragOffset = { x: point.x - wx, y: point.y - wy };
   clearInterval(dragTimer);
@@ -393,7 +399,23 @@ function endDrag() {
 function emitState(payload) {
   if (!win || win.isDestroyed()) return;
   const message = parseAgentMessage(payload);
-  if (message) win.webContents.send('state:apply', message);
+  if (!message) return;
+  try {
+    win.webContents.send('state:apply', message);
+  } catch {
+    // The window can be between load and ready; dropping one frame beats
+    // throwing inside a polling timer, which would stop the poll for good.
+  }
+}
+
+/** Tell the renderer which edge the ball is on, so the bubble grows inward. */
+function notifyDock() {
+  if (!win || win.isDestroyed()) return;
+  try {
+    win.webContents.send('dock:changed', dockSide ? (dockOpen ? `${dockSide}-open` : dockSide) : null);
+  } catch {
+    /* same as above */
+  }
 }
 
 function applyStateFile() {
@@ -447,9 +469,13 @@ function startAgentWatch(prefs) {
       }
       if (stat.mtimeMs === last) return;
       last = stat.mtimeMs;
-      const id = source.map(readJson(file, null));
+      // A file caught mid-write parses as null; leave `last` alone so the next
+      // tick retries instead of waiting for the writer to touch it again.
+      const raw = readJson(file, null);
+      if (raw == null) return;
+      const id = source.map(raw);
       if (id) emitState({ emotionId: id });
-    }, 700);
+    }, 350);
   }
 }
 

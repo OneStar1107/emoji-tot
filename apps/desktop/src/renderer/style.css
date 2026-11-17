@@ -76,3 +76,17 @@ aora-bot {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+/*
+ * While docked, half the window is off-screen, so a centred bubble would be
+ * the half nobody sees. It grows toward the inside of the screen instead.
+ */
+body[data-docked] #bubble {
+  transform: translate(0, 4px);
+  max-width: calc(100vw - 12px);
+}
+
+body[data-docked="left"] #bubble { left: auto; right: 2px; }
+body[data-docked="right"] #bubble { left: 2px; }
+
+body[data-docked] #bubble[data-visible="true"] { transform: translate(0, 0); }
