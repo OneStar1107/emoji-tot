@@ -2,16 +2,16 @@
 
 # EmojiBot
 
-**面向桌面与 Web 的角色引擎 —— 15 个角色来自 15 种身体 × 26 种特征 × 12 色，44 个表情由一个两位数驱动；网页里看得见，桌面上养得起。**
+**面向桌面与 Web 的角色引擎 —— 15 个手绘轮廓的角色、44 个带分组与中文名的表情、模切白边画风；网页里看得见，桌面上养得起。**
 
 [控制台](https://onestar1107.github.io/emoji-bot/#/console) · [表情馆](https://onestar1107.github.io/emoji-bot/#/gallery) · [场景](https://onestar1107.github.io/emoji-bot/#/scene) · [文档](https://onestar1107.github.io/emoji-bot/#/docs) · [English](README.en.md)
 
 ![全家福](docs/screenshots/hero.png)
 
 > **关于 / About**
-> 一个由公式画出来的角色引擎：15 个角色来自 15 种参数化身体 × 26 种特征 × 12 色，44 个表情由一个两位数驱动。桌宠、控制台、站点共用同一套引擎，零图片资源。
+> 一个用 SVG 画出来的角色引擎：15 个角色各有自己手写的闭合轮廓，44 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
 >
-> A character engine drawn from formulas: 15 characters from 15 parametric bodies × 26 traits × 12 colours, and 44 expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
+> A character engine drawn in SVG: 15 characters, each with its own hand-written closed outline; 44 expressions grouped into lifecycle, emotions and agent states, in a die-cut sticker finish by default. The desktop pet, the console and the site share one engine, with zero image assets.
 
 </div>
 
@@ -28,14 +28,14 @@ Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行�
 
 ## 这是什么
 
-**角色不是图片，是一段基因。** 没有雪碧图，没有 Lottie 文件，也没有一张手绘的角色图：一个角色是 `{ body, color, traits, state }` 四项，身体来自参数化公式，特征会自己贴着身体找位置，表情是眼型与嘴型的一小套词汇。加一行就有新角色——这是组合式阵容和预绘图阵容的根本区别。
+**角色不是图片，是一段基因。** 没有雪碧图，没有 Lottie 文件，也没有一张手绘的角色图：一个角色是 `{ body, color, face }` 三项——身体是一条手写的闭合贝塞尔路径，颜色决定五官墨色（按亮度自动取反），表情是眼型与嘴型的一小套词汇。加一行就有新角色。
 
 | 维度 | 数量 | 说明 |
 | --- | --- | --- |
 | 身体 | 15 | 圆、蛋、方圆、水滴、星、宝石、花瓣、云、心、幽灵、机器人…都由 `r(t)` 或参数曲线采样生成 |
-| 特征 | 26 | 引擎能力：耳朵、头顶、身侧、表面，锚点读身体的高度与尖度（角色各戴一个） |
-| 颜色 | 12 | 实色；五官墨色按亮度自动取反 |
-| 表情 | 44 | 6 种眼型 × 7 种嘴型 + 偏移，由协议里的状态名索引 |
+| 身体 | 15 | 每个形态按它本来的样子手写：梨有腰和梗叶、面包有拱顶平底、星星有五个真角、樱花是五片心形瓣 |
+| 表情 | 44 | 9 种眼型 × 10 种嘴型 + 偏移；带分组元数据（中文名、英文 id、一句话行为描述） |
+| 画风 | 2 | 模切白边（默认，深色身体自动换深边）与纯平涂，同一份轮廓切换 |
 | 角色 | 15 | 每种身体一个代表，各有招牌表情与招牌动作 |
 | 后代 | 无限 | `breed(a, b, seed)` 交叉两个角色的基因，不落库 |
 
@@ -43,7 +43,7 @@ Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行�
 
 | 部件 | 位置 | 它做什么 |
 | --- | --- | --- |
-| 角色引擎 | `packages/core` | 参数化身体、特征锚点、表情词汇、四层合成，输出 SVG |
+| 角色引擎 | `packages/core` | 手写轮廓、部件层、表情词汇、画风与合成，输出 SVG |
 | 两位数协议 | `packages/protocol` | 把两位数字变成状态，带仲裁、事件桥与容错解析 |
 | 桌面与站点 | `apps/desktop` · `apps/gallery` | 贴边常驻的桌宠；控制台、表情馆、场景、文档四页 |
 
@@ -70,7 +70,7 @@ feed('thinking');              // 也可以直接给状态名
 
 | 页面 | 内容 |
 | --- | --- |
-| **控制台** | 15 个角色任选，15 身体 · 12 色 · 26 特征 · 44 表情逐项可调；组件片段与 JSON 基因组随选择实时生成 |
+| **控制台** | 15 个角色任选，15 身体 · 12 色 · 44 表情逐项可调；组件片段与 JSON 基因组随选择实时生成 |
 | **表情馆** | 两个墙：15 个角色的阵容墙（按族筛选），和 44 个表情的表情墙；点角色跳去控制台，点表情带着状态过去 |
 | **场景** | 十四个角色同台，各自按自己的节奏换表情；点它会回应你，还有"全体开心 / 全体入睡 / 换一批" |
 | **文档** | 引擎怎么画、基因组怎么组、协议每一位什么意思、怎么调用，全部由代码生成，不会过时 |

@@ -6,7 +6,7 @@
  * so the protocol table has exactly one home.
  */
 import { faceFor } from './faces.js';
-import { castMember } from './vendor/core/index.js';
+import { castMember, FACE_META } from './vendor/core/index.js';
 
 const pet = document.getElementById('pet');
 const bubble = document.getElementById('bubble');
@@ -146,7 +146,18 @@ api.onAction((action) => {
  * repeats the last one. Timers are chained rather than fixed so the rhythm
  * does not turn into a metronome.
  */
-const GENERIC_MOODS = ['curious', 'happy', 'bored', 'excited', 'playful', 'proud', 'shy', 'humming', 'surprised', 'confused', 'laughing', 'waiting', 'thinking', 'curious'];
+/*
+ * Two pools, because a ball with a job and a ball with nothing to do are not
+ * the same character.
+ *
+ * Idle, it may wear any living or feeling face — that is what makes it feel
+ * alive. Busy, it may only wear faces the job itself could produce; a pet that
+ * starts giggling mid-task reads as "not actually doing anything".
+ */
+const IDLE_MOODS = FACE_META
+  .filter((m) => m.group !== 'agent' && !['idle', 'sleeping', 'powering-down', 'spawning'].includes(m.id))
+  .map((m) => m.id);
+const AGENT_MOODS = FACE_META.filter((m) => m.group === 'agent' && m.id !== 'waiting').map((m) => m.id);
 
 /*
  * The member the pet is wearing. Its signature expression leads the mood pool
@@ -165,9 +176,9 @@ let member = castMember('bot');
 let moodBag = [];
 
 function refillBag() {
-  const pool = [member?.face, ...GENERIC_MOODS].filter(Boolean);
-  const unique = [...new Set(pool)].filter((state) => state !== 'idle');
-  for (let i = unique.length - 1; i > 0; i -= 1) {
+  const busy = taskState !== 'idle';
+  const pool = busy ? AGENT_MOODS : [member?.face, ...IDLE_MOODS].filter(Boolean);
+  const unique = [...new Set(pool)].filter((state) => state !== 'idle' && state !== taskState);
     const j = Math.floor(Math.random() * (i + 1));
     [unique[i], unique[j]] = [unique[j], unique[i]];
   }
@@ -184,9 +195,11 @@ function scheduleMood() {
   clearTimeout(moodTimer);
   moodTimer = window.setTimeout(() => {
     /*
-     * A borrowed mood is allowed even while a task is showing: the host's
-     * state is the resident, but a pet that only ever wears it is a status
-     * light. It holds the mood briefly, then snaps back to `taskState`.
+     * A running task owns the face.
+     *
+     * With a job in flight the ball only borrows other *agent* states — never
+     * a feeling. Sadness or delight in the middle of a task is a lie about
+     * what is happening; another agent state is just a change of activity.
      */
     if (!document.hidden && !dragging) {
       const mood = nextMood();

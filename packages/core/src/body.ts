@@ -1,16 +1,26 @@
 /**
- * Bodies, as formulas rather than drawings.
+ * Bodies, drawn by hand this time.
  *
- * A hand-drawn path gives one silhouette and locks it. A radial formula gives
- * a family: the same function with a different amplitude is a rounder ball, a
- * pear, or a star. Every body here is described by `r(t)` — the distance from
- * the centre at angle t — or by a short parametric curve, then sampled into a
- * path. That is what lets one file carry fourteen silhouettes that still read
- * as different characters, and what lets a host deform any of them later.
+ * The first version sampled every silhouette from a radial formula: cheap to
+ * extend, but a formula cannot describe a pear's waist, a bread's flat base,
+ * or a star's five real corners. Each path here is written out, closed with
+ * `Z`, and reviewed for the two things a formula got wrong: a missing sliver
+ * where the pen stopped, and a corner rounded off until the character lost the
+ * one feature that identifies it.
  *
- * All bodies live in the same 100×100 box and are centred on (50, 50), so one
- * set of face coordinates works on all of them.
+ * All bodies share the 100×100 box and sit on (50, 50).
  */
+export interface BodyPart {
+  /** One extra shape, in box coordinates. */
+  d: string;
+  /** Same colour as the body, or a darker/lighter tone of it. */
+  tone?: 'body' | 'shade' | 'light';
+  /** Drawn under the body instead of over it (stems, antennae). */
+  behind?: boolean;
+  /** Rotation in degrees about the box centre, for petals and leaves. */
+  rotate?: number;
+}
+
 export interface BodySpec {
   id: string;
   family: string;
@@ -23,94 +33,150 @@ export interface BodySpec {
   height: number;
   /** How pointy the top is (0 round, 1 spiked), used by ear anchoring. */
   pointed?: number;
+  /** Signature add-ons that belong to the species, not to a character. */
+  parts?: BodyPart[];
+  /**
+   * Fatten the fill by this many units with a round-joined stroke of its own
+   * colour, which turns sharp corners blunt — how a cookie-cutter star gets
+   * its soft points without redrawing the outline.
+   */
+  round?: number;
 }
 
-export type RadialFn = (t: number) => number;
+/** One upward cherry-blossom petal, notched at the tip, drawn from the centre. */
+const PETAL_NOTCHED =
+  'M50 50C40 44 32 30 34 21C35.5 13.5 43 12 46.5 19L50 25L53.5 19C57 12 64.5 13.5 66 21C68 30 60 44 50 50Z';
 
-const TAU = Math.PI * 2;
-
-/** Sample a radial function into a closed polygon path. */
-function radial(fn: RadialFn, steps = 96, cx = 50, cy = 50): string {
-  const pts: string[] = [];
-  for (let i = 0; i < steps; i++) {
-    const t = (i / steps) * TAU;
-    const r = fn(t);
-    pts.push(`${(cx + Math.cos(t) * r).toFixed(2)} ${(cy + Math.sin(t) * r).toFixed(2)}`);
-  }
-  return `M${pts.join('L')}Z`;
-}
-
-/** |cos|^n + |sin|^n superellipse, the family behind circles, squircles and gems. */
-const superellipse = (n: number, radius = 40): RadialFn => (t) =>
-  radius / Math.pow(Math.pow(Math.abs(Math.cos(t)), n) + Math.pow(Math.abs(Math.sin(t)), n), 1 / n);
-
-/** A cone-ish top: narrow at the top, wide at the base. */
-const pearShape = (radius = 40, waist = 0.24): RadialFn => (t) =>
-  radius * (1 - waist * Math.cos(t) + 0.08 * Math.cos(2 * t));
-
-/** n petals, softly. */
-const petalShape = (n: number, radius = 40, depth = 0.26): RadialFn => (t) =>
-  radius * (1 - depth * Math.abs(Math.cos((n * t) / 2)));
-
-/** n sharp points. */
-const starShape = (n: number, radius = 40, inner = 0.56): RadialFn => (t) => {
-  const p = ((t + Math.PI / 2) / TAU) * n;
-  const f = Math.abs((p % 1) - 0.5) * 2;
-  return radius * (inner + (1 - inner) * f);
-};
-
-/** The classic teardrop: pointed at the top, round at the bottom. */
-const dropShape = (radius = 40): RadialFn => (t) => {
-  const c = Math.cos(t);
-  return radius * (1 - 0.42 * c * c * c) * (1 + 0.06 * Math.max(0, -c));
-};
+/** One upward clover leaf: a heart with its point at the centre. */
+const LEAF_HEART =
+  'M50 50C40 43 32 29 34 20C35.5 12.5 43.5 11.5 47 19L50 25L53 19C56.5 11.5 64.5 12.5 66 20C68 29 60 43 50 50Z';
 
 export const BODIES: readonly BodySpec[] = [
-  { id: 'circle', family: 'round', path: radial(() => 40), face: { x: 50, y: 52 }, height: 0.8 },
-  { id: 'egg', family: 'round', path: radial(pearShape(38, 0.12)), face: { x: 50, y: 54 }, height: 0.82 },
-  { id: 'squircle', family: 'square', path: radial(superellipse(3.4, 42)), face: { x: 50, y: 52 }, height: 0.84 },
-  { id: 'blob', family: 'round', path: radial((t) => 40 * (1 + 0.07 * Math.sin(3 * t + 0.7) + 0.04 * Math.cos(5 * t + 1.9))), face: { x: 50, y: 52 }, height: 0.8 },
-  { id: 'pear', family: 'garden', path: radial(pearShape(40, 0.26)), face: { x: 50, y: 58 }, height: 0.88 },
-  { id: 'drop', family: 'round', path: radial(dropShape(40)), face: { x: 50, y: 58 }, height: 0.9, pointed: 0.6 },
-  { id: 'star', family: 'poly', path: radial(starShape(5, 44, 0.54)), face: { x: 50, y: 54 }, eyeScale: 0.92, height: 0.88, pointed: 0.7 },
-  { id: 'gem', family: 'poly', path: radial(superellipse(1.15, 42)), face: { x: 50, y: 54 }, height: 0.84, pointed: 0.8 },
-  { id: 'pill', family: 'square', path: radial((t) => 40 * Math.sqrt(1 - 0.28 * Math.sin(t) ** 2)), face: { x: 50, y: 52 }, height: 0.72 },
-  { id: 'flower', family: 'flora', path: radial(petalShape(5, 42, 0.24)), face: { x: 50, y: 52 }, height: 0.84 },
-  { id: 'clover', family: 'flora', path: radial(petalShape(4, 40, 0.3)), face: { x: 50, y: 52 }, height: 0.8 },
-  { id: 'cloud', family: 'flora', path: radial((t) => 40 * (0.86 + 0.14 * Math.cos(4 * t)) + 4 * Math.max(0, Math.cos(t)) ** 2), face: { x: 50, y: 50 }, height: 0.78 },
-  { id: 'heart', family: 'form', path: (() => {
-    const pts: string[] = [];
-    for (let i = 0; i < 96; i++) {
-      const t = (i / 96) * TAU;
-      const x = 16 * Math.sin(t) ** 3;
-      const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
-      pts.push(`${(50 + x * 2.2).toFixed(2)} ${(48 + y * 2.0).toFixed(2)}`);
-    }
-    return `M${pts.join('L')}Z`;
-  })(), face: { x: 50, y: 46 }, height: 0.86 },
-  { id: 'ghost', family: 'form', path: (() => {
-    const pts: string[] = [];
-    for (let i = 0; i <= 40; i++) {
-      const a = Math.PI + (i / 40) * Math.PI;
-      pts.push(`${(50 + Math.cos(a) * 34).toFixed(2)} ${(40 + Math.sin(a) * 30).toFixed(2)}`);
-    }
-    for (let i = 0; i <= 5; i++) {
-      const x = 84 - i * (68 / 5);
-      const y = 70 + (i % 2 === 0 ? 18 : 8);
-      pts.push(`${x.toFixed(2)} ${Math.min(88, y).toFixed(2)}`);
-    }
-    return `M${pts.join('L')}Z`;
-  })(), face: { x: 50, y: 48 }, height: 0.88 },
-  { id: 'bot', family: 'object', path: (() => {
-    const r = 8, x = 12, y = 26, w = 76, h = 60;
-    return `M${x + r} ${y}H${x + w - r}Q${x + w} ${y} ${x + w} ${y + r}V${y + h - r}Q${x + w} ${y + h} ${x + w - r} ${y + h}H${x + r}Q${x} ${y + h} ${x} ${y + h - r}V${y + r}Q${x} ${y} ${x + r} ${y}Z`;
-  })(), face: { x: 50, y: 62 }, eyeScale: 0.95, height: 0.86 },
+  // A circle, still the default: nothing to misread.
+  {
+    id: 'circle', family: 'round', height: 0.8,
+    path: 'M50 10C72 10 90 28 90 50C90 72 72 90 50 90C28 90 10 72 10 50C10 28 28 10 50 10Z',
+    face: { x: 50, y: 52 },
+  },
+  // An egg: narrow crown, heavy base.
+  {
+    id: 'egg', family: 'round', height: 0.82,
+    path: 'M50 10C61 10 72 26 72 47C72 72 63 90 50 90C37 90 28 72 28 47C28 26 39 10 50 10Z',
+    face: { x: 50, y: 54 },
+  },
+  // A squircle: square shoulders, round corners.
+  {
+    id: 'squircle', family: 'square', height: 0.84,
+    path: 'M34 12H66Q88 12 88 34V66Q88 88 66 88H34Q12 88 12 66V34Q12 12 34 12Z',
+    face: { x: 50, y: 52 },
+  },
+  // A soft blob, deliberately asymmetric.
+  {
+    id: 'blob', family: 'round', height: 0.8,
+    // A jelly: wide round body with one small nub on the crown.
+    path: 'M50 22C53 22 54.6 24.6 53.8 27.6C65 31 82 44 82 60C82 77 68 89 50 89C32 89 18 77 18 60C18 44 35 31 46.2 27.6C45.4 24.6 47 22 50 22Z',
+    face: { x: 50, y: 54 },
+  },
+  // A pear: narrow at the stem, a real waist, wide hips, plus stem and leaf.
+  {
+    id: 'pear', family: 'garden', height: 0.88, pointed: 0.3,
+    path: 'M50 20C58 20 63 27 60 35C56 45 74 50 80 63C86 78 73 89 55 89C47 89 43 90 37 88C20 82 14 68 22 55C28 45 44 42 42 34C39 25 42 20 50 20Z',
+    face: { x: 50, y: 66 },
+    parts: [
+      { d: 'M50 21C50 15 51 10 54 7', tone: 'shade', behind: true },
+      { d: 'M53 12C58 5 68 4 72 9C67 14 58 15 53 12Z', tone: 'shade', behind: true },
+    ],
+  },
+  // A raindrop: a real point on top, a round bottom.
+  {
+    id: 'drop', family: 'round', height: 0.9, pointed: 0.6,
+    path: 'M50 10C56 24 78 40 78 58C78 76 65 88 50 88C35 88 22 76 22 58C22 40 44 24 50 10Z',
+    face: { x: 50, y: 60 },
+  },
+  // A five-point star with real corners.
+  {
+    id: 'star', family: 'poly', height: 0.88, pointed: 0.9, round: 11,
+    // Sampled inside 42 so the renderer's round join can fatten it back out.
+    path: 'M50 12L59.7 36.7L86.1 38.3L65.7 55.1L72.3 80.7L50 66.5L27.7 80.7L34.3 55.1L13.9 38.3L40.3 36.7Z',
+    face: { x: 50, y: 52 }, eyeScale: 0.92,
+  },
+  // A gem: a flat table on top, one point at the bottom.
+  {
+    id: 'gem', family: 'poly', height: 0.86, pointed: 0.7,
+    path: 'M50 8L86 34L50 92L14 34Z',
+    face: { x: 50, y: 52 },
+  },
+  // A loaf: a domed top, a flat base.
+  {
+    id: 'pill', family: 'square', height: 0.74,
+    path: 'M14 46C14 24 30 14 50 14C70 14 86 24 86 46L86 76C86 84 82 88 74 88H26C18 88 14 84 14 76Z',
+    face: { x: 50, y: 56 },
+  },
+  // A cherry blossom: five petals, each with a notch at its tip.
+  {
+    id: 'flower', family: 'flora', height: 0.92,
+    // A cherry blossom: five separate petals, each with the little notch at its
+    // tip that separates a blossom from a daisy, around a round core big enough
+    // for a face. Petals are rotated copies of one hand-written path.
+    path: 'M50 50m-12 0a12 12 0 1 0 24 0a12 12 0 1 0 -24 0Z',
+    parts: [
+      { d: PETAL_NOTCHED, rotate: 0 },
+      { d: PETAL_NOTCHED, rotate: 72 },
+      { d: PETAL_NOTCHED, rotate: 144 },
+      { d: PETAL_NOTCHED, rotate: 216 },
+      { d: PETAL_NOTCHED, rotate: 288 },
+    ],
+    face: { x: 50, y: 52 }, eyeScale: 0.52,
+  },
+  // A four-leaf clover: four heart-shaped leaves and a stem.
+  {
+    id: 'clover', family: 'flora', height: 0.9,
+    // A four-leaf clover: four heart-shaped leaves, a stem, and a small round
+    // heart in the middle for the face.
+    path: 'M50 50m-11 0a11 11 0 1 0 22 0a11 11 0 1 0 -22 0Z',
+    parts: [
+      { d: LEAF_HEART, rotate: 0 },
+      { d: LEAF_HEART, rotate: 90 },
+      { d: LEAF_HEART, rotate: 180 },
+      { d: LEAF_HEART, rotate: 270 },
+
+    ],
+    face: { x: 50, y: 52 }, eyeScale: 0.5,
+  },
+  // A cloud: three bumps on top, a flat-ish base.
+  {
+    id: 'cloud', family: 'flora', height: 0.76,
+    path: 'M24 70C12 70 8 55 19 48C15 35 30 26 41 32C46 18 66 18 71 32C83 27 93 38 88 49C98 55 93 70 80 70Z',
+    face: { x: 50, y: 54 },
+  },
+  // A heart: two lobes, one point.
+  {
+    id: 'heart', family: 'form', height: 0.86,
+    path: 'M50 86C18 64 10 44 28 31C38 24 48 31 50 40C52 31 62 24 72 31C90 44 82 64 50 86Z',
+    face: { x: 50, y: 46 },
+  },
+  // A ghost: a round hood and three tattered points.
+  {
+    id: 'ghost', family: 'form', height: 0.88,
+    path: 'M18 88V48C18 28 32 12 50 12C68 12 82 28 82 48V88L70 79L58 88L46 79L34 88Z',
+    face: { x: 50, y: 46 },
+  },
+  // A bot: rounded body, an antenna, a screen-like face.
+  {
+    id: 'bot', family: 'object', height: 0.86,
+    path: 'M34 30H66Q84 30 84 46V70Q84 86 66 86H34Q16 86 16 70V46Q16 30 34 30Z',
+    face: { x: 50, y: 58 },
+    parts: [
+      { d: 'M50 30V18', tone: 'shade', behind: true },
+      { d: 'M50 18a5 5 0 1 0 0.1 0Z', tone: 'shade', behind: true },
+    ],
+  },
 ];
 
 /** Display names. The engine never needs them; every picker does. */
 export const BODY_ZH: Record<string, string> = {
   circle: '圆', egg: '蛋', squircle: '方圆', blob: '软圆', pear: '梨', drop: '水滴',
-  star: '星', gem: '宝石', pill: '胶囊', flower: '花', clover: '四叶', cloud: '云',
+  star: '星', gem: '宝石', pill: '面包', flower: '花', clover: '四叶', cloud: '云',
   heart: '心', ghost: '幽灵', bot: '机器人',
 };
 
