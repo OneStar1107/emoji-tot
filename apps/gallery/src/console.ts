@@ -17,13 +17,14 @@ import {
 } from '@aora-bot/engine';
 import { EMOTIONS, getEmotion } from '@emojibot-studio/protocol';
 import { backgroundClass, look, onLookChange, setLook } from './store';
+import { t } from './i18n';
 
-const BACKGROUNDS: { id: string; label: string }[] = [
-  { id: 'plain', label: '纯色' },
-  { id: 'grid', label: '网格' },
-  { id: 'dots', label: '圆点' },
-  { id: 'night', label: '夜色' },
-  { id: 'paper', label: '纸' },
+const BACKGROUNDS: { id: string; key: 'console.plain' | 'console.grid' | 'console.dots' | 'console.night' | 'console.paper' }[] = [
+  { id: 'plain', key: 'console.plain' },
+  { id: 'grid', key: 'console.grid' },
+  { id: 'dots', key: 'console.dots' },
+  { id: 'night', key: 'console.night' },
+  { id: 'paper', key: 'console.paper' },
 ];
 
 function option(value: string, label = value, selected = false): string {
@@ -79,26 +80,26 @@ export function createConsole(): HTMLElement {
       </div>
       <div class="stage-bar">
         <div class="actions">
-          <button type="button" data-act="spin">转一圈</button>
-          <button type="button" data-act="bounce">跳一下</button>
-          <button type="button" data-act="burst">撒花</button>
+          <button type="button" data-act="spin">${t('console.spin')}</button>
+          <button type="button" data-act="bounce">${t('console.bounce')}</button>
+          <button type="button" data-act="burst">${t('console.burst')}</button>
         </div>
         <div class="group" id="backgrounds">
-          ${BACKGROUNDS.map((b) => `<button type="button" data-bg="${b.id}" aria-pressed="${look.background === b.id}">${b.label}</button>`).join('')}
+          ${BACKGROUNDS.map((b) => `<button type="button" data-bg="${b.id}" aria-pressed="${look.background === b.id}">${t(b.key)}</button>`).join('')}
         </div>
       </div>
       <pre class="snippet"><code data-snippet>${snippet()}</code></pre>
     </section>
 
     <aside class="panel">
-      ${row('角色', `<select data-field="cast">${CAST_IDS.map((c) => option(c, c, c === look.cast)).join('')}</select>`)}
-      ${row('形状', `<select data-field="shape">${SHAPE_IDS.map((s) => option(s, s, s === look.shape)).join('')}</select>`)}
-      ${row('颜色', `<select data-field="color">${colorOptions()}</select>`)}
-      ${row('画法', `<select data-field="styleId">${['vector', 'pixel', 'kaomoji'].map((s) => option(s, s, followStyle(s))).join('')}</select>`)}
-      ${row('变体', `<select data-field="variant"></select>`)}
-      ${row('状态', `<select data-field="state">${stateOptions()}</select>`)}
+      ${row(t('console.cast'), `<select data-field="cast">${CAST_IDS.map((c) => option(c, c, c === look.cast)).join('')}</select>`)}
+      ${row(t('console.shape'), `<select data-field="shape">${SHAPE_IDS.map((s) => option(s, s, s === look.shape)).join('')}</select>`)}
+      ${row(t('console.color'), `<select data-field="color">${colorOptions()}</select>`)}
+      ${row(t('console.style'), `<select data-field="styleId">${['vector', 'pixel', 'kaomoji'].map((s) => option(s, s, followStyle(s))).join('')}</select>`)}
+      ${row(t('console.variant'), `<select data-field="variant"></select>`)}
+      ${row(t('console.state'), `<select data-field="state">${stateOptions()}</select>`)}
       <div class="params" id="params"></div>
-      <button type="button" class="primary" id="copy">复制代码</button>
+      <button type="button" class="primary" id="copy">${t('console.copy')}</button>
     </aside>
   `;
 
@@ -143,7 +144,7 @@ export function createConsole(): HTMLElement {
     const defaults = style.defaults as Record<string, unknown>;
     const entries = Object.entries(specs);
     if (!entries.length) {
-      paramsBox.innerHTML = '<p class="hint">这个变体没有可调参数</p>';
+      paramsBox.innerHTML = `<p class="hint">${t('console.noParams')}</p>`;
       return;
     }
     paramsBox.innerHTML = entries
@@ -221,10 +222,10 @@ export function createConsole(): HTMLElement {
     if (target.id === 'copy') {
       const text = snippetEl.textContent ?? '';
       navigator.clipboard?.writeText(text).then(
-        () => (target.textContent = '已复制'),
-        () => (target.textContent = '复制失败'),
+        () => (target.textContent = t('console.copied')),
+        () => (target.textContent = t('console.copied')),
       );
-      setTimeout(() => (target.textContent = '复制代码'), 1400);
+      setTimeout(() => (target.textContent = t('console.copy')), 1400);
     }
   });
 

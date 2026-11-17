@@ -275,6 +275,32 @@ button.ghost { background: transparent; }
 .theme-meta { font-size: 11px; color: var(--muted); }
 .theme-card.loaded { border-color: var(--ink); }
 
+/* ---------- scene ---------- */
+
+.scene-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+@media (max-width: 880px) { .scene-grid { grid-template-columns: 1fr; } }
+
+.sessions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  text-align: left;
+  background: var(--card);
+  border-radius: 10px;
+}
+
+.session-name { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; }
+.session-state { font-size: 11px; color: var(--muted); }
+
 /* ---------- docs ---------- */
 
 .docs { max-width: 760px; }

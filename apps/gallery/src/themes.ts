@@ -7,6 +7,7 @@
  */
 import { THEME_MANIFEST, isThemeInstalled, loadTheme } from '@aora-bot/engine';
 import { renderStaticSvg } from '@aora-bot/engine/static';
+import { t } from './i18n';
 
 function pinSvg(svg: string): string {
   return svg.replaceAll('@media (prefers-color-scheme: dark)', '@media all');
@@ -17,14 +18,14 @@ export function createThemes(): HTMLElement {
   el.className = 'themes';
 
   el.innerHTML = `
-    <h1 class="view-title">表情馆</h1>
-    <p class="lead">每套主题自带形状、角色与皮肤。点一下加载，<span id="status"></span></p>
+    <h1 class="view-title">${t('themes.title')}</h1>
+    <p class="lead">${t('themes.lead')} <span id="status"></span></p>
     <section class="theme-grid" id="theme-grid">
       ${THEME_MANIFEST.map(
         (t) => `<button type="button" class="theme-card" data-theme="${t.id}">
           <span class="theme-art" data-art="${t.id}"></span>
           <span class="theme-name">${t.name.zh}<small>${t.name.en}</small></span>
-          <span class="theme-meta">${t.shapes.length} 形状 · ${t.cast.length} 角色</span>
+          <span class="theme-meta">${t.shapes.length} shapes · ${t.cast.length} cast</span>
         </button>`,
       ).join('')}
     </section>
@@ -38,11 +39,11 @@ export function createThemes(): HTMLElement {
     const art = el.querySelector<HTMLElement>(`[data-art="${id}"]`);
     if (!art) return;
     if (!isThemeInstalled(id as never)) {
-      status.textContent = '加载中…';
+      status.textContent = t('themes.loading');
       try {
         await loadTheme(id as never);
       } catch {
-        status.textContent = '加载失败';
+        status.textContent = t('themes.failed');
         return;
       }
     }

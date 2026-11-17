@@ -8,6 +8,7 @@
 import { renderStaticSvg } from '@aora-bot/engine/static';
 import { EMOTIONS, EMOTION_SEGMENTS, getEmotion, type EmotionId, type SegmentId } from '@emojibot-studio/protocol';
 import { look, onLookChange } from './store';
+import { t } from './i18n';
 
 /** The ball is always white, so the static branch that draws it is forced. */
 function pinSvg(svg: string): string {
@@ -53,8 +54,8 @@ export function createWall(): HTMLElement {
         <p id="detail-meta"></p>
         <pre class="snippet"><code id="snippet"></code></pre>
         <div class="detail-actions">
-          <button type="button" id="copy">复制代码</button>
-          <button type="button" id="close" class="ghost">关闭</button>
+          <button type="button" id="copy">${t('wall.copy')}</button>
+          <button type="button" id="close" class="ghost">${t('wall.close')}</button>
         </div>
       </div>
     </aside>
@@ -107,7 +108,7 @@ export function createWall(): HTMLElement {
   }
 
   const options: { id: 'all' | SegmentId; label: string }[] = [
-    { id: 'all', label: '全部' },
+    { id: 'all', label: t('wall.all') },
     ...EMOTION_SEGMENTS.map((s) => ({ id: s.id as SegmentId, label: s.name.zh })),
   ];
   segments.innerHTML = options
@@ -135,8 +136,8 @@ export function createWall(): HTMLElement {
     if (target.closest('#copy')) {
       const button = target.closest<HTMLElement>('#copy')!;
       navigator.clipboard?.writeText(el.querySelector('#snippet')!.textContent ?? '');
-      button.textContent = '已复制';
-      setTimeout(() => (button.textContent = '复制代码'), 1400);
+      button.textContent = t('console.copied');
+      setTimeout(() => (button.textContent = t('wall.copy')), 1400);
     }
   });
 

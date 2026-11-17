@@ -7,8 +7,10 @@
 import { defineAoraBot } from '@aora-bot/element';
 import { createConsole } from './console';
 import { createWall } from './wall';
+import { createScene } from './scene';
 import { createThemes } from './themes';
 import { createDocs } from './docs';
+import { getLang, onLangChange, setLang, t, type MessageKey } from './i18n';
 import './style.css';
 
 defineAoraBot();
@@ -17,6 +19,7 @@ const view = document.getElementById('view')!;
 const routes = {
   console: createConsole,
   gallery: createWall,
+  scene: createScene,
   themes: createThemes,
   docs: createDocs,
 };
@@ -27,8 +30,19 @@ function currentRoute(): Route {
   return key in routes ? key : 'console';
 }
 
+/** Static chrome that is not rebuilt with the view. */
+function applyStaticText(): void {
+  for (const el of document.querySelectorAll<HTMLElement>('[data-i18n]')) {
+    el.textContent = t(el.dataset.i18n as MessageKey);
+  }
+  for (const button of document.querySelectorAll<HTMLElement>('#lang button')) {
+    button.setAttribute('aria-pressed', String(button.dataset.lang === getLang()));
+  }
+}
+
 function render(): void {
   const route = currentRoute();
+  applyStaticText();
   view.replaceChildren(routes[route]());
   for (const link of document.querySelectorAll<HTMLAnchorElement>('#nav a')) {
     link.setAttribute('aria-current', String(link.dataset.route === route));
@@ -37,6 +51,13 @@ function render(): void {
 }
 
 window.addEventListener('hashchange', render);
+
+document.getElementById('lang')!.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLElement>('[data-lang]');
+  if (!button) return;
+  setLang(button.dataset.lang as 'zh' | 'en');
+});
+onLangChange(render);
 
 /*
  * The ball is always white, so the switch only changes what is behind it.
