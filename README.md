@@ -2,7 +2,7 @@
 
 # EmojiBot
 
-**面向桌面与 Web 的表情角色 —— 一个两位数驱动 71 个角色、3 种画法、16 个变体、7 套主题；网页里看得见，桌面上养得起。**
+**面向桌面与 Web 的表情角色 —— 一个两位数驱动 8 种形状、44 种表情；网页里看得见，桌面上养得起。**
 
 [控制台](https://onestar1107.github.io/emojibot-studio/#/console) · [表情馆](https://onestar1107.github.io/emojibot-studio/#/gallery) · [场景](https://onestar1107.github.io/emojibot-studio/#/scene) · [主题](https://onestar1107.github.io/emojibot-studio/#/themes) · [文档](https://onestar1107.github.io/emojibot-studio/#/docs) · [English](README.en.md)
 

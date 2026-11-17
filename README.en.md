@@ -2,7 +2,7 @@
 
 # EmojiBot
 
-**An expressive character for the desktop and the web — one two-digit number drives 71 cast members, 3 drawing styles, 16 variants and 7 themes. Visible in a page, livable on a desktop.**
+**An expressive character for the desktop and the web — one two-digit number drives 8 shapes and 44 expressions. Visible in a page, livable on a desktop.**
 
 [Console](https://onestar1107.github.io/emojibot-studio/#/console) · [Faces](https://onestar1107.github.io/emojibot-studio/#/gallery) · [Scene](https://onestar1107.github.io/emojibot-studio/#/scene) · [Themes](https://onestar1107.github.io/emojibot-studio/#/themes) · [Docs](https://onestar1107.github.io/emojibot-studio/#/docs) · [中文](README.md)
 
@@ -21,7 +21,7 @@ Three upstreams, each doing what it is best at:
 | Upstream | Contribution | Here |
 | --- | --- | --- |
 | [Emotion Ball](https://github.com/Aithena/emotion-ball) | The two-digit emotion id protocol, decade semantics, forgiving intake | `packages/protocol` |
-| [Aora Bot](https://github.com/sam70361/aora-bot) | The engine: 71 cast members, 3 style series, 16 variants, 7 themes, HUD, particles | npm `@aora-bot/*` |
+| [Aora Bot](https://github.com/sam70361/aora-bot) | Evidence for how far "a character drawn by code" can go (no code or art taken) | `packages/core` |
 | [球球桌宠](https://github.com/dreamcall520/emotion-ball-desktop-pet) | Desktop product behaviour: edge docking, click-through, agent linkage | `apps/desktop` |
 
 ## One two-digit number
@@ -47,7 +47,7 @@ feed('thinking');              // a bare state name works too
 
 | Page | What is there |
 | --- | --- |
-| **Console** | 71 cast · 71 shapes · 11 colours · 3 style series with 16 variants · 51 states · 5 stage backgrounds. The parameter panel lists only what the current variant actually reads, and the snippet follows every change |
+| **Console** | 8 shapes · 12 colours · 44 expressions · 5 stage backgrounds. Every option is a picture of itself, and the snippet follows every change |
 | **Faces** | All 51 ids on one screen, filtered by decade, click to copy the snippet |
 | **Scene** | Nine agents report; one face shows what the arbiter decided — the "urgent event interrupts the dwell" rule made visible |
 | **Themes** | Seven seasonal sets, loaded on click (code-split), drawing their own shapes |
