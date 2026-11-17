@@ -641,6 +641,15 @@ app.setName('EmojiBot');
  */
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-gpu');
+/*
+ * Chromium still spawns a GPU child process even with the two lines above, and
+ * on Windows that child can fail to launch (error_code=18). After six attempts
+ * it declares the GPU unusable and aborts before any window exists — the app
+ * "does not open", with no error the user can act on. Running the GPU inside
+ * the main process removes the child instead of hoping it starts, and keeps the
+ * renderer sandbox intact, which `--no-sandbox` would not.
+ */
+app.commandLine.appendSwitch('in-process-gpu');
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {

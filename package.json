@@ -1,19 +1,9 @@
 {
-  "name": "emojibot-studio",
+  "name": "@emojibot-studio/desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "Fused, non-commercial fork of Emotion Ball + Aora Bot + 球球桌宠",
-  "license": "MIT",
-  "type": "module",
-  "packageManager": "pnpm@9.15.0",
-  "engines": {
-    "node": ">=20"
-  },
-  "scripts": {
-    "postinstall": "pnpm --filter @emojibot-studio/protocol build",
-    "build": "pnpm -r build",
-    "test": "pnpm -r test",
-    "dev": "pnpm --filter @emojibot-studio/gallery dev",
-    "desktop": "pnpm --filter @emojibot-studio/desktop start"
-  }
+  "description": "EmojiBot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "license": "MIT"
 }

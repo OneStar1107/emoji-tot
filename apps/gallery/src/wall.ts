@@ -11,7 +11,14 @@ import { look, onLookChange } from './store';
 
 const THUMB = 128;
 
-function cardHtml(state: string, label: string): string {
+/**
+ * One card per id, and the id is shown.
+ *
+ * Fifty-one ids share forty-four states, so a wall keyed by state would repeat
+ * itself. The number is the thing a host actually sends, so it belongs on the
+ * card; two ids with the same face are a fact about the protocol, not a bug.
+ */
+function cardHtml(id: string, state: string, label: string): string {
   const svg = (() => {
     try {
       return renderCharacter({ shape: look.shape, color: look.color, state, size: THUMB });
@@ -19,9 +26,9 @@ function cardHtml(state: string, label: string): string {
       return '';
     }
   })();
-  return `<button type="button" class="card" data-state="${state}" aria-label="${label}">
+  return `<button type="button" class="card" data-state="${state}" data-id="${id}" aria-label="${id} ${label}">
     ${svg}
-    <span class="card-id">${state}</span>
+    <span class="card-id">#${id}</span>
     <span class="card-name">${label}</span>
   </button>`;
 }
@@ -52,7 +59,7 @@ export function createWall(): HTMLElement {
   function renderGrid(): void {
     const list = visible();
     count.textContent = `${list.length} / ${EMOTIONS.length} 个 id`;
-    grid.innerHTML = list.map((d) => cardHtml(d.state, d.name.zh)).join('');
+    grid.innerHTML = list.map((d) => cardHtml(d.id, d.state, d.name.zh)).join('');
   }
 
   const options: { id: 'all' | SegmentId; label: string }[] = [
