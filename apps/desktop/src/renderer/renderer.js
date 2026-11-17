@@ -179,6 +179,7 @@ function refillBag() {
   const busy = taskState !== 'idle';
   const pool = busy ? AGENT_MOODS : [member?.face, ...IDLE_MOODS].filter(Boolean);
   const unique = [...new Set(pool)].filter((state) => state !== 'idle' && state !== taskState);
+  for (let i = unique.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     [unique[i], unique[j]] = [unique[j], unique[i]];
   }
