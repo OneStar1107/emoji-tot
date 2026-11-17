@@ -28,30 +28,25 @@ body:active { cursor: grabbing; }
  * bubble. The ball is sized to the square below it.
  */
 /*
- * The ball's square sits inside the window with a margin on every side, so
- * its own hop, spin and squash have room. Clipping it is the window's job and
- * it does not do that any more — a docked ball is cut by the screen edge, which
- * leaves an arc, not a flat edge.
+ * The ball sits at the centre of the window. The margin all around it is the
+ * bubble's room: without it, a bubble placed beside the ball would be clipped
+ * by the window edge instead of shown.
  */
 #pet {
   position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
-  top: 46px;
+  inset: 0;
   display: grid;
   place-items: center;
 }
 
 aora-bot {
-  width: 100%;
-  height: 100%;
+  width: var(--ball-size, 120px);
+  height: var(--ball-size, 120px);
+  flex: none;
 }
 
 #bubble {
   position: absolute;
-  left: 50%;
-  top: 0;
   transform: translate(-50%, 4px);
   max-width: 260px;
   padding: 5px 9px;
@@ -78,15 +73,36 @@ aora-bot {
 }
 
 /*
- * While docked, half the window is off-screen, so a centred bubble would be
- * the half nobody sees. It grows toward the inside of the screen instead.
+ * The bubble sits on the side away from the docked edge: docked left, it goes
+ * at three o'clock; docked right, nine o'clock. Free-standing, it is above.
+ * Positions are derived from the ball's radius so they hold at every size.
  */
-body[data-docked] #bubble {
-  transform: translate(0, 4px);
-  max-width: calc(100vw - 12px);
+body[data-dir="up"] #bubble {
+  left: 50%;
+  bottom: calc(50% + var(--ball-size) / 2 + 8px);
+  transform: translate(-50%, 4px);
+  max-width: calc(100vw - 16px);
+}
+body[data-dir="down"] #bubble {
+  left: 50%;
+  top: calc(50% + var(--ball-size) / 2 + 8px);
+  transform: translate(-50%, -4px);
+  max-width: calc(100vw - 16px);
+}
+body[data-dir="right"] #bubble {
+  left: calc(50% + var(--ball-size) / 2 + 8px);
+  top: 50%;
+  transform: translate(-4px, -50%);
+  max-width: 150px;
+}
+body[data-dir="left"] #bubble {
+  right: calc(50% + var(--ball-size) / 2 + 8px);
+  top: 50%;
+  transform: translate(4px, -50%);
+  max-width: 150px;
 }
 
-body[data-docked="left"] #bubble { left: auto; right: 2px; }
-body[data-docked="right"] #bubble { left: 2px; }
-
-body[data-docked] #bubble[data-visible="true"] { transform: translate(0, 0); }
+body[data-dir="up"] #bubble[data-visible="true"] { transform: translate(-50%, 0); }
+body[data-dir="down"] #bubble[data-visible="true"] { transform: translate(-50%, 0); }
+body[data-dir="right"] #bubble[data-visible="true"] { transform: translate(0, -50%); }
+body[data-dir="left"] #bubble[data-visible="true"] { transform: translate(0, -50%); }

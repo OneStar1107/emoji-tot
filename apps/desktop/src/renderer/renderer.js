@@ -106,47 +106,69 @@ api.onAction((action) => {
 });
 
 /*
- * Left alone, it does something now and then.
+ * Left alone, it lives.
  *
- * A desktop pet that only reacts is furniture. This is deliberately slow and
- * only runs while idle, so it reads as a breath rather than a notification.
+ * The resting face is idle, but a pet that only ever rests is a screensaver.
+ * Every 7–16 seconds it borrows one expression from a pool, holds it for a
+ * couple of seconds, then goes back to idle — and the next borrow never
+ * repeats the last one. Timers are chained rather than fixed so the rhythm
+ * does not turn into a metronome.
  */
-let lastAntic = Date.now();
-window.setInterval(() => {
-  if (document.hidden) return;
-  if (ball.state !== 'idle') {
-    lastAntic = Date.now();
-    return;
-  }
-  if (Date.now() - lastAntic < 24000) return;
-  lastAntic = Date.now();
-  const roll = Math.random();
-  if (roll < 0.45) ball.bounce?.(0.3);
-  else if (roll < 0.75) ball.spin?.(1);
-  else {
-    ball.state = 'curious';
-    window.setTimeout(() => {
-      if (ball.state === 'curious') ball.state = 'idle';
-    }, 2400);
-  }
-}, 8000);
+const MOODS = ['curious', 'happy', 'bored', 'excited', 'playful', 'proud', 'shy', 'humming', 'surprised', 'confused'];
+let lastMood = null;
+let moodTimer = null;
+
+function scheduleMood() {
+  clearTimeout(moodTimer);
+  moodTimer = window.setTimeout(() => {
+    if (!document.hidden && ball.state === 'idle' && !dragging) {
+      const pool = MOODS.filter((m) => m !== lastMood);
+      const mood = pool[Math.floor(Math.random() * pool.length)];
+      lastMood = mood;
+      const token = ++actionToken;
+      ball.state = mood;
+      const face = faceFor(mood);
+      if (face) say(face);
+      // A little motion with the expression, or it reads as a freeze-frame.
+      const roll = Math.random();
+      if (roll < 0.4) ball.bounce?.(0.28);
+      else if (roll < 0.6) ball.spin?.(0.8);
+      window.setTimeout(() => {
+        if (token !== actionToken) return;
+        ball.state = 'idle';
+      }, 2400 + Math.random() * 1600);
+    }
+    scheduleMood();
+  }, 7000 + Math.random() * 9000);
+}
+
+scheduleMood();
 
 api.onSize((px) => {
   ball.setAttribute('size', String(px));
 });
 
 /*
- * While docked the bubble has to grow inward, or it would be the part that
- * hangs off the screen.
+ * Where the bubble goes follows where the ball is.
+ *
+ * The bubble always takes the side the screen is NOT on: docked to the left
+ * edge, the ball's left is off-screen, so the bubble goes at three o'clock.
+ * Free-standing, it sits above.
  */
+function setBubbleDirection(side) {
+  const map = { left: 'right', right: 'left', top: 'down', bottom: 'up' };
+  document.body.dataset.dir = map[side] ?? 'up';
+}
+
+setBubbleDirection(null);
 api.onDock((side) => {
-  if (side) document.body.dataset.docked = side;
-  else delete document.body.dataset.docked;
+  if (!side) return setBubbleDirection(null);
+  setBubbleDirection(side.replace('-open', ''));
 });
 
 if (typeof api.debugState === 'function') {
   api.debugState().then((s) => {
-    if (s?.docked) document.body.dataset.docked = s.docked.startsWith('left') ? 'left' : 'right';
+    if (s?.docked) setBubbleDirection(s.docked.replace('-open', ''));
   }).catch(() => {});
 }
 
@@ -154,9 +176,12 @@ if (typeof api.debugState === 'function') {
 // The ball occupies the square below the bubble strip, so the smaller of the
 // two dimensions is the one that fits.
 function fitBall() {
-  // 16px of margin on each side plus the bubble strip, matching the CSS.
-  const px = Math.max(32, Math.min(window.innerWidth - 32, window.innerHeight - 46 - 32));
+  // 16px of animation margin plus 88px of bubble room on each side; the
+  // window is square and the ball is centred, so both axes agree.
+  const room = (16 + 88) * 2;
+  const px = Math.max(32, Math.min(window.innerWidth, window.innerHeight) - room);
   ball.setAttribute('size', String(px));
+  document.documentElement.style.setProperty('--ball-size', `${px}px`);
 }
 
 window.addEventListener('resize', fitBall);

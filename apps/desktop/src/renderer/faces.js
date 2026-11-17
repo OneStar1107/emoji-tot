@@ -61,8 +61,62 @@ export const STATE_TEXT = {
   celebrate: '做完了',
 };
 
-/** The bubble content for a state: kaomoji, else a short word, else nothing. */
+/** Plain words under the kaomoji, so the bubble explains itself. */
+export const STATE_LABEL = {
+  idle: '待机',
+  sleeping: '睡着了',
+  waking: '刚醒',
+  drowsy: '有点困',
+  bored: '发呆',
+  thinking: '在想事情',
+  working: '处理中',
+  searching: '找资料',
+  reading: '在看',
+  writing: '在写',
+  loading: '加载中',
+  progress: '进行中',
+  listening: '在听',
+  waiting: '等你',
+  happy: '开心',
+  excited: '兴奋',
+  laughing: '笑了',
+  shy: '害羞',
+  sad: '有点低落',
+  angry: '生气了',
+  confused: '没懂',
+  surprised: '惊了',
+  scared: '吓到',
+  curious: '好奇',
+  proud: '得意',
+  celebrate: '做完了',
+  bouncing: '蹦一下',
+  humming: '哼歌',
+  alerting: '出错了',
+  refusing: '不行',
+  notifying: '提醒你',
+  radar: '扫描中',
+  messaging: '有消息',
+  receiving: '收到',
+  sending: '发出去',
+  uploading: '上传中',
+  dictating: '听你说',
+  orbit: '绕一下',
+  spawning: '登场',
+  composing: '组织语言',
+  dragging: '拖我',
+  'powering-down': '歇了',
+};
+
+/**
+ * Bubble content: a face, then words.
+ *
+ * The kaomoji carries the mood and the words carry the meaning — a reader who
+ * does not know that `(╬ Ò﹏Ó)` means "angry" does not have to guess. A host
+ * that sent its own `tips` replaces the words, not the face.
+ */
 export function faceFor(state, tips) {
-  if (tips) return tips;
-  return KAOMOJI[state] ?? STATE_TEXT[state] ?? '';
+  const face = KAOMOJI[state];
+  const label = tips || STATE_LABEL[state] || STATE_TEXT[state] || '';
+  if (face && label) return `${face}\n${label}`;
+  return face || label;
 }

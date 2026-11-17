@@ -37,6 +37,17 @@ const BUBBLE_SPACE = 46;
  */
 const BALL_PAD = 16;
 
+/**
+ * Room on every side for the speech bubble.
+ *
+ * The bubble belongs beside the ball, and which side depends on where the
+ * ball is docked: docked left, it goes on the three-o'clock side; docked
+ * right, nine o'clock. A window exactly the ball's size could not show that,
+ * so the window is padded on all four sides. It is transparent and
+ * click-through, so the extra area is invisible and harmless.
+ */
+const BUBBLE_ROOM = 88;
+
 /** How close to an edge counts as "dock here", and how much of the ball stays visible. */
 const EDGE_SNAP = 8;
 const PEEK_RATIO = 0.3;
@@ -148,9 +159,14 @@ function workArea() {
   return screen.getPrimaryDisplay().workAreaSize;
 }
 
+function outerSize(dim) {
+  return dim + (BALL_PAD + BUBBLE_ROOM) * 2;
+}
+
 function defaultPosition(dim) {
   const area = workArea();
-  return { x: area.width - dim - BALL_PAD * 2 - 48, y: area.height - dim - BALL_PAD * 2 - BUBBLE_SPACE - 40 };
+  const outer = outerSize(dim);
+  return { x: area.width - outer - 8, y: area.height - outer - 8 };
 }
 
 /* ---------------------------------------------------------------- window */
@@ -164,8 +180,8 @@ function createWindow() {
   const pos = prefs.position ?? defaultPosition(dim);
 
   win = new BrowserWindow({
-    width: dim + BALL_PAD * 2,
-    height: dim + BALL_PAD * 2 + BUBBLE_SPACE,
+    width: dim + (BALL_PAD + BUBBLE_ROOM) * 2,
+    height: dim + (BALL_PAD + BUBBLE_ROOM) * 2,
     x: pos.x,
     y: pos.y,
     frame: false,
@@ -225,9 +241,9 @@ function startPointerWatch() {
     const cursor = screen.getCursorScreenPoint();
     const [wx, wy] = win.getPosition();
     const dim = SIZES[sizeKey];
-    // The ball sits in the padded square below the bubble strip.
-    const cx = wx + BALL_PAD + dim / 2;
-    const cy = wy + BUBBLE_SPACE + BALL_PAD + dim / 2;
+    // The ball sits at the centre of the window, with equal room all round.
+    const cx = wx + outerSize(dim) / 2;
+    const cy = wy + outerSize(dim) / 2;
     const onBall = Math.hypot(cursor.x - cx, cursor.y - cy) <= dim / 2;
     if (onBall === !clickThrough) return;
     setClickThrough(!onBall);
@@ -239,7 +255,8 @@ function setSize(key) {
   sizeKey = key;
   const dim = SIZES[key];
   const [x, y] = win.getPosition();
-  win.setBounds({ x, y, width: dim + BALL_PAD * 2, height: dim + BALL_PAD * 2 + BUBBLE_SPACE });
+  const outer = dim + (BALL_PAD + BUBBLE_ROOM) * 2;
+  win.setBounds({ x, y, width: outer, height: outer });
   win.webContents.send('size:changed', dim);
   savePrefs();
   refreshMenus();
@@ -267,13 +284,15 @@ function dock(side) {
   if (!win) return;
   const dim = SIZES[sizeKey];
   const [, y] = win.getPosition();
-  const width = dim + BALL_PAD * 2;
+  const outer = outerSize(dim);
   const peek = Math.round(dim * PEEK_RATIO);
   const area = workArea();
-  // The window slides out until only a sliver of the ball is on screen. The
-  // ball itself stays whole inside the window, so what the screen cuts is an
-  // arc of the circle.
-  const x = side === 'left' ? -(width - peek - BALL_PAD) : area.width - peek - BALL_PAD;
+  // Half the window is empty (the bubble's room), so "hide the ball" is a
+  // window offset from the centre, not the window width.
+  const x =
+    side === 'left'
+      ? peek - outer / 2 - dim / 2
+      : area.width - peek - outer / 2 + dim / 2;
   dockSide = side;
   dockOpen = false;
   dockArmed = false;
@@ -288,7 +307,8 @@ function undock() {
   const dim = SIZES[sizeKey];
   const area = workArea();
   const [, y] = win.getPosition();
-  const x = dockSide === 'left' ? 0 : area.width - dim - BALL_PAD * 2;
+  const outer = outerSize(dim);
+  const x = dockSide === 'left' ? -(outer - dim) / 2 : area.width - (outer + dim) / 2;
   dockSide = null;
   dockOpen = false;
   dockArmed = false;
@@ -314,17 +334,18 @@ function startHoverWatch() {
     const dim = SIZES[sizeKey];
     const area = workArea();
     const [, wy] = win.getPosition();
-    const width = dim + BALL_PAD * 2;
+    const outer = outerSize(dim);
     const sliverWidth = Math.round(dim * PEEK_RATIO);
     const sliverLeft = dockSide === 'left' ? 0 : area.width - sliverWidth;
+    const ballTop = wy + (outer - dim) / 2;
     const overSliver =
       cursor.x >= sliverLeft &&
       cursor.x <= sliverLeft + sliverWidth &&
-      cursor.y >= wy &&
-      cursor.y <= wy + dim + BALL_PAD * 2 + BUBBLE_SPACE;
+      cursor.y >= ballTop &&
+      cursor.y <= ballTop + dim;
 
-    const closedX = dockSide === 'left' ? -(width - sliverWidth - BALL_PAD) : area.width - sliverWidth - BALL_PAD;
-    const openX = dockSide === 'left' ? -BALL_PAD : area.width - dim - BALL_PAD;
+    const closedX = dockSide === 'left' ? sliverWidth - outer / 2 - dim / 2 : area.width - sliverWidth - outer / 2 + dim / 2;
+    const openX = dockSide === 'left' ? -(outer - dim) / 2 : area.width - (outer + dim) / 2;
 
     if (!overSliver) {
       // Leaving is what arms the next hover, and it also tucks an open ball
