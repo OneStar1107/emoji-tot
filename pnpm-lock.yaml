@@ -19,7 +19,7 @@ importers:
 
   apps/gallery:
     dependencies:
-      '@emojibot-studio/protocol':
+      '@emojibot/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
       '@emojibot/core':

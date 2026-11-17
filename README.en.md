@@ -4,7 +4,7 @@
 
 **An expressive character for the desktop and the web — one two-digit number drives 8 shapes and 44 expressions. Visible in a page, livable on a desktop.**
 
-[Console](https://onestar1107.github.io/emojibot-studio/#/console) · [Faces](https://onestar1107.github.io/emojibot-studio/#/gallery) · [Scene](https://onestar1107.github.io/emojibot-studio/#/scene) · [Themes](https://onestar1107.github.io/emojibot-studio/#/themes) · [Docs](https://onestar1107.github.io/emojibot-studio/#/docs) · [中文](README.md)
+[Console](https://onestar1107.github.io/emoji-bot/#/console) · [Faces](https://onestar1107.github.io/emoji-bot/#/gallery) · [Scene](https://onestar1107.github.io/emoji-bot/#/scene) · [Themes](https://onestar1107.github.io/emoji-bot/#/themes) · [Docs](https://onestar1107.github.io/emoji-bot/#/docs) · [中文](README.md)
 
 ![Cast](docs/screenshots/hero.png)
 
@@ -82,7 +82,7 @@ pnpm test        # 27 protocol tests, including a row-by-row comparison with ups
 Package the app:
 
 ```bash
-pnpm --filter @emojibot-studio/desktop dist   # Windows installer lands in release/
+pnpm --filter @emojibot/desktop dist   # Windows installer lands in release/
 ```
 
 ## Layout

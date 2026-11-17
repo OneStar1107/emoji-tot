@@ -15,7 +15,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderStaticSvg } from '@aora-bot/engine/static';
-import { EMOTIONS, parseAgentMessage, stateForEmotion } from '@emojibot-studio/protocol';
+import { EMOTIONS, parseAgentMessage, stateForEmotion } from '@emojibot/protocol';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(here, '../../../out');

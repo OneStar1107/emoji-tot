@@ -7,7 +7,7 @@
  * while a lesser one waits its turn.
  */
 import { defineBall } from '@emojibot/core/element';
-import { createArbiter, getEmotion } from '@emojibot-studio/protocol';
+import { createArbiter, getEmotion } from '@emojibot/protocol';
 import { DEMO_SESSIONS } from './sessions';
 import { t } from './i18n';
 import { look } from './store';

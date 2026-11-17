@@ -76,7 +76,7 @@ emotion-ball 的卖点是无构建接入。但融合后画法来自 aora 引擎�
 ```
 @aora-bot/engine             （npm 依赖，画法与模拟）
         ↑
-@emojibot-studio/protocol    （本仓库，纯逻辑，零依赖）
+@emojibot/protocol    （本仓库，纯逻辑，零依赖）
         ↑
 apps/gallery · apps/desktop  （本仓库，两个宿主）
 ```

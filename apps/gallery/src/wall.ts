@@ -5,7 +5,7 @@
  * character uses, and none of them runs a frame loop.
  */
 import { renderCharacter } from '@emojibot/core';
-import { EMOTIONS, EMOTION_SEGMENTS, getEmotion, type SegmentId } from '@emojibot-studio/protocol';
+import { EMOTIONS, EMOTION_SEGMENTS, getEmotion, type SegmentId } from '@emojibot/protocol';
 import { t } from './i18n';
 import { look, onLookChange } from './store';
 

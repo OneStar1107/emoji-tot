@@ -1,5 +1,5 @@
 {
-  "name": "@emojibot-studio/gallery",
+  "name": "@emojibot/gallery",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emojibot-studio/protocol": "workspace:*",
+    "@emojibot/protocol": "workspace:*",
     "@emojibot/core": "workspace:*"
   },
   "devDependencies": {

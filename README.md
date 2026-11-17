@@ -4,7 +4,7 @@
 
 **面向桌面与 Web 的表情角色 —— 一个两位数驱动 8 种形状、44 种表情；网页里看得见，桌面上养得起。**
 
-[控制台](https://onestar1107.github.io/emojibot-studio/#/console) · [表情馆](https://onestar1107.github.io/emojibot-studio/#/gallery) · [场景](https://onestar1107.github.io/emojibot-studio/#/scene) · [主题](https://onestar1107.github.io/emojibot-studio/#/themes) · [文档](https://onestar1107.github.io/emojibot-studio/#/docs) · [English](README.en.md)
+[控制台](https://onestar1107.github.io/emoji-bot/#/console) · [表情馆](https://onestar1107.github.io/emoji-bot/#/gallery) · [场景](https://onestar1107.github.io/emoji-bot/#/scene) · [主题](https://onestar1107.github.io/emoji-bot/#/themes) · [文档](https://onestar1107.github.io/emoji-bot/#/docs) · [English](README.en.md)
 
 ![全家福](docs/screenshots/hero.png)
 
@@ -82,7 +82,7 @@ pnpm test        # 27 个协议测试，含与上游逐行比对
 出安装包：
 
 ```bash
-pnpm --filter @emojibot-studio/desktop dist   # release/ 下出 Windows 安装包
+pnpm --filter @emojibot/desktop dist   # release/ 下出 Windows 安装包
 ```
 
 ## 项目结构

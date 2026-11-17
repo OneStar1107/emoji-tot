@@ -7,7 +7,7 @@
  * recalling a name.
  */
 import { COLOR_IDS, FACES, SHAPE_IDS, colorHex, renderCharacter } from '@emojibot/core';
-import { EMOTIONS, getEmotion } from '@emojibot-studio/protocol';
+import { EMOTIONS, getEmotion } from '@emojibot/protocol';
 import { getLang, t } from './i18n';
 import { look, onLookChange, setLook } from './store';
 import { COLOR_ZH, SHAPE_ZH, zh } from './zh';

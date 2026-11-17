@@ -73,7 +73,7 @@ export function createDocs(): HTMLElement {
       <section><h2>${t.links}</h2>
         <p><a href="https://github.com/sam70361/aora-bot">Aora Bot</a> ·
            <a href="https://github.com/Aithena/emotion-ball">Emotion Ball</a> ·
-           <a href="https://github.com/OneStar1107/emojibot-studio">本项目仓库</a></p>
+           <a href="https://github.com/OneStar1107/emoji-bot">本项目仓库</a></p>
       </section>
     `;
   }

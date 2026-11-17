@@ -1,5 +1,5 @@
 {
-  "name": "@emojibot-studio/desktop",
+  "name": "@emojibot/desktop",
   "private": true,
   "version": "0.1.0",
   "description": "EmojiBot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",

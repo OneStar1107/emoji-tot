@@ -1,9 +1,14 @@
 {
-  "name": "@emojibot-studio/desktop",
+  "name": "emoji-bot",
   "private": true,
   "version": "0.1.0",
-  "description": "EmojiBot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
-  "main": "src/main.js",
+  "description": "EmojiBot: an expressive character for the desktop and the web, driven by a two-digit protocol",
   "type": "commonjs",
-  "license": "MIT"
+  "license": "MIT",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  }
 }
