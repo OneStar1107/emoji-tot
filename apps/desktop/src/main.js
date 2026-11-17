@@ -271,9 +271,19 @@ ipcMain.on('pet:action', () => {
 // which turns into a nested path with a slash in it.
 app.setName('EmojiBot');
 
-// A transparent window over a software-composited desktop is fine; a failed
-// GPU process is fatal, and it fails on machines without a usable GPU.
+/*
+ * Software rendering, deliberately.
+ *
+ * The window is one small SVG ball, so compositing it on the CPU costs
+ * nothing noticeable — while a GPU process that fails to start is *fatal*
+ * (Chromium prints "GPU process isn't usable. Goodbye." and exits before any
+ * window appears). That failure is common on remote sessions, VMs and
+ * machines with no usable driver, and there is no way to catch it after the
+ * fact: the process is gone. A pet that always starts beats a pet that runs
+ * at 120fps on the machines where it starts at all.
+ */
 app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {

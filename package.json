@@ -10,8 +10,10 @@
     "node": ">=20"
   },
   "scripts": {
+    "postinstall": "pnpm --filter @emojibot-studio/protocol build",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter @emojibot-studio/gallery dev"
+    "dev": "pnpm --filter @emojibot-studio/gallery dev",
+    "desktop": "pnpm --filter @emojibot-studio/desktop start"
   }
 }
