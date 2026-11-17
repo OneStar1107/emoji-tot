@@ -19,15 +19,12 @@ importers:
 
   apps/gallery:
     dependencies:
-      '@aora-bot/element':
-        specifier: 0.2.0
-        version: 0.2.0
-      '@aora-bot/engine':
-        specifier: 0.2.0
-        version: 0.2.0
       '@emojibot-studio/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@emojibot/core':
+        specifier: workspace:*
+        version: link:../../packages/core
     devDependencies:
       vite:
         specifier: ^6.0.0
@@ -44,9 +41,6 @@ importers:
 
   packages/protocol:
     devDependencies:
-      '@aora-bot/engine':
-        specifier: 0.2.0
-        version: 0.2.0
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -58,14 +52,6 @@ packages:
 
   7zip-bin@5.2.0:
     resolution: {integrity: sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A==}
-
-  '@aora-bot/element@0.2.0':
-    resolution: {integrity: sha512-k4mBwHmYxdQNx3XyUd7wYsx2bdDbRQ/84uT1zs7W2Kr6xVXASfQKw6ggcx1kOfRPgIeuXbrmUd002hTzoJ8gcQ==}
-    engines: {node: '>=20'}
-
-  '@aora-bot/engine@0.2.0':
-    resolution: {integrity: sha512-YyFThF8C2al4MBuXWDaFs23IYerv286vZkhznWKdVYKoQxryFHapttVmmEXPcFsgPdorxJrD1hCqJ43yO/TaQA==}
-    engines: {node: '>=20'}
 
   '@develar/schema-utils@2.6.5':
     resolution: {integrity: sha512-0cp4PsWQ/9avqTVMCtZ+GirikIA36ikvjtHweU4/j8yLtgObI0+JUPhYFScgwlteveGB1rt3Cm8UhN04XayDig==}
@@ -1932,12 +1918,6 @@ packages:
 snapshots:
 
   7zip-bin@5.2.0: {}
-
-  '@aora-bot/element@0.2.0':
-    dependencies:
-      '@aora-bot/engine': 0.2.0
-
-  '@aora-bot/engine@0.2.0': {}
 
   '@develar/schema-utils@2.6.5':
     dependencies:

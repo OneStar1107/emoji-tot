@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Fused, non-commercial fork of Emotion Ball + Aora Bot + 球球桌宠",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "engines": {

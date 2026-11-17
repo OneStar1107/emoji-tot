@@ -1,17 +1,18 @@
 /**
  * The scene: several agents, one face.
  *
- * This is the page that makes the arbitration rule visible. Nine sessions each
- * report their own state; the big character shows what the arbiter decided.
- * Click a session to make it report something else and watch the face switch —
- * including the rule that an urgent event interrupts a dwell while a lesser
- * one waits its turn.
+ * Nine sessions report their own state; one character shows what the arbiter
+ * decided. Click a session to make it report something else and watch the
+ * face switch — including the rule that an urgent event interrupts a dwell
+ * while a lesser one waits its turn.
  */
+import { defineBall } from '@emojibot/core/element';
+import { createArbiter, getEmotion } from '@emojibot-studio/protocol';
 import { DEMO_SESSIONS } from './sessions';
-import { createArbiter } from '@emojibot-studio/protocol';
-import { getEmotion } from '@emojibot-studio/protocol';
-import { look } from './store';
 import { t } from './i18n';
+import { look } from './store';
+
+defineBall();
 
 const STATES = [
   { id: '30', label: '思考中' },
@@ -34,8 +35,7 @@ export function createScene(): HTMLElement {
       <section class="sessions" id="sessions"></section>
       <section class="stage-col">
         <div class="stage bg-grid">
-          <aora-bot data-hero shape="${look.shape}" color="${look.color}"
-                    style-id="${look.styleId}" variant="${look.variant}" size="200"></aora-bot>
+          <emojibot-ball data-hero shape="${look.shape}" color="${look.color}" state="idle" size="200"></emojibot-ball>
         </div>
         <div class="stage-bar">
           <span class="hint" id="verdict"></span>
@@ -58,10 +58,8 @@ export function createScene(): HTMLElement {
     onApply: (result) => {
       hero.state = result.state;
       const def = getEmotion(result.emotionId);
-      const name = def ? (document.documentElement.lang === 'en' ? def.name.en : def.name.zh) : result.emotionId;
-      verdict.textContent = result.sessionId
-        ? `${t('scene.showing')}${name} · ${result.sessionId}`
-        : `${t('scene.showing')}${t('scene.idle')}`;
+      const name = def ? def.name.zh : result.emotionId;
+      verdict.textContent = result.sessionId ? `${t('scene.showing')}${name} · ${result.sessionId}` : `${t('scene.showing')}${t('scene.idle')}`;
     },
   });
 
@@ -82,8 +80,7 @@ export function createScene(): HTMLElement {
     const target = event.target as HTMLElement;
     const session = target.closest<HTMLElement>('[data-session]')?.dataset.session;
     if (session) {
-      const next = STATES[Math.floor(Math.random() * 3)];
-      report(session, next.id);
+      report(session, STATES[Math.floor(Math.random() * 3)].id);
       return;
     }
     const action = target.closest<HTMLElement>('[data-scene]')?.dataset.scene;

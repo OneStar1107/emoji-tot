@@ -20,9 +20,9 @@
 
 | 上游 | 贡献 | 位置 |
 | --- | --- | --- |
-| [Emotion Ball](https://github.com/Aithena/emotion-ball) | 两位数 emotionId 协议、分十年段的语义、容错接入的体感 | `packages/protocol` |
-| [Aora Bot](https://github.com/sam70361/aora-bot) | 程序化渲染引擎：71 角色、3 画法、16 变体、7 套主题、HUD、粒子 | npm 依赖 `@aora-bot/*` |
-| [球球桌宠](https://github.com/dreamcall520/emotion-ball-desktop-pet) | 桌面常驻的产品经验：贴边、穿透、Agent 联动 | `apps/desktop` |
+| [Emotion Ball](https://github.com/Aithena/emotion-ball) | 两位数 emotionId 协议的分段思路（代码自己写） | `packages/protocol` |
+| [Aora Bot](https://github.com/sam70361/aora-bot) | "角色由代码绘制"这条路能走多远的参照（不含其代码或美术） | `packages/core` |
+| [球球桌宠](https://github.com/dreamcall520/emotion-ball-desktop-pet) | 桌面常驻的产品行为：贴边、穿透、状态气泡 | `apps/desktop` |
 
 ## 一个两位数
 
@@ -47,7 +47,7 @@ feed('thinking');              // 也可以直接给状态名
 
 | 页面 | 内容 |
 | --- | --- |
-| **控制台** | 71 角色 · 71 形状 · 11 色 · 3 画法 16 变体 · 51 状态 · 5 种舞台背景。参数面板只显示当前变体**真正读取**的参数，代码片段随选择实时生成 |
+| **控制台** | 8 形状 · 12 色 · 44 状态表情 · 5 种舞台背景。每个选项就是它自己的样子，代码片段随选择实时生成 |
 | **表情馆** | 51 个 id 一屏看完，按十年段筛选，点开拿代码 |
 | **场景** | 九个 agent 各自上报，一张脸显示仲裁结果。这是协议里"紧急事件打断停留期"那条规则的可视化 |
 | **主题** | 7 套季节主题，点击才加载（代码分割），加载后画的是该主题自己的形状 |
@@ -112,13 +112,13 @@ apps/desktop         Electron 桌宠：贴边、穿透、Agent 联动、托盘
 
 ## 许可
 
-非商业共享。三个上游各自许可继续有效，商用需要分别联系原作者：
+**MIT。** 代码、形状、表情全部由本仓库自行实现：可以商用、可以闭源、可以再分发，保留版权声明即可。
 
-- Aora Bot：Aora Bot License 1.1，商用授权 1251579308@qq.com
-- Emotion Ball：双许可，商用同样联系 1251579308@qq.com
-- 球球桌宠：仅供学习研究，**永不提供**商业授权
+设计上的来路见 [NOTICE.md](NOTICE.md)（只有致谢，不含任何许可约束）。
 
-细节见 [LICENSE](LICENSE)、[NOTICE.md](NOTICE.md)、[CREDITS.md](CREDITS.md)。
+> 早期版本直接依赖上游引擎，能拿到 71 个角色和 16 种画法，但整个仓库只能是"非商业衍生作品"。
+> 为了让许可干净，引擎重写成了 `packages/core`：8 个形状、44 个状态表情、一种画法。
+> 功能少了，许可见得清楚了——这是有意的取舍。
 
 ---
 

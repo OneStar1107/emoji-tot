@@ -9,12 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@aora-bot/element": "0.2.0",
-    "@aora-bot/engine": "0.2.0",
-    "@emojibot-studio/protocol": "workspace:*"
+    "@emojibot-studio/protocol": "workspace:*",
+    "@emojibot/core": "workspace:*"
   },
   "devDependencies": {
     "vite": "^6.0.0"
   },
-  "description": "Browse every emotion id, every drawing style, and copy the snippet that reproduces it"
+  "description": "Browse every emotion id, every drawing style, and copy the snippet that reproduces it",
+  "license": "MIT"
 }

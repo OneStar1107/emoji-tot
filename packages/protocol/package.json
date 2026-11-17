@@ -2,7 +2,7 @@
   "name": "@emojibot-studio/protocol",
   "version": "0.1.0",
   "description": "The two-digit emotion protocol: ids, segments, parsing, arbitration and an event bridge. No runtime dependencies.",
-  "license": "SEE LICENSE IN ../../LICENSE",
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
   "main": "./dist-cjs/index.js",
@@ -26,7 +26,6 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@aora-bot/engine": "0.2.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }

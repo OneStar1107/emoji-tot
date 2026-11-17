@@ -4,23 +4,21 @@
  * No framework: the views return DOM, and swapping them is `replaceChildren`.
  * That is enough for four pages and keeps the bundle to the engine alone.
  */
-import { defineAoraBot } from '@aora-bot/element';
+import { defineBall } from '@emojibot/core/element';
 import { createConsole } from './console';
 import { createWall } from './wall';
 import { createScene } from './scene';
-import { createThemes } from './themes';
 import { createDocs } from './docs';
 import { getLang, onLangChange, setLang, t, type MessageKey } from './i18n';
 import './style.css';
 
-defineAoraBot();
+defineBall();
 
 const view = document.getElementById('view')!;
 const routes = {
   console: createConsole,
   gallery: createWall,
   scene: createScene,
-  themes: createThemes,
   docs: createDocs,
 };
 type Route = keyof typeof routes;

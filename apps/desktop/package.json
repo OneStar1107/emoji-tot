@@ -42,5 +42,6 @@
       "icon": "assets/icon.png",
       "category": "public.app-category.entertainment"
     }
-  }
+  },
+  "license": "MIT"
 }

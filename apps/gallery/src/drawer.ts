@@ -1,44 +1,48 @@
 /**
  * The drawer: every option as a picture of itself.
  *
- * A dropdown makes you imagine what `riso` or `strawberry` looks like. Here
- * each choice renders the thing it stands for — the shape, drawn; the colour,
- * filled; the state, with that face — so the choice is made by looking rather
- * than by recalling a name. The tray scrolls sideways because there are 71
- * shapes and no column wide enough for them.
+ * A dropdown makes you imagine what a `squircle` looks like. Here each choice
+ * renders the thing it stands for — the shape, drawn; the colour, filled; the
+ * state, with that face — so the choice is made by looking rather than by
+ * recalling a name.
  */
-import { CAST_IDS, SHAPE_IDS, allVariants, castMember, getStyle } from '@aora-bot/engine';
-import { renderStaticSvg } from '@aora-bot/engine/static';
+import { COLOR_IDS, FACES, SHAPE_IDS, colorHex, renderCharacter } from '@emojibot/core';
 import { EMOTIONS, getEmotion } from '@emojibot-studio/protocol';
 import { getLang, t } from './i18n';
 import { look, onLookChange, setLook } from './store';
-import { COLOR_ZH, SHAPE_ZH, STYLE_ZH, VARIANT_ZH, zh } from './zh';
+import { COLOR_ZH, SHAPE_ZH, zh } from './zh';
 
-export type DrawerTab = 'cast' | 'shape' | 'color' | 'style' | 'variant' | 'state';
+export type DrawerTab = 'shape' | 'color' | 'state';
 
-const TABS: { id: DrawerTab; key: 'console.cast' | 'console.shape' | 'console.color' | 'console.style' | 'console.variant' | 'console.state' }[] = [
-  { id: 'cast', key: 'console.cast' },
+const TABS: { id: DrawerTab; key: 'console.shape' | 'console.color' | 'console.state' }[] = [
   { id: 'shape', key: 'console.shape' },
   { id: 'color', key: 'console.color' },
-  { id: 'style', key: 'console.style' },
-  { id: 'variant', key: 'console.variant' },
   { id: 'state', key: 'console.state' },
 ];
 
-const THUMB = 64;
+const THUMB = 56;
 
-function svg(options: Parameters<typeof renderStaticSvg>[0], size = THUMB): string {
+function thumb(options: { shape?: string; color?: string; state?: string }): string {
   try {
-    return renderStaticSvg({ ...options, size }).replaceAll('@media (prefers-color-scheme: dark)', '@media all');
+    return renderCharacter({
+      shape: options.shape ?? look.shape,
+      color: options.color ?? look.color,
+      state: options.state ?? 'idle',
+      size: THUMB,
+    });
   } catch {
     return '';
   }
 }
 
+function swatch(color: string): string {
+  return `<span class="swatch" style="background:${colorHex(color)}"></span>`;
+}
+
 export function createDrawer(onPick?: () => void): HTMLElement {
   const el = document.createElement('section');
   el.className = 'drawer';
-  let tab: DrawerTab = 'cast';
+  let tab: DrawerTab = 'shape';
 
   el.innerHTML = `
     <div class="drawer-tabs" role="tablist">
@@ -57,84 +61,51 @@ export function createDrawer(onPick?: () => void): HTMLElement {
     </button>`;
   }
 
-  function swatch(color: string): string {
-    return `<span class="swatch" style="background:var(--aora-swatch-${color}, ${cssColor(color)})"></span>`;
-  }
-
-  /** The palette ids are the engine's; a plain CSS colour keeps this independent of its variables. */
-  function cssColor(id: string): string {
-    const map: Record<string, string> = {
-      cream: '#F6E7C1', ivory: '#F8F4E8', black: '#1F1F1F', brown: '#7A4B2A', red: '#D93A3A',
-      orange: '#F08A24', yellow: '#F2C230', green: '#4FA65B', cyan: '#38B6C4', blue: '#3C6FE0',
-      violet: '#7C5CD6', magenta: '#D4478F', pink: '#F39BB6', gray: '#9AA0A6', sage: '#9FB49A',
-      clay: '#C4846A', navy: '#26324F', mauve: '#B08CA8',
-    };
-    return map[id] ?? '#ccc';
+  /**
+   * One chip per state, not per id: several ids share a state ("Tired" and
+   * "Dormant" both drowse) and the picture would be identical.
+   */
+  function stateEntries(): { state: string; label: string }[] {
+    const seen = new Map<string, string>();
+    for (const def of EMOTIONS) {
+      if (seen.has(def.state)) continue;
+      seen.set(def.state, lang() === 'zh' ? def.name.zh : def.name.en);
+    }
+    return [...seen].map(([state, label]) => ({ state, label }));
   }
 
   function renderTray(): void {
     const L = lang();
-    let html = '';
-    if (tab === 'cast') {
-      html = CAST_IDS.map((id) => {
-        const member = castMember(id);
-        let preview = '';
-        try {
-          preview = svg({
-            shape: (member?.shape ?? look.shape) as never,
-            color: (member?.color ?? 'black') as never,
-            state: 'idle',
-            size: THUMB,
-          });
-        } catch {
-          preview = '';
-        }
-        return chip(id, id, preview, id === look.cast);
-      }).join('');
-    } else if (tab === 'shape') {
-      html = SHAPE_IDS.map((id) =>
-        chip(id, zh(SHAPE_ZH, id, L), svg({ shape: id as never, color: look.color as never, state: 'idle' }), id === look.shape),
+    if (tab === 'shape') {
+      tray.innerHTML = SHAPE_IDS.map((id) =>
+        chip(id, zh(SHAPE_ZH, id, L), thumb({ shape: id, state: look.state }), id === look.shape),
       ).join('');
-    } else if (tab === 'color') {
-      html = Object.keys(COLOR_ZH).map((id) =>
+      return;
+    }
+    if (tab === 'color') {
+      tray.innerHTML = COLOR_IDS.map((id) =>
         chip(id, zh(COLOR_ZH, id, L), swatch(id), id === look.color),
       ).join('');
-    } else if (tab === 'style') {
-      html = ['vector', 'pixel', 'kaomoji'].map((id) => {
-        const style = getStyle(id);
-        return chip(
-          id,
-          zh(STYLE_ZH, id, L),
-          svg({ shape: look.shape as never, color: look.color as never, state: 'idle', style: id as never, variant: style.defaultVariant as never }),
-          id === look.styleId,
-        );
-      }).join('');
-    } else if (tab === 'variant') {
-      const style = getStyle(look.styleId);
-      html = allVariants(style).map((id) =>
-        chip(
-          id,
-          zh(VARIANT_ZH, id, L),
-          svg({ shape: look.shape as never, color: look.color as never, state: 'idle', style: look.styleId as never, variant: id as never }),
-          id === look.variant,
-        ),
-      ).join('');
-    } else {
-      html = EMOTIONS.map((def) =>
-        chip(
-          def.state,
-          L === 'zh' ? def.name.zh : def.name.en,
-          svg({ shape: look.shape as never, color: look.color as never, state: def.state as never, style: look.styleId as never, variant: look.variant as never }),
-          def.state === look.state,
-        ),
-      ).join('');
+      return;
     }
-    tray.innerHTML = html;
+    tray.innerHTML = stateEntries()
+      .map((entry) => chip(entry.state, entry.label, thumb({ state: entry.state }), entry.state === look.state))
+      .join('');
   }
 
   function markTab(): void {
     for (const button of el.querySelectorAll<HTMLElement>('[data-tab]')) {
       button.setAttribute('aria-selected', String(button.dataset.tab === tab));
+    }
+  }
+
+  function markChips(): void {
+    for (const button of tray.querySelectorAll<HTMLElement>('.chip')) {
+      const active =
+        (tab === 'shape' && button.dataset.value === look.shape) ||
+        (tab === 'color' && button.dataset.value === look.color) ||
+        (tab === 'state' && button.dataset.value === look.state);
+      button.setAttribute('aria-selected', String(active));
     }
   }
 
@@ -148,20 +119,16 @@ export function createDrawer(onPick?: () => void): HTMLElement {
       return;
     }
     const option = target.closest<HTMLElement>('.chip');
-    if (!option) return;
-    const value = option.dataset.value!;
-    if (tab === 'cast') setLook({ cast: value });
+    if (!option?.dataset.value) return;
+    const value = option.dataset.value;
     if (tab === 'shape') setLook({ shape: value });
     if (tab === 'color') setLook({ color: value });
-    if (tab === 'style') {
-      const style = getStyle(value);
-      setLook({ styleId: value, variant: style.defaultVariant });
-    }
-    if (tab === 'variant') setLook({ variant: value });
     if (tab === 'state') {
       const def = getEmotion(value);
-      if (def) setLook({ state: def.state });
+      setLook({ state: def?.state ?? value });
     }
+    // Redraw the thumbnails too: they are drawn with the current look, so a
+    // shape change repaints the colour and state chips as well.
     renderTray();
     onPick?.();
   });
@@ -169,19 +136,14 @@ export function createDrawer(onPick?: () => void): HTMLElement {
   markTab();
   renderTray();
   onLookChange(() => {
-    // Only the selected chip changes; rebuilding 71 pictures on every click
-    // would throw away work the browser just did.
-    for (const button of tray.querySelectorAll<HTMLElement>('.chip')) {
-      const active =
-        (tab === 'cast' && button.dataset.value === look.cast) ||
-        (tab === 'shape' && button.dataset.value === look.shape) ||
-        (tab === 'color' && button.dataset.value === look.color) ||
-        (tab === 'style' && button.dataset.value === look.styleId) ||
-        (tab === 'variant' && button.dataset.value === look.variant) ||
-        (tab === 'state' && button.dataset.value === look.state);
-      button.setAttribute('aria-selected', String(active));
-    }
+    renderTray();
+    markChips();
   });
 
   return el;
+}
+
+/** The number of distinct states a wall can show. */
+export function stateCount(): number {
+  return new Set(Object.keys(FACES)).size;
 }

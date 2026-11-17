@@ -12,7 +12,6 @@ const MESSAGES = {
     'nav.console': '控制台',
     'nav.gallery': '表情馆',
     'nav.scene': '场景',
-    'nav.themes': '主题',
     'nav.docs': '文档',
     'nav.dark': '深色背景',
 
@@ -21,8 +20,6 @@ const MESSAGES = {
     'console.cast': '角色',
     'console.shape': '形状',
     'console.color': '颜色',
-    'console.style': '画法',
-    'console.variant': '变体',
     'console.state': '状态',
     'console.copy': '复制代码',
     'console.code': '代码',
@@ -51,22 +48,15 @@ const MESSAGES = {
     'scene.idle': '待机',
     'scene.showing': '显示：',
 
-    'themes.title': '表情馆 · 主题',
-    'themes.lead': '每套主题自带形状、角色与皮肤。点一下加载，',
-    'themes.loading': '加载中…',
-    'themes.failed': '加载失败',
 
     'docs.title': '文档',
 
-    'footer.powered': 'Powered by',
-    'footer.semantics': '表情语义来自',
-    'footer.license': '非商业衍生作品，见 NOTICE.md',
+    'footer.license': 'MIT 许可 · 由 @emojibot/core 绘制',
   },
   en: {
     'nav.console': 'Console',
     'nav.gallery': 'Faces',
     'nav.scene': 'Scene',
-    'nav.themes': 'Themes',
     'nav.docs': 'Docs',
     'nav.dark': 'Dark background',
 
@@ -75,8 +65,6 @@ const MESSAGES = {
     'console.cast': 'Cast',
     'console.shape': 'Shape',
     'console.color': 'Colour',
-    'console.style': 'Style',
-    'console.variant': 'Variant',
     'console.state': 'State',
     'console.copy': 'Copy snippet',
     'console.code': 'snippet',
@@ -106,16 +94,10 @@ const MESSAGES = {
     'scene.idle': 'Idle',
     'scene.showing': 'Showing: ',
 
-    'themes.title': 'Themes',
-    'themes.lead': 'Each set brings its own shapes, cast and skins. Click to load.',
-    'themes.loading': 'Loading…',
-    'themes.failed': 'Failed to load',
 
     'docs.title': 'Docs',
 
-    'footer.powered': 'Powered by',
-    'footer.semantics': 'Expression semantics from',
-    'footer.license': 'Non-commercial derivative work. See NOTICE.md',
+    'footer.license': 'MIT licensed · drawn by @emojibot/core',
   },
 } as const;
 
