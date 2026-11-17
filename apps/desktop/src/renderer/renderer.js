@@ -75,7 +75,11 @@ pet.addEventListener('contextmenu', (event) => {
  * arrive. The renderer stays out of it.
  */
 
+/** A counter so a late timer cannot overwrite a state that just arrived. */
+let actionToken = 0;
+
 api.onState((message) => {
+  actionToken += 1;
   if (message.state) ball.state = message.state;
   if (message.tips) say(message.tips);
 });
@@ -83,10 +87,45 @@ api.onState((message) => {
 // The main process picks the action, so a poke and the menu agree on what is
 // possible.
 api.onAction((action) => {
+  const token = ++actionToken;
   if (action === 'bounce') ball.bounce?.(0.5);
   else if (action === 'spin') ball.spin?.(1.5);
   else if (action === 'burst') ball.burst?.(18);
+
+  // A poke is a moment, not a condition: once it has played, the face goes
+  // back to waiting. Without this the ball kept whatever expression the poke
+  // happened to land on.
+  window.setTimeout(() => {
+    if (token !== actionToken) return;
+    ball.state = 'idle';
+  }, 1700);
 });
+
+/*
+ * Left alone, it does something now and then.
+ *
+ * A desktop pet that only reacts is furniture. This is deliberately slow and
+ * only runs while idle, so it reads as a breath rather than a notification.
+ */
+let lastAntic = Date.now();
+window.setInterval(() => {
+  if (document.hidden) return;
+  if (ball.state !== 'idle') {
+    lastAntic = Date.now();
+    return;
+  }
+  if (Date.now() - lastAntic < 24000) return;
+  lastAntic = Date.now();
+  const roll = Math.random();
+  if (roll < 0.45) ball.bounce?.(0.3);
+  else if (roll < 0.75) ball.spin?.(1);
+  else {
+    ball.state = 'curious';
+    window.setTimeout(() => {
+      if (ball.state === 'curious') ball.state = 'idle';
+    }, 2400);
+  }
+}, 8000);
 
 api.onSize((px) => {
   ball.setAttribute('size', String(px));
@@ -96,7 +135,8 @@ api.onSize((px) => {
 // The ball occupies the square below the bubble strip, so the smaller of the
 // two dimensions is the one that fits.
 function fitBall() {
-  const px = Math.max(32, Math.min(window.innerWidth, window.innerHeight - 46));
+  // 16px of margin on each side plus the bubble strip, matching the CSS.
+  const px = Math.max(32, Math.min(window.innerWidth - 32, window.innerHeight - 46 - 32));
   ball.setAttribute('size', String(px));
 }
 

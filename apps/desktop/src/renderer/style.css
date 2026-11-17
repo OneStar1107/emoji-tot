@@ -27,11 +27,17 @@ body:active { cursor: grabbing; }
  * The window is taller than the ball: the strip at the top belongs to the
  * bubble. The ball is sized to the square below it.
  */
+/*
+ * The ball's square sits inside the window with a margin on every side, so
+ * its own hop, spin and squash have room. Clipping it is the window's job and
+ * it does not do that any more — a docked ball is cut by the screen edge, which
+ * leaves an arc, not a flat edge.
+ */
 #pet {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
   top: 46px;
   display: grid;
   place-items: center;
