@@ -50,7 +50,7 @@ const BUBBLE_ROOM = 88;
 
 /** How close to an edge counts as "dock here", and how much of the ball stays visible. */
 const EDGE_SNAP = 8;
-const PEEK_RATIO = 0.3;
+const PEEK_RATIO = 0.5;
 
 /** Ids worth a menu entry. The full table lives in the protocol package. */
 const DEMO_STATES = [
@@ -362,8 +362,14 @@ function undock() {
   else if (side === 'top') y = -(outer - dim) / 2;
   else y = area.height - (outer + dim) / 2;
 
-  x = clamp(x, 0, Math.max(0, area.width - outer));
-  y = clamp(y, 0, Math.max(0, area.height - outer));
+  /*
+   * Deliberately NOT clamped to 0: the window is wider than the ball, so a
+   * ball sitting exactly on the screen edge needs the window to start off
+   * screen. Clamping to 0 pushed the pet 104px inward, which looked like it
+   * had jumped away from the edge it was just tucked into.
+   */
+  x = Math.round(x);
+  y = Math.round(y);
 
   dockSide = null;
   dockOpen = false;
@@ -389,17 +395,24 @@ function sliverRect(dim) {
   return { x: ballLeft, y: area.height - peek, w: dim, h: peek };
 }
 
-/** Where an open (fully visible) ball sits, given the docked side. */
+/**
+ * Where an open (fully visible) ball sits, given the docked side.
+ *
+ * Deliberately not clamped to 0 on the docked axis: the window is wider than
+ * the ball, so a ball sitting exactly on the screen edge needs the window to
+ * start off screen. Clamping it pushed the pet 104px inward the moment it
+ * opened, which looked like it had jumped away from the edge.
+ */
 function openPosition(dim) {
   const outer = outerSize(dim);
   const area = workArea();
   const [wx, wy] = win.getPosition();
-  const clampX = (v) => clamp(v, 0, Math.max(0, area.width - outer));
   const clampY = (v) => clamp(v, 0, Math.max(0, area.height - outer));
-  if (dockSide === 'left') return { x: clampX(-(outer - dim) / 2), y: clampY(wy) };
-  if (dockSide === 'right') return { x: clampX(area.width - (outer + dim) / 2), y: clampY(wy) };
-  if (dockSide === 'top') return { x: clampX(wx), y: clampY(-(outer - dim) / 2) };
-  return { x: clampX(wx), y: clampY(area.height - (outer + dim) / 2) };
+  const clampX = (v) => clamp(v, 0, Math.max(0, area.width - outer));
+  if (dockSide === 'left') return { x: -(outer - dim) / 2, y: clampY(wy) };
+  if (dockSide === 'right') return { x: area.width - (outer + dim) / 2, y: clampY(wy) };
+  if (dockSide === 'top') return { x: clampX(wx), y: -(outer - dim) / 2 };
+  return { x: clampX(wx), y: area.height - (outer + dim) / 2 };
 }
 
 /** Where a tucked ball sits: the same as the closed dock position. */
@@ -705,7 +718,12 @@ function createTray() {
  * load to restore the bubble side; a missing handler is a console error on
  * every launch for a question that costs nothing to answer.
  */
-ipcMain.handle('debug:state', () => ({ docked: dockSide, dockOpen, cast: castId, size: sizeKey }));
+ipcMain.handle('debug:state', () => ({ docked: dockSide, dockOpen, cast: castId, size: sizeKey, bounds: win && !win.isDestroyed() ? win.getBounds() : null, area: workArea() }));
+ipcMain.handle('debug:dock', (_event, side) => {
+  if (side) dock(side);
+  else undock();
+  return { docked: dockSide, dockOpen };
+});
 
 ipcMain.on('drag:start', (_event, point) => {
   if (dockSide) undock();

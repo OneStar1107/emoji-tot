@@ -244,6 +244,9 @@ api.onDock((side) => {
   setBubbleDirection(side ? side.replace('-open', '') : null);
   // Leaving the edge takes the bubble with it, not just its next update.
   if (!bubbleAllowed) bubble.dataset.visible = 'false';
+  // Docked, the bubble should say something at once rather than wait for the
+  // next mood; an empty bubble beside a tucked pet looks broken.
+  else say(faceFor(ball.state) || faceFor(taskState));
 });
 
 if (typeof api.debugState === 'function') {
