@@ -21,8 +21,8 @@
 
 | File | For |
 | --- | --- |
-| [EmojiBot Setup 0.1.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.1.0/EmojiBot-Setup-0.1.0.exe) | Installer — starts from the Start menu |
-| [EmojiBot Portable 0.1.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.1.0/EmojiBot-Portable-0.1.0.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiBot Setup 0.2.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.2.0/EmojiBot-Setup-0.2.0.exe) | Installer — starts from the Start menu |
+| [EmojiBot Portable 0.2.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.2.0/EmojiBot-Portable-0.2.0.exe) | Portable — double-click, writes nothing to the registry |
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-bot/releases)
 
