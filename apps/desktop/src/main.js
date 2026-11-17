@@ -482,10 +482,25 @@ function startDrag(point) {
   const [wx, wy] = win.getPosition();
   dragOffset = { x: point.x - wx, y: point.y - wy };
   clearInterval(dragTimer);
+  /*
+   * setBounds, not setPosition.
+   *
+   * A plain setPosition lets the OS pick the size when the window crosses a
+   * monitor with a different scale factor, and a resize makes the renderer
+   * recompute --ball-size from the new innerWidth — the ball then grows and
+   * never shrinks back. Pinning the width and height on every tick keeps the
+   * ball the size the user chose.
+   */
+  const outer = outerSize(SIZES[sizeKey]);
   dragTimer = setInterval(() => {
     if (!win || win.isDestroyed()) return;
     const cursor = screen.getCursorScreenPoint();
-    win.setPosition(Math.round(cursor.x - dragOffset.x), Math.round(cursor.y - dragOffset.y));
+    win.setBounds({
+      x: Math.round(cursor.x - dragOffset.x),
+      y: Math.round(cursor.y - dragOffset.y),
+      width: outer,
+      height: outer,
+    });
   }, 16);
 }
 
