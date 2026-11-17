@@ -9,7 +9,7 @@
 
 ```json
 { "emotionId": "34", "tips": "读取失败", "hud": { "kind": "progress", "value": 0.4 } }
-{ "aoraBotId": 34 }
+{ "emotion": 34 }
 { "state": "thinking" }
 ```
 
@@ -17,7 +17,7 @@
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| `emotionId` / `emotion` / `aoraBotId` | 三选一 | 两位数 id，或状态名 |
+| `emotionId` / `emotion` | 三选一 | 两位数 id，或状态名 |
 | `state` | 同上 | 状态名，如 `thinking` |
 | `tips` | 否 | 一行文案，宿主自行决定展示方式 |
 | `hud` | 否 | 环外仪表。格式不合就丢弃，不影响表情 |
@@ -78,9 +78,8 @@ arbiter.update({ sessionId: 'build', emotionId: '32' });
 arbiter.update({ sessionId: 'test', emotionId: '34' });
 ```
 
-## 7. 与上游的关系
+## 7. 编号约定
 
-- id 编号与四段划分来自 Emotion Ball；
-- state 词表与仲裁的四条规则来自 Aora Bot；
-- 本项目的实现为独立编写，并用 `test/parity.test.ts` 与 `@aora-bot/engine` 逐行比对，
-  上游一旦改表，测试立即失败——这是防止语义漂移的闸门。
+- 十位是分组，个位是组内序号，组间空号是给扩展留的；编号一旦发布就不再重排；
+- 状态名是给人读的别名，编号才是对外契约；
+- 27 个测试守住这张表：id 合法性、状态映射、事件标记、段边界，任何一处漂移都会红。

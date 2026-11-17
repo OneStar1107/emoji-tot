@@ -1,98 +1,68 @@
-# 架构与融合决策
+# 架构
 
-这份文档记录「为什么是这样」，不只是「是什么」。改结构前先改这里。
-
-## 1. 三个上游的真实关系
-
-三者同源，是一套设计的三次迭代：
-
-| | emotion-ball | aora-bot | 球球桌宠 |
-| --- | --- | --- | --- |
-| 定位 | Web 表情引擎 + 展示馆 | 通用角色渲染库 | macOS 桌宠应用 |
-| 形态 | 原生 JS + SVG，零依赖无构建 | TS monorepo，四个 npm 包 | Electron，820 个文件 |
-| 状态 | 32 个数字 id | 44 个 state / 51 个协议 id | 内嵌 emotion-ball 副本 |
-| 画法 | 单套（3 形状 + 线稿） | 3 系列 × 12 变体、12 张脸、8 套主题 | 4 套皮肤 + 精灵图 |
-| 测试 | 无 | 40+ vitest 文件、静态 golden | 209 个应用级 verify 脚本 |
-| 强项 | 接入体验（4 个 script 标签） | 引擎与测试 | 桌面系统集成 |
-| 弱项 | 工程化、多画法 | 重、无「贴一段就能用」的路、无桌面 | 内嵌分叉副本、只 mac |
-
-aora-bot 已经把 emotion-ball 的数字协议吸收成自己的 `agent/protocol.ts`（编号完全兼容），
-所以 aora 是语义超集；球球桌宠则复制了一份 emotion-ball 源码，两边已经分叉。
-
-## 2. 融合原则
-
-**引擎不搬，用依赖。** aora 引擎约 4.5 万行、213 个文件。复制进新仓库的代价是：
-上游修 bug 你要手动同步、仓库体积膨胀、许可声明必须逐文件跟进。
-它在 npm 上有 `@aora-bot/engine@0.2.0`，直接依赖，上游更新自动受益。
-
-**协议自研，但不许漂移。** 协议是「接口语义」，任何宿主都要用，必须零依赖、可在
-Node / Electron 主进程 / 浏览器 / 扩展里跑。因此在本仓库重写一份；
-同时用 `test/parity.test.ts` 与上游逐行比对 id、state、event 标记、段边界——
-上游改表，测试立刻红。
-
-**桌面端重写，不复制。** 球球桌宠的许可永久禁止商业用途，且其 `main.js`（264KB）与 `lib/`
-（5MB）深度绑定 macOS。桌面壳重写，只借鉴产品行为（拖拽、贴边、托盘、注视、气泡）。
-
-## 3. 决策记录
-
-### ADR-1 为什么是新仓库而不是 fork 上游
-
-fork 会带上全部历史与上游文件结构，之后每次上游更新都变成人工合并。
-新建仓库 + 依赖的方式让「我的代码」和「上游的代码」边界清楚，许可也好声明。
-
-### ADR-2 为什么协议要自研一份
-
-上游的 `@aora-bot/engine/agent` 已经是零运行时依赖，理论上可以 re-export。
-选择自研的理由是：
-- 项目需要**零 npm 依赖**的接入路径（单文件 UMD、Electron 主进程、扩展），
-  re-export 会把整个包的解析链带进来；
-- 需要在上游语义之上加东西（见 ADR-3）。
-代价是重复，用 parity 测试把重复变成「有保护的重复」。
-
-### ADR-3 仲裁：紧急事件立即打断（偏离上游）
-
-上游规则是「事件一律排队，等停留期结束再播」。好处是绝不闪烁，坏处是**错误要等 900ms 才出现**。
-本项目的规则：
-- 事件的优先级**高于**当前显示 → 立即打断（`34` 出错盖过 `30` 思考中）；
-- 否则排队（连续 `50` 通知不会刷屏）。
-这是一条有意为之的分歧，已在 `docs/PROTOCOL.md` 写明。
-
-### ADR-4 为什么 demo 用 Vite 而不是「4 个 script 标签」
-
-emotion-ball 的卖点是无构建接入。但融合后画法来自 aora 引擎（必须走模块系统）。
-折中：
-- `apps/gallery` 用 Vite，本地开发体验好；
-- aora 的 `@aora-bot/element` 自带 CDN 构建（`dist/aora-bot.js`），
-  「一行 script」的路径依然存在，见 README 的接入段落（后续补 `examples/cdn.html`）。
-
-### ADR-5 静态渲染进 CI
-
-`renderStaticSvg` 无 DOM 无计时器，输出确定。`apps/gallery/scripts/preview.mjs` 在 Node 里
-把 51 个 id 渲染成 SVG，任何状态渲染失败都会让脚本退出码非零。
-这样「表情坏了」不需要开浏览器就能发现。
-
-## 4. 分层
+四个包，一条从「两个数字」到「一个 SVG」的路。
 
 ```
-@aora-bot/engine             （npm 依赖，画法与模拟）
-        ↑
-@emojibot/protocol    （本仓库，纯逻辑，零依赖）
-        ↑
-apps/gallery · apps/desktop  （本仓库，两个宿主）
+apps/desktop      Electron 桌宠：贴边、穿透、状态气泡
+apps/gallery      四页站点：控制台 / 表情馆 / 场景 / 文档
+        ↓ 都依赖
+packages/core     组合式角色引擎：身体、特征、表情、渲染（纯函数，输出 SVG）
+packages/protocol 两位数协议：解析、仲裁、事件桥
 ```
 
-protocol 不认识引擎，也不认识 DOM。宿主把两者接起来：协议决定 state，引擎负责画。
+## 一条数据流
 
-两个宿主的接法不同，这是有意的：
+```
+外部（文件 / 事件 / 用户点击）
+  → protocol.parse     两位 id 或状态名 → 一个 StateId（不认识也能落段）
+  → protocol.arbitrate 按优先级与停留期决定「现在显示谁」
+  → core.render        { body, color, traits, state } → <svg>
+  → 宿主               写进 DOM（站点）或窗口（桌面）
+```
 
-- **gallery** 用 Vite，import 引擎与协议，网格里的 51 张图由 `renderStaticSvg` 在浏览器里画；
-- **desktop** 不打包渲染进程：主进程 `require` 协议包（所以 protocol 同时产出 ESM 与 CommonJS），
-  渲染进程用 `<script type="module">` 加载引擎的单文件构建（`vendor/aora-bot.js`，从 npm 包原样复制）。
+协议的每一位都有含义（见 [PROTOCOL.md](PROTOCOL.md)）：十位是分组，个位是组内序号，组间空号留给扩展。
 
-## 5. 已知代价
+## 角色是基因组
 
-- **两套 id 表**：上游与本仓库各一份，靠 parity 测试对齐。上游重构目录时测试会失败，需要人工跟。
-- **引擎版本锁定**：`@aora-bot/engine` 目前钉 0.2.0。上游发 0.3 时先跑 parity 与 preview，再升。
-- **画法参数未透出**：gallery 只暴露 style 与 shape，引擎的 `styleOptions` 还没做面板。
-- **静态图的配色靠改字符串**：静态渲染把 ink 写成 `prefers-color-scheme` 媒体查询，
-  页面钉死配色时只能重写这段查询。这是上游输出的形状决定的，升级时要复查。
+一个角色不是一个文件，是四项：
+
+| 项 | 来源 | 数量 |
+| --- | --- | --- |
+| `body` | `core/src/body.ts` 里的参数化轮廓（`r(t)` 或参数曲线采样） | 15 |
+| `color` | `core/src/palette.ts` 的实色 | 12 |
+| `traits` | `core/src/traits.ts`，**每个角色最多一个** | 26 |
+| `state` | `core/src/face.ts` 的眼型 × 嘴型词汇 | 44 |
+
+`core/src/cast.ts` 把 135 个组合钉成有名有姓的成员，每个还带一个招牌表情（`face`）和一个招牌动作（`motion`）。`breed(a, b, seed)` 能交叉两个基因组，用于演示「阵容不是枚举出来的」。
+
+**为什么一个角色只给一个特征**：特征都抢同一块空间（耳朵、光环、尾巴都在身体外沿）。堆四个不如放一个 —— 72px 下能看清的是一个想法，不是四个零件。
+
+## 渲染四层
+
+`renderCharacter` 按固定顺序拼：
+
+1. **身体** —— 一条闭合路径，填充或描边
+2. **表面** —— 斑点、条纹、腮红这类贴身纹理（必须在脸下面，否则糊住眼睛）
+3. **脸** —— 两只眼、一张嘴，按状态取词，带 lean 偏移
+4. **轮廓外** —— 耳朵、光环、尾巴（在身体外面，必须压在最上层）
+
+墨色不单独选：`inkFor()` 按身体亮度取反（亮度 < 0.55 用白墨，否则用深墨）。所以「白底黑字」和「黑底白字」是同一个规则的两端，`bot` 就是后者的默认演示。
+
+## 站点
+
+四个视图共用一个 hash 路由与一个基因状态（`store.ts`）。视图是函数，返回 DOM，切换即 `replaceChildren`；没有框架，包体只有引擎本身。
+
+控制台里的每一个选项都是它自己的渲染：角色是缩略图，身体是轮廓，特征是「当前角色戴上该特征」，表情是「当前角色做出该表情」。没有需要用户猜的文字按钮。
+
+## 构建与发布
+
+```bash
+pnpm --filter @emojibot/protocol build
+pnpm --filter @emojibot/core build
+node apps/desktop/scripts/copy-vendor.mjs
+pnpm --filter @emojibot/gallery build
+```
+
+- 站点：`apps/gallery/dist` 推到 `gh-pages`，`vite base` 必须是 `/emoji-bot/`
+- 桌宠：`apps/desktop` 下跑 electron-builder，产物在 `release/`
+- 注入方式：宿主持有 `emotionId` 写进状态文件，或直接调用 `core` 的渲染函数

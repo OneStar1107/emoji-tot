@@ -14,13 +14,11 @@
  * - `30`–`49` agent work: thinking, searching, replying, done, error.
  * - `50`–`59` signalling: alerts and notifications aimed at the user.
  *
- * The numbering and the segment semantics follow the Emotion Ball protocol
- * (https://github.com/Aithena/emotion-ball) as extended by Aora Bot
- * (https://github.com/sam70361/aora-bot). Ids keep their number and meaning
+ * The numbering is this project's own contract: a decade is a group, the
  * forever; new ids fill gaps inside a decade so the two-digit budget holds.
  */
 
-/** Every state the character engine can adopt. Mirrors Aora Bot's CharacterState. */
+/** Every state the character engine can adopt. */
 export type StateId =
   | 'idle' | 'sleeping' | 'drowsy' | 'bored' | 'waking' | 'powering-down'
   | 'listening' | 'thinking' | 'searching' | 'reading' | 'writing' | 'working'

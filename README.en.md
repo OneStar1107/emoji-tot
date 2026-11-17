@@ -112,7 +112,7 @@ Not "it should run" — it was run:
 
 | Check | Evidence |
 | --- | --- |
-| Protocol table | 27 tests covering id validity, state mapping, event flags and segment bounds |
+| Protocol table | 23 tests covering id validity, state mapping, event flags and segment bounds |
 | 51 states render | `node apps/gallery/scripts/preview.mjs` — 51/51, 0 failures, in Node with no browser |
 | Desktop window behaviour | `node apps/desktop/scripts/ui-check.mjs <port>` — drives the real cursor, 7/7 (dock, open, tuck, click-through) |
 | Desktop protocol | write `34` → `alerting`, `33` → `celebrate`, malformed JSON → keeps the current face |

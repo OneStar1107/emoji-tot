@@ -89,7 +89,7 @@ echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiBot/state.js
 pnpm install     # 装完会自动构建协议包（postinstall）
 pnpm dev         # 站点 http://localhost:5173
 pnpm desktop     # 桌面宠物
-pnpm test        # 27 个协议测试
+pnpm test        # 23 个协议测试
 ```
 
 出安装包：
@@ -112,7 +112,7 @@ apps/desktop         Electron 桌宠：贴边、穿透、Agent 联动、托盘
 
 | 检查 | 证据 |
 | --- | --- |
-| 协议表 | 27 个测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
+| 协议表 | 23 个测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
 | 51 个状态渲染 | `node apps/gallery/scripts/preview.mjs` — 51/51，0 failures（Node 里跑，无浏览器） |
 | 桌面端窗口行为 | `node apps/desktop/scripts/ui-check.mjs <端口>` — 用原生光标驱动真实拖拽，7/7（贴边、展开、收起、穿透） |
 | 桌面端协议驱动 | 写 `34` → `alerting`，写 `33` → `celebrate`，写坏 JSON → 保持当前表情 |

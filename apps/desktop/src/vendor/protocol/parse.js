@@ -10,7 +10,7 @@ const emotions_js_1 = require("./emotions.js");
  *
  * ```json
  * { "emotionId": "34", "tips": "步骤失败" }
- * { "aoraBotId": 33 }
+ * { "emotionId": 33 }
  * { "state": "thinking" }
  * ```
  *
@@ -42,7 +42,7 @@ function parseAgentMessage(input) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw))
         return null;
     const m = raw;
-    const candidate = m.aoraBotId ?? m.emotionId ?? m.emotion ?? m.state;
+    const candidate = m.emotionId ?? m.emotion ?? m.state;
     if (candidate == null || (typeof candidate !== 'string' && typeof candidate !== 'number')) {
         return null;
     }
@@ -83,7 +83,7 @@ function parseAgentMessageDetailed(input) {
     }
     if (typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate)) {
         const m = candidate;
-        if (m.aoraBotId == null && m.emotionId == null && m.emotion == null && m.state == null) {
+        if (m.emotionId == null && m.emotion == null && m.state == null) {
             return { ok: false, message: null, reason: 'no-id' };
         }
     }

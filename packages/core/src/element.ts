@@ -88,10 +88,10 @@ export class EmojiBotBall extends HTMLElement {
     const el = this.#root.querySelector<HTMLDivElement>('.ball');
     if (!el) return;
     const keyframes = kind === 'rotate'
-      ? `@keyframes aora-spin { from { transform: rotate(0); } to { transform: rotate(${360}deg); } }`
+      ? `@keyframes eb-spin { from { transform: rotate(0); } to { transform: rotate(${360}deg); } }`
       : kind === 'scale'
-        ? '@keyframes aora-pop { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }'
-        : '@keyframes aora-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-14%); } }';
+        ? '@keyframes eb-pop { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }'
+        : '@keyframes eb-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-14%); } }';
     const id = `emoji-${kind}`;
     this.#style.textContent = STYLE + keyframes;
     el.style.animation = 'none';

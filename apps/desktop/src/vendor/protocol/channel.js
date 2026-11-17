@@ -7,7 +7,7 @@ const parse_js_1 = require("./parse.js");
 /**
  * A framework-free bridge between a wire protocol and a host.
  *
- * This is the piece Emotion Ball shipped as `handleAIMessage` and Aora Bot
+ * This is the piece a host needs in order to
  * ships as the agent channel, reduced to one object: feed it a message, and
  * subscribe to what the character should be doing. It knows nothing about
  * the DOM, so the same instance works in a browser, an Electron main

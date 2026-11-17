@@ -36,7 +36,7 @@ export interface AgentMessage {
  *
  * ```json
  * { "emotionId": "34", "tips": "步骤失败" }
- * { "aoraBotId": 33 }
+ * { "emotionId": 33 }
  * { "state": "thinking" }
  * ```
  *
@@ -65,7 +65,7 @@ export function parseAgentMessage(input: unknown): AgentMessage | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 
   const m = raw as Record<string, unknown>;
-  const candidate = m.aoraBotId ?? m.emotionId ?? m.emotion ?? m.state;
+  const candidate = m.emotionId ?? m.emotion ?? m.state;
   if (candidate == null || (typeof candidate !== 'string' && typeof candidate !== 'number')) {
     return null;
   }
@@ -115,7 +115,7 @@ export function parseAgentMessageDetailed(input: unknown): ParseResult {
   }
   if (typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate)) {
     const m = candidate as Record<string, unknown>;
-    if (m.aoraBotId == null && m.emotionId == null && m.emotion == null && m.state == null) {
+    if (m.emotionId == null && m.emotion == null && m.state == null) {
       return { ok: false, message: null, reason: 'no-id' };
     }
   }

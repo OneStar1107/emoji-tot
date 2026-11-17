@@ -94,7 +94,7 @@ describe('stateForEmotion', () => {
 
 describe('parseAgentMessage', () => {
   it('accepts the documented shapes', () => {
-    expect(parseAgentMessage('{"aoraBotId":"34"}')?.state).toBe('alerting');
+    expect(parseAgentMessage('{"emotion":34}')?.state).toBe('alerting');
     expect(parseAgentMessage({ emotionId: 33 })?.state).toBe('celebrate');
     expect(parseAgentMessage({ emotion: '14' })?.emotionId).toBe('14');
     expect(parseAgentMessage({ state: 'thinking' })?.emotionId).toBe('30');

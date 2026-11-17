@@ -5,7 +5,7 @@
  * and registers itself. Animation is CSS: a breath on the body and a blink on
  * the lids, both paused when the window is hidden.
  */
-import { renderCharacter } from './render.js';
+import { renderCast, renderCharacter } from './render.js';
 import { colorHex } from './palette.js';
 const STYLE = `
   :host { display: inline-block; width: var(--ball-size, 120px); height: var(--ball-size, 120px); }
@@ -17,7 +17,7 @@ const STYLE = `
 `;
 export class EmojiBotBall extends HTMLElement {
     static get observedAttributes() {
-        return ['shape', 'color', 'state', 'size'];
+        return ['cast', 'body', 'shape', 'color', 'state', 'size', 'traits'];
     }
     #root;
     #style;
@@ -42,7 +42,16 @@ export class EmojiBotBall extends HTMLElement {
         return this.getAttribute('state') ?? 'idle';
     }
     set shape(value) {
-        this.setAttribute('shape', String(value));
+        this.setAttribute('body', String(value));
+    }
+    set body(value) {
+        this.setAttribute('body', String(value));
+    }
+    set cast(value) {
+        this.setAttribute('cast', String(value));
+    }
+    set traits(value) {
+        this.setAttribute('traits', Array.isArray(value) ? value.join(' ') : value);
     }
     set color(value) {
         this.setAttribute('color', String(value));
@@ -63,10 +72,10 @@ export class EmojiBotBall extends HTMLElement {
         if (!el)
             return;
         const keyframes = kind === 'rotate'
-            ? `@keyframes aora-spin { from { transform: rotate(0); } to { transform: rotate(${360}deg); } }`
+            ? `@keyframes eb-spin { from { transform: rotate(0); } to { transform: rotate(${360}deg); } }`
             : kind === 'scale'
-                ? '@keyframes aora-pop { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }'
-                : '@keyframes aora-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-14%); } }';
+                ? '@keyframes eb-pop { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }'
+                : '@keyframes eb-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-14%); } }';
         const id = `emoji-${kind}`;
         this.#style.textContent = STYLE + keyframes;
         el.style.animation = 'none';
@@ -77,16 +86,20 @@ export class EmojiBotBall extends HTMLElement {
         }, { once: true });
     }
     #draw() {
-        const shape = this.getAttribute('shape') ?? 'circle';
+        const cast = this.getAttribute('cast');
+        const body = this.getAttribute('body') ?? this.getAttribute('shape') ?? 'circle';
         const color = this.getAttribute('color') ?? 'white';
         const state = this.getAttribute('state') ?? 'idle';
         const size = Number(this.getAttribute('size') ?? 0) || 120;
+        const traits = (this.getAttribute('traits') ?? '').split(/\s+/).filter(Boolean);
         let svg;
         try {
-            svg = renderCharacter({ shape, color, state, size });
+            svg = cast
+                ? renderCast({ id: cast, state, size })
+                : renderCharacter({ body, color, state, size, traits });
         }
         catch {
-            svg = renderCharacter({ shape: 'circle', color, state: 'idle', size });
+            svg = renderCharacter({ body: 'circle', color, state: 'idle', size });
         }
         let host = this.#root.querySelector('.ball');
         if (!host) {

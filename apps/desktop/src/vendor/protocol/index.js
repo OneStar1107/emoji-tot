@@ -6,8 +6,8 @@
  * event bridge. No DOM, no runtime dependencies: the same code runs in a
  * browser, an Electron main process, a Node relay or a VS Code extension.
  *
- * The ids and their decade semantics come from Emotion Ball; the state
- * vocabulary and the arbitration rules follow Aora Bot. See NOTICE.md.
+ * The two-digit ids are this project's own contract; the state
+ * vocabulary and the arbitration rules are defined here.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.segmentOf = exports.isEvent = exports.createEmotionChannel = exports.DEFAULT_PRIORITY = exports.createArbiter = exports.parseAgentMessageDetailed = exports.parseAgentMessage = exports.stateForEmotion = exports.resolveEmotionId = exports.normaliseId = exports.isStateId = exports.isOneshotEmotion = exports.getEmotion = exports.emotionIdForState = exports.emotionSegment = exports.IDLE_STATE = exports.IDLE_EMOTION_ID = exports.SEGMENT_FALLBACK = exports.EMOTION_SEGMENTS = exports.EMOTION_IDS = exports.EMOTIONS = void 0;
