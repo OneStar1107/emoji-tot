@@ -17,6 +17,15 @@
 
 ---
 
+## Download
+
+| File | For |
+| --- | --- |
+| [EmojiBot Setup 0.1.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.1.0/EmojiBot-Setup-0.1.0.exe) | Installer — starts from the Start menu |
+| [EmojiBot Portable 0.1.0.exe](https://github.com/OneStar1107/emoji-bot/releases/download/v0.1.0/EmojiBot-Portable-0.1.0.exe) | Portable — double-click, writes nothing to the registry |
+
+Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-bot/releases)
+
 ## What this is
 
 **A character is a genome, not an image.** No spritesheets, no Lottie files, and no 134 hand-drawn pictures: a character is `{ body, color, traits, state }`. Bodies come from parametric formulas, traits find their own anchor on the body they sit on, and expressions are a small vocabulary of eyes and mouths. Add a row and there is a new character — that is the difference between a compositional cast and a pre-drawn one.
