@@ -121,6 +121,28 @@ let hoverTimer = null;
 let pointerTimer = null;
 let clickThrough = true;
 let agentWatch = {};
+/** The cast member the pet wears; persisted in prefs.json. */
+let castId = 'bot';
+/** The engine's cast table, loaded as ESM from the vendored copy. */
+let CORE = null;
+
+async function loadCore() {
+  try {
+    const { pathToFileURL } = require('url');
+    const file = path.join(__dirname, 'renderer', 'vendor', 'core', 'index.js');
+    CORE = await import(pathToFileURL(file).href);
+  } catch (error) {
+    CORE = null;
+    console.error('[emojibot] cast table unavailable:', error.message);
+  }
+}
+
+function setCast(id) {
+  castId = id;
+  writeJson(prefsPath(), { ...readJson(prefsPath(), {}), cast: id });
+  if (win) win.webContents.send('cast:changed', id);
+  refreshMenus();
+}
 
 const userDir = () => app.getPath('userData');
 const statePath = () => path.join(userDir(), 'state.json');
@@ -545,6 +567,20 @@ function buildMenu() {
       })),
     },
     {
+      label: '角色',
+      submenu: CORE
+        ? CORE.FAMILIES.map((family) => ({
+            label: `${family.zh} · ${family.en}`,
+            submenu: CORE.CAST.filter((member) => member.family === family.id).map((member) => ({
+              label: member.name.zh,
+              type: 'radio',
+              checked: member.id === castId,
+              click: () => setCast(member.id),
+            })),
+          }))
+        : [{ label: '（角色表未加载）', enabled: false }],
+    },
+    {
       label: '试一个表情',
       submenu: DEMO_STATES.map(([id, label]) => ({
         label: `${id} · ${label}`,
@@ -589,6 +625,13 @@ function createTray() {
 }
 
 /* -------------------------------------------------------------- IPC glue */
+
+/*
+ * Always answer, in dev and in a packaged build. The renderer asks once on
+ * load to restore the bubble side; a missing handler is a console error on
+ * every launch for a question that costs nothing to answer.
+ */
+ipcMain.handle('debug:state', () => ({ docked: dockSide, dockOpen, cast: castId, size: sizeKey }));
 
 ipcMain.on('drag:start', (_event, point) => {
   if (dockSide) undock();
@@ -662,9 +705,13 @@ if (!gotTheLock) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     if (process.platform === 'darwin') app.dock?.hide();
+    await loadCore();
+    const stored = readJson(prefsPath(), {});
+    castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'bot';
     createWindow();
+    if (win) win.webContents.on('did-finish-load', () => win.webContents.send('cast:changed', castId));
     createTray();
     ensureStateFile();
     startPointerWatch();

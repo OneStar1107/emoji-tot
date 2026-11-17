@@ -84,19 +84,40 @@ export class EmojiBotBall extends HTMLElement {
     this.#play('pop 420ms ease-out', 'scale');
   }
 
+  /** Play one of the seven signature motions by name. */
+  play(motion: string) {
+    const map: Record<string, [string, string]> = {
+      bounce: ['hop 620ms ease-out', 'translateY'],
+      spin: ['turn 760ms cubic-bezier(.3,.7,.4,1)', 'rotate'],
+      pop: ['pop 420ms ease-out', 'scale'],
+      tilt: ['tilt 520ms ease-in-out', 'rotate'],
+      wobble: ['wobble 640ms ease-in-out', 'rotate'],
+      pulse: ['pulse 900ms ease-in-out', 'scale'],
+      float: ['float 1400ms ease-in-out', 'translateY'],
+    };
+    const [name, kind] = map[motion] ?? ['hop 620ms ease-out', 'translateY'];
+    this.#play(name, kind);
+  }
+
   #play(name: string, kind: string = 'translateY') {
     const el = this.#root.querySelector<HTMLDivElement>('.ball');
     if (!el) return;
-    const keyframes = kind === 'rotate'
-      ? `@keyframes eb-spin { from { transform: rotate(0); } to { transform: rotate(${360}deg); } }`
-      : kind === 'scale'
-        ? '@keyframes eb-pop { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }'
-        : '@keyframes eb-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-14%); } }';
-    const id = `emoji-${kind}`;
+    const frames: Record<string, string> = {
+      translateY: '@keyframes eb-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-14%); } }',
+      rotate: '@keyframes eb-turn { from { transform: rotate(0); } to { transform: rotate(360deg); } }',
+      scale: '@keyframes eb-pop { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }',
+      tilt: '@keyframes eb-tilt { 0%,100% { transform: rotate(0); } 35% { transform: rotate(-9deg); } 70% { transform: rotate(6deg); } }',
+      wobble: '@keyframes eb-wobble { 0%,100% { transform: rotate(0); } 20% { transform: rotate(-5deg); } 45% { transform: rotate(5deg); } 70% { transform: rotate(-3deg); } }',
+      pulse: '@keyframes eb-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }',
+      float: '@keyframes eb-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8%); } }',
+    };
+    const keyframes = frames[kind] ?? frames.translateY;
+    // Motion names differ per kind, so pick the matching one from the chosen frames.
+    const frameName = kind === 'rotate' ? 'eb-turn' : kind === 'scale' ? 'eb-pop' : kind === 'tilt' ? 'eb-tilt' : kind === 'wobble' ? 'eb-wobble' : kind === 'pulse' ? 'eb-pulse' : kind === 'float' ? 'eb-float' : 'eb-hop';
     this.#style.textContent = STYLE + keyframes;
     el.style.animation = 'none';
     void el.offsetWidth;
-    el.style.animation = `${id} ${name.split(' ')[1]} ease-out`;
+    el.style.animation = `${frameName} ${name.split(' ')[1]} ease-out`;
     el.addEventListener('animationend', () => {
       el.style.animation = '';
     }, { once: true });

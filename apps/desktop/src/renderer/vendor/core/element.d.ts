@@ -16,6 +16,8 @@ export declare class EmojiBotBall extends HTMLElement {
     bounce(amount?: number): void;
     spin(turns?: number): void;
     burst(count?: number): void;
+    /** Play one of the seven signature motions by name. */
+    play(motion: string): void;
 }
 /** Register the element once. Safe to call in a browser only. */
 export declare function defineBall(tag?: string): void;

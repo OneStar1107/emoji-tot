@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld('petAPI', {
     ipcRenderer.on('state:action', handler);
     return () => ipcRenderer.removeListener('state:action', handler);
   },
+  /** The cast member the pet should wear. */
+  onCast: (listener) => {
+    const handler = (_event, id) => listener(id);
+    ipcRenderer.on('cast:changed', handler);
+    return () => ipcRenderer.removeListener('cast:changed', handler);
+  },
   /** Which edge the ball is docked to, or null. */
   onDock: (listener) => {
     const handler = (_event, side) => listener(side);

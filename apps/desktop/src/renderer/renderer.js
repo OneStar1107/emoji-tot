@@ -6,6 +6,7 @@
  * so the protocol table has exactly one home.
  */
 import { faceFor } from './faces.js';
+import { castMember } from './vendor/core/index.js';
 
 const pet = document.getElementById('pet');
 const bubble = document.getElementById('bubble');
@@ -122,7 +123,14 @@ api.onAction((action) => {
  * repeats the last one. Timers are chained rather than fixed so the rhythm
  * does not turn into a metronome.
  */
-const MOODS = ['curious', 'happy', 'bored', 'excited', 'playful', 'proud', 'shy', 'humming', 'surprised', 'confused'];
+const GENERIC_MOODS = ['curious', 'happy', 'bored', 'excited', 'playful', 'proud', 'shy', 'humming', 'surprised', 'confused'];
+
+/*
+ * The member the pet is wearing. Its signature expression leads the mood pool
+ * and its signature motion plays when the mood ends, so switching the cast
+ * changes behaviour, not just paint.
+ */
+let member = castMember('bot');
 let lastMood = null;
 let moodTimer = null;
 
@@ -130,7 +138,7 @@ function scheduleMood() {
   clearTimeout(moodTimer);
   moodTimer = window.setTimeout(() => {
     if (!document.hidden && ball.state === 'idle' && !dragging) {
-      const pool = MOODS.filter((m) => m !== lastMood);
+      const pool = [member?.face, ...GENERIC_MOODS.filter((m) => m !== member?.face)].filter((m) => m && m !== lastMood);
       const mood = pool[Math.floor(Math.random() * pool.length)];
       lastMood = mood;
       const token = ++actionToken;
@@ -138,12 +146,12 @@ function scheduleMood() {
       const face = faceFor(mood);
       if (face) say(face);
       // A little motion with the expression, or it reads as a freeze-frame.
-      const roll = Math.random();
-      if (roll < 0.4) ball.bounce?.(0.28);
-      else if (roll < 0.6) ball.spin?.(0.8);
+      const motion = member?.motion ?? 'bounce';
+      if (Math.random() < 0.7) ball.play?.(motion);
       window.setTimeout(() => {
         if (token !== actionToken) return;
         ball.state = 'idle';
+        ball.play?.(motion);
       }, 2400 + Math.random() * 1600);
     }
     scheduleMood();
@@ -151,6 +159,15 @@ function scheduleMood() {
 }
 
 scheduleMood();
+
+/** Switch the character: new paint, new signature face, new signature motion. */
+api.onCast((id) => {
+  const next = castMember(id);
+  if (!next) return;
+  member = next;
+  ball.cast = id;
+  ball.state = 'idle';
+});
 
 api.onSize((px) => {
   ball.setAttribute('size', String(px));

@@ -5,7 +5,7 @@
  * packaged app. Vendoring the built CommonJS/ESM output keeps the app to three
  * self-contained folders with no resolution surprises at runtime.
  */
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,3 +23,17 @@ for (const job of jobs) {
   await cp(job.from, job.to, { recursive: true });
   console.log('copied', job.to);
 }
+
+/*
+ * The core is ESM and the desktop package is CommonJS, so a plain .js file in
+ * this folder would be read as CJS by Node inside the main process — the
+ * dynamic import that loads the cast table would fail on the first `export`.
+ * A local package.json marks just this folder as ESM. The renderer is
+ * unaffected (a module script does not consult package.json).
+ */
+await writeFile(
+  resolve(here, '../src/renderer/vendor/core/package.json'),
+  JSON.stringify({ type: 'module', main: 'index.js' }, null, 2) + '\n',
+  'utf8',
+);
+console.log('marked core as ESM');
