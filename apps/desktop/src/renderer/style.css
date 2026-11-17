@@ -1,8 +1,15 @@
 /* A transparent window: only the ball and its bubble paint anything. */
 
+/* One look: a white ball with black features on a light bubble. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+aora-bot {
+  color-scheme: dark;
+  /* Same reason as the gallery: a white ball needs an edge on a light desktop. */
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.22));
 }
 
 html, body {
@@ -43,9 +50,9 @@ aora-bot {
   max-width: 260px;
   padding: 5px 9px;
   border-radius: 10px;
-  background: light-dark(#ffffff, #1c1c1c);
-  color: light-dark(#1a1a1a, #f2f2f2);
-  border: 1px solid light-dark(#e4e4e4, #333333);
+  background: #ffffff;
+  color: #16161a;
+  border: 1px solid #e6e6ea;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
   font-size: 11px;
   line-height: 1.45;

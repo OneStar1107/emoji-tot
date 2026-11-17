@@ -3,16 +3,36 @@
   --ink: light-dark(#16161a, #f4f4f5);
   --muted: light-dark(#6b6b70, #9b9ba2);
   --line: light-dark(#e6e6ea, #2a2a30);
-  --page: light-dark(#fbfbfc, #101013);
-  --card: light-dark(#ffffff, #16161a);
+  --page: light-dark(#ffffff, #101013);
+  --card: light-dark(#f4f4f6, #16161a);
   --accent: light-dark(#16161a, #f4f4f5);
   font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 14px;
 }
 
-/* The switch pins the page scheme, so the ink of every ball stays put. */
+/*
+ * One look everywhere: white body, black features.
+ *
+ * The ball's colour is not a theme decision — the app icon, the gallery grid
+ * and the desktop pet all show the same white ball, so the element is pinned
+ * to the dark ink branch and never follows the page.
+ */
+html { color-scheme: light; }
 html[data-mono="light"] { color-scheme: light; }
 html[data-mono="dark"] { color-scheme: dark; }
+
+/*
+ * A white ball on a white card has no edge. The shadow is not decoration: it
+ * is what makes the silhouette readable, and it is the only piece of styling
+ * the character needs from its host.
+ */
+aora-bot,
+.card svg {
+  /* Two shadows: a tight one that reads as an outline on pale cards, and a
+     soft one that lifts the ball off the surface. */
+  filter: drop-shadow(0 0 1.5px rgb(0 0 0 / 0.22)) drop-shadow(0 2px 5px rgb(0 0 0 / 0.14));
+  color-scheme: dark;
+}
 
 * { box-sizing: border-box; }
 

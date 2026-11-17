@@ -90,18 +90,16 @@ function buildShapeOptions(): void {
 }
 
 /**
- * Steer a static render into the scheme the page is pinned to.
+ * Force the white-ball branch in every static render.
  *
- * The static renderer writes its ink as a `prefers-color-scheme` media query,
- * because it has to look right with no page variables at all. When the switch
- * pins the page to the opposite of the system, the drawing has to be told,
- * or the grid and the live header ball disagree.
+ * The static renderer writes its ink as a `prefers-color-scheme` media query
+ * because it has to work with no page variables at all. The ball is always
+ * white with black features here, so that query is rewritten to match
+ * unconditionally — otherwise a light desktop would silently turn every
+ * picture black while the live elements stay white.
  */
 function pinSvg(svg: string): string {
-  const pinned = document.documentElement.dataset.mono;
-  if (pinned === 'dark') return svg.replaceAll('@media (prefers-color-scheme: dark)', '@media all');
-  if (pinned === 'light') return svg.replaceAll('@media (prefers-color-scheme: dark)', '@media not all');
-  return svg;
+  return svg.replaceAll('@media (prefers-color-scheme: dark)', '@media all');
 }
 
 function cardHtml(id: EmotionId): string {
@@ -187,14 +185,14 @@ shapeSelect.addEventListener('change', () => {
 /* Same rule as the demo: pin the page scheme so the drawing cannot drift. */
 const root = document.documentElement;
 function setMono(on: boolean): void {
-  if (!on) delete root.dataset.mono;
-  else root.dataset.mono = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+  // Light page by default; the switch only changes what is behind the ball,
+  // never the ball itself.
+  root.dataset.mono = on ? 'dark' : 'light';
   try {
     localStorage.setItem('es.mono', on ? '1' : '0');
   } catch {
     /* private mode */
   }
-  // Static pictures baked the old scheme in; redraw them.
   renderGrid();
 }
 
