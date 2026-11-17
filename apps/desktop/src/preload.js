@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('petAPI', {
 
   /** Present only when the main process runs with --dev. */
   debugState: () => ipcRenderer.invoke('debug:state'),
+  /** Dev-only: drive the dock so edge behaviour is testable. */
+  debugDock: (side) => ipcRenderer.invoke('debug:dock', side),
 
   onSize: (listener) => {
     const handler = (_event, px) => listener(px);
