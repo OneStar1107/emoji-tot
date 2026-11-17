@@ -70,31 +70,10 @@ pet.addEventListener('contextmenu', (event) => {
 });
 
 /*
- * The window is click-through until the pointer is on the ball.
- *
- * Coordinates are checked against the circle rather than the element box: the
- * window is taller than the ball to make room for the bubble, and the corners
- * of a square hit area would steal clicks from the desktop behind them.
+ * Click-through is decided in the main process, by polling the cursor: the
+ * window ignores mouse events, so nothing here would ever hear the pointer
+ * arrive. The renderer stays out of it.
  */
-let overBall = false;
-
-window.addEventListener('pointermove', (event) => {
-  const box = pet.getBoundingClientRect();
-  const diameter = box.height - 46;
-  const cx = box.width / 2;
-  const cy = 46 + diameter / 2;
-  const inside = Math.hypot(event.clientX - cx, event.clientY - cy) <= diameter / 2;
-  if (inside !== overBall) {
-    overBall = inside;
-    api.pointerOver(inside);
-  }
-});
-
-window.addEventListener('pointerleave', () => {
-  if (!overBall) return;
-  overBall = false;
-  api.pointerOver(false);
-});
 
 api.onState((message) => {
   if (message.state) ball.state = message.state;

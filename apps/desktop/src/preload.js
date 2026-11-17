@@ -14,14 +14,6 @@ contextBridge.exposeInMainWorld('petAPI', {
   openMenu: () => ipcRenderer.send('pet:menu'),
   /** A click that was not a drag: the pet does something by itself. */
   poke: () => ipcRenderer.send('pet:action'),
-  /**
-   * Whether the pointer is on the ball.
-   *
-   * The window is click-through by default, so the main process has to know
-   * when to take input back — and the only code that knows where the ball is
-   * drawn is this renderer.
-   */
-  pointerOver: (over) => ipcRenderer.send('pointer:over', over),
 
   /** Every message the host wants the character to play. */
   onState: (listener) => {
@@ -35,6 +27,9 @@ contextBridge.exposeInMainWorld('petAPI', {
     ipcRenderer.on('state:action', handler);
     return () => ipcRenderer.removeListener('state:action', handler);
   },
+  /** Present only when the main process runs with --dev. */
+  debugState: () => ipcRenderer.invoke('debug:state'),
+
   onSize: (listener) => {
     const handler = (_event, px) => listener(px);
     ipcRenderer.on('size:changed', handler);

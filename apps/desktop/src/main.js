@@ -83,8 +83,20 @@ let dragOffset = { x: 0, y: 0 };
 let sizeKey = 'md';
 let pinned = true;
 let lastStateMtime = 0;
-let docked = null;
+/**
+ * Docking is three pieces of state, not a string.
+ *
+ * `side` is where it tucked; `open` is whether the ball has slid back out;
+ * `armed` is whether the pointer has ever been away since the last dock. The
+ * last one matters: a drop happens with the cursor on the edge, so without it
+ * the hover watcher opens the ball again the instant it was put away —
+ * which is exactly what the first version did.
+ */
+let dockSide = null;
+let dockOpen = false;
+let dockArmed = false;
 let hoverTimer = null;
+let pointerTimer = null;
 let clickThrough = true;
 let agentWatch = {};
 
@@ -117,7 +129,7 @@ function savePrefs() {
     sizeKey,
     pinned,
     clickThrough,
-    ...(position && !docked ? { position: { x: position[0], y: position[1] } } : {}),
+    ...(position && !dockSide ? { position: { x: position[0], y: position[1] } } : {}),
   });
 }
 
@@ -172,7 +184,7 @@ function createWindow() {
     setClickThrough(clickThrough);
   });
   win.on('moved', () => {
-    if (!docked) savePrefs();
+    if (!dockSide) savePrefs();
   });
   win.on('closed', () => {
     win = null;
@@ -182,14 +194,33 @@ function createWindow() {
 /**
  * Clicks go through the window by default.
  *
- * `forward` keeps delivering mousemove to the page, which is the only way the
- * renderer can notice the pointer arriving on the ball and ask for real
- * input back.
+ * The decision is made by polling the cursor, not by listening in the page.
+ * `setIgnoreMouseEvents(true, { forward: true })}` promises to keep delivering
+ * mousemove, but it did not deliver any here — the page never learned the
+ * pointer was on the ball, so the ball could neither be clicked nor dragged.
+ * Polling the cursor is one call every 60 ms and behaves the same on both
+ * platforms.
  */
 function setClickThrough(on) {
   if (!win || win.isDestroyed()) return;
   clickThrough = on;
-  win.setIgnoreMouseEvents(on, { forward: true });
+  win.setIgnoreMouseEvents(on, on ? { forward: true } : undefined);
+}
+
+function startPointerWatch() {
+  clearInterval(pointerTimer);
+  pointerTimer = setInterval(() => {
+    if (!win || win.isDestroyed() || !win.isVisible() || dockOpen === undefined) return;
+    const cursor = screen.getCursorScreenPoint();
+    const [wx, wy] = win.getPosition();
+    const dim = SIZES[sizeKey];
+    // The ball occupies the square below the bubble strip.
+    const cx = wx + dim / 2;
+    const cy = wy + BUBBLE_SPACE + dim / 2;
+    const onBall = Math.hypot(cursor.x - cx, cursor.y - cy) <= dim / 2;
+    if (onBall === !clickThrough) return;
+    setClickThrough(!onBall);
+  }, 60);
 }
 
 function setSize(key) {
@@ -208,7 +239,7 @@ function toggleVisible() {
   if (win.isVisible()) win.hide();
   else {
     win.showInactive();
-    if (docked) undock();
+    if (dockSide) undock();
   }
   refreshMenus();
 }
@@ -228,19 +259,23 @@ function dock(side) {
   const peek = Math.round(dim * PEEK_RATIO);
   const area = workArea();
   const x = side === 'left' ? -(dim - peek) : area.width - peek;
-  docked = side;
+  dockSide = side;
+  dockOpen = false;
+  dockArmed = false;
   win.setPosition(x, y);
   startHoverWatch();
   refreshMenus();
 }
 
 function undock() {
-  if (!win || !docked) return;
+  if (!win || !dockSide) return;
   const dim = SIZES[sizeKey];
   const area = workArea();
   const [, y] = win.getPosition();
-  const x = docked === 'left' ? 0 : area.width - dim;
-  docked = null;
+  const x = dockSide === 'left' ? 0 : area.width - dim;
+  dockSide = null;
+  dockOpen = false;
+  dockArmed = false;
   win.setPosition(x, y);
   stopHoverWatch();
   savePrefs();
@@ -257,31 +292,36 @@ function undock() {
 function startHoverWatch() {
   stopHoverWatch();
   hoverTimer = setInterval(() => {
-    if (!win || win.isDestroyed() || !docked) return;
+    if (!win || win.isDestroyed() || !dockSide) return;
     const cursor = screen.getCursorScreenPoint();
     const dim = SIZES[sizeKey];
     const area = workArea();
-    const [wx, wy] = win.getPosition();
-    const visibleLeft = docked === 'left' ? 0 : area.width - Math.round(dim * PEEK_RATIO);
-    const visibleWidth = Math.round(dim * PEEK_RATIO);
+    const [, wy] = win.getPosition();
+    const sliverWidth = Math.round(dim * PEEK_RATIO);
+    const sliverLeft = dockSide === 'left' ? 0 : area.width - sliverWidth;
     const overSliver =
-      cursor.x >= visibleLeft &&
-      cursor.x <= visibleLeft + visibleWidth &&
+      cursor.x >= sliverLeft &&
+      cursor.x <= sliverLeft + sliverWidth &&
       cursor.y >= wy &&
       cursor.y <= wy + dim + BUBBLE_SPACE;
-    // A docked sliver reopens on hover; the watcher is the only reliable
-    // signal because a click-through window gets no enter/leave events.
-    if (overSliver) {
-      // Slide the whole ball back on screen, keeping it flush with the edge.
-      const targetX = docked === 'left' ? 0 : area.width - dim;
-      win.setPosition(targetX, wy);
-      docked = `${docked}-open`;
-    } else if (docked && docked.endsWith('-open')) {
-      const side = docked.replace('-open', '');
-      const backX = side === 'left' ? -(dim - Math.round(dim * PEEK_RATIO)) : area.width - Math.round(dim * PEEK_RATIO);
-      win.setPosition(backX, wy);
-      docked = side;
+
+    const closedX = dockSide === 'left' ? -(dim - sliverWidth) : area.width - sliverWidth;
+    const openX = dockSide === 'left' ? 0 : area.width - dim;
+
+    if (!overSliver) {
+      // Leaving is what arms the next hover, and it also tucks an open ball
+      // back in.
+      dockArmed = true;
+      if (dockOpen) {
+        dockOpen = false;
+        win.setPosition(closedX, wy);
+      }
+      return;
     }
+    if (!dockArmed) return;
+    if (dockOpen) return;
+    dockOpen = true;
+    win.setPosition(openX, wy);
   }, 140);
 }
 
@@ -314,7 +354,9 @@ function endDrag() {
   if (x <= EDGE_SNAP) dock('left');
   else if (x + dim >= area.width - EDGE_SNAP) dock('right');
   else {
-    docked = null;
+    dockSide = null;
+    dockOpen = false;
+    dockArmed = false;
     stopHoverWatch();
     savePrefs();
   }
@@ -428,7 +470,7 @@ function buildMenu() {
     },
     {
       label: '贴边收起',
-      click: () => (docked ? undock() : dock('right')),
+      click: () => (dockSide ? undock() : dock('right')),
     },
     {
       label: '尺寸',
@@ -486,7 +528,7 @@ function createTray() {
 /* -------------------------------------------------------------- IPC glue */
 
 ipcMain.on('drag:start', (_event, point) => {
-  if (docked) undock();
+  if (dockSide) undock();
   startDrag(point);
 });
 ipcMain.on('drag:end', endDrag);
@@ -500,12 +542,29 @@ ipcMain.on('pet:action', () => {
   if (win) win.webContents.send('state:action', action);
 });
 /** The renderer saw the pointer on the ball, or leave it. */
-ipcMain.on('pointer:over', (_event, over) => {
-  if (!clickThrough && over) return;
-  if (!win || win.isDestroyed()) return;
-  win.setIgnoreMouseEvents(!over, { forward: true });
-  clickThrough = !over;
-});
+
+
+/**
+ * Read-only state, for tests only.
+ *
+ * Edge docking and click-through are invisible in the DOM: they are window
+ * behaviour. Without a way to ask the main process what it actually did,
+ * "verified" would mean "looks plausible". Registered only under --dev so a
+ * shipped build has no query surface.
+ */
+if (process.argv.includes('--dev')) {
+  ipcMain.handle('debug:state', () => {
+    if (!win || win.isDestroyed()) return null;
+    return {
+      clickThrough,
+      docked: dockSide ? (dockOpen ? `${dockSide}-open` : dockSide) : null,
+      bounds: win.getBounds(),
+      visible: win.isVisible(),
+      workArea: workArea(),
+      size: SIZES[sizeKey],
+    };
+  });
+}
 
 /* ------------------------------------------------------------------ boot */
 
@@ -536,6 +595,7 @@ if (!gotTheLock) {
     createWindow();
     createTray();
     ensureStateFile();
+    startPointerWatch();
     startAgentWatch(readJson(prefsPath(), {}));
   });
 
@@ -546,6 +606,7 @@ if (!gotTheLock) {
   app.on('before-quit', () => {
     endDrag();
     stopHoverWatch();
+    clearInterval(pointerTimer);
     stopAgentWatch();
     fs.unwatchFile(statePath());
   });
