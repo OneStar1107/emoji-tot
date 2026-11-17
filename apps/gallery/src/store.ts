@@ -1,12 +1,12 @@
 /**
  * The character being edited, shared by every view.
  *
- * One genome: a body, a colour, a list of traits and a state. A cast member is
- * just a saved genome with a name, so selecting a member copies its genes into
- * the editor and editing any gene marks the character as custom — the name
- * stays as a starting point rather than a mode that locks the controls.
+ * One genome: a body, a colour, at most one trait and a state. A cast member
+ * is just a saved genome with a name, a signature expression and a signature
+ * motion, so selecting a member copies its genes into the editor; editing any
+ * gene marks the character as custom.
  */
-import { castMember } from '@emojibot/core';
+import { DEFAULT_CAST, castMember } from '@emojibot/core';
 
 export type BackgroundId = 'plain' | 'grid' | 'dots' | 'night' | 'paper';
 
@@ -20,10 +20,10 @@ export interface Look {
   background: BackgroundId;
 }
 
-const seed = castMember('tuan')!;
+const seed = castMember(DEFAULT_CAST)!;
 
 const DEFAULTS: Look = {
-  cast: 'tuan',
+  cast: DEFAULT_CAST,
   body: seed.body,
   color: seed.color,
   traits: [...seed.traits],
@@ -33,7 +33,7 @@ const DEFAULTS: Look = {
 
 function load(): Look {
   try {
-    const raw = localStorage.getItem('es.look.v2');
+    const raw = localStorage.getItem('es.look.v3');
     if (!raw) return { ...DEFAULTS, traits: [...DEFAULTS.traits] };
     const saved = JSON.parse(raw) as Partial<Look>;
     return { ...DEFAULTS, ...saved, traits: Array.isArray(saved.traits) ? saved.traits : [...DEFAULTS.traits] };
@@ -52,7 +52,7 @@ export function onLookChange(fn: () => void): () => void {
 
 function persist(): void {
   try {
-    localStorage.setItem('es.look.v2', JSON.stringify(look));
+    localStorage.setItem('es.look.v3', JSON.stringify(look));
   } catch {
     /* private mode */
   }
@@ -67,7 +67,7 @@ export function setLook(patch: Partial<Look>): void {
   for (const fn of listeners) fn();
 }
 
-/** Adopt a cast member wholesale. */
+/** Adopt a cast member wholesale: its genes, its expression, its motion. */
 export function selectCast(id: string): void {
   const member = castMember(id);
   if (!member) return;
@@ -75,20 +75,16 @@ export function selectCast(id: string): void {
   look.body = member.body;
   look.color = member.color;
   look.traits = [...member.traits];
+  look.state = member.face;
   persist();
   for (const fn of listeners) fn();
 }
 
-export function toggleTrait(id: string): void {
-  const next = look.traits.includes(id) ? look.traits.filter((t) => t !== id) : [...look.traits, id];
-  setLook({ traits: next });
+/** Replace the single trait, or clear it. Traits never stack. */
+export function setTrait(id: string): void {
+  setLook({ traits: look.traits.includes(id) ? [] : [id] });
 }
 
 export function backgroundClass(): string {
   return `bg-${look.background}`;
-}
-
-/** The genome as a plain object, for the code snippet and the exports. */
-export function genomeJson(): string {
-  return JSON.stringify({ body: look.body, color: look.color, traits: look.traits, state: look.state }, null, 2);
 }

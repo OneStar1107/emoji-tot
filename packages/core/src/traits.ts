@@ -147,6 +147,15 @@ const SURFACES: Record<string, TraitFn> = {
   none: () => '',
 };
 
+/** Display names, so a Chinese picker never shows an English id. */
+export const TRAIT_ZH: Record<string, string> = {
+  catEar: '猫耳', bunnyEar: '兔耳', bearEar: '熊耳', foxEar: '狐耳', mouseEar: '鼠耳', deerAntler: '鹿角',
+  horn: '小角', antenna: '天线', sprout: '嫩芽', leaf: '叶子', flowerCrown: '花冠', halo: '光环', crown: '王冠', bow: '蝴蝶结',
+  wing: '翅膀', fin: '鳍', spike: '尖刺', tail: '尾巴', fluff: '绒毛',
+  blush: '腮红', freckles: '雀斑', spots: '斑点', stripes: '条纹', patch: '补丁', starfield: '星点',
+  none: '无',
+};
+
 export const TRAITS: Record<string, TraitFn> = { ...EARS, ...TOPS, ...SIDES, ...SURFACES };
 
 export const EAR_IDS = Object.keys(EARS);

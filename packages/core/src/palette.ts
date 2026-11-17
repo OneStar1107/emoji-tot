@@ -22,6 +22,12 @@ export const COLORS: Record<string, string> = {
 
 export const COLOR_IDS: readonly string[] = Object.keys(COLORS);
 
+/** Display names, so a Chinese picker never shows an English id. */
+export const COLOR_ZH: Record<string, string> = {
+  black: '墨黑', cream: '奶白', white: '雪白', pink: '樱粉', red: '朱红', orange: '橘橙',
+  yellow: '暖黄', green: '草绿', cyan: '水青', blue: '天蓝', violet: '藤紫', gray: '石灰',
+};
+
 export function colorHex(id: string): string {
   return COLORS[id] ?? COLORS.black;
 }

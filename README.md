@@ -8,6 +8,11 @@
 
 ![全家福](docs/screenshots/hero.png)
 
+> **关于 / About**
+> 一个由公式画出来的角色引擎：135 个角色来自 15 种参数化身体 × 26 种特征 × 12 色，44 个表情由一个两位数驱动。桌宠、控制台、站点共用同一套引擎，零图片资源。
+>
+> A character engine drawn from formulas: 135 characters from 15 parametric bodies × 26 traits × 12 colours, and 44 expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
+
 </div>
 
 ---
@@ -25,13 +30,13 @@
 | 角色 | 134 | 13 个族，每个都有中英双名和一句话 |
 | 后代 | 无限 | `breed(a, b, seed)` 交叉两个角色的基因，不落库 |
 
-本项目把三个上游合成一个能跑的东西，各自出力：
+它由三件东西组成，全部在这个仓库里从零写成：
 
-| 上游 | 贡献 | 位置 |
+| 部件 | 位置 | 它做什么 |
 | --- | --- | --- |
-| [Emotion Ball](https://github.com/Aithena/emotion-ball) | 两位数 emotionId 协议的分段思路（代码自己写） | `packages/protocol` |
-| [Aora Bot](https://github.com/sam70361/aora-bot) | "角色由代码绘制"这条路能走多远的参照（不含其代码或美术） | `packages/core` |
-| [球球桌宠](https://github.com/dreamcall520/emotion-ball-desktop-pet) | 桌面常驻的产品行为：贴边、穿透、状态气泡 | `apps/desktop` |
+| 角色引擎 | `packages/core` | 参数化身体、特征锚点、表情词汇、四层合成，输出 SVG |
+| 两位数协议 | `packages/protocol` | 把两位数字变成状态，带仲裁、事件桥与容错解析 |
+| 桌面与站点 | `apps/desktop` · `apps/gallery` | 贴边常驻的桌宠；控制台、表情馆、场景、文档四页 |
 
 ## 一个两位数
 
@@ -84,7 +89,7 @@ echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiBot/state.js
 pnpm install     # 装完会自动构建协议包（postinstall）
 pnpm dev         # 站点 http://localhost:5173
 pnpm desktop     # 桌面宠物
-pnpm test        # 27 个协议测试，含与上游逐行比对
+pnpm test        # 27 个协议测试
 ```
 
 出安装包：
@@ -107,14 +112,14 @@ apps/desktop         Electron 桌宠：贴边、穿透、Agent 联动、托盘
 
 | 检查 | 证据 |
 | --- | --- |
-| 协议表 | 27 个测试，其中 4 个与 `@aora-bot/engine` 逐行比对 id / state / 事件标记 / 段边界，上游改表就红 |
+| 协议表 | 27 个测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
 | 51 个状态渲染 | `node apps/gallery/scripts/preview.mjs` — 51/51，0 failures（Node 里跑，无浏览器） |
 | 桌面端窗口行为 | `node apps/desktop/scripts/ui-check.mjs <端口>` — 用原生光标驱动真实拖拽，7/7（贴边、展开、收起、穿透） |
 | 桌面端协议驱动 | 写 `34` → `alerting`，写 `33` → `celebrate`，写坏 JSON → 保持当前表情 |
 
 ## 几处有意的取舍
 
-- **紧急事件立即打断**：上游的仲裁一律让事件排队等停留期；这里改成"比当前显示更紧急的事件立即打断"——出错必须马上看见，不紧急的仍然排队，避免闪烁。
+- **紧急事件立即打断**：仲裁默认让事件排队等停留期；这里改成"比当前显示更紧急的事件立即打断"——出错必须马上看见，不紧急的仍然排队，避免闪烁。
 - **静态图的配色靠改字符串**：静态渲染把 ink 写成 `prefers-color-scheme` 媒体查询，页面钉死配色时只能重写这段查询；用 CSS invert 会把腮红和感叹号一起反掉。
 - **穿透靠轮询光标**：`setIgnoreMouseEvents(forward)` 在本机没有转发 mousemove，页面永远不知道指针在球上，球既点不动也拖不动。改成主进程每 60ms 查一次光标位置，两个平台一致。
 
@@ -122,12 +127,8 @@ apps/desktop         Electron 桌宠：贴边、穿透、Agent 联动、托盘
 
 **MIT。** 代码、形状、表情全部由本仓库自行实现：可以商用、可以闭源、可以再分发，保留版权声明即可。
 
-设计上的来路见 [NOTICE.md](NOTICE.md)（只有致谢，不含任何许可约束）。
-
-> 早期版本直接依赖上游引擎，能拿到 71 个角色和 16 种画法，但整个仓库只能是"非商业衍生作品"。
-> 为了让许可干净，引擎重写成了 `packages/core`：8 个形状、44 个状态表情、一种画法。
-> 功能少了，许可见得清楚了——这是有意的取舍。
+引擎、协议、页面、角色全部由本仓库自己实现：没有引用任何第三方角色引擎的代码或美术。
 
 ---
 
-Powered by [Aora Bot](https://github.com/sam70361/aora-bot) · 表情语义来自 [Emotion Ball](https://github.com/Aithena/emotion-ball) · 桌面设计参考 [球球桌宠](https://github.com/dreamcall520/emotion-ball-desktop-pet)
+Made by [OneStar1107](https://github.com/OneStar1107) · [MIT](LICENSE)

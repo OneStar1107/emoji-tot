@@ -11,7 +11,7 @@
  * static SVG: the wall never runs a frame loop, so 134 characters cost 134
  * paths, not 134 animations.
  */
-import { CAST, FAMILIES, castMember, renderCast, renderCharacter } from '@emojibot/core';
+import { CAST, FAMILIES, MOTION_ZH, castMember, renderCast, renderCharacter } from '@emojibot/core';
 import { EMOTIONS, EMOTION_SEGMENTS, getEmotion, type SegmentId } from '@emojibot/protocol';
 import { look, onLookChange, selectCast } from './store';
 import { t } from './i18n';
@@ -35,9 +35,9 @@ function castSvg(id: string, state: string, size = THUMB): string {
 function castCard(id: string): string {
   const member = castMember(id)!;
   return `<button type="button" class="tile" data-cast="${id}" title="${member.desc}">
-    ${castSvg(id, 'idle', THUMB)}
+    ${castSvg(id, member.face, THUMB)}
     <span class="tile-name">${member.name.zh}</span>
-    <span class="tile-sub">${member.name.en}</span>
+    <span class="tile-sub">${MOTION_ZH[member.motion] ?? member.motion}</span>
   </button>`;
 }
 

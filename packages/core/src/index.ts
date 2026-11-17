@@ -7,15 +7,15 @@
  * Rendering is a pure function that returns SVG, so the same code serves a
  * browser, a static export and a test.
  */
-export { BODIES, BODY_IDS, getBody, bodyPreview } from './body.js';
+export { BODIES, BODY_IDS, BODY_ZH, getBody, bodyPreview } from './body.js';
 export type { BodySpec, RadialFn } from './body.js';
-export { TRAITS, TRAIT_IDS, EAR_IDS, TOP_IDS, SIDE_IDS, SURFACE_IDS, PAIRED, renderTraits } from './traits.js';
+export { TRAITS, TRAIT_IDS, TRAIT_ZH, EAR_IDS, TOP_IDS, SIDE_IDS, SURFACE_IDS, PAIRED, renderTraits } from './traits.js';
 export type { TraitFn, TraitContext } from './traits.js';
-export { CAST, CAST_IDS, FAMILIES, castMember, castByFamily, breed } from './cast.js';
-export type { CastMember } from './cast.js';
+export { CAST, CAST_IDS, FAMILIES, MOTIONS, MOTION_ZH, DEFAULT_CAST, castMember, castByFamily, breed } from './cast.js';
+export type { CastMember, Motion } from './cast.js';
 export { FACES, FACE_IDS, faceFor } from './face.js';
 export type { FaceSpec, EyeStyle, MouthStyle } from './face.js';
-export { COLORS, COLOR_IDS, colorHex } from './palette.js';
+export { COLORS, COLOR_IDS, COLOR_ZH, colorHex } from './palette.js';
 export { renderCharacter, renderCast, renderFace, renderDataUrl, inkFor } from './render.js';
 export type { RenderOptions, CastRenderOptions } from './render.js';
 

@@ -107,6 +107,13 @@ export const BODIES: readonly BodySpec[] = [
   })(), face: { x: 50, y: 62 }, eyeScale: 0.95, height: 0.86 },
 ];
 
+/** Display names. The engine never needs them; every picker does. */
+export const BODY_ZH: Record<string, string> = {
+  circle: '圆', egg: '蛋', squircle: '方圆', blob: '软圆', pear: '梨', drop: '水滴',
+  star: '星', gem: '宝石', pill: '胶囊', flower: '花', clover: '四叶', cloud: '云',
+  heart: '心', ghost: '幽灵', bot: '机器人',
+};
+
 const BY_ID = new Map(BODIES.map((b) => [b.id, b]));
 
 export const BODY_IDS: readonly string[] = BODIES.map((b) => b.id);

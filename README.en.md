@@ -8,6 +8,11 @@
 
 ![Cast](docs/screenshots/hero.png)
 
+> **About**
+> A character engine drawn from formulas: 135 characters from 15 parametric bodies × 26 traits × 12 colours, and 44 expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
+>
+> 一个由公式画出来的角色引擎：135 个角色来自 15 种参数化身体 × 26 种特征 × 12 色，44 个表情由一个两位数驱动。桌宠、控制台、站点共用同一套引擎，零图片资源。
+
 </div>
 
 ---
@@ -25,13 +30,13 @@
 | Characters | 134 | 13 families, every one with a name in two languages and a sentence |
 | Offspring | unbounded | `breed(a, b, seed)` crosses two genomes; nothing is stored |
 
-Three upstreams, each doing what it is best at:
+Three parts, all written from scratch in this repository:
 
-| Upstream | Contribution | Here |
+| Part | Where | What it does |
 | --- | --- | --- |
-| [Emotion Ball](https://github.com/Aithena/emotion-ball) | The two-digit emotion id protocol, decade semantics, forgiving intake | `packages/protocol` |
-| [Aora Bot](https://github.com/sam70361/aora-bot) | Evidence for how far "a character drawn by code" can go (no code or art taken) | `packages/core` |
-| [球球桌宠](https://github.com/dreamcall520/emotion-ball-desktop-pet) | Desktop product behaviour: edge docking, click-through, agent linkage | `apps/desktop` |
+| Character engine | `packages/core` | Parametric bodies, trait anchoring, an expression vocabulary, four-layer composition, SVG out |
+| Two-digit protocol | `packages/protocol` | Turns two digits into a state, with arbitration, an event bridge and forgiving parsing |
+| Desktop & site | `apps/desktop` · `apps/gallery` | A pet that docks to the screen edge; console, cast wall, scene, docs |
 
 ## One two-digit number
 
@@ -107,7 +112,7 @@ Not "it should run" — it was run:
 
 | Check | Evidence |
 | --- | --- |
-| Protocol table | 27 tests, 4 of them comparing id / state / event flags / segment bounds against `@aora-bot/engine` row by row — upstream changes turn them red |
+| Protocol table | 27 tests covering id validity, state mapping, event flags and segment bounds |
 | 51 states render | `node apps/gallery/scripts/preview.mjs` — 51/51, 0 failures, in Node with no browser |
 | Desktop window behaviour | `node apps/desktop/scripts/ui-check.mjs <port>` — drives the real cursor, 7/7 (dock, open, tuck, click-through) |
 | Desktop protocol | write `34` → `alerting`, `33` → `celebrate`, malformed JSON → keeps the current face |
@@ -120,14 +125,10 @@ Not "it should run" — it was run:
 
 ## Licence
 
-Non-commercial share-alike. Each upstream licence continues to apply; commercial use requires contacting each author:
+**MIT.** The engine, the protocol, the pages and every character were implemented from scratch in this repository: use it commercially, close-source it, redistribute it — keep the copyright notice.
 
-- Aora Bot — Aora Bot License 1.1, commercial licensing via 1251579308@qq.com
-- Emotion Ball — dual licence, same contact for commercial use
-- 球球桌宠 — learning and research only; **never** commercially licensed
-
-See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md) and [CREDITS.md](CREDITS.md).
+No third-party character engine's code or art is included.
 
 ---
 
-Powered by [Aora Bot](https://github.com/sam70361/aora-bot) · Expression semantics from [Emotion Ball](https://github.com/Aithena/emotion-ball) · Desktop design informed by [球球桌宠](https://github.com/dreamcall520/emotion-ball-desktop-pet)
+Made by [OneStar1107](https://github.com/OneStar1107) · [MIT](LICENSE)
