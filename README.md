@@ -2,16 +2,16 @@
 
 # EmojiBot
 
-**面向桌面与 Web 的角色引擎 —— 134 个角色来自 15 种身体 × 26 种特征 × 12 色，44 个表情由一个两位数驱动；网页里看得见，桌面上养得起。**
+**面向桌面与 Web 的角色引擎 —— 15 个角色来自 15 种身体 × 26 种特征 × 12 色，44 个表情由一个两位数驱动；网页里看得见，桌面上养得起。**
 
 [控制台](https://onestar1107.github.io/emoji-bot/#/console) · [表情馆](https://onestar1107.github.io/emoji-bot/#/gallery) · [场景](https://onestar1107.github.io/emoji-bot/#/scene) · [文档](https://onestar1107.github.io/emoji-bot/#/docs) · [English](README.en.md)
 
 ![全家福](docs/screenshots/hero.png)
 
 > **关于 / About**
-> 一个由公式画出来的角色引擎：135 个角色来自 15 种参数化身体 × 26 种特征 × 12 色，44 个表情由一个两位数驱动。桌宠、控制台、站点共用同一套引擎，零图片资源。
+> 一个由公式画出来的角色引擎：15 个角色来自 15 种参数化身体 × 26 种特征 × 12 色，44 个表情由一个两位数驱动。桌宠、控制台、站点共用同一套引擎，零图片资源。
 >
-> A character engine drawn from formulas: 135 characters from 15 parametric bodies × 26 traits × 12 colours, and 44 expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
+> A character engine drawn from formulas: 15 characters from 15 parametric bodies × 26 traits × 12 colours, and 44 expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
 
 </div>
 
@@ -28,15 +28,15 @@ Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行�
 
 ## 这是什么
 
-**角色不是图片，是一段基因。** 没有雪碧图，没有 Lottie 文件，也没有 134 张手绘的图：一个角色是 `{ body, color, traits, state }` 四项，身体来自参数化公式，特征会自己贴着身体找位置，表情是眼型与嘴型的一小套词汇。加一行就有新角色——这是组合式阵容和预绘图阵容的根本区别。
+**角色不是图片，是一段基因。** 没有雪碧图，没有 Lottie 文件，也没有一张手绘的角色图：一个角色是 `{ body, color, traits, state }` 四项，身体来自参数化公式，特征会自己贴着身体找位置，表情是眼型与嘴型的一小套词汇。加一行就有新角色——这是组合式阵容和预绘图阵容的根本区别。
 
 | 维度 | 数量 | 说明 |
 | --- | --- | --- |
 | 身体 | 15 | 圆、蛋、方圆、水滴、星、宝石、花瓣、云、心、幽灵、机器人…都由 `r(t)` 或参数曲线采样生成 |
-| 特征 | 26 | 耳朵 6、头顶 8、身侧 5、表面 6，锚点读身体的高度与尖度 |
+| 特征 | 26 | 引擎能力：耳朵、头顶、身侧、表面，锚点读身体的高度与尖度（角色各戴一个） |
 | 颜色 | 12 | 实色；五官墨色按亮度自动取反 |
 | 表情 | 44 | 6 种眼型 × 7 种嘴型 + 偏移，由协议里的状态名索引 |
-| 角色 | 134 | 13 个族，每个都有中英双名和一句话 |
+| 角色 | 15 | 每种身体一个代表，各有招牌表情与招牌动作 |
 | 后代 | 无限 | `breed(a, b, seed)` 交叉两个角色的基因，不落库 |
 
 它由三件东西组成，全部在这个仓库里从零写成：
@@ -70,8 +70,8 @@ feed('thinking');              // 也可以直接给状态名
 
 | 页面 | 内容 |
 | --- | --- |
-| **控制台** | 134 个角色任选，15 身体 · 12 色 · 26 特征 · 44 表情逐项可调；组件片段与 JSON 基因组随选择实时生成 |
-| **表情馆** | 两个墙：134 个角色的阵容墙（按族筛选），和 44 个表情的表情墙；点角色跳去控制台，点表情带着状态过去 |
+| **控制台** | 15 个角色任选，15 身体 · 12 色 · 26 特征 · 44 表情逐项可调；组件片段与 JSON 基因组随选择实时生成 |
+| **表情馆** | 两个墙：15 个角色的阵容墙（按族筛选），和 44 个表情的表情墙；点角色跳去控制台，点表情带着状态过去 |
 | **场景** | 十四个角色同台，各自按自己的节奏换表情；点它会回应你，还有"全体开心 / 全体入睡 / 换一批" |
 | **文档** | 引擎怎么画、基因组怎么组、协议每一位什么意思、怎么调用，全部由代码生成，不会过时 |
 
@@ -85,7 +85,7 @@ feed('thinking');              // 也可以直接给状态名
 
 - **贴边收起**：拖到屏幕左右边缘松手，球缩进去只留 30%，悬停滑出来。松手时光标就在边缘，所以必须移开过一次才会响应悬停——否则刚放下就被自己弹开。
 - **点击穿透**：窗口默认不拦点击，底下的桌面图标照样能点；指针落到球上才收回输入。
-- **135 个角色**：托盘菜单按族分组挑角色，选中即换外观、招牌表情和招牌动作；默认是黑底白字的 `bot`。
+- **15 个角色**：托盘菜单按族分组挑角色，选中即换外观、招牌表情和招牌动作；默认是黑底白字的 `bot`。
 - **Agent 联动**：菜单可开 DeepSeek Harness / Claude Code / Codex，读各自的状态文件并映射成表情。
 - **一个文件就是接口**：`%APPDATA%/EmojiBot/state.json`（macOS 在 `~/Library/Application Support/EmojiBot/`）。裸 id、JSON 串、JSON 对象都收，坏数据保留当前表情。
 

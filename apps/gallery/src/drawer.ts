@@ -7,24 +7,9 @@
  * expressions are the current character feeling that expression. Text is only
  * used for the name, and always the Chinese name when the page is in Chinese.
  */
-import {
-  BODIES,
-  BODY_ZH,
-  CAST,
-  COLOR_IDS,
-  COLOR_ZH,
-  COLORS,
-  FACES,
-  FAMILIES,
-  SURFACE_IDS,
-  TOP_IDS,
-  TRAIT_ZH,
-  castMember,
-  renderCast,
-  renderCharacter,
-} from '@emojibot/core';
+import { CAST, COLOR_IDS, COLOR_ZH, COLORS, FACES, FAMILIES, castMember, renderCast, renderCharacter } from '@emojibot/core';
 import { EMOTIONS, EMOTION_SEGMENTS } from '@emojibot/protocol';
-import { look, selectCast, setLook, setTrait, type BackgroundId } from './store';
+import { look, selectCast, setLook, type BackgroundId } from './store';
 
 const BACKGROUNDS: BackgroundId[] = ['plain', 'grid', 'dots', 'night', 'paper'];
 const BACKGROUND_ZH: Record<BackgroundId, string> = {
@@ -35,23 +20,9 @@ const BACKGROUND_ZH: Record<BackgroundId, string> = {
   paper: '纸张',
 };
 
-const EARS = ['catEar', 'bunnyEar', 'bearEar', 'foxEar', 'mouseEar', 'deerAntler'];
-const TOPS = TOP_IDS.filter((id) => id !== 'none');
-const SIDES = ['wing', 'fin', 'spike', 'tail', 'fluff'];
-const SURFACES = SURFACE_IDS.filter((id) => id !== 'none');
-
-/** The current character wearing one trait, at picker size. */
-function traitSwatch(id: string): string {
-  return renderCharacter({ body: look.body, color: look.color, traits: [id], state: look.state, size: 38 });
-}
-
 /** The current character feeling one expression. */
 function faceSwatch(state: string): string {
   return renderCharacter({ body: look.body, color: look.color, traits: look.traits, state, size: 36 });
-}
-
-function bodySwatch(id: string): string {
-  return renderCharacter({ body: id, color: look.color, traits: [], state: 'idle', size: 40 });
 }
 
 function castTile(id: string): string {
@@ -76,13 +47,6 @@ export function createDrawer(onChange: () => void): HTMLElement {
   el.className = 'drawer';
   let query = '';
 
-  function traitChip(id: string): string {
-    return `<button type="button" class="trait-chip" data-trait="${id}" aria-pressed="${look.traits.includes(id)}" title="${TRAIT_ZH[id] ?? id}">
-      <span class="trait-art">${traitSwatch(id)}</span>
-      <span class="trait-name">${TRAIT_ZH[id] ?? id}</span>
-    </button>`;
-  }
-
   function paint(): void {
     const member = look.cast ? castMember(look.cast) : undefined;
     el.innerHTML = `
@@ -96,35 +60,12 @@ export function createDrawer(onChange: () => void): HTMLElement {
       </div>
 
       <div class="gene-row">
-        <span class="gene-label">身体<small>${BODIES.length}</small></span>
-        <div class="chips bodies">
-          ${BODIES.map(
-            (b) =>
-              `<button type="button" class="body-chip" data-body="${b.id}" aria-pressed="${look.body === b.id}" title="${BODY_ZH[b.id] ?? b.id}">
-                <span class="body-art">${bodySwatch(b.id)}</span>
-                <span class="body-name">${BODY_ZH[b.id] ?? b.id}</span>
-              </button>`,
-          ).join('')}
-        </div>
-      </div>
-
-      <div class="gene-row">
         <span class="gene-label">颜色<small>${COLOR_IDS.length}</small></span>
         <div class="chips colors">
           ${COLOR_IDS.map(
             (id) =>
               `<button type="button" class="color-chip" data-color="${id}" aria-pressed="${look.color === id}" title="${COLOR_ZH[id] ?? id}" style="--swatch:${COLORS[id]}"><span class="sr-only">${COLOR_ZH[id] ?? id}</span></button>`,
           ).join('')}
-        </div>
-      </div>
-
-      <div class="gene-row">
-        <span class="gene-label">特征<small>单选</small></span>
-        <div class="trait-groups">
-          <div class="trait-group"><span>耳朵</span>${EARS.map((id) => traitChip(id)).join('')}</div>
-          <div class="trait-group"><span>头顶</span>${TOPS.map((id) => traitChip(id)).join('')}</div>
-          <div class="trait-group"><span>身侧</span>${SIDES.map((id) => traitChip(id)).join('')}</div>
-          <div class="trait-group"><span>表面</span>${SURFACES.map((id) => traitChip(id)).join('')}</div>
         </div>
       </div>
 
@@ -187,13 +128,11 @@ export function createDrawer(onChange: () => void): HTMLElement {
 
   el.addEventListener('click', (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>(
-      '[data-cast], [data-body], [data-color], [data-trait], [data-state], [data-bg]',
+      '[data-cast], [data-color], [data-state], [data-bg]',
     );
     if (!target) return;
     if (target.dataset.cast) selectCast(target.dataset.cast);
-    else if (target.dataset.body) setLook({ body: target.dataset.body });
     else if (target.dataset.color) setLook({ color: target.dataset.color });
-    else if (target.dataset.trait) setTrait(target.dataset.trait);
     else if (target.dataset.state) setLook({ state: target.dataset.state });
     else if (target.dataset.bg) setLook({ background: target.dataset.bg as BackgroundId });
     paint();

@@ -78,10 +78,19 @@ function mouth(style, x, y, scale, ink) {
 /** The face of one expression, positioned inside the body. */
 export function renderFace(state, face, ink, baseEyeScale = 1) {
     const spec = faceFor(state);
-    const dx = face.x + (spec.dx ?? 0);
-    const dy = face.y + (spec.dy ?? 0);
-    const es = baseEyeScale * (spec.eyeScale ?? 1);
-    const ms = baseEyeScale * (spec.mouthScale ?? 1);
+    /*
+     * The face never turns: a character that looks to the side at a stranger
+     * reads as a person, and this is a pet. What moves instead is the face
+     * inside the silhouette — the lean, the eye size, the mouth size — and it
+     * moves further than the literal offsets so an expression is visible at a
+     * glance instead of having to be compared with the one before it.
+     */
+    const LEAN = 1.6;
+    const SCALE = 1.25;
+    const dx = face.x + (spec.dx ?? 0) * LEAN;
+    const dy = face.y + (spec.dy ?? 0) * LEAN;
+    const es = baseEyeScale * (1 + ((spec.eyeScale ?? 1) - 1) * SCALE);
+    const ms = baseEyeScale * (1 + ((spec.mouthScale ?? 1) - 1) * SCALE);
     const parts = [
         eye(spec.eye, dx - 13 * baseEyeScale, dy - 4, es, ink),
         eye(spec.eye, dx + 13 * baseEyeScale, dy - 4, es, ink),

@@ -296,49 +296,122 @@ function toggleVisible() {
 
 /* ------------------------------------------------------------ edge dock */
 
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
 /**
- * Tuck the window against an edge, leaving a sliver on screen.
+ * Tuck the window against one of four edges, leaving a sliver on screen.
  *
- * The sliver is what the hover watcher looks for; anything more and the pet
- * covers desktop icons, anything less and it cannot be grabbed.
+ * The ball always stays a whole circle: a docked window is clamped on the axis
+ * it did not dock to, so the only thing that ever leaves the screen is the
+ * half facing the edge. Without that clamp a ball parked near the bottom lost
+ * its chin to the taskbar, which reads as a broken circle rather than a tucked
+ * one.
+ *
+ * `peek` is how much of the ball stays grabbable. The window is wider than the
+ * ball (the bubble's room), so the offset is measured from the ball's centre,
+ * not the window's edge.
  */
 function dock(side) {
   if (!win) return;
   const dim = SIZES[sizeKey];
-  const [, y] = win.getPosition();
   const outer = outerSize(dim);
   const peek = Math.round(dim * PEEK_RATIO);
   const area = workArea();
-  // Half the window is empty (the bubble's room), so "hide the ball" is a
-  // window offset from the centre, not the window width.
-  const x =
-    side === 'left'
-      ? peek - outer / 2 - dim / 2
-      : area.width - peek - outer / 2 + dim / 2;
+  const [wx, wy] = win.getPosition();
+  const centred = (outer - dim) / 2;
+
+  let x = wx;
+  let y = wy;
+  if (side === 'left') {
+    x = peek - outer / 2 - dim / 2;
+    y = clamp(wy, 0, Math.max(0, area.height - outer));
+  } else if (side === 'right') {
+    x = area.width - peek - outer / 2 + dim / 2;
+    y = clamp(wy, 0, Math.max(0, area.height - outer));
+  } else if (side === 'top') {
+    y = peek - outer / 2 - dim / 2;
+    x = clamp(wx, 0, Math.max(0, area.width - outer));
+  } else {
+    y = area.height - peek - outer / 2 + dim / 2;
+    x = clamp(wx, 0, Math.max(0, area.width - outer));
+  }
+  void centred;
+
   dockSide = side;
   dockOpen = false;
   dockArmed = false;
-  win.setPosition(x, y);
+  win.setPosition(Math.round(x), Math.round(y));
   startHoverWatch();
   notifyDock();
   refreshMenus();
 }
 
+/** Put the whole ball back on screen, centred on the docked axis. */
 function undock() {
   if (!win || !dockSide) return;
   const dim = SIZES[sizeKey];
-  const area = workArea();
-  const [, y] = win.getPosition();
   const outer = outerSize(dim);
-  const x = dockSide === 'left' ? -(outer - dim) / 2 : area.width - (outer + dim) / 2;
+  const area = workArea();
+  const [wx, wy] = win.getPosition();
+  const side = dockSide;
+
+  let x = wx;
+  let y = wy;
+  if (side === 'left') x = -(outer - dim) / 2;
+  else if (side === 'right') x = area.width - (outer + dim) / 2;
+  else if (side === 'top') y = -(outer - dim) / 2;
+  else y = area.height - (outer + dim) / 2;
+
+  x = clamp(x, 0, Math.max(0, area.width - outer));
+  y = clamp(y, 0, Math.max(0, area.height - outer));
+
   dockSide = null;
   dockOpen = false;
   dockArmed = false;
-  win.setPosition(x, y);
+  win.setPosition(Math.round(x), Math.round(y));
   stopHoverWatch();
   notifyDock();
   savePrefs();
   refreshMenus();
+}
+
+/** The sliver of ball left on screen, in screen coordinates. */
+function sliverRect(dim) {
+  const outer = outerSize(dim);
+  const area = workArea();
+  const [wx, wy] = win.getPosition();
+  const peek = Math.round(dim * PEEK_RATIO);
+  const ballLeft = wx + (outer - dim) / 2;
+  const ballTop = wy + (outer - dim) / 2;
+  if (dockSide === 'left') return { x: 0, y: ballTop, w: peek, h: dim };
+  if (dockSide === 'right') return { x: area.width - peek, y: ballTop, w: peek, h: dim };
+  if (dockSide === 'top') return { x: ballLeft, y: 0, w: dim, h: peek };
+  return { x: ballLeft, y: area.height - peek, w: dim, h: peek };
+}
+
+/** Where an open (fully visible) ball sits, given the docked side. */
+function openPosition(dim) {
+  const outer = outerSize(dim);
+  const area = workArea();
+  const [wx, wy] = win.getPosition();
+  const clampX = (v) => clamp(v, 0, Math.max(0, area.width - outer));
+  const clampY = (v) => clamp(v, 0, Math.max(0, area.height - outer));
+  if (dockSide === 'left') return { x: clampX(-(outer - dim) / 2), y: clampY(wy) };
+  if (dockSide === 'right') return { x: clampX(area.width - (outer + dim) / 2), y: clampY(wy) };
+  if (dockSide === 'top') return { x: clampX(wx), y: clampY(-(outer - dim) / 2) };
+  return { x: clampX(wx), y: clampY(area.height - (outer + dim) / 2) };
+}
+
+/** Where a tucked ball sits: the same as the closed dock position. */
+function closedPosition(dim) {
+  const outer = outerSize(dim);
+  const area = workArea();
+  const peek = Math.round(dim * PEEK_RATIO);
+  const [wx, wy] = win.getPosition();
+  if (dockSide === 'left') return { x: peek - outer / 2 - dim / 2, y: clamp(wy, 0, Math.max(0, area.height - outer)) };
+  if (dockSide === 'right') return { x: area.width - peek - outer / 2 + dim / 2, y: clamp(wy, 0, Math.max(0, area.height - outer)) };
+  if (dockSide === 'top') return { x: clamp(wx, 0, Math.max(0, area.width - outer)), y: peek - outer / 2 - dim / 2 };
+  return { x: clamp(wx, 0, Math.max(0, area.width - outer)), y: area.height - peek - outer / 2 + dim / 2 };
 }
 
 /**
@@ -352,30 +425,21 @@ function startHoverWatch() {
   stopHoverWatch();
   hoverTimer = setInterval(() => {
     if (!win || win.isDestroyed() || !dockSide) return;
-    const cursor = screen.getCursorScreenPoint();
     const dim = SIZES[sizeKey];
-    const area = workArea();
-    const [, wy] = win.getPosition();
-    const outer = outerSize(dim);
-    const sliverWidth = Math.round(dim * PEEK_RATIO);
-    const sliverLeft = dockSide === 'left' ? 0 : area.width - sliverWidth;
-    const ballTop = wy + (outer - dim) / 2;
+    const cursor = screen.getCursorScreenPoint();
+    const rect = sliverRect(dim);
     const overSliver =
-      cursor.x >= sliverLeft &&
-      cursor.x <= sliverLeft + sliverWidth &&
-      cursor.y >= ballTop &&
-      cursor.y <= ballTop + dim;
-
-    const closedX = dockSide === 'left' ? sliverWidth - outer / 2 - dim / 2 : area.width - sliverWidth - outer / 2 + dim / 2;
-    const openX = dockSide === 'left' ? -(outer - dim) / 2 : area.width - (outer + dim) / 2;
+      cursor.x >= rect.x &&
+      cursor.x <= rect.x + rect.w &&
+      cursor.y >= rect.y &&
+      cursor.y <= rect.y + rect.h;
 
     if (!overSliver) {
-      // Leaving is what arms the next hover, and it also tucks an open ball
-      // back in.
       dockArmed = true;
       if (dockOpen) {
         dockOpen = false;
-        win.setPosition(closedX, wy);
+        const closed = closedPosition(dim);
+        win.setPosition(Math.round(closed.x), Math.round(closed.y));
         notifyDock();
       }
       return;
@@ -383,7 +447,9 @@ function startHoverWatch() {
     if (!dockArmed) return;
     if (dockOpen) return;
     dockOpen = true;
-    win.setPosition(openX, wy);
+    const open = openPosition(dim);
+    win.setPosition(Math.round(open.x), Math.round(open.y));
+    notifyDock();
   }, 140);
 }
 
@@ -396,9 +462,10 @@ function stopHoverWatch() {
 
 function startDrag(point) {
   if (!win) return;
-  // Re-entrant drags happen when a click-through toggle makes the window
-  // re-hit-test; ignoring the second press keeps the offset honest.
-  if (dragTimer) clearInterval(dragTimer);
+  // A second start while a drag is live would recompute the offset from a
+  // window that has already moved, which makes the ball jump and, pressed
+  // long enough, look like it keeps growing. One drag at a time.
+  if (dragTimer) return;
   const [wx, wy] = win.getPosition();
   dragOffset = { x: point.x - wx, y: point.y - wy };
   clearInterval(dragTimer);
@@ -555,7 +622,14 @@ function buildMenu() {
     },
     {
       label: '贴边收起',
-      click: () => (dockSide ? undock() : dock('right')),
+      submenu: [
+        { label: '贴左边', click: () => dock('left') },
+        { label: '贴右边', click: () => dock('right') },
+        { label: '贴上边', click: () => dock('top') },
+        { label: '贴下边', click: () => dock('bottom') },
+        { type: 'separator' },
+        { label: dockSide ? '收回桌面' : '收起', click: () => (dockSide ? undock() : dock('right')) },
+      ],
     },
     {
       label: '尺寸',

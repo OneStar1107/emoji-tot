@@ -1,18 +1,14 @@
 /**
- * The cast: 135 named characters, each one a genome rather than a drawing.
+ * The cast: one member per body, fifteen in all.
  *
- * A member is `{ body, color, trait, face, motion }`: one silhouette, one
- * colour, at most ONE trait, a signature expression and a signature motion.
+ * A body is the strongest identity a character has — a star reads as a star at
+ * 32px, while two circles with different spots read as the same character. So
+ * the roster is one-to-one with `BODIES`: fifteen silhouettes, each with the
+ * colour, the single trait, the expression and the motion that show it off
+ * best. Nothing here is a drawing; add a body and there is a new character.
  *
- * One trait per member is deliberate. Traits are anchors that compete for the
- * same space — two ears and a halo is a pile of parts, not a character. A
- * member with a single strong idea reads better at 72px than one wearing four,
- * and it forces the 135 to differentiate by *which* idea they carry rather than
- * by how many.
- *
- * Order is catalogue order, grouped by family. Family ids and body ids are
- * stable; a member's id is stable forever, because a stored preference may
- * name it years later.
+ * One trait per member is deliberate. Traits compete for the same space along
+ * the silhouette — two ears and a halo is a pile of parts, not a character.
  */
 export interface CastMember {
     id: string;

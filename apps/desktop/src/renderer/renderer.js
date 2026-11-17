@@ -51,24 +51,41 @@ let dragging = false;
 let grabbedAt = null;
 let travelled = false;
 
+/*
+ * A press only becomes a drag after the pointer moves.
+ *
+ * Starting the follow loop on pointerdown made a long press send a position
+ * every frame while the pointer stood still, which reads as the ball growing
+ * until the window clips it. Waiting for 4px of travel keeps a hold a hold.
+ */
+let dragStarted = false;
+
 pet.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
   dragging = true;
   travelled = false;
+  dragStarted = false;
   grabbedAt = { x: event.screenX, y: event.screenY };
   pet.setPointerCapture?.(event.pointerId);
-  api.dragStart(grabbedAt);
 });
 
 pet.addEventListener('pointermove', (event) => {
   if (!dragging || !grabbedAt) return;
-  if (Math.hypot(event.screenX - grabbedAt.x, event.screenY - grabbedAt.y) > 4) travelled = true;
+  const moved = Math.hypot(event.screenX - grabbedAt.x, event.screenY - grabbedAt.y);
+  if (moved <= 4) return;
+  travelled = true;
+  if (!dragStarted) {
+    dragStarted = true;
+    api.dragStart(grabbedAt);
+  }
 });
 
 function release() {
   if (!dragging) return;
   dragging = false;
-  api.dragEnd();
+  const wasDragging = dragStarted;
+  dragStarted = false;
+  if (wasDragging) api.dragEnd();
   // A press that never travelled is a poke, not a drag.
   if (!travelled) api.poke();
 }
@@ -90,10 +107,16 @@ pet.addEventListener('contextmenu', (event) => {
 /** A counter so a late timer cannot overwrite a state that just arrived. */
 let actionToken = 0;
 
+/** The state the host asked for; a borrowed mood must never outlive it. */
+let taskState = 'idle';
+
 api.onState((message) => {
   actionToken += 1;
-  if (message.state) ball.state = message.state;
-  const face = faceFor(message.state);
+  if (message.state) {
+    taskState = message.state;
+    ball.state = taskState;
+  }
+  const face = faceFor(taskState);
   if (face) say(face);
 });
 
@@ -123,7 +146,7 @@ api.onAction((action) => {
  * repeats the last one. Timers are chained rather than fixed so the rhythm
  * does not turn into a metronome.
  */
-const GENERIC_MOODS = ['curious', 'happy', 'bored', 'excited', 'playful', 'proud', 'shy', 'humming', 'surprised', 'confused'];
+const GENERIC_MOODS = ['curious', 'happy', 'bored', 'excited', 'playful', 'proud', 'shy', 'humming', 'surprised', 'confused', 'laughing', 'waiting', 'thinking', 'curious'];
 
 /*
  * The member the pet is wearing. Its signature expression leads the mood pool
@@ -131,16 +154,42 @@ const GENERIC_MOODS = ['curious', 'happy', 'bored', 'excited', 'playful', 'proud
  * changes behaviour, not just paint.
  */
 let member = castMember('bot');
-let lastMood = null;
+
+/*
+ * A shuffled queue instead of a random pick.
+ *
+ * Random picks repeat, and a repeat is what makes an idle pet feel scripted.
+ * Drawing without replacement from a reshuffled bag guarantees no two
+ * consecutive moods are the same, and that every mood appears once per cycle.
+ */
+let moodBag = [];
+
+function refillBag() {
+  const pool = [member?.face, ...GENERIC_MOODS].filter(Boolean);
+  const unique = [...new Set(pool)].filter((state) => state !== 'idle');
+  for (let i = unique.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [unique[i], unique[j]] = [unique[j], unique[i]];
+  }
+  moodBag = unique;
+}
+
+function nextMood() {
+  if (!moodBag.length) refillBag();
+  return moodBag.pop();
+}
 let moodTimer = null;
 
 function scheduleMood() {
   clearTimeout(moodTimer);
   moodTimer = window.setTimeout(() => {
-    if (!document.hidden && ball.state === 'idle' && !dragging) {
-      const pool = [member?.face, ...GENERIC_MOODS.filter((m) => m !== member?.face)].filter((m) => m && m !== lastMood);
-      const mood = pool[Math.floor(Math.random() * pool.length)];
-      lastMood = mood;
+    /*
+     * A borrowed mood is allowed even while a task is showing: the host's
+     * state is the resident, but a pet that only ever wears it is a status
+     * light. It holds the mood briefly, then snaps back to `taskState`.
+     */
+    if (!document.hidden && !dragging) {
+      const mood = nextMood();
       const token = ++actionToken;
       ball.state = mood;
       const face = faceFor(mood);
@@ -148,11 +197,15 @@ function scheduleMood() {
       // A little motion with the expression, or it reads as a freeze-frame.
       const motion = member?.motion ?? 'bounce';
       if (Math.random() < 0.7) ball.play?.(motion);
+      // Every hold is a different length; a fixed beat turns into a metronome.
+      const hold = 1800 + Math.random() * 2600;
       window.setTimeout(() => {
         if (token !== actionToken) return;
-        ball.state = 'idle';
+        // Snap straight back to whatever the host asked for: the borrowed mood
+        // is a guest, the task state is the resident.
+        ball.state = taskState;
         ball.play?.(motion);
-      }, 2400 + Math.random() * 1600);
+      }, hold);
     }
     scheduleMood();
   }, 7000 + Math.random() * 9000);
