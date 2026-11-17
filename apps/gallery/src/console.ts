@@ -61,7 +61,7 @@ export function createConsole(): HTMLElement {
 
     <aside class="studio-side">
       <div class="code-card">
-        <div class="code-head"><span>snippet</span><button type="button" id="copy">${t('console.copy')}</button></div>
+        <div class="code-head"><span>${t('console.code')}</span><button type="button" id="copy">${t('console.copy')}</button></div>
         <pre class="snippet"><code data-snippet>${snippet()}</code></pre>
       </div>
       <div class="params" id="params"></div>
