@@ -1,0 +1,19 @@
+{
+  "name": "@emotion-studio/demo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@aora-bot/element": "0.2.0",
+    "@aora-bot/engine": "0.2.0",
+    "@emotion-studio/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

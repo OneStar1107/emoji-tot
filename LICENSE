@@ -1,0 +1,58 @@
+Emotion Studio 非商业共享许可 1.0
+Emotion Studio Non-Commercial Share License 1.0
+（本许可文件以中文为准 / The Chinese text prevails）
+
+Copyright (c) 2026 Emotion Studio contributors
+
+本项目是三个上游项目的衍生融合作品，整体适用本许可。上游部分各自
+保留其原有许可与版权，详见 NOTICE.md 与 CREDITS.md。
+
+一、允许（非商业）
+
+  1. 免费查看、下载、运行、修改本项目，包括阅读源码与二次开发。
+  2. 以非商业目的分享本项目或其衍生作品，包括开源发布、教学演示、
+     个人研究与技术交流。
+  3. 在分享或发布时须同时满足：
+     (a) 注明出处并保留本文件、NOTICE.md 与 CREDITS.md；
+     (b) 链接至本项目仓库；
+     (c) 在产品的关于页、页脚、README 或文档中写明上游署名。
+
+二、禁止
+
+  1. 任何商业用途，包括但不限于：售卖本项目或衍生作品、付费授权、
+     集成进对外销售或运营的产品与服务、用于商业推广物料。
+  2. 把本项目或衍生作品作为主体单独出售或付费分发，例如以组件库、
+     模板、UI 套件、源码包、SDK 或插件的形式。
+  3. 提供以本项目为主要价值的托管服务或接口。
+  4. 将本项目使用的球形角色视觉形象用于任何商业用途。
+  5. 删除或修改本项目及上游项目中的版权与许可声明。
+  6. 将上游角色形象申请注册为商标，或声称拥有其著作权。
+
+三、上游限制
+
+  本项目依赖或包含上游项目的代码与角色设计，上游许可对衍生作品继续
+  成立。若本许可与上游许可冲突，以上游许可中更严格者为准。
+
+四、终止
+
+  违反本许可的，本许可授予你的权利自动终止。收到权利人书面通知后
+  30 日内纠正违约行为的，权利恢复。
+
+五、无担保
+
+  本项目按「现状」提供，不附带任何明示或默示担保。因使用本项目产生
+  的任何风险与责任由使用者自行承担。
+
+---
+
+English summary (for reference only)
+
+This project is a derivative fusion of three upstream projects and is
+licensed as a whole under this non-commercial share license. You may view,
+run, modify and share it for non-commercial purposes, provided you keep
+this file, NOTICE.md and CREDITS.md, credit the upstream projects, and link
+back to this repository. Commercial use of any kind — including selling,
+paid licensing, and integration into commercial products or services — is
+prohibited, and the spherical character visual designs may never be used
+commercially. Upstream licenses continue to apply to their portions; where
+this license conflicts with an upstream license, the stricter term governs.
