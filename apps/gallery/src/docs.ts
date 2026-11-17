@@ -54,8 +54,8 @@ export function createDocs(): HTMLElement {
 
       <section><h2>${t.install}</h2><p>${t.installBody}</p>
         <pre class="snippet"><code>${lang === 'zh'
-          ? `pnpm add @aora-bot/element &nbsp;\n\n<aora-bot shape="circle" color="black" state="thinking"></aora-bot>`
-          : `pnpm add @aora-bot/element &nbsp;\n\n<aora-bot shape="circle" color="black" state="thinking"></aora-bot>`}</code></pre>
+          ? `pnpm add @emojibot/core &nbsp;\n\n<emojibot-ball shape="circle" color="white" state="thinking"></emojibot-ball>`
+          : `pnpm add @emojibot/core &nbsp;\n\n<emojibot-ball shape="circle" color="white" state="thinking"></emojibot-ball>`}</code></pre>
       </section>
 
       <section><h2>${t.protocol}</h2><p>${t.protocolBody}</p>
