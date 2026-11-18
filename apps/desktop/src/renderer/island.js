@@ -143,19 +143,37 @@ function lyricAt(seconds) {
 
 /* ------------------------------------------------------------- measurement */
 
-let frame = 0;
+let measuring = false;
 function measure() {
-  if (frame) return;
-  frame = requestAnimationFrame(() => {
-    frame = 0;
-    // The island wrapper's own box is not the content's box while the frame is
-    // out of flow; measure the visible surface instead.
-    const rect = (open ? panelEl : pillEl).getBoundingClientRect();
+  if (measuring) return;
+  measuring = true;
+  /*
+   * A microtask, not requestAnimationFrame.
+   *
+   * rAF does not run while the window is hidden or occluded, so the "already
+   * queued" flag stayed set forever after one call from a hidden window: every
+   * later measurement returned at the top and the window never resized again.
+   * That is why the panel spilled outside the island and looked like a stray
+   * rectangle around it, and why it never recovered without a restart.
+   */
+  queueMicrotask(() => {
+    measuring = false;
+    /*
+     * The frame is the content's natural box — it is out of flow with
+     * width: max-content, so it reports the real size of whichever surface is
+     * showing. Reading the surface itself (panel/pill) reported zero while the
+     * swap was still pending a layout, and a zero box is dropped, which left
+     * the window at its collapsed size with the panel spilling out.
+     */
+    const rect = frameEl.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     api.reportBox({ w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
   });
 }
-new ResizeObserver(measure).observe(islandEl);
+// Observe the frame, not the island: the island's width is what this observer
+// writes, so watching it was circular — a collapsed island never changed size
+// on its own and the expanded panel never got measured.
+new ResizeObserver(measure).observe(frameEl);
 
 /*
  * The frame is measured, the island is animated towards it.
@@ -164,7 +182,7 @@ new ResizeObserver(measure).observe(islandEl);
  * the size with transitions off, then hands the transition back.
  */
 let sized = false;
-const sizeObserver = new ResizeObserver(() => {
+function syncSize() {
   const rect = frameEl.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
   if (!sized) islandEl.style.transition = 'none';
@@ -176,7 +194,8 @@ const sizeObserver = new ResizeObserver(() => {
       islandEl.style.transition = '';
     });
   }
-});
+}
+const sizeObserver = new ResizeObserver(syncSize);
 sizeObserver.observe(frameEl);
 
 /* ------------------------------------------------------------- pill status */
@@ -823,7 +842,31 @@ function setOpen(next) {
   panelEl.hidden = !open;
   pillEl.setAttribute('aria-expanded', String(open));
   if (open) renderPage();
+  /*
+   * Size the wrapper here instead of trusting the frame's ResizeObserver to
+   * fire on time. Opening swaps a hidden pill for a visible panel; the observer
+   * kept reporting the collapsed frame and the wrapper stayed at the collapsed
+   * width, so the window never grew and the panel spilled outside it. Reading
+   * the frame right after the swap forces the layout and gives the real box.
+   */
+  syncSize();
+  reportBoxNow();
   measure();
+}
+
+/**
+ * Send the current frame size immediately.
+ *
+ * The deferred path (measure) reads the frame after a microtask, which can land
+ * before the browser has laid out the pill/panel swap — during the close that
+ * reported the open size, so the window stayed big around a collapsed pill.
+ * Reading synchronously right after the swap forces the layout and the value is
+ * then the one actually on screen.
+ */
+function reportBoxNow() {
+  const rect = frameEl.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  api.reportBox({ w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
 }
 
 /* ------------------------------------------------------------------- wiring */

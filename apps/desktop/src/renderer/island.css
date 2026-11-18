@@ -126,6 +126,13 @@ body {
 #island {
   position: relative;
   display: block;
+  /*
+   * Without this the flex parent shrinks the island back to the window width:
+   * the window is sized *from* the island, so a squeezed island reports its
+   * squeezed width forever and the window never grows to meet the panel. The
+   * panel then overflows the window, which is the rectangle seen around it.
+   */
+  flex: none;
   /* Not hidden: the panel's shadow is wider than the window padding, and
      clipping turned it into a hard-edged dark square around each corner. */
   overflow: visible;
