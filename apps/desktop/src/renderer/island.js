@@ -1146,6 +1146,14 @@ api.onMessenger((value) => {
  * Both faces follow the protocol state — the pill's and the header's. Without
  * this the island always showed the idle face while the ball reacted.
  */
+/* Switching character updates every face on the island, not only the ball. */
+api.onCast((cast) => {
+  if (!cast) return;
+  for (const face of document.querySelectorAll('emojitot-ball')) {
+    face.setAttribute('cast', String(cast));
+  }
+});
+
 api.onState((message) => {
   const state = message && message.state;
   if (!state) return;

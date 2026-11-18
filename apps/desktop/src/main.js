@@ -148,6 +148,7 @@ async function loadCore() {
 function setCast(id) {
   castId = id;
   writeJson(prefsPath(), { ...readJson(prefsPath(), {}), cast: id });
+  island.send('island:cast', id);
   if (win) win.webContents.send('cast:changed', id);
   refreshMenus();
 }
@@ -279,6 +280,17 @@ function setSize(key) {
 
 function toggleVisible() {
   if (!win) return;
+  if (win.isVisible()) win.hide();
+  else {
+    win.showInactive();
+    if (dockSide) undock();
+  }
+  refreshMenus();
+}
+
+/** Show or hide the desktop ball. */
+function toggleBall() {
+  if (!win || win.isDestroyed()) return;
   if (win.isVisible()) win.hide();
   else {
     win.showInactive();
@@ -848,7 +860,11 @@ function createTray() {
   tray = new Tray(icon);
   tray.setToolTip('EmojiTot');
   tray.setContextMenu(buildMenu());
-  tray.on('click', toggleVisible);
+  /*
+   * Left click is the ball's switch, not the island's. The ball is the pet you
+   * reach for; the island is already on screen and has its own gestures.
+   */
+  tray.on('click', toggleBall);
 }
 
 /* -------------------------------------------------------------- IPC glue */
@@ -929,8 +945,9 @@ function pushBattery() {
 async function refreshWeather() {
   const prefs = readPrefs();
   const city = (prefs.weather && prefs.weather.city) || '香港';
+  const autoLocate = prefs.weatherAutoLocate === true;
   try {
-    const data = await weather.load(city);
+    const data = await weather.load(city, autoLocate);
     island.send('island:weather', data);
   } catch (error) {
     // Offline: the island keeps the last reading rather than an empty card.

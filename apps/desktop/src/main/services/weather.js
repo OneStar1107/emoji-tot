@@ -52,12 +52,15 @@ function cacheFile() {
 }
 
 /** Ask the child process; resolve the raw object or reject with a reason. */
-function fetchRemote(city) {
+function fetchRemote(city, autoLocate) {
   return new Promise((resolve, reject) => {
     const encoded = Buffer.from(city, 'utf8').toString('base64');
+    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT];
+    if (autoLocate) args.push('-AutoLocate');
+    else args.push('-CityB64', encoded);
     execFile(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-CityB64', encoded],
+      args,
       { windowsHide: true, timeout: 30000, maxBuffer: 2 * 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
@@ -116,14 +119,17 @@ function cached() {
  * Resolve a city and its forecast. Cached for ten minutes per city, so opening
  * the island repeatedly costs one child process, not one per open.
  */
-async function load(city) {
+async function load(city, autoLocate) {
   const file = cacheFile();
+  // "auto" is its own cache slot: switching back to a named city must not
+  // reuse the coordinates the locator happened to find.
+  const key = autoLocate ? 'auto' : city;
   const saved = readJson(file, null);
-  if (saved && saved.city === city && saved.data && Date.now() - saved.data.fetchedAt < CACHE_TTL) {
+  if (saved && saved.city === key && saved.data && Date.now() - saved.data.fetchedAt < CACHE_TTL) {
     return saved.data;
   }
-  const data = normalize(await fetchRemote(city));
-  writeJson(file, { city, data });
+  const data = normalize(await fetchRemote(city, autoLocate));
+  writeJson(file, { city: key, data });
   return data;
 }
 

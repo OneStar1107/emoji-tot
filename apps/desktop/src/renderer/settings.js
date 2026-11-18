@@ -501,14 +501,15 @@ function emptyCardRow() {
 function pageWeather() {
   return head('天气', '城市、单位与刷新') +
     group('位置', card([
-      rowInput('城市', '中文或英文都行，例如 香港 / Tokyo', 'weather.city', prefs.weather.city, '香港'),
+      rowToggle('自动定位', '按网络位置识别城市，比手填更接近你所在的地方', 'weatherAutoLocate'),
+      rowInput('城市', '关掉自动定位时使用；中文或英文都行', 'weather.city', prefs.weather.city, '香港'),
       rowSeg('单位', '', 'weather.unit', [['c', '摄氏'], ['f', '华氏']]),
     ])) +
     group('数据', card([
       rowRange('刷新间隔', 'Open-Meteo 免费额度足够', 'weather.intervalMin', 5, 60, 5, ' 分钟'),
       row('立即刷新', '重新拉一次当前城市', '<button type="button" class="btn" data-act="button" data-key="refresh-weather">刷新</button>'),
     ])) +
-    '<p class="note">无需 API Key。城市解析用 Open-Meteo geocoding，失败时保留上一次结果。</p>';
+    '<p class="note">无需 API Key。自动定位走 IP 归属地（ipapi / ipinfo），失败时回落到手填城市；城市解析用 Open-Meteo geocoding，两者都失败时保留上一次结果。</p>';
 }
 
 function pagePlugins() {
