@@ -32,6 +32,7 @@ const todo = require('./main/services/todo');
 const shelf = require('./main/services/shelf');
 const clipboardHistory = require('./main/services/clipboard');
 const messenger = require('./main/services/messenger');
+const devices = require('./main/services/devices');
 const quota = require('./main/services/quota');
 const mail = require('./main/services/mail');
 const calendar = require('./main/services/calendar');
@@ -988,6 +989,8 @@ function startServices() {
   messenger.setPrefsReader(readPrefs);
   messenger.onChange((value) => island.send('island:messenger', value));
   messenger.start();
+  devices.onChange((value) => island.send('island:devices', value));
+  devices.start();
   quota.onChange((value) => island.send('island:quota', value));
   mail.onChange((value) => island.send('island:mail', value));
   // Same shape as the bootstrap payload: the page reads .events, and a bare
@@ -1029,6 +1032,7 @@ function startServices() {
     shelf: shelf.list(),
     clipboard: clipboardHistory.list(),
     messenger: messenger.snapshot(),
+    devices: devices.snapshot(),
   }));
 
   ipcMain.handle('local:do', async (_event, payload) => {
@@ -1069,6 +1073,8 @@ function startServices() {
       todos: todo.list(),
       shelf: shelf.list(),
       clipboard: clipboardHistory.list(),
+      messenger: messenger.snapshot(),
+      devices: devices.snapshot(),
     };
   });
 
@@ -1085,6 +1091,7 @@ function startServices() {
     shelf: shelf.list(),
     clipboard: clipboardHistory.list(),
     messenger: messenger.snapshot(),
+    devices: devices.snapshot(),
     quota: quota.snapshot(),
     mail: mail.snapshot(),
     calendar: { events: calendar.list(), upcoming: calendar.upcoming() },

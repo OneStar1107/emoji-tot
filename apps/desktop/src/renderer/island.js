@@ -77,6 +77,7 @@ let todos = [];
 let shelfFiles = [];
 let clipboardItems = [];
 let messengerState = { apps: [], unread: 0 };
+let devicesState = { devices: [] };
 let quotaState = { accounts: [], current: null, last: null };
 let mailState = { accounts: [], messages: [], syncing: false, error: '', lastSync: 0 };
 let calendarState = { events: [], upcoming: [] };
@@ -664,7 +665,34 @@ function clipLabel(text) {
   return flat.length > 42 ? flat.slice(0, 42) + '…' : flat;
 }
 
+/**
+ * Paired Bluetooth devices. A device without a battery property still earns a
+ * row: knowing the headset is connected is half the answer.
+ */
+function devicesPage() {
+  const list = devicesState?.devices ?? [];
+  if (!list.length) {
+    return empty(ICON.tray, '没有蓝牙设备', '连接过的耳机、键盘、手柄会出现在这里。', '去设置', 'settings:general');
+  }
+  const rows = list
+    .map((device) => {
+      const battery = device.battery === null || device.battery === undefined ? '—' : device.battery + '%';
+      const low = battery !== '—' && Number(device.battery) <= 20;
+      return `<div class="dev-item">
+      <span class="dev-name">${escapeHtml(device.name)}</span>
+      <span class="dev-status">${device.status === 'OK' ? '已连接' : escapeHtml(device.status)}</span>
+      <span class="dev-bat${low ? ' low' : ''}">${battery}</span>
+    </div>`;
+    })
+    .join('');
+  return `<div class="dev">
+    <div class="dev-head"><span>${list.length} 个设备</span><span class="spacer"></span><span>每 5 分钟刷新</span></div>
+    ${rows}
+  </div>`;
+}
+
 const RENDERERS = {
+  devices: devicesPage,
   music: musicPage,
   weather: weatherPage,
   quota: quotaPage,
@@ -720,6 +748,7 @@ function applyLocal(snapshot) {
   if (Array.isArray(snapshot.shelf)) shelfFiles = snapshot.shelf;
   if (Array.isArray(snapshot.clipboard)) clipboardItems = snapshot.clipboard;
   if (snapshot.messenger) messengerState = snapshot.messenger;
+  if (snapshot.devices) devicesState = snapshot.devices;
 }
 
 /** +1 = next page, -1 = previous; the panel slides in from the side it came from. */
@@ -1043,6 +1072,12 @@ api.onMessenger((value) => {
   if (!value || !Array.isArray(value.apps)) return;
   messengerState = value;
   if (open && enabledPages()[pageIndex]?.key === 'mail') renderPage();
+});
+
+api.onDevices((value) => {
+  if (!value || !Array.isArray(value.devices)) return;
+  devicesState = value;
+  if (open && enabledPages()[pageIndex]?.key === 'devices') renderPage();
 });
 
 api.onQuota((value) => {

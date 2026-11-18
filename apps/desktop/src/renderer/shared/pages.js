@@ -15,6 +15,7 @@ export const PAGES = [
   { key: 'todo', title: '待办', sub: '清单与到期', icon: 'check', stage: 1 },
   { key: 'health', title: '健康', sub: '喝水与久坐', icon: 'drop', stage: 1 },
   { key: 'shelf', title: '置物架', sub: '临时收纳', icon: 'tray', stage: 1 },
+  { key: 'devices', title: '设备', sub: '蓝牙与电量', icon: 'tray', stage: 1 },
   { key: 'calendar', title: '日程', sub: '月历与邀请', icon: 'calendar', stage: 3 },
 ];
 
