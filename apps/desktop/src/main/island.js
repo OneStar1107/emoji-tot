@@ -89,15 +89,8 @@ function place() {
   const y = Math.round(prefs.avoidTopBar === false ? display.bounds.y : area.y);
   windowRect = { x, y, width, height };
   const bounds = win.getBounds();
-  const same = bounds.x === x && bounds.y === y && bounds.width === width && bounds.height === height;
-  try {
-    require('node:fs').appendFileSync('C:/Users/hyx11/et-diag.log', JSON.stringify({ t: Date.now(), ev: 'place', want: { x, y, width, height }, have: bounds, same }) + '\n');
-  } catch {}
-  if (same) return;
+  if (bounds.x === x && bounds.y === y && bounds.width === width && bounds.height === height) return;
   win.setBounds({ x, y, width, height });
-  try {
-    require('node:fs').appendFileSync('C:/Users/hyx11/et-diag.log', JSON.stringify({ t: Date.now(), ev: 'after', have: win.getBounds() }) + '\n');
-  } catch {}
 }
 
 /**
