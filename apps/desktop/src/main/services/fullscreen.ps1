@@ -18,6 +18,7 @@ using System.Runtime.InteropServices;
 public class FgWin {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
   public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
 "@
@@ -31,7 +32,13 @@ while ($true) {
   $width = $rect.Right - $rect.Left
   $height = $rect.Bottom - $rect.Top
   $full = $false
-  if ($width -ge $screen.Width -and $height -ge $screen.Height) { $full = $true }
+  # A maximised window reports a rect LARGER than the screen (Windows pushes its
+  # invisible resize border off-screen: -7,-7 to +7,+7), so "rect covers the
+  # screen" alone reported every maximised browser as full screen. The island
+  # then hid itself on launch and only came back when the user switched to a
+  # window that happened to be smaller. IsZoomed is what tells the two apart.
+  $zoomed = [FgWin]::IsZoomed($handle)
+  if (-not $zoomed -and $width -ge $screen.Width -and $height -ge $screen.Height) { $full = $true }
 
   # A foreground rect can cover the screen without the shell considering it
   # full screen (borderless maximised windows do). QUNS knows the difference:
