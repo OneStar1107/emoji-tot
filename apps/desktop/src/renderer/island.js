@@ -242,12 +242,13 @@ function renderSub() {
   if (batteryIndex >= entries.length) batteryIndex = 0;
   const entry = entries[batteryIndex];
   /*
-   * The number leads. With the name first, a long device name ("FlyDigi
-   * BS2PRO") filled the whole line and the level it was reporting was the part
-   * that got cut. Leading with the figure means truncation costs a name, not
-   * the reading.
+   * Line two: where you are, then the battery. The level still leads within its
+   * own segment so a truncated device name never hides the number, and the
+   * whole line scrolls when a long device name makes it wider than the slot.
    */
-  const text = entry.level + '% · ' + entry.name;
+  const page = enabledPages()[pageIndex];
+  const prefix = page ? page.title + ' · ' : '';
+  const text = prefix + entry.level + '% · ' + entry.name;
   const textEl = subEl.firstElementChild;
   if (textEl && textEl.textContent !== text) textEl.textContent = text;
   subEl.dataset.muted = 'false';
@@ -282,24 +283,16 @@ function ensureBatteryRotation() {
 
 /* Now-playing in the header: the full title, scrolling only when it overflows. */
 function renderTopMedia() {
-  const box = document.getElementById('top-media');
-  const text = document.getElementById('top-media-text');
-  if (!box || !text) return;
+  const page = enabledPages()[pageIndex];
   const title = media && media.active ? String(media.title || '') : '';
-  if (!title) {
-    box.hidden = true;
-    return;
-  }
-  box.hidden = false;
-  if (text.textContent !== title) text.textContent = title;
   /*
-   * Decide on every call, not only when the text changed: the first measurement
-   * runs in the same frame that set the text, before layout, so scrollWidth was
-   * still 0 and "does it overflow" answered no forever. Toggling to the same
-   * value does not restart the animation, so repeating this is free.
+   * Line one is the now-playing title, and falls back to the page name when
+   * nothing is playing — the line is the widest slot in the header, so this is
+   * where a long track title can actually be read.
    */
-  const overflow = text.scrollWidth > box.clientWidth + 2;
-  if (box.classList.contains('scrolling') !== overflow) box.classList.toggle('scrolling', overflow);
+  const text = title || (page ? page.title : '');
+  if (titleEl.textContent !== text) titleEl.textContent = text;
+  titleEl.dataset.over = String(title.length > 0 && titleEl.scrollWidth > titleEl.clientWidth + 2);
 }
 
 function renderPillStatus() {
@@ -1003,9 +996,13 @@ function renderPage(animate = false) {
   // One page means the paging arrows would be dead controls.
   document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
-  titleEl.textContent = page.key === 'music' && isBrowserMedia() ? '媒体' : page.title;
-  renderSub();
+  /*
+   * The header now reads top-down as: what is playing, then where you are and
+   * how much battery is left. The page name moved under the ball so the top
+   * line can carry the now-playing title at full width.
+   */
   renderTopMedia();
+  renderSub();
   pagesEl.innerHTML = (RENDERERS[page.key] ?? ((p) => fallbackPage(p)))(page);
   dotsEl.innerHTML = list
     .map((p, index) => `<button type="button" data-page="${index}" aria-current="${index === pageIndex}" aria-label="${p.title}"></button>`)
