@@ -701,6 +701,18 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   transform: scale(1.02);
 }
 .shelf-hint code { font-size: 10.5px; color: var(--dim); }
+/* A live stream has no end, so the bar shows motion instead of a fraction. */
+.music-bar.live { overflow: hidden; }
+.music-bar.live i {
+  width: 34%;
+  animation: live-sweep 1.8s var(--ease) infinite;
+}
+
+@keyframes live-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(320%); }
+}
+
 /* Paired devices: name, state, battery. */
 .dev-head {
   display: flex;

@@ -542,6 +542,8 @@ function emitState(payload) {
   if (!win || win.isDestroyed()) return;
   const message = parseAgentMessage(payload);
   if (!message) return;
+  // The island shows the same character: one state, two windows.
+  island.send('island:state', message);
   try {
     win.webContents.send('state:apply', message);
   } catch {

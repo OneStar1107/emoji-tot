@@ -249,6 +249,20 @@ function lyricSliceHtml(index) {
     .join('');
 }
 
+/**
+ * A browser session is "media", not "music": the user asked for the distinction
+ * because a video tab and a music player are different things to interrupt.
+ */
+const BROWSER_SOURCES = ['chrome', 'msedge', 'edge', 'firefox', 'brave', 'opera', 'vivaldi', 'egolite', 'browser', 'chromium'];
+
+function isBrowserMedia() {
+  const source = String(media.source || '').toLowerCase();
+  return BROWSER_SOURCES.some((name) => source.includes(name));
+}
+
+/** Live streams and video tabs often report no duration at all. */
+const isLiveMedia = () => !media.duration;
+
 function musicPage() {
   if (!media.active) {
     return empty(
@@ -260,6 +274,8 @@ function musicPage() {
     );
   }
   const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
+  const live = isLiveMedia();
+  const browser = isBrowserMedia();
   const art = media.art
     ? `<img class="cover-img" src="${media.art}" alt="" />`
     : `<div class="cover">${svg(ICON.music)}</div>`;
@@ -268,13 +284,14 @@ function musicPage() {
       ${art}
       <div class="music-meta">
         <b>${escapeHtml(media.title || '未命名')}</b>
-        <span>${escapeHtml(media.artist || media.album || media.source || '')}</span>
+        <span>${escapeHtml(media.artist || media.album || (browser ? '媒体 · ' + (media.source || '浏览器') : media.source || ''))}</span>
       </div>
-      <span class="music-state">${media.playing ? '播放中' : '已暂停'}</span>
+      <span class="music-state">${live ? '直播' : media.playing ? '播放中' : '已暂停'}</span>
     </div>
     ${prefs.music?.lyrics === false ? '' : `<div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>`}
-    <div class="music-bar"><i data-progress style="width:${pct.toFixed(1)}%"></i></div>
-    <div class="music-times"><span data-pos>${clock(media.position)}</span><span data-dur>${clock(media.duration)}</span></div>
+    ${live
+      ? '<div class="music-bar live"><i></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span>直播</span></div>'
+      : '<div class="music-bar"><i data-progress style="width:' + pct.toFixed(1) + '%"></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-dur>' + clock(media.duration) + '</span></div>'}
     <div class="music-controls">
       <button type="button" data-media="prev" aria-label="上一首">${svg(ICON.prev)}</button>
       <button type="button" class="main" data-media="toggle" aria-label="${media.playing ? '暂停' : '播放'}">${svg(media.playing ? ICON.pause : ICON.play)}</button>
@@ -781,7 +798,7 @@ function renderPage(animate = false) {
   // One page means the paging arrows would be dead controls.
   document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
-  titleEl.textContent = page.title;
+  titleEl.textContent = page.key === 'music' && isBrowserMedia() ? '媒体' : page.title;
   subEl.textContent = page.sub;
   pagesEl.innerHTML = (RENDERERS[page.key] ?? ((p) => fallbackPage(p)))(page);
   dotsEl.innerHTML = list
@@ -1089,6 +1106,18 @@ api.onMessenger((value) => {
   if (!value || !Array.isArray(value.apps)) return;
   messengerState = value;
   if (open && enabledPages()[pageIndex]?.key === 'mail') renderPage();
+});
+
+/*
+ * Both faces follow the protocol state — the pill's and the header's. Without
+ * this the island always showed the idle face while the ball reacted.
+ */
+api.onState((message) => {
+  const state = message && message.state;
+  if (!state) return;
+  for (const face of document.querySelectorAll('emojitot-ball')) {
+    face.setAttribute('state', String(state));
+  }
 });
 
 api.onDevices((value) => {
