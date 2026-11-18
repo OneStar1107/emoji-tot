@@ -106,21 +106,33 @@ function stand() {
 }
 
 /**
- * Clear both counters and restart both timers from now.
+ * The way back out of a counter.
  *
- * The acknowledge buttons only ever add; this is the way back out — after a
- * test tap, or when the counts were wrong from the start.
+ * The two "clear" buttons sit next to their own card and must not touch the
+ * other one: clearing the water count is not a reason to tell someone they
+ * just stood up. reset() both-at-once stays for tests and for a future
+ * "reset everything" action.
  */
-function reset() {
-  const now = Date.now();
-  state.lastWater = now;
-  state.lastStand = now;
+function resetWater() {
+  state.lastWater = Date.now();
   state.waterAt = 0;
-  state.standAt = 0;
   state.waterCount = 0;
+  save();
+  emit();
+}
+
+function resetStand() {
+  state.lastStand = Date.now();
+  state.standAt = 0;
   state.standCount = 0;
   save();
   emit();
+}
+
+/** Both counters, deliberately — used by tests and by a full reset. */
+function reset() {
+  resetWater();
+  resetStand();
 }
 
 function startService() {
@@ -140,4 +152,4 @@ function onChange(fn) {
   return () => listeners.delete(fn);
 }
 
-module.exports = { startService, stopService, onChange, snapshot, drink, stand };
+module.exports = { startService, stopService, onChange, snapshot, drink, stand, reset, resetWater, resetStand };

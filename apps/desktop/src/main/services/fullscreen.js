@@ -6,7 +6,7 @@
  * the user closing the island on purpose, so a manual hide wins until the next
  * full-screen edge.
  */
-const { spawn } = require('node:child_process');
+const platform = require('../platform');
 const path = require('node:path');
 const { scriptFile } = require('../paths');
 
@@ -20,10 +20,14 @@ function start(handler) {
   stop();
   stopped = false;
   onEdge = handler;
-  proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT], {
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
+  proc = platform.spawnPowerShell(
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT],
+    { stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+  if (!proc) {
+    proc = null;
+    return;
+  }
   proc.stdout.setEncoding('utf8');
   let buffer = '';
   proc.stdout.on('data', (chunk) => {
@@ -44,6 +48,12 @@ function start(handler) {
     }
   });
   proc.on('exit', () => {
+    proc = null;
+    if (!stopped) setTimeout(() => start(handler), 3000);
+  });
+  // A watcher that cannot start used to crash the process: spawn emits
+  // 'error' whether or not anyone listens, and this one did not.
+  proc.on('error', () => {
     proc = null;
     if (!stopped) setTimeout(() => start(handler), 3000);
   });

@@ -19,6 +19,7 @@ export {
   emotionSegment,
   emotionIdForState,
   getEmotion,
+  isEmotionId,
   isOneshotEmotion,
   isStateId,
   normaliseId,

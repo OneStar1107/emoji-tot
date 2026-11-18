@@ -21,6 +21,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isOneshotEmotion = exports.getEmotion = exports.SEGMENT_FALLBACK = exports.IDLE_STATE = exports.IDLE_EMOTION_ID = exports.EMOTION_IDS = exports.EMOTIONS = exports.EMOTION_SEGMENTS = void 0;
 exports.normaliseId = normaliseId;
+exports.isEmotionId = isEmotionId;
 exports.emotionSegment = emotionSegment;
 exports.isStateId = isStateId;
 exports.stateForEmotion = stateForEmotion;
@@ -113,22 +114,49 @@ exports.SEGMENT_FALLBACK = {
     agent: '32',
     signalling: '50',
 };
+/**
+ * A protocol id: one or two ASCII digits, nothing else.
+ *
+ * This used to be "whatever parseInt makes of it", which quietly accepted
+ * `'3.5'` (→ 3, lifecycle), `'58abc'` (→ 58, signalling) and a 200-character
+ * string whose prefix happened to be numeric. An id that is not a
+ * two-digit number is not an id, and every caller now gets null for it
+ * instead of a plausible-looking wrong segment.
+ */
+function parseId(value) {
+    if (typeof value === 'number') {
+        if (!Number.isInteger(value) || value < 0 || value > 99)
+            return null;
+        return String(value).padStart(2, '0');
+    }
+    const text = String(value ?? '').trim();
+    if (!/^\d{1,2}$/.test(text))
+        return null;
+    return text.padStart(2, '0');
+}
 /** Accept `3`, `'3'`, `'03'`, `' 03 '` as the same id. */
 function normaliseId(id) {
-    const s = String(id).trim();
-    return s.length === 1 ? `0${s}` : s;
+    return parseId(id) ?? String(id ?? '').trim();
+}
+/** True only for a real two-digit protocol id. */
+function isEmotionId(value) {
+    return parseId(value) !== null;
 }
 function emotionSegment(id) {
-    const n = Number.parseInt(id, 10);
-    if (!Number.isFinite(n))
+    const key = parseId(id);
+    if (!key)
         return null;
+    const n = Number(key);
     for (const seg of exports.EMOTION_SEGMENTS) {
         if (n >= seg.range[0] && n <= seg.range[1])
             return seg.id;
     }
     return null;
 }
-const getEmotion = (id) => id == null ? null : (BY_ID.get(normaliseId(id)) ?? null);
+const getEmotion = (id) => {
+    const key = id == null ? null : parseId(id);
+    return key ? BY_ID.get(key) ?? null : null;
+};
 exports.getEmotion = getEmotion;
 const isOneshotEmotion = (id) => (0, exports.getEmotion)(id)?.oneshot === true;
 exports.isOneshotEmotion = isOneshotEmotion;
@@ -145,7 +173,10 @@ function isStateId(value) {
 function stateForEmotion(id) {
     if (id == null)
         return exports.IDLE_STATE;
-    const key = normaliseId(id);
+    const key = parseId(id);
+    // Not an id at all: no segment fallback, because there is no segment.
+    if (!key)
+        return exports.IDLE_STATE;
     const exact = BY_ID.get(key);
     if (exact)
         return exact.state;
@@ -168,7 +199,9 @@ function resolveEmotionId(value) {
         return null;
     if (isStateId(s))
         return emotionIdForState(s);
-    const key = normaliseId(s);
+    const key = parseId(s);
+    if (!key)
+        return null;
     if (BY_ID.has(key))
         return key;
     const seg = emotionSegment(key);

@@ -10,15 +10,13 @@
 import { CAST, COLOR_IDS, COLOR_ZH, COLORS, FACES, FAMILIES, castMember, renderCast, renderCharacter } from '@emojitot/core';
 import { EMOTIONS, EMOTION_SEGMENTS } from '@emojitot/protocol';
 import { look, selectCast, setLook, type BackgroundId } from './store';
+import { getLang, t } from './i18n';
+import { BACKGROUND_ZH } from './zh';
 
 const BACKGROUNDS: BackgroundId[] = ['plain', 'grid', 'dots', 'night', 'paper'];
-const BACKGROUND_ZH: Record<BackgroundId, string> = {
-  plain: '纯色',
-  grid: '网格',
-  dots: '圆点',
-  night: '夜色',
-  paper: '纸张',
-};
+
+/** The background's name: the dictionary in Chinese, the id in English. */
+const backgroundName = (id: BackgroundId): string => (getLang() === 'zh' ? BACKGROUND_ZH[id] ?? id : id);
 
 /** The current character feeling one expression. */
 function faceSwatch(state: string): string {
@@ -51,16 +49,16 @@ export function createDrawer(onChange: () => void): HTMLElement {
     const member = look.cast ? castMember(look.cast) : undefined;
     el.innerHTML = `
       <div class="gene-row cast-row">
-        <span class="gene-label">角色<small>${CAST.length}</small></span>
+        <span class="gene-label">${t('drawer.cast')}<small>${CAST.length}</small></span>
         <div class="cast-picker">
-          <input class="cast-search" type="search" placeholder="搜索名字" value="${query}">
+          <input class="cast-search" type="search" placeholder="${t('drawer.search')}" value="${query}">
           <div class="cast-scroll">${castGrid(query)}</div>
-          <p class="gene-desc">${member ? `${member.name.zh} · ${member.desc}` : '一个没有被命名的组合。'}</p>
+          <p class="gene-desc">${member ? `${member.name.zh} · ${member.desc}` : t('drawer.unnamed')}</p>
         </div>
       </div>
 
       <div class="gene-row">
-        <span class="gene-label">颜色<small>${COLOR_IDS.length}</small></span>
+        <span class="gene-label">${t('drawer.color')}<small>${COLOR_IDS.length}</small></span>
         <div class="chips colors">
           ${COLOR_IDS.map(
             (id) =>
@@ -70,7 +68,7 @@ export function createDrawer(onChange: () => void): HTMLElement {
       </div>
 
       <div class="gene-row">
-        <span class="gene-label">表情<small>${Object.keys(FACES).length}</small></span>
+        <span class="gene-label">${t('drawer.face')}<small>${Object.keys(FACES).length}</small></span>
         <div class="emotion-groups">
           <div class="chips" id="quick-faces">
             ${['idle', 'happy', 'excited', 'laughing', 'shy', 'sad', 'surprised', 'thinking']
@@ -99,11 +97,11 @@ export function createDrawer(onChange: () => void): HTMLElement {
       </div>
 
       <div class="gene-row">
-        <span class="gene-label">背景<small>5</small></span>
+        <span class="gene-label">${t('drawer.background')}<small>5</small></span>
         <div class="chips" id="backgrounds">
           ${BACKGROUNDS.map(
             (id) =>
-              `<button type="button" class="bg-chip" data-bg="${id}" aria-pressed="${look.background === id}">${BACKGROUND_ZH[id]}</button>`,
+              `<button type="button" class="bg-chip" data-bg="${id}" aria-pressed="${look.background === id}">${backgroundName(id)}</button>`,
           ).join('')}
         </div>
       </div>

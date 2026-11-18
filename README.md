@@ -2,16 +2,16 @@
 
 # EmojiTot
 
-**面向桌面与 Web 的角色引擎 —— 15 个手绘轮廓的角色、44 个带分组与中文名的表情、模切白边画风；网页里看得见，桌面上养得起 —— 现在既是桌面上的球，也是屏幕顶部的一条岛。**
+**面向桌面与 Web 的角色引擎 —— <!--facts:bodies-->15<!--/facts--> 个手绘轮廓的角色、<!--facts:faceStates-->44<!--/facts--> 个带分组与中文名的表情、模切白边画风；网页里看得见，桌面上养得起 —— 现在既是桌面上的球，也是屏幕顶部的一条岛。**
 
 [控制台](https://onestar1107.github.io/emoji-tot/#/console) · [表情馆](https://onestar1107.github.io/emoji-tot/#/gallery) · [场景](https://onestar1107.github.io/emoji-tot/#/scene) · [文档](https://onestar1107.github.io/emoji-tot/#/docs) · [English](README.en.md)
 
 ![全家福](docs/screenshots/hero.png)
 
 > **关于 / About**
-> 一个用 SVG 画出来的角色引擎：15 个角色各有自己手写的闭合轮廓，44 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
+> 一个用 SVG 画出来的角色引擎：<!--facts:cast-->15<!--/facts--> 个角色各有自己手写的闭合轮廓，<!--facts:faceStates-->44<!--/facts--> 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
 >
-> A character engine drawn in SVG: 15 characters, each with its own hand-written closed outline; 44 expressions grouped into lifecycle, emotions and agent states, in a die-cut sticker finish by default. The desktop pet, the console and the site share one engine, with zero image assets.
+> A character engine drawn in SVG: <!--facts:cast-->15<!--/facts--> characters, each with its own hand-written closed outline; <!--facts:faceStates-->44<!--/facts--> expressions grouped into lifecycle, emotions and agent states, in a die-cut sticker finish by default. The desktop pet, the console and the site share one engine, with zero image assets.
 
 </div>
 
@@ -19,14 +19,18 @@
 
 ## 下载
 
+<!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot Setup 0.3.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.2/EmojiTot.Setup.0.3.2.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot Portable 0.3.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.2/EmojiTot.0.3.2.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot Setup 0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.Setup.0.3.32.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot Portable 0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.0.3.32.exe) | 便携版，双击即用，不写注册表 |
+<!--downloads:end-->
 
 Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases)
 
-> **0.3.2**：双形态（灵动岛 + 桌面球）、十一个功能页、设置中心 14 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
+> 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护。如果它指向的版本还没打标签，链接会 404 —— 那种情况下从上面「全部版本」里取当前已发布的那一版。
+
+> **<!--facts:version-->0.3.32<!--/facts-->**：双形态（灵动岛 + 桌面球）、十一个功能页、设置中心 <!--facts:settingsPages-->14<!--/facts--> 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
 
 ## 这是什么
 
@@ -34,11 +38,10 @@ Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行�
 
 | 维度 | 数量 | 说明 |
 | --- | --- | --- |
-| 身体 | 15 | 圆、蛋、方圆、水滴、星、宝石、花瓣、云、心、幽灵、机器人…都由 `r(t)` 或参数曲线采样生成 |
-| 身体 | 15 | 每个形态按它本来的样子手写：梨有腰和梗叶、面包有拱顶平底、星星有五个真角、樱花是五片心形瓣 |
-| 表情 | 44 | 9 种眼型 × 10 种嘴型 + 偏移；带分组元数据（中文名、英文 id、一句话行为描述） |
+| 身体 | <!--facts:bodies-->15<!--/facts--> | 每个形态按它本来的样子手写：梨有腰和梗叶、面包有拱顶平底、星星有五个真角、樱花是五片心形瓣 |
+| 表情 | <!--facts:faceStates-->44<!--/facts--> | <!--facts:eyeStyles-->9<!--/facts--> 种眼型 × <!--facts:mouthStyles-->10<!--/facts--> 种嘴型 + 偏移；带分组元数据（中文名、英文 id、一句话行为描述） |
 | 画风 | 2 | 模切白边（默认，深色身体自动换深边）与纯平涂，同一份轮廓切换 |
-| 角色 | 15 | 每种身体一个代表，各有招牌表情与招牌动作 |
+| 角色 | <!--facts:cast-->15<!--/facts--> | 每种身体一个代表，各有招牌表情与招牌动作 |
 | 后代 | 无限 | `breed(a, b, seed)` 交叉两个角色的基因，不落库 |
 
 它由三件东西组成，全部在这个仓库里从零写成：
@@ -72,9 +75,9 @@ feed('thinking');              // 也可以直接给状态名
 
 | 页面 | 内容 |
 | --- | --- |
-| **控制台** | 15 个角色任选，15 身体 · 12 色 · 44 表情逐项可调；组件片段与 JSON 基因组随选择实时生成 |
-| **表情馆** | 两个墙：15 个角色的阵容墙（按族筛选），和 44 个表情的表情墙；点角色跳去控制台，点表情带着状态过去 |
-| **场景** | 十四个角色同台，各自按自己的节奏换表情；点它会回应你，还有"全体开心 / 全体入睡 / 换一批" |
+| **控制台** | <!--facts:cast-->15<!--/facts--> 个角色任选，<!--facts:bodies-->15<!--/facts--> 身体 · <!--facts:colors-->12<!--/facts--> 色 · <!--facts:faceStates-->44<!--/facts--> 表情逐项可调；组件片段与 JSON 基因组随选择实时生成 |
+| **表情馆** | 两个墙：<!--facts:cast-->15<!--/facts--> 个角色的阵容墙（按族筛选），和 <!--facts:faceStates-->44<!--/facts--> 个表情的表情墙；点角色跳去控制台，点表情带着状态过去 |
+| **场景** | <!--facts:sceneHerd-->12<!--/facts--> 个角色同台，各自按自己的节奏换表情；点它会回应你，还有"全体开心 / 全体入睡 / 换一批" |
 | **文档** | 引擎怎么画、基因组怎么组、协议每一位什么意思、怎么调用，全部由代码生成，不会过时 |
 
 ![场景](docs/screenshots/scene.png)
@@ -94,13 +97,13 @@ feed('thinking');              // 也可以直接给状态名
 
 ![表情馆](docs/screenshots/faces.png)
 
-同一个球可以贴在任何桌面上（Windows / macOS）：
+同一个球可以贴在任何桌面上（Windows 10/11）：
 
 - **贴边收起**：拖到屏幕左右边缘松手，球缩进去只留 30%，悬停滑出来。松手时光标就在边缘，所以必须移开过一次才会响应悬停——否则刚放下就被自己弹开。
 - **点击穿透**：窗口默认不拦点击，底下的桌面图标照样能点；指针落到球上才收回输入。
 - **15 个角色**：托盘菜单按族分组挑角色，选中即换外观、招牌表情和招牌动作；默认是黑底白字的 `tot`。
 - **Agent 联动**：菜单可开 DeepSeek Harness / Claude Code / Codex，读各自的状态文件并映射成表情。
-- **一个文件就是接口**：`%APPDATA%/EmojiTot/state.json`（macOS 在 `~/Library/Application Support/EmojiTot/`）。裸 id、JSON 串、JSON 对象都收，坏数据保留当前表情。
+- **一个文件就是接口**：`%APPDATA%/EmojiTot/state.json`。裸 id、JSON 串、JSON 对象都收，坏数据保留当前表情。
 
 ```bash
 echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiTot/state.json"
@@ -125,7 +128,7 @@ echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiTot/state.js
 | AI 额度 | DeepSeek 余额：总额、充值、赠送、更新时间；多账号切换 |
 | 邮箱 | IMAP 拉最近 10 封：发件人、主题、时间，识别出验证码会在岛上高亮；邮件里的 .ics 自动进日程 |
 | 日程 | 月历 + 当天事件；邮件邀请与手动添加共用一份数据 |
-| 电量 | 状态组件常驻胶囊，无电池设备自动隐藏 |
+| 设备 | 蓝牙外设的电量与连接状态；无电池的设备显示「—」，低于 20% 标红 |
 
 空态的页面给一句话加一个动作按钮，点了直接跳进设置对应页 —— 空盒子会让人以为功能坏了，空态不会。
 - **贴着内容长**：页面自己用 `ResizeObserver` 量尺寸，主进程据此 `setBounds` 并保持水平居中。窗口与内容永远同尺寸，不存在「岛比窗口大」或「窗口比岛大」两种经典错位。
@@ -135,7 +138,7 @@ echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiTot/state.js
 
 ## 设置中心
 
-独立窗口，左侧导航、右侧分组卡片，14 页：常规、外观、尺寸与位置、隐藏与交互、角色与表情、页面管理、音乐与歌词、专注与饮水、待办与置物、通知·邮箱与日程、AI 额度、天气、插件、关于。
+独立窗口，左侧导航、右侧分组卡片，<!--facts:settingsPages-->14<!--/facts--> 页：常规、外观、尺寸与位置、隐藏与交互、角色与表情、页面管理、音乐与歌词、专注与饮水、待办与置物、通知·邮箱与日程、AI 额度、天气、插件、关于。
 
 - **没有保存按钮**：每个开关、下拉、滑块的改动立刻写进 `prefs.json`，其它窗口随即跟上。
 - **页面管理**：状态组件与功能页两块拖拽列表，拖动即排序，开关即启停。
@@ -150,7 +153,7 @@ echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiTot/state.js
 新补的能力，逐项说清边界：
 
 - **消息未读**：微信、企业微信、飞书、钉钉的未读数从窗口标题读，岛上邮箱页顶部一行一个应用，点「切过去」把窗口提到前台。**不读聊天内容**；QQ NT 不在标题里写条数，所以只报运行中。
-- **剪贴板历史**：置物架页下方保留最近 60 条文字，可固定、可点一下重新复制、可清空。存在本机 `clipboard.json`。Windows 的「禁止监视」标记 Electron 读不到，所以只做了长度与空值过滤，没有敏感内容识别。
+- **剪贴板历史**：**默认关闭**。开启后置物架页下方保留最近 60 条文字，可固定、可点一下重新复制、可清空；关掉开关会立即清掉未固定的记录，固定项要在设置里手动「清除全部记录」。存在本机 `clipboard.json`。Windows 的「禁止监视」标记 Electron 读不到，所以只做了长度与空值过滤，没有敏感内容识别。
 - **AI 余额**：DeepSeek、Kimi（Moonshot）、SiliconFlow、OpenRouter 四家，各自接口在子进程里归一出同一形状，岛和低余额提醒不用关心差异。
 - **重复待办**：每天 / 每周。完成时不销毁，而是算出下一次并保留完成标记，到点自动复活；没填到期时间的重复任务会得到「一个周期后」作为首次基准。
 - **OLED 防烧屏**：开启后岛每 90 秒横移 1px，在 ±3px 间来回；关掉立即回正中。默认关。
@@ -163,15 +166,20 @@ echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiTot/state.js
 pnpm approve-builds --all   # pnpm 12 默认不跑依赖的安装脚本，Electron 需要
 pnpm install
 pnpm build                  # 构建 core 与 protocol
+pnpm typecheck              # 两个库的类型检查
+pnpm test                   # 协议与引擎测试
+pnpm preview                # 把 51 个协议 id 渲染成 out/preview.html（会先 build）
 pnpm dev                    # 站点 http://localhost:5173
 pnpm desktop                # 桌面端（默认灵动岛）
-pnpm test                   # 协议与引擎测试
+pnpm scan                   # 发布前敏感信息扫描
 ```
+
+上面每一条都从仓库根目录执行，不需要先 `cd` 进任何子目录。
 
 出安装包：
 
 ```bash
-pnpm --filter @emojitot/desktop dist   # release/ 下出 Windows 安装包
+pnpm dist                   # release/ 下出 Windows 安装包
 ```
 
 ## 发布前
@@ -186,11 +194,15 @@ pnpm scan
 - **WARN 里的大图要逐张打开看**：文本扫描看不到截图里的桌面、其它窗口、工作区名和路径。0.3.1 就是一张整屏截图把会话内容和本机路径带出去的，之后那条路径已从历史里重写掉。
 - WARN 里如果出现真实邮箱的提交作者，也要处理：提交作者是公开信息的一部分。
 
+## 隐私与安全
+
+存什么、存多久、怎么删：[docs/PRIVACY.md](docs/PRIVACY.md)。加固范围与依赖审计前后对比：[docs/SECURITY.md](docs/SECURITY.md)。
+
 ## 项目结构
 
 ```
-packages/protocol    零运行时依赖：51 个 id、解析、多会话仲裁、事件桥（ESM + CJS）
-packages/core        角色引擎：15 条轮廓、44 个表情、渲染成 SVG
+packages/protocol    零运行时依赖：<!--facts:protocolIds-->51<!--/facts--> 个 id、解析、多会话仲裁、事件桥（ESM + CJS）
+packages/core        角色引擎：<!--facts:bodies-->15<!--/facts--> 条轮廓、<!--facts:faceStates-->44<!--/facts--> 个表情、渲染成 SVG
 apps/gallery         站点：控制台 / 表情馆 / 场景 / 文档
 apps/desktop         Electron 桌面端
   src/main.js         球窗口、托盘（三项）、Agent 联动、启动装配
@@ -210,7 +222,7 @@ docs/                架构、协议、岛规格、设置规格、调研结论
 | 检查 | 证据 |
 | --- | --- |
 | 协议表 | 23 个测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
-| 51 个状态渲染 | `node apps/gallery/scripts/preview.mjs` — 51/51，0 failures（Node 里跑，无浏览器） |
+| <!--facts:protocolIds-->51<!--/facts--> 个协议 id 渲染 | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> 个 id → <!--facts:faceStates-->44<!--/facts--> 个脸部状态，51/51 与 44/44 全通过，0 failures（Node 里跑，无浏览器） |
 | 桌面端窗口行为 | `node apps/desktop/scripts/ui-check.mjs <端口>` — 用原生光标驱动真实拖拽，7/7（贴边、展开、收起、穿透） |
 | 桌面端协议驱动 | 写 `34` → `alerting`，写 `33` → `celebrate`，写坏 JSON → 保持当前表情 |
 | 灵动岛窗口 | 截图 + CDP 实测：收起 84×34、展开 420×272；窗口在 1707 宽的工作区里 x=628（居中）、y=0（贴顶） |
@@ -246,6 +258,7 @@ docs/                架构、协议、岛规格、设置规格、调研结论
 - **0.3.0 修掉的 bug** —— `debug:state` 重复注册导致 `electron . --dev` 崩溃；分页点击因 target 脱离 DOM 误收起；日程推送裸数组与页面读取结构不一致；设置里开页面后面板不重绘；场景页文案声称有仲裁器而实际没有。
 - **0.3.1** —— 修掉岛两侧的物理裁切（留白 16→28、去掉透明窗口里无效的 backdrop-filter）；面板左右加常显的换页箭头；展开动画与窗口过渡同曲线；设置里的每个开关都接上了实际行为（皮肤、圆角、字体、宽度、12/24 小时、默认页、悬停、滚轮、失焦、歌词、天气单位与间隔、额度间隔与低余额提醒、待办/置物开关、通知总开关、日程提前量、托盘、快捷键、全屏隐藏）；岛屿与设置窗口都支持浅色主题；全屏检测改用系统的通知状态信号；安装包 0.3.1。
 - **0.3.2** —— 托盘收回三项（设置/置顶/退出），其余搬进设置并直接作用于运行中的应用；新增角色与表情页、显示卡片（岛/球显隐、贴边收起）；剪贴板历史、消息未读（微信/企业微信/飞书/钉钉）、四家 AI 余额、待办每天/每周重复、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。
+- **0.3.3 – 0.3.32** —— 逐次递增的连续迭代（每改一次版本号 +1，中间没有逐版打标签）。这一段集中在灵动岛与设置：页名和电量拆成两行、播放行移到首行、指针按下即翻页、阴影不再被窗口裁掉、健康页改用药丸按钮、电量读数前置到设备名之前。
 - **0.2.1** —— 首个发布版：角色引擎、两位数协议、站点四页、桌宠。
 
 ## 许可

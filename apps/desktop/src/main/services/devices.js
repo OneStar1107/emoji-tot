@@ -6,7 +6,7 @@
  * five minutes and the module keeps the last answer in between. A device with
  * no battery property is still listed — "connected" is useful on its own.
  */
-const { spawn } = require('node:child_process');
+const platform = require('../platform');
 const path = require('node:path');
 const { scriptFile } = require('../paths');
 
@@ -73,11 +73,15 @@ function start() {
 function spawnChild() {
   if (stopped) return;
   try {
-    child = spawn(
-      'powershell',
+    child = platform.spawnPowerShell(
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath()],
-      { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] },
+      { stdio: ['ignore', 'pipe', 'ignore'] },
     );
+    if (!child) {
+      // Unsupported platform: leave the feature off instead of retrying.
+      stopped = true;
+      return;
+    }
   } catch {
     child = null;
     setTimeout(spawnChild, RESPAWN_MS);

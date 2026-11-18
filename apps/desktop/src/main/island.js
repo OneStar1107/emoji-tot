@@ -14,6 +14,8 @@
 const { BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('node:path');
 const { readPrefs } = require('./paths');
+const guard = require('./ipc-guard');
+const { safeSend } = guard;
 
 /**
  * Transparent margin around the island.
@@ -124,7 +126,7 @@ function setClickThrough(on) {
   if (!win || win.isDestroyed() || clickThrough === on) return;
   clickThrough = on;
   win.setIgnoreMouseEvents(on, on ? { forward: true } : undefined);
-  win.webContents.send('island:hover', !on);
+  safeSend(win, 'island:hover', !on);
 }
 
 /**
@@ -181,7 +183,7 @@ function startCursorWatch() {
     setClickThrough(!inside);
     if (inside !== wasInside) {
       wasInside = inside;
-      win.webContents.send('island:hover', inside);
+      safeSend(win, 'island:hover', inside);
     }
     const next = inside || gap <= WATCH_NEAR_PX ? WATCH_FAST_MS : gap <= WATCH_FAR_PX ? WATCH_MID_MS : WATCH_FAR_MS;
     cursorTimer = setTimeout(tick, next);
@@ -196,6 +198,7 @@ function create() {
   const width = box.w + PAD_X * 2;
   const height = box.h + PAD_Y * 2;
 
+  // Registered before the page loads, so its first message is attributed.
   win = new BrowserWindow({
     width,
     height,
@@ -218,7 +221,7 @@ function create() {
       preload: path.join(__dirname, '..', 'preload-island.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -229,6 +232,7 @@ function create() {
   win.setIgnoreMouseEvents(true, { forward: true });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'island.html'));
 
+  guard.claim('island', win.webContents);
   win.once('ready-to-show', () => {
     ready = true;
     win.showInactive();
@@ -302,7 +306,7 @@ function send(channel, payload) {
   // every push returned before sending and the pill only ever showed a clock.
   if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
   try {
-    win.webContents.send(channel, payload);
+    safeSend(win, channel, payload);
   } catch {
     // Between load and ready; dropping one frame beats throwing in a timer.
   }
@@ -313,17 +317,26 @@ function loadFile(file) {
 }
 
 function registerIpc() {
-  ipcMain.on('island:box', (_event, payload) => setBox(payload));
-  ipcMain.handle('island:visible', () => isVisible());
-  ipcMain.handle('island:show', () => {
+  guard.guardedSend('island:box', ['island'], (box) => setBox(box), {
+    maxBytes: 512,
+    check: (box) => {
+      // The page reports its own content size; the window follows it. A NaN or
+      // a negative size would leave the window at zero and the panel invisible.
+      if (!guard.isPlainObject(box)) return undefined;
+      if (!guard.isNumber(box.w, 1, 10000) || !guard.isNumber(box.h, 1, 10000)) return undefined;
+      return { w: Math.round(box.w), h: Math.round(box.h) };
+    },
+  });
+  guard.guardedHandle('island:visible', ['island'], () => isVisible());
+  guard.guardedHandle('island:show', ['island'], () => {
     show();
     return true;
   });
-  ipcMain.handle('island:hide', () => {
+  guard.guardedHandle('island:hide', ['island'], () => {
     hide();
     return true;
   });
-  ipcMain.handle('island:ready', () => ready);
+  guard.guardedHandle('island:ready', ['island'], () => ready);
 }
 
 function onLoaded(fn) {
@@ -331,7 +344,20 @@ function onLoaded(fn) {
   return () => loadedHooks.delete(fn);
 }
 
+/**
+ * Re-run placement against the current prefs.
+ *
+ * Called when the chosen display disappears or the preference changes; the
+ * next setBox/place cycle would do it anyway, but only after the page
+ * measures itself again, which may not happen while the panel is closed.
+ */
+function refreshPosition() {
+  if (!win || win.isDestroyed()) return;
+  place();
+}
+
 module.exports = {
+  refreshPosition,
   create,
   show,
   hide,

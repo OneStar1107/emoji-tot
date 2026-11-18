@@ -4,3 +4,15 @@ packages:
 allowBuilds:
   electron: true
   esbuild: true
+  # electron-builder 26 pulls this in for the Windows installer; its install
+  # script only downloads the Squirrel toolchain.
+  electron-winstaller: true
+minimumReleaseAgeExclude:
+  - '@vitest/mocker@5.1.1'
+  - '@vitest/spy@5.1.1'
+  - vitest@5.1.1
+
+# electron-builder pulls minimatch <11 through app-builder-lib; the advisory is
+# in the version range every 9.x/10.x release sits in.
+overrides:
+  minimatch: ^11.0.1

@@ -9,6 +9,7 @@
 const { BrowserWindow, ipcMain, screen, shell, app } = require('electron');
 const path = require('node:path');
 const { readPrefs, writePrefs, userDir, statePath } = require('./paths');
+const guard = require('./ipc-guard');
 
 let win = null;
 const listeners = new Set();
@@ -50,10 +51,13 @@ function create(page) {
       preload: path.join(__dirname, '..', 'preload-settings.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
   win.setMenuBarVisibility(false);
+  // Register before the page can call anything, so the first message is
+  // already attributed to this window.
+  guard.claim('settings', win.webContents);
   win.loadFile(path.join(__dirname, '..', 'renderer', 'settings.html'));
   win.once('ready-to-show', () => {
     win.show();
@@ -69,31 +73,72 @@ function broadcastPrefs(next) {
   for (const fn of listeners) fn(next);
 }
 
+/* ----------------------------------------------------------------- guard */
+
+/** Action kinds the settings page may ask for, and nothing else. */
+const ACTION_KINDS = ['meta', 'island', 'ball', 'dock', 'demo', 'cast', 'agent', 'settings'];
+const SIDES = ['top', 'left', 'right', 'none'];
+const PATCH_LIMIT = 32 * 1024;
+
+/** A preference patch: a plain object of known keys, bounded in size. */
+const checkPatch = (patch) => (guard.isPlainObject(patch) ? patch : undefined);
+
+/**
+ * One action message.
+ *
+ * `kind` is a closed set — without it a page could reach any branch that
+ * happened to be added later. `value` is bounded because the cast grid sends
+ * ids and the settings page sends booleans; neither needs more than a few
+ * hundred bytes.
+ */
+const checkAction = (message) => {
+  if (!guard.isPlainObject(message)) return undefined;
+  if (!guard.oneOf(message.kind, ACTION_KINDS)) return undefined;
+  if (message.value !== undefined && guard.byteSize(message.value) > 8 * 1024) return undefined;
+  if (message.kind === 'dock' && message.value !== undefined && !guard.oneOf(message.value, SIDES)) return undefined;
+  if (message.kind === 'settings' && message.value !== undefined && !guard.isString(message.value, 32)) return undefined;
+  if (message.kind === 'agent' && message.value !== undefined) {
+    if (!guard.isPlainObject(message.value)) return undefined;
+    if (!guard.isId(message.value.id)) return undefined;
+  }
+  return message;
+};
+
+const checkPage = (page) => {
+  if (page === undefined || page === null) return null;
+  return typeof page === 'string' && /^[a-z-]{1,32}$/.test(page) ? page : undefined;
+};
+
 function registerIpc() {
-  ipcMain.handle('settings:get', () => readPrefs());
-  ipcMain.handle('settings:patch', (_event, patch) => {
-    if (!patch || typeof patch !== 'object') return readPrefs();
-    const next = writePrefs(patch);
-    // Applying the OS login item is the one patch with a side effect outside
-    // prefs.json; doing it here keeps every entry point (tray, settings, future
-    // onboarding) consistent.
-    if ('launchAtLogin' in patch) {
-      try {
-        app.setLoginItemSettings({ openAtLogin: Boolean(patch.launchAtLogin) });
-      } catch {
-        // Unsupported on some Linux desktops; prefs still records the intent.
+  guard.guardedHandle('settings:get', ['settings'], () => readPrefs());
+
+  guard.guardedHandle(
+    'settings:patch',
+    ['settings'],
+    (patch) => {
+      const next = writePrefs(patch);
+      // Applying the OS login item is the one patch with a side effect outside
+      // prefs.json; doing it here keeps every entry point (tray, settings,
+      // future onboarding) consistent.
+      if ('launchAtLogin' in patch) {
+        try {
+          app.setLoginItemSettings({ openAtLogin: Boolean(patch.launchAtLogin) });
+        } catch {
+          // Unsupported on some Linux desktops; prefs still records the intent.
+        }
       }
-    }
-    // The window that made the change also gets the merged object, so a
-    // control can be changed by the tray or by another window and still repaint.
-    if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next);
-    broadcastPrefs(next);
-    return next;
-  });
+      // The window that made the change also gets the merged object, so a
+      // control can be changed by the tray or by another window and still repaint.
+      if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next);
+      broadcastPrefs(next);
+      return next;
+    },
+    { check: checkPatch, maxBytes: PATCH_LIMIT },
+  );
 
-  ipcMain.handle('settings:version', () => app.getVersion());
+  guard.guardedHandle('settings:version', ['settings'], () => app.getVersion());
 
-  ipcMain.handle('settings:displays', () => {
+  guard.guardedHandle('settings:displays', ['settings'], () => {
     const primaryId = screen.getPrimaryDisplay().id;
     return screen.getAllDisplays().map((display) => ({
       id: display.id,
@@ -104,7 +149,7 @@ function registerIpc() {
     }));
   });
 
-  ipcMain.handle('settings:refresh-weather', async () => {
+  guard.guardedHandle('settings:refresh-weather', ['settings'], async () => {
     try {
       await refreshWeatherHook?.();
       return { ok: true };
@@ -113,38 +158,50 @@ function registerIpc() {
     }
   });
 
-  ipcMain.handle('settings:action', async (_event, message) => {
-    if (!message || typeof message !== 'object') return null;
-    try {
-      return (await actionHook?.(message)) ?? null;
-    } catch (error) {
-      return { ok: false, error: String(error?.message ?? error) };
-    }
-  });
-  ipcMain.handle('settings:meta', async () => {
+  guard.guardedHandle(
+    'settings:action',
+    ['settings'],
+    async (message) => {
+      try {
+        return (await actionHook?.(message)) ?? null;
+      } catch (error) {
+        return { ok: false, error: String(error?.message ?? error) };
+      }
+    },
+    { check: checkAction, maxBytes: 16 * 1024 },
+  );
+
+  guard.guardedHandle('settings:meta', ['settings'], async () => {
     try {
       return (await actionHook?.({ kind: 'meta' })) ?? null;
     } catch {
       return null;
     }
   });
-  ipcMain.handle('settings:open-state', () => shell.openPath(statePath()));
-  ipcMain.handle('settings:open-data', () => shell.openPath(userDir()));
-  ipcMain.handle('settings:open-repo', () => shell.openExternal('https://github.com/OneStar1107/emoji-tot'));
-  ipcMain.handle('app:quit', () => app.quit());
-  ipcMain.handle('settings:open', (_event, page) => {
+
+  guard.guardedHandle('settings:open-state', ['settings'], () => shell.openPath(statePath()));
+  guard.guardedHandle('settings:open-data', ['settings'], () => shell.openPath(userDir()));
+  guard.guardedHandle('settings:open-repo', ['settings'], () =>
+    shell.openExternal('https://github.com/OneStar1107/emoji-tot'));
+
+  guard.guardedHandle('app:quit', ['settings', 'island'], () => app.quit());
+
+  guard.guardedHandle('settings:open', ['settings', 'island'], (page) => {
     create(page);
     return true;
-  });
-  ipcMain.handle('settings:close', () => {
+  }, { check: checkPage, maxBytes: 512 });
+
+  guard.guardedHandle('settings:close', ['settings'], () => {
     if (win && !win.isDestroyed()) win.close();
     return true;
   });
-  ipcMain.handle('settings:minimize', () => {
+
+  guard.guardedHandle('settings:minimize', ['settings'], () => {
     if (win && !win.isDestroyed()) win.minimize();
     return true;
   });
-  ipcMain.handle('settings:maximize', () => {
+
+  guard.guardedHandle('settings:maximize', ['settings'], () => {
     if (win && !win.isDestroyed()) {
       if (win.isMaximized()) win.unmaximize();
       else win.maximize();

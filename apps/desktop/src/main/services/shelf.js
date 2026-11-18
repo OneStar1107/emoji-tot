@@ -7,11 +7,26 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { shell } = require('electron');
-const { userDir } = require('../paths');
+const { userDir, readPrefs } = require('../paths');
 
 const listeners = new Set();
 
-const dir = () => path.join(userDir(), 'shelf');
+/**
+ * Where the shelf keeps its files.
+ *
+ * `shelf.dir` was a setting with no reader: the folder was hard-coded, so
+ * whatever the user typed changed nothing. A relative path is resolved inside
+ * the app's data directory rather than the process cwd — the cwd of a packaged
+ * app is wherever the launcher happened to be.
+ */
+const dir = () => {
+  const custom = readPrefs().shelf?.dir;
+  if (typeof custom === 'string' && custom.trim()) {
+    const value = custom.trim();
+    return path.isAbsolute(value) ? value : path.join(userDir(), value);
+  }
+  return path.join(userDir(), 'shelf');
+};
 
 function ensure() {
   try {

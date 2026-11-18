@@ -6,7 +6,7 @@
  * with no battery answers null, and the island hides the component instead of
  * showing a permanent 100%.
  */
-const { execFile } = require('node:child_process');
+const platform = require('../platform');
 
 /*
  * ConvertTo-Json, not a hand-built string.
@@ -20,10 +20,10 @@ const { execFile } = require('node:child_process');
 const WINDOWS = "Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1 | Select-Object EstimatedChargeRemaining, BatteryStatus | ConvertTo-Json -Compress";
 
 function readWindows(done) {
-  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS], { windowsHide: true, timeout: 6000 }, (error, stdout) => {
-    if (error || !stdout || !stdout.trim()) return done(null);
+  platform.runPowerShell(['-NoProfile', '-NonInteractive', '-Command', WINDOWS], { timeout: 6000 }).then((result) => {
+    if (!result.ok || !result.stdout.trim()) return done(null);
     try {
-      const value = JSON.parse(stdout.trim());
+      const value = JSON.parse(result.stdout.trim());
       const level = Number(value.EstimatedChargeRemaining);
       if (!Number.isFinite(level)) return done(null);
       done({ level: Math.max(0, Math.min(100, Math.round(level))), charging: Number(value.BatteryStatus) === 2 });
@@ -33,21 +33,15 @@ function readWindows(done) {
   });
 }
 
-function readMac(done) {
-  execFile('pmset', ['-g', 'batt'], { timeout: 4000 }, (error, stdout) => {
-    if (error || !stdout) return done(null);
-    if (/no batteries|AC Power/i.test(stdout) && !/%/.test(stdout)) return done(null);
-    const level = /(\d+)%/.exec(stdout);
-    if (!level) return done(null);
-    done({ level: Number(level[1]), charging: /AC Power|charging/i.test(stdout) });
-  });
-}
-
 /** Call back with { level, charging } or null; never throws. */
 function read(done) {
-  if (process.platform === 'win32') return readWindows(done);
-  if (process.platform === 'darwin') return readMac(done);
-  done(null);
+  // Windows-only: the app's runtime features are all PowerShell-backed. On
+  // anything else the battery simply has no value, which the island hides.
+  if (!platform.supports('battery')) {
+    done(null);
+    return;
+  }
+  readWindows(done);
 }
 
 module.exports = { read };

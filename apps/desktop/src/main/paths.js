@@ -46,17 +46,49 @@ function writeJson(file, value) {
   }
 }
 
-/** Preferences are a single flat object; every window reads the same file. */
-function readPrefs() {
+/**
+ * The settings schema, injected once at boot.
+ *
+ * It lives in src/shared/schema.js, an ES module, so the main process loads it
+ * with a dynamic import after app.whenReady(); until then readPrefs() falls
+ * back to the raw file, which is what every caller saw before the schema
+ * existed. Keeping the fallback means a broken import degrades to the old
+ * behaviour instead of emptying every setting.
+ */
+let settingsSchema = null;
+
+function configureSettingsSchema(value) {
+  settingsSchema = value ?? null;
+}
+
+/** The file exactly as stored, defaults not applied. */
+function readStoredPrefs() {
   const raw = readJson(prefsPath(), {});
   return raw && typeof raw === 'object' ? raw : {};
 }
 
-/** Merge a patch into prefs and return the whole object. */
-function writePrefs(patch) {
-  const next = { ...readPrefs(), ...patch };
-  writeJson(prefsPath(), next);
-  return next;
+/** Preferences with every default filled in — never a bare {}. */
+function readPrefs() {
+  const stored = readStoredPrefs();
+  return settingsSchema ? settingsSchema.withDefaults(stored) : stored;
 }
 
-module.exports = { userDir, prefsPath, statePath, cachePath, scriptFile, readJson, writeJson, readPrefs, writePrefs };
+/**
+ * Merge a patch into prefs and return the whole object.
+ *
+ * Unknown keys are dropped rather than written: a control whose key drifted
+ * from the schema used to leave a dead entry in prefs.json that nothing read
+ * and nothing could reset.
+ */
+function writePrefs(patch) {
+  const base = readStoredPrefs();
+  const accepted =
+    settingsSchema && patch && typeof patch === 'object'
+      ? settingsSchema.filterPatch(patch).accepted
+      : patch ?? {};
+  const next = { ...base, ...accepted };
+  writeJson(prefsPath(), next);
+  return settingsSchema ? settingsSchema.withDefaults(next) : next;
+}
+
+module.exports = { userDir, prefsPath, statePath, cachePath, scriptFile, readJson, writeJson, readPrefs, readStoredPrefs, writePrefs, configureSettingsSchema };

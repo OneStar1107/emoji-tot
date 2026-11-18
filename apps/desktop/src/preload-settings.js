@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   mail: () => ipcRenderer.invoke('mail:get'),
   mailDo: (action, data) => ipcRenderer.invoke('mail:do', { action, data }),
   calendar: () => ipcRenderer.invoke('calendar:get'),
+  /** "Forget the clipboard history" — the one action that deletes user data. */
+  clipboardClear: () => ipcRenderer.invoke('local:do', { service: 'clipboard', action: 'clear' }),
   calendarDo: (action, data) => ipcRenderer.invoke('calendar:do', { action, data }),
   onGoto: (listener) => on('settings:goto', listener),
   onChanged: (listener) => on('settings:changed', listener),

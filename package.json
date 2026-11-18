@@ -5,14 +5,25 @@
   "description": "EmojiTot: an expressive character for the desktop and the web, driven by a two-digit protocol",
   "type": "commonjs",
   "license": "MIT",
-  "scripts": {
-    "scan": "node scripts/scan-sensitive.mjs"
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=12.0.0"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "esbuild"
-    ]
+  "scripts": {
+    "build": "pnpm --filter @emojitot/core --filter @emojitot/protocol build",
+    "dev": "pnpm --filter @emojitot/gallery dev",
+    "desktop": "pnpm --filter @emojitot/desktop start",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "preview": "pnpm build && node apps/gallery/scripts/preview.mjs",
+    "dist": "pnpm --filter @emojitot/desktop dist",
+    "scan": "node scripts/scan-sensitive.mjs",
+    "facts": "pnpm build && node scripts/facts.mjs",
+    "docs:sync": "pnpm build && node scripts/sync-docs.mjs",
+    "docs:check": "pnpm build && node scripts/sync-docs.mjs --check",
+    "settings:audit": "node scripts/settings-audit.mjs",
+    "settings:check": "node scripts/settings-audit.mjs --check"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0"

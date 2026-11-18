@@ -7,26 +7,49 @@
  * local, and all-day dates.
  */
 const crypto = require('node:crypto');
-const { execFile } = require('node:child_process');
+const platform = require('../platform');
 const { cachePath, readJson, writeJson, readPrefs } = require('../paths');
+const secrets = require('../secrets');
 
 let events = [];
 let subscriptions = [];
 let timer = null;
+let subscriptionTimer = null;
 let reminded = new Set();
 const listeners = new Set();
 
 const FETCH_SCRIPT = require('node:path').join(__dirname, 'calendar-fetch.ps1');
 const REFRESH_MS = 30 * 60 * 1000;
 
+/**
+ * A subscription URL is a credential.
+ *
+ * Feishu, DingTalk, WeCom, Outlook and iCloud all put a long-lived token in the
+ * path: anyone holding the link can read the calendar. It is therefore stored
+ * through safeStorage, like the mail passwords, and only ever in memory as
+ * plain text. A value written by an older build has no prefix and is read as
+ * clear text, so an upgrade does not silently drop existing subscriptions.
+ */
+const decodeUrl = (value) => {
+  if (typeof value !== 'string' || !value) return '';
+  if (value.startsWith('v1:') || value.startsWith('plain:')) return secrets.decrypt(value) || '';
+  return value;
+};
+
 function load() {
   const saved = readJson(cachePath('calendar'), null);
   events = Array.isArray(saved?.events) ? saved.events : [];
-  subscriptions = Array.isArray(saved?.subscriptions) ? saved.subscriptions : [];
+  subscriptions = (Array.isArray(saved?.subscriptions) ? saved.subscriptions : []).map((sub) => ({
+    ...sub,
+    url: decodeUrl(sub.url),
+  }));
 }
 
 function save() {
-  writeJson(cachePath('calendar'), { events, subscriptions });
+  writeJson(cachePath('calendar'), {
+    events,
+    subscriptions: subscriptions.map((sub) => ({ ...sub, url: secrets.encrypt(sub.url) })),
+  });
 }
 
 function emit() {
@@ -53,9 +76,11 @@ function add(payload) {
   if (!title || !Number.isFinite(start)) return null;
   const event = {
     id: crypto.randomBytes(4).toString('hex'),
+    uid: String(payload?.uid ?? '').slice(0, 200),
     title: title.slice(0, 160),
     start,
     end: Number.isFinite(Number(payload?.end)) ? Number(payload.end) : start + 60 * 60 * 1000,
+    allDay: Boolean(payload?.allDay),
     location: String(payload?.location ?? '').slice(0, 120),
     note: String(payload?.note ?? '').slice(0, 500),
     source: String(payload?.source ?? 'manual'),
@@ -73,59 +98,32 @@ function remove(id) {
   emit();
 }
 
-/** Parse one ICS date value into epoch ms. */
-function parseDate(value) {
-  if (!value) return null;
-  const text = String(value).trim();
-  const dateOnly = /^(\d{4})(\d{2})(\d{2})$/.exec(text);
-  if (dateOnly) {
-    return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])).getTime();
-  }
-  const utc = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(text);
-  if (utc) {
-    return Date.UTC(Number(utc[1]), Number(utc[2]) - 1, Number(utc[3]), Number(utc[4]), Number(utc[5]), Number(utc[6]));
-  }
-  const local = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/.exec(text);
-  if (local) {
-    return new Date(Number(local[1]), Number(local[2]) - 1, Number(local[3]), Number(local[4]), Number(local[5]), Number(local[6])).getTime();
-  }
-  const parsed = Date.parse(text);
-  return Number.isFinite(parsed) ? parsed : null;
-}
+/* ------------------------------------------------------------------ ICS */
 
-/** Unfold, then pull the VEVENT fields this app renders. */
-function parseIcs(text) {
-  if (!text || !/BEGIN:VCALENDAR/i.test(text)) return [];
-  const unfolded = String(text).replace(/\r?\n[ \t]/g, '');
-  const blocks = [...unfolded.matchAll(/BEGIN:VEVENT([\s\S]*?)END:VEVENT/gi)];
-  const out = [];
-  for (const block of blocks) {
-    const body = block[1];
-    const field = (name) => {
-      const match = new RegExp('^' + name + '[^:]*:(.*)$', 'im').exec(body);
-      return match ? match[1].trim() : '';
-    };
-    const start = parseDate(field('DTSTART'));
-    if (!start) continue;
-    out.push({
-      title: field('SUMMARY') || '未命名日程',
-      start,
-      end: parseDate(field('DTEND')) ?? start + 60 * 60 * 1000,
-      location: field('LOCATION'),
-      note: field('DESCRIPTION').slice(0, 300),
-      source: 'invite',
-    });
-  }
-  return out;
-}
+// Parsing lives in its own module so it can be unit-tested without Electron.
+const { parseIcs } = require('../ics');
 
-/** Import every VEVENT found in a text; returns how many were added. */
-function importIcs(text) {
+/**
+ * Import every VEVENT found in a text; returns how many were added.
+ *
+ * `source` is what makes a re-sync idempotent: the same mail polled twice
+ * produces the same (uid, source, start) triple, so the second pass adds
+ * nothing. An event with no UID cannot be de-duplicated and is added each
+ * time — the alternative is guessing, and guessing merges two real meetings.
+ */
+function importIcs(text, source = 'invite') {
   if (readPrefs().calendar?.fromMail === false) return 0;
   const parsed = parseIcs(text);
   let added = 0;
   for (const event of parsed) {
-    if (add(event)) added += 1;
+    const uid = String(event.uid ?? '');
+    if (uid) {
+      const duplicate = events.some(
+        (existing) => existing.uid === uid && existing.source === source && existing.start === event.start,
+      );
+      if (duplicate) continue;
+    }
+    if (add({ ...event, uid, source })) added += 1;
   }
   return added;
 }
@@ -137,19 +135,14 @@ function importIcs(text) {
  * The URL is passed as an argv entry to PowerShell from execFile, which does
  * not go through a shell, so a URL with & or spaces is one argument, not two.
  */
-function fetchSubscription(url) {
-  return new Promise((resolve) => {
-    execFile(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', FETCH_SCRIPT, '-Url', String(url)],
-      { windowsHide: true, timeout: 40000, maxBuffer: 8 * 1024 * 1024 },
-      (error, stdout) => {
-        const text = String(stdout ?? '').trim();
-        if (error || !text || text.startsWith('ERROR')) return resolve(null);
-        resolve(text);
-      },
-    );
-  });
+async function fetchSubscription(url) {
+  const result = await platform.runPowerShell(
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', FETCH_SCRIPT, '-Url', String(url)],
+    { timeout: 40000, maxBuffer: 8 * 1024 * 1024 },
+  );
+  const text = result.stdout.trim();
+  if (!result.ok || !text || text.startsWith('ERROR')) return null;
+  return text;
 }
 
 /**
@@ -165,10 +158,12 @@ function applySubscription(sub, text) {
   for (const event of parsed) {
     events.push({
       id: crypto.randomBytes(4).toString('hex'),
+      uid: event.uid,
       title: event.title,
       start: event.start,
       end: event.end,
       allDay: Boolean(event.allDay),
+      location: event.location,
       source: sub.id,
       importedAt: stamp,
     });
@@ -255,20 +250,34 @@ function tick() {
   }
 }
 
+/**
+ * Start the calendar worker.
+ *
+ * Order matters: load() first, or the immediate refresh runs against an empty
+ * subscription list and the first pull is silently skipped. Then the refresh,
+ * then the two timers — both kept in variables, because the old code dropped
+ * the subscription interval's handle and stopService() could not stop it.
+ */
 function startService() {
-  refreshSubscriptions(false).catch(() => {});
-  setInterval(() => {
-    refreshSubscriptions(false).catch(() => {});
-  }, REFRESH_MS).unref?.();
   load();
   emit();
+  refreshSubscriptions(false).catch(() => {});
+
   clearInterval(timer);
   timer = setInterval(tick, 30000);
+
+  clearInterval(subscriptionTimer);
+  subscriptionTimer = setInterval(() => {
+    refreshSubscriptions(false).catch(() => {});
+  }, REFRESH_MS);
+  subscriptionTimer.unref?.();
 }
 
 function stopService() {
   clearInterval(timer);
   timer = null;
+  clearInterval(subscriptionTimer);
+  subscriptionTimer = null;
 }
 
 function onChange(fn) {

@@ -37,8 +37,12 @@ export const CAST = RAW.map(([id, zh, en, family, body, color, trait, face, moti
     family,
     body,
     color,
-    // No traits: a character is its silhouette plus its face, nothing bolted on.
-    traits: [],
+    /*
+     * The seventh RAW column is the member's one trait, and it used to be thrown
+     * away here — the renderer drew every character with no trait at all, and
+     * breed() could never inherit one because both parents had an empty list.
+     */
+    traits: trait ? [trait] : [],
     face,
     motion,
 }));

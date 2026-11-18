@@ -12,6 +12,16 @@ export declare class EmojiTotBall extends HTMLElement {
     set cast(value: string);
     set traits(value: string[] | string);
     set color(value: string);
+    /**
+     * The finish, as a property.
+     *
+     * #draw() has always read the finish attribute, but it was missing from
+     * observedAttributes, so setting it at runtime never redrew anything — the
+     * console's flat/sticker switch only worked because it replaced the whole
+     * element from outside.
+     */
+    set finish(value: string);
+    get finish(): string;
     /** One-shot motions. They do not change the state. */
     bounce(amount?: number): void;
     spin(turns?: number): void;

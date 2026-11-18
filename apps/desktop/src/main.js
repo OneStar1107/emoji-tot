@@ -17,9 +17,9 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 // Vendored, not resolved: a workspace link does not survive packaging.
-const { parseAgentMessage, stateForEmotion, EMOTIONS } = require('./vendor/protocol/index.js');
+const { createArbiter, parseAgentMessage, stateForEmotion, EMOTIONS } = require('./vendor/protocol/index.js');
 // Shared, because the island and the settings window write the same file.
-const { userDir, statePath, prefsPath, readJson, writeJson, readPrefs, writePrefs } = require('./main/paths');
+const { userDir, statePath, prefsPath, readJson, writeJson, readPrefs, writePrefs, configureSettingsSchema } = require('./main/paths');
 const island = require('./main/island');
 const settings = require('./main/settings');
 const battery = require('./main/services/battery');
@@ -37,6 +37,9 @@ const quota = require('./main/services/quota');
 const mail = require('./main/services/mail');
 const calendar = require('./main/services/calendar');
 const fullscreen = require('./main/services/fullscreen');
+const guard = require('./main/ipc-guard');
+const { safeSend } = guard;
+const platform = require('./main/platform');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -129,10 +132,42 @@ let hoverTimer = null;
 let pointerTimer = null;
 let clickThrough = true;
 let agentWatch = {};
+/**
+ * One arbiter for the agents.
+ *
+ * Each agent is its own session. Before this, every poll wrote its emotion
+ * straight to the state file and the last writer won: three sub-agents, one
+ * error among them, and the ball showed whichever status file happened to be
+ * touched last. Priority and dwell now decide, the same way the gallery's
+ * scene page arbitrates a dozen sessions.
+ */
+let agentArbiter = null;
+
+function agentsArbiter() {
+  if (!agentArbiter) {
+    agentArbiter = createArbiter({
+      minDisplayMs: 900,
+      onApply: (result) => {
+        emitState({
+          emotionId: result.emotionId,
+          ...(result.tips ? { tips: result.tips } : {}),
+        });
+      },
+    });
+  }
+  return agentArbiter;
+}
 /** The cast member the pet wears; persisted in prefs.json. */
 let castId = 'tot';
 /** The engine's cast table, loaded as ESM from the vendored copy. */
 let CORE = null;
+/**
+ * The shared settings schema (src/shared/schema.js), loaded as ESM.
+ *
+ * Until it arrives readPrefs() returns the raw file, which is exactly the old
+ * behaviour — so a broken import degrades instead of wiping every preference.
+ */
+let SCHEMA = null;
 
 async function loadCore() {
   try {
@@ -145,11 +180,23 @@ async function loadCore() {
   }
 }
 
+async function loadSchema() {
+  try {
+    const { pathToFileURL } = require('url');
+    const file = path.join(__dirname, 'shared', 'schema.js');
+    SCHEMA = await import(pathToFileURL(file).href);
+    configureSettingsSchema(SCHEMA);
+  } catch (error) {
+    SCHEMA = null;
+    console.error('[settings] schema unavailable:', error?.message ?? String(error));
+  }
+}
+
 function setCast(id) {
   castId = id;
   writeJson(prefsPath(), { ...readJson(prefsPath(), {}), cast: id });
   island.send('island:cast', id);
-  if (win) win.webContents.send('cast:changed', id);
+  if (win) safeSend(win, 'cast:changed', id);
   refreshMenus();
 }
 
@@ -170,8 +217,33 @@ function savePrefs() {
   });
 }
 
-function workArea() {
-  return screen.getPrimaryDisplay().workAreaSize;
+/**
+ * The display the ball lives on.
+ *
+ * displayId used to be honoured by the island only, so a user who picked a
+ * second screen got the panel there and the ball on the primary one. A
+ * display that is no longer plugged in falls back to the primary instead of
+ * leaving a window at coordinates that exist on no monitor.
+ */
+function displayForBall(prefs = readPrefs()) {
+  const all = screen.getAllDisplays();
+  const wanted = prefs.displayId;
+  if (wanted != null) {
+    const found = all.find((display) => display.id === wanted);
+    if (found) return found;
+  }
+  return screen.getPrimaryDisplay();
+}
+
+/**
+ * The work area of that display, origin included.
+ *
+ * This used to return workAreaSize — width and height only. A secondary
+ * monitor to the left of the primary starts at x = -1920, so anchoring a
+ * docked ball at x = 0 put it on the wrong screen entirely.
+ */
+function workArea(prefs) {
+  return displayForBall(prefs).workArea;
 }
 
 function outerSize(dim) {
@@ -181,13 +253,13 @@ function outerSize(dim) {
 function defaultPosition(dim) {
   const area = workArea();
   const outer = outerSize(dim);
-  return { x: area.width - outer - 8, y: area.height - outer - 8 };
+  return { x: area.x + area.width - outer - 8, y: area.y + area.height - outer - 8 };
 }
 
 /* ---------------------------------------------------------------- window */
 
 function createWindow() {
-  const prefs = readJson(prefsPath(), {});
+  const prefs = readPrefs();
   sizeKey = SIZES[prefs.sizeKey] ? prefs.sizeKey : 'md';
   pinned = prefs.pinned !== false;
   clickThrough = prefs.clickThrough !== false;
@@ -214,9 +286,13 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      // The preload only uses contextBridge and ipcRenderer, so the renderer
+      // has no reason to share a process with Node.
+      sandbox: true,
     },
   });
+
+  guard.claim('ball', win.webContents);
 
   win.setAlwaysOnTop(pinned, 'floating');
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -273,7 +349,7 @@ function setSize(key) {
   const [x, y] = win.getPosition();
   const outer = dim + (BALL_PAD + BUBBLE_ROOM) * 2;
   win.setBounds({ x, y, width: outer, height: outer });
-  win.webContents.send('size:changed', dim);
+  safeSend(win, 'size:changed', dim);
   savePrefs();
   refreshMenus();
 }
@@ -352,18 +428,22 @@ function dock(side) {
 
   let x = wx;
   let y = wy;
+  const minY = area.y;
+  const maxY = area.y + Math.max(0, area.height - outer);
+  const minX = area.x;
+  const maxX = area.x + Math.max(0, area.width - outer);
   if (side === 'left') {
-    x = peek - outer / 2 - dim / 2;
-    y = clamp(wy, 0, Math.max(0, area.height - outer));
+    x = area.x + peek - outer / 2 - dim / 2;
+    y = clamp(wy, minY, maxY);
   } else if (side === 'right') {
-    x = area.width - peek - outer / 2 + dim / 2;
-    y = clamp(wy, 0, Math.max(0, area.height - outer));
+    x = area.x + area.width - peek - outer / 2 + dim / 2;
+    y = clamp(wy, minY, maxY);
   } else if (side === 'top') {
-    y = peek - outer / 2 - dim / 2;
-    x = clamp(wx, 0, Math.max(0, area.width - outer));
+    y = area.y + peek - outer / 2 - dim / 2;
+    x = clamp(wx, minX, maxX);
   } else {
-    y = area.height - peek - outer / 2 + dim / 2;
-    x = clamp(wx, 0, Math.max(0, area.width - outer));
+    y = area.y + area.height - peek - outer / 2 + dim / 2;
+    x = clamp(wx, minX, maxX);
   }
   void centred;
 
@@ -387,10 +467,10 @@ function undock() {
 
   let x = wx;
   let y = wy;
-  if (side === 'left') x = -(outer - dim) / 2;
-  else if (side === 'right') x = area.width - (outer + dim) / 2;
-  else if (side === 'top') y = -(outer - dim) / 2;
-  else y = area.height - (outer + dim) / 2;
+  if (side === 'left') x = area.x - (outer - dim) / 2;
+  else if (side === 'right') x = area.x + area.width - (outer + dim) / 2;
+  else if (side === 'top') y = area.y - (outer - dim) / 2;
+  else y = area.y + area.height - (outer + dim) / 2;
 
   /*
    * Deliberately NOT clamped to 0: the window is wider than the ball, so a
@@ -419,10 +499,10 @@ function sliverRect(dim) {
   const peek = Math.round(dim * PEEK_RATIO);
   const ballLeft = wx + (outer - dim) / 2;
   const ballTop = wy + (outer - dim) / 2;
-  if (dockSide === 'left') return { x: 0, y: ballTop, w: peek, h: dim };
-  if (dockSide === 'right') return { x: area.width - peek, y: ballTop, w: peek, h: dim };
-  if (dockSide === 'top') return { x: ballLeft, y: 0, w: dim, h: peek };
-  return { x: ballLeft, y: area.height - peek, w: dim, h: peek };
+  if (dockSide === 'left') return { x: area.x, y: ballTop, w: peek, h: dim };
+  if (dockSide === 'right') return { x: area.x + area.width - peek, y: ballTop, w: peek, h: dim };
+  if (dockSide === 'top') return { x: ballLeft, y: area.y, w: dim, h: peek };
+  return { x: ballLeft, y: area.y + area.height - peek, w: dim, h: peek };
 }
 
 /**
@@ -437,12 +517,12 @@ function openPosition(dim) {
   const outer = outerSize(dim);
   const area = workArea();
   const [wx, wy] = win.getPosition();
-  const clampY = (v) => clamp(v, 0, Math.max(0, area.height - outer));
-  const clampX = (v) => clamp(v, 0, Math.max(0, area.width - outer));
-  if (dockSide === 'left') return { x: -(outer - dim) / 2, y: clampY(wy) };
-  if (dockSide === 'right') return { x: area.width - (outer + dim) / 2, y: clampY(wy) };
-  if (dockSide === 'top') return { x: clampX(wx), y: -(outer - dim) / 2 };
-  return { x: clampX(wx), y: area.height - (outer + dim) / 2 };
+  const clampY = (v) => clamp(v, area.y, area.y + Math.max(0, area.height - outer));
+  const clampX = (v) => clamp(v, area.x, area.x + Math.max(0, area.width - outer));
+  if (dockSide === 'left') return { x: area.x - (outer - dim) / 2, y: clampY(wy) };
+  if (dockSide === 'right') return { x: area.x + area.width - (outer + dim) / 2, y: clampY(wy) };
+  if (dockSide === 'top') return { x: clampX(wx), y: area.y - (outer - dim) / 2 };
+  return { x: clampX(wx), y: area.y + area.height - (outer + dim) / 2 };
 }
 
 /** Where a tucked ball sits: the same as the closed dock position. */
@@ -451,10 +531,14 @@ function closedPosition(dim) {
   const area = workArea();
   const peek = Math.round(dim * PEEK_RATIO);
   const [wx, wy] = win.getPosition();
-  if (dockSide === 'left') return { x: peek - outer / 2 - dim / 2, y: clamp(wy, 0, Math.max(0, area.height - outer)) };
-  if (dockSide === 'right') return { x: area.width - peek - outer / 2 + dim / 2, y: clamp(wy, 0, Math.max(0, area.height - outer)) };
-  if (dockSide === 'top') return { x: clamp(wx, 0, Math.max(0, area.width - outer)), y: peek - outer / 2 - dim / 2 };
-  return { x: clamp(wx, 0, Math.max(0, area.width - outer)), y: area.height - peek - outer / 2 + dim / 2 };
+  const minY = area.y;
+  const maxY = area.y + Math.max(0, area.height - outer);
+  const minX = area.x;
+  const maxX = area.x + Math.max(0, area.width - outer);
+  if (dockSide === 'left') return { x: area.x + peek - outer / 2 - dim / 2, y: clamp(wy, minY, maxY) };
+  if (dockSide === 'right') return { x: area.x + area.width - peek - outer / 2 + dim / 2, y: clamp(wy, minY, maxY) };
+  if (dockSide === 'top') return { x: clamp(wx, minX, maxX), y: area.y + peek - outer / 2 - dim / 2 };
+  return { x: clamp(wx, minX, maxX), y: area.y + area.height - peek - outer / 2 + dim / 2 };
 }
 
 /**
@@ -541,8 +625,8 @@ function endDrag() {
   const [x] = win.getPosition();
   const dim = SIZES[sizeKey];
   const area = workArea();
-  if (x <= EDGE_SNAP) dock('left');
-  else if (x + dim >= area.width - EDGE_SNAP) dock('right');
+  if (x <= area.x + EDGE_SNAP) dock('left');
+  else if (x + dim >= area.x + area.width - EDGE_SNAP) dock('right');
   else {
     dockSide = null;
     dockOpen = false;
@@ -571,7 +655,7 @@ function emitState(payload) {
   // The island shows the same character: one state, two windows.
   island.send('island:state', message);
   try {
-    win.webContents.send('state:apply', message);
+    safeSend(win, 'state:apply', message);
   } catch {
     // The window can be between load and ready; dropping one frame beats
     // throwing inside a polling timer, which would stop the poll for good.
@@ -582,7 +666,7 @@ function emitState(payload) {
 function notifyDock() {
   if (!win || win.isDestroyed()) return;
   try {
-    win.webContents.send('dock:changed', dockSide ? (dockOpen ? `${dockSide}-open` : dockSide) : null);
+    safeSend(win, 'dock:changed', dockSide ? (dockOpen ? `${dockSide}-open` : dockSide) : null);
   } catch {
     /* same as above */
   }
@@ -644,7 +728,7 @@ function startAgentWatch(prefs) {
       const raw = readJson(file, null);
       if (raw == null) return;
       const id = source.map(raw);
-      if (id) emitState({ emotionId: id });
+      if (id) agentsArbiter().update({ sessionId: 'agent:' + source.id, emotionId: id });
     }, 350);
   }
 }
@@ -652,6 +736,9 @@ function startAgentWatch(prefs) {
 function stopAgentWatch() {
   for (const timer of Object.values(agentWatch)) clearInterval(timer);
   agentWatch = {};
+  if (agentArbiter) {
+    for (const source of AGENT_SOURCES) agentArbiter.remove('agent:' + source.id);
+  }
 }
 
 /* ------------------------------------------------------------- forms */
@@ -727,6 +814,7 @@ function handleSettingsAction({ kind, value } = {}) {
     case 'meta': {
       const prefs = readPrefs();
       return {
+      platform: { id: platform.id, supported: platform.supported, features: platform.capabilities() },
         form,
         both,
         pinned,
@@ -866,10 +954,66 @@ function applyFullscreenWatch() {
   });
 }
 
+/**
+ * Always-on-top and click-through are window flags, not chrome.
+ *
+ * Both used to be read once in createWindow(), so flipping them in settings
+ * wrote prefs.json and changed nothing until the next launch. They are applied
+ * here instead, and applyMainPrefs() runs on every preference change.
+ */
+function applyWindowFlags() {
+  const prefs = readPrefs();
+  const wantPinned = prefs.pinned !== false;
+  if (win && !win.isDestroyed() && win.isAlwaysOnTop() !== wantPinned) {
+    win.setAlwaysOnTop(wantPinned, 'screen-saver');
+  }
+  pinned = wantPinned;
+  const wantThrough = prefs.clickThrough !== false;
+  if (wantThrough !== clickThrough) setClickThrough(wantThrough);
+}
+
+/**
+ * Keep the ball on a display that exists.
+ *
+ * Two ways it stops being true: the user picks another screen in settings, or
+ * the screen it was on is unplugged. Both end the same way — if the window is
+ * not fully inside the chosen display's work area, move it to that display's
+ * default corner. Coordinates are absolute, so a display to the left of the
+ * primary (negative x) is handled by the same comparison.
+ */
+function applyDisplayPreference() {
+  if (!win || win.isDestroyed()) return;
+  const dim = SIZES[sizeKey];
+  const outer = outerSize(dim);
+  const area = workArea();
+  const [x, y] = win.getPosition();
+  const inside =
+    x + outer > area.x &&
+    x < area.x + area.width &&
+    y + outer > area.y &&
+    y < area.y + area.height;
+  if (inside) return;
+  const pos = defaultPosition(dim);
+  dockSide = null;
+  dockOpen = false;
+  dockArmed = false;
+  win.setPosition(pos.x, pos.y);
+  savePrefs();
+  notifyDock();
+}
+
+function handleDisplayChange() {
+  applyDisplayPreference();
+  // The island owns its own placement; ask it to re-run it.
+  island.refreshPosition?.();
+}
+
 function applyMainPrefs() {
   applyTrayPreference();
   applyHotkey();
   applyFullscreenWatch();
+  applyWindowFlags();
+  applyDisplayPreference();
   // The ball's size is a window size, so a prefs change has to reach the
   // browser window — the tray used to be the only path that did.
   const prefs = readPrefs();
@@ -891,6 +1035,62 @@ function createTray() {
 
 /* -------------------------------------------------------------- IPC glue */
 
+/*
+ * What each channel accepts.
+ *
+ * The renderer is untrusted by construction: it renders mail bodies, calendar
+ * titles and clipboard text, any of which could carry markup that tries to
+ * drive the main process. A handler that destructures whatever it is given
+ * turns that into an arbitrary call, so every channel states its shape here
+ * and anything else is refused before the handler runs.
+ */
+const checkMail = guard.actionPayload(['add', 'remove', 'refresh']);
+const checkCalendar = guard.actionPayload([
+  'add', 'remove', 'import', 'subscribe', 'unsubscribe', 'refresh-subscriptions',
+]);
+const checkQuota = guard.actionPayload(['add', 'remove', 'select', 'refresh']);
+const checkMedia = (payload) => {
+  if (!guard.isPlainObject(payload)) return undefined;
+  if (!guard.oneOf(payload.kind, ['toggle', 'next', 'prev', 'seek'])) return undefined;
+  if (payload.arg !== undefined && !guard.isNumber(payload.arg, -1e9, 1e9)) return undefined;
+  return payload;
+};
+const checkPoint = (point) => {
+  if (!guard.isPlainObject(point)) return undefined;
+  if (!guard.isNumber(point.x, -100000, 100000) || !guard.isNumber(point.y, -100000, 100000)) return undefined;
+  return { x: point.x, y: point.y };
+};
+const checkDockSide = (side) => (side === undefined || side === null ? null : guard.oneOf(side, ['top', 'left', 'right']) ? side : undefined);
+
+/** `local:do` is a service bus; the switch below is its allowlist. */
+const LOCAL_ACTIONS = {
+  focus: ['start', 'pause', 'resume', 'stop', 'skip', 'restart'],
+  health: ['drink', 'stand', 'reset', 'resetWater', 'resetStand'],
+  todo: ['add', 'toggle', 'remove', 'update', 'clearDone'],
+  shelf: ['add', 'addBuffer', 'open', 'reveal', 'remove'],
+  clipboard: ['copy', 'togglePin', 'remove', 'clear', 'clearUnpinned'],
+  messenger: ['activate'],
+};
+const SHELF_BUFFER_LIMIT = 8 * 1024 * 1024;
+const BUS_LIMIT = 64 * 1024;
+
+const checkLocal = (payload) => {
+  if (!guard.isPlainObject(payload)) return undefined;
+  const allowed = LOCAL_ACTIONS[payload.service];
+  if (!allowed || !guard.oneOf(payload.action, allowed)) return undefined;
+  if (payload.data !== undefined && !guard.isPlainObject(payload.data)) return undefined;
+  const data = payload.data ?? {};
+  if (payload.action === 'addBuffer') {
+    // The one channel that carries bytes: a dragged-in file image. Bounded
+    // here as well as in the guard, because the outer limit has to cover it.
+    if (guard.byteSize(data.bytes) > SHELF_BUFFER_LIMIT) return undefined;
+    if (!guard.isString(data.name, 255)) return undefined;
+  } else if (guard.byteSize(payload) > BUS_LIMIT) {
+    return undefined;
+  }
+  return { service: payload.service, action: payload.action, data };
+};
+
 
 /**
  * Read-only state, for tests only.
@@ -901,7 +1101,7 @@ function createTray() {
  * it used to be declared twice (once unconditionally, once under --dev), and
  * the second registration crashed the whole app on `electron . --dev`.
  */
-ipcMain.handle('debug:state', () => {
+guard.guardedHandle('debug:state', ['ball', 'island', 'settings'], () => {
   if (!win || win.isDestroyed()) return null;
   return {
     clickThrough,
@@ -919,26 +1119,26 @@ ipcMain.handle('debug:state', () => {
     islandVisible: island.isVisible(),
   };
 });
-ipcMain.handle('debug:dock', (_event, side) => {
+guard.guardedHandle('debug:dock', ['ball'], (side) => {
   if (side) dock(side);
   else undock();
   return { docked: dockSide, dockOpen };
-});
+}, { check: checkDockSide, maxBytes: 256 });
 
-ipcMain.on('drag:start', (_event, point) => {
+guard.guardedSend('drag:start', ['ball'], (point) => {
   if (dockSide) undock();
   startDrag(point);
-});
-ipcMain.on('drag:end', endDrag);
-ipcMain.on('pet:menu', () => {
+}, { check: checkPoint, maxBytes: 256 });
+guard.guardedSend('drag:end', ['ball'], endDrag, { maxBytes: 64 });
+guard.guardedSend('pet:menu', ['ball'], () => {
   if (!win) return;
   buildMenu().popup({ window: win });
-});
-ipcMain.on('pet:action', () => {
+}, { maxBytes: 64 });
+guard.guardedSend('pet:action', ['ball'], () => {
   const actions = ['bounce', 'spin', 'burst'];
   const action = actions[Math.floor(Math.random() * actions.length)];
-  if (win) win.webContents.send('state:action', action);
-});
+  if (win) safeSend(win, 'state:action', action);
+}, { maxBytes: 64 });
 /** The renderer saw the pointer on the ball, or leave it. */
 
 
@@ -967,7 +1167,7 @@ function pushBattery() {
 async function refreshWeather() {
   const prefs = readPrefs();
   const city = (prefs.weather && prefs.weather.city) || '香港';
-  const autoLocate = prefs.weatherAutoLocate === true;
+  const autoLocate = prefs.weather?.autoLocate === true;
   try {
     const data = await weather.load(city, autoLocate);
     island.send('island:weather', data);
@@ -984,17 +1184,101 @@ function scheduleWeather() {
   weatherTimer = setInterval(refreshWeather, minutes * 60 * 1000);
 }
 
-function startServices() {
-  pushBattery();
-  clearInterval(batteryTimer);
-  batteryTimer = setInterval(pushBattery, 30000);
-  refreshWeather();
-  scheduleWeather();
+/**
+ * What each background worker is, and how to start and stop it.
+ *
+ * One entry per service named by the shared schema's PAGE_MANIFEST or
+ * STATUS_MANIFEST. applyServicePlan() diffs the wanted set against what is
+ * running, so boot and every later preference change take the same path.
+ */
+const SERVICE_PLAN = {
+  battery: { feature: 'battery',
+    start: () => {
+      pushBattery();
+      clearInterval(batteryTimer);
+      batteryTimer = setInterval(pushBattery, 30000);
+    },
+    stop: () => {
+      clearInterval(batteryTimer);
+      batteryTimer = null;
+    },
+  },
+  weather: {
+    feature: 'weather',
+    start: () => {
+      refreshWeather();
+      scheduleWeather();
+    },
+    stop: () => {
+      clearInterval(weatherTimer);
+      weatherTimer = null;
+    },
+  },
+  media: { feature: 'media', start: () => media.start(), stop: () => media.stop() },
+  focus: { start: () => focus.startService(), stop: () => focus.stopService() },
+  health: { start: () => health.startService(), stop: () => health.stopService() },
+  todo: { start: () => todo.startService(), stop: () => todo.stopService() },
+  quota: { feature: 'quota', start: () => quota.startService(), stop: () => quota.stopService() },
+  mail: { feature: 'mail', start: () => mail.startService(), stop: () => mail.stopService() },
+  calendar: { feature: 'calendar', start: () => calendar.startService(), stop: () => calendar.stopService() },
+  clipboard: { feature: 'clipboard', start: () => clipboardHistory.start(), stop: () => clipboardHistory.stop() },
+  devices: { feature: 'devices', start: () => devices.start(), stop: () => devices.stop() },
+  messenger: { feature: 'messenger', start: () => messenger.start(), stop: () => messenger.stop() },
+};
 
+const runningServices = new Set();
+
+/**
+ * Start what should run, stop what should not.
+ *
+ * A page switched off in settings stops its worker here. The one exception is
+ * a pill status item that still needs the same worker: switching the weather
+ * page off must not blank the temperature in the collapsed pill, so
+ * enabledServices() unions the two sets.
+ *
+ * Idempotent, so the prefs listener calls it on every change.
+ */
+function applyServicePlan() {
+  let wanted;
+  if (SCHEMA) {
+    wanted = SCHEMA.enabledServices(readPrefs());
+    // The messenger has no island page of its own; it follows its five app
+    // switches instead, and runs when any of them is on.
+    const messengerPrefs = readPrefs().messenger ?? {};
+    if (Object.values(messengerPrefs).some((value) => value !== false)) wanted.add('messenger');
+  } else {
+    wanted = new Set(Object.keys(SERVICE_PLAN));
+  }
+
+  for (const [name, control] of Object.entries(SERVICE_PLAN)) {
+    const shouldRun = wanted.has(name) && (!control.feature || platform.supports(control.feature));
+    const isRunning = runningServices.has(name);
+    if (wanted.has(name) && !shouldRun && !isRunning) {
+      // Enabled in settings, unsupported here: skip once, do not retry.
+      continue;
+    }
+    if (shouldRun && !isRunning) {
+      try {
+        control.start();
+        runningServices.add(name);
+      } catch (error) {
+        console.error('[services] start', name, error?.message ?? String(error));
+      }
+    } else if (!shouldRun && isRunning) {
+      try {
+        control.stop();
+      } catch (error) {
+        console.error('[services] stop', name, error?.message ?? String(error));
+      }
+      runningServices.delete(name);
+    }
+  }
+}
+
+function startServices() {
   /*
-   * Media: the bridge streams a line per second. The island only needs a frame
-   * when something changed, and lyrics only when the track changed — a song
-   * that is merely playing does not re-query LRCLIB every second.
+   * Listeners are registered once and outlive any single worker: a service
+   * switched off and back on must not stack a second copy of its listener.
    */
   media.onChange((state) => {
     island.send('island:media', state);
@@ -1011,54 +1295,46 @@ function startServices() {
       island.send('island:lyrics', value);
     });
   });
-  media.start();
 
-  /*
-   * Local services: focus, health, todos, shelf. Each one owns its own file,
-   * and each pushes its snapshot on change — the island never polls.
-   */
-  focus.startService();
-  health.startService();
-  todo.startService();
-  quota.startService();
-  calendar.startService();
-  mail.startService();
   focus.onChange((value) => island.send('island:focus', value));
   health.onChange((value) => island.send('island:health', value));
   todo.onChange((value) => island.send('island:todos', value));
   shelf.onChange((value) => island.send('island:shelf', value));
   clipboardHistory.onChange((value) => island.send('island:clipboard', value));
-  clipboardHistory.start();
   messenger.setPrefsReader(readPrefs);
   messenger.onChange((value) => island.send('island:messenger', value));
-  messenger.start();
   devices.onChange((value) => island.send('island:devices', value));
-  devices.start();
   quota.onChange((value) => island.send('island:quota', value));
   mail.onChange((value) => island.send('island:mail', value));
   // Same shape as the bootstrap payload: the page reads .events, and a bare
   // array here made every pushed update render as "nothing scheduled".
-  calendar.onChange(() => island.send('island:calendar', { events: calendar.list(), upcoming: calendar.upcoming() }));
-
-  ipcMain.handle('mail:get', () => mail.snapshot());
-  ipcMain.handle('mail:do', async (_event, payload) => {
-    const { action, data } = payload ?? {};
-    if (action === 'add') mail.add(data);
-    else if (action === 'remove') mail.remove(data?.id);
-    else if (action === 'refresh') await mail.refresh(true);
-    return mail.snapshot();
-  });
-
-  ipcMain.handle('calendar:get', () => ({
+  calendar.onChange(() => island.send('island:calendar', {
     events: calendar.list(),
     upcoming: calendar.upcoming(),
     subscriptions: calendar.subscriptionList(),
   }));
-  ipcMain.handle('calendar:do', async (_event, payload) => {
-    const { action, data } = payload ?? {};
+
+  applyServicePlan();
+
+  guard.guardedHandle('mail:get', ['settings', 'island'], () => mail.snapshot());
+  guard.guardedHandle('mail:do', ['settings', 'island'], async (payload) => {
+    const { action, data } = payload;
+    if (action === 'add') mail.add(data);
+    else if (action === 'remove') mail.remove(data?.id);
+    else if (action === 'refresh') await mail.refresh(true);
+    return mail.snapshot();
+  }, { check: checkMail, maxBytes: 16 * 1024 });
+
+  guard.guardedHandle('calendar:get', ['settings', 'island'], () => ({
+    events: calendar.list(),
+    upcoming: calendar.upcoming(),
+    subscriptions: calendar.subscriptionList(),
+  }));
+  guard.guardedHandle('calendar:do', ['settings'], async (payload) => {
+    const { action, data } = payload;
     if (action === 'add') calendar.add(data);
     else if (action === 'remove') calendar.remove(data?.id);
-    else if (action === 'import') calendar.importIcs(data?.ics);
+    else if (action === 'import') calendar.importIcs(data?.ics, 'manual-import');
     else if (action === 'subscribe') await calendar.addSubscription(data?.name, data?.url);
     else if (action === 'unsubscribe') calendar.removeSubscription(data?.id);
     else if (action === 'refresh-subscriptions') await calendar.refreshSubscriptions(true);
@@ -1067,19 +1343,19 @@ function startServices() {
       upcoming: calendar.upcoming(),
       subscriptions: calendar.subscriptionList(),
     };
-  });
+  }, { check: checkCalendar, maxBytes: 64 * 1024 });
 
-  ipcMain.handle('quota:get', () => quota.snapshot());
-  ipcMain.handle('quota:do', async (_event, payload) => {
-    const { action, data } = payload ?? {};
+  guard.guardedHandle('quota:get', ['settings'], () => quota.snapshot());
+  guard.guardedHandle('quota:do', ['settings', 'island'], async (payload) => {
+    const { action, data } = payload;
     if (action === 'add') quota.add(data?.name, data?.key, data?.provider);
     else if (action === 'remove') quota.remove(data?.id);
     else if (action === 'select') quota.select(data?.id);
     else if (action === 'refresh') await quota.refresh();
     return quota.snapshot();
-  });
+  }, { check: checkQuota, maxBytes: 16 * 1024 });
 
-  ipcMain.handle('local:get', () => ({
+  guard.guardedHandle('local:get', ['island'], () => ({
     focus: focus.snapshot(),
     health: health.snapshot(),
     todos: todo.list(),
@@ -1089,8 +1365,8 @@ function startServices() {
     devices: devices.snapshot(),
   }));
 
-  ipcMain.handle('local:do', async (_event, payload) => {
-    const { service, action, data } = payload ?? {};
+  guard.guardedHandle('local:do', ['island', 'settings'], async (payload) => {
+    const { service, action, data } = payload;
     if (service === 'focus') {
       if (action === 'start') focus.start();
       else if (action === 'pause') focus.pause();
@@ -1102,6 +1378,8 @@ function startServices() {
       if (action === 'drink') health.drink();
       else if (action === 'stand') health.stand();
       else if (action === 'reset') health.reset();
+      else if (action === 'resetWater') health.resetWater();
+      else if (action === 'resetStand') health.resetStand();
     } else if (service === 'todo') {
       if (action === 'add') todo.add(data?.text, data?.due, data?.repeat);
       else if (action === 'toggle') todo.toggle(data?.id);
@@ -1119,6 +1397,7 @@ function startServices() {
       else if (action === 'togglePin') clipboardHistory.togglePin(data?.id);
       else if (action === 'remove') clipboardHistory.remove(data?.id);
       else if (action === 'clear') clipboardHistory.clear();
+      else if (action === 'clearUnpinned') clipboardHistory.clearUnpinned();
     } else if (service === 'messenger') {
       if (action === 'activate') messenger.activate(data?.handle);
     }
@@ -1131,11 +1410,11 @@ function startServices() {
       messenger: messenger.snapshot(),
       devices: devices.snapshot(),
     };
-  });
+  }, { check: checkLocal, maxBytes: SHELF_BUFFER_LIMIT + 1024 });
 
   // The island asks once after it loads: pushing into a window that is still
   // parsing its page would drop the first frame.
-  ipcMain.handle('island:bootstrap', () => ({
+  guard.guardedHandle('island:bootstrap', ['island'], () => ({
     battery: lastBattery,
     weather: weather.cached(),
     media: media.current(),
@@ -1149,7 +1428,11 @@ function startServices() {
     devices: devices.snapshot(),
     quota: quota.snapshot(),
     mail: mail.snapshot(),
-    calendar: { events: calendar.list(), upcoming: calendar.upcoming() },
+    calendar: {
+      events: calendar.list(),
+      upcoming: calendar.upcoming(),
+      subscriptions: calendar.subscriptionList(),
+    },
     // Read the file rather than the variable: the island can load before the
     // startup code has restored castId, and then it would boot on whatever
     // cast the HTML was written with.
@@ -1157,10 +1440,60 @@ function startServices() {
     prefs: readPrefs(),
   }));
 
-  ipcMain.handle('media:control', (_event, payload) => {
-    if (payload && typeof payload === 'object') media.command(payload.kind, Number(payload.arg) || 0);
+  guard.guardedHandle('media:control', ['island'], (payload) => {
+    media.command(payload.kind, Number(payload.arg) || 0);
     return media.current();
+  }, { check: checkMedia, maxBytes: 1024 });
+}
+
+/* --------------------------------------------------------------- hardening */
+
+/*
+ * Every page this app creates renders something a stranger wrote: a mail
+ * subject, a calendar title, a clipboard line, a song name. None of them has
+ * any reason to navigate, open a window, embed a webview or ask for the
+ * camera, so all four capabilities are refused once, globally, instead of
+ * being re-decided at each call site.
+ */
+const LOCAL_PAGE = /^file:\/\/.*\/renderer\/[a-z-]+\.html$/i;
+
+function isLocalPage(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'file:' && LOCAL_PAGE.test(url.split('?')[0]);
+  } catch {
+    return false;
+  }
+}
+
+app.on('web-contents-created', (_event, contents) => {
+  // No window.open, no target=_blank, no popup that inherits our preload.
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.on('will-navigate', (event, url) => {
+    if (!isLocalPage(url)) {
+      event.preventDefault();
+      console.warn('[security] blocked navigation to', String(url).slice(0, 120));
+    }
   });
+  contents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+  });
+});
+
+/**
+ * Permission requests, answered without asking the user.
+ *
+ * The app needs no camera, microphone, geolocation, notification relay or
+ * clipboard-read permission from Chromium: it reads the clipboard from the
+ * main process and draws notifications there too. A granted permission would
+ * only ever be used by injected markup.
+ */
+function hardenSession(target) {
+  target.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  target.setPermissionCheckHandler(() => false);
+  if (typeof target.setDevicePermissionHandler === 'function') {
+    target.setDevicePermissionHandler(() => false);
+  }
 }
 
 /* ------------------------------------------------------------------ boot */
@@ -1197,7 +1530,6 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
-    if (process.platform === 'darwin') app.dock?.hide();
     /*
      * Direct network, no system proxy.
      *
@@ -1213,13 +1545,15 @@ if (!gotTheLock) {
     } catch (error) {
       console.error('[net] proxy bypass failed', error?.message ?? error);
     }
+    hardenSession(session.defaultSession);
     await loadCore();
+    await loadSchema();
     const stored = readPrefs();
     castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'tot';
     form = stored.form === 'ball' ? 'ball' : 'island';
     both = Boolean(stored.formBoth);
     createWindow();
-    if (win) win.webContents.on('did-finish-load', () => win.webContents.send('cast:changed', castId));
+    if (win) win.webContents.on('did-finish-load', () => safeSend(win, 'cast:changed', castId));
     settings.registerIpc();
     island.registerIpc();
     // The island page cannot hold data that was pushed before it listened.
@@ -1229,6 +1563,9 @@ if (!gotTheLock) {
       island.send('settings:changed', readPrefs());
     });
     createTray();
+    screen.on('display-removed', handleDisplayChange);
+    screen.on('display-added', handleDisplayChange);
+    screen.on('display-metrics-changed', handleDisplayChange);
     ensureStateFile();
     startPointerWatch();
     startAgentWatch(stored);
@@ -1245,7 +1582,7 @@ if (!gotTheLock) {
       both = Boolean(next.formBoth);
       applyForm();
       applyMainPrefs();
-      scheduleWeather();
+      applyServicePlan();
       quota.reschedule();
       messenger.refresh();
       island.send('settings:changed', next);
@@ -1272,13 +1609,14 @@ if (!gotTheLock) {
       // shutting down anyway
     }
     fullscreen.stop();
-    media.stop();
-    focus.stopService();
-    health.stopService();
-    todo.stopService();
-    quota.stopService();
-    mail.stopService();
-    calendar.stopService();
+    for (const name of runningServices) {
+      try {
+        SERVICE_PLAN[name]?.stop();
+      } catch {
+        // shutting down anyway
+      }
+    }
+    runningServices.clear();
     stopAgentWatch();
     fs.unwatchFile(statePath());
   });

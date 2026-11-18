@@ -20,7 +20,7 @@ const STYLE = `
 
 export class EmojiTotBall extends HTMLElement {
   static get observedAttributes() {
-    return ['cast', 'body', 'shape', 'color', 'state', 'size', 'traits'];
+    return ['cast', 'body', 'shape', 'color', 'state', 'size', 'traits', 'finish'];
   }
 
   #root;
@@ -69,6 +69,22 @@ export class EmojiTotBall extends HTMLElement {
 
   set color(value: string) {
     this.setAttribute('color', String(value));
+  }
+
+  /**
+   * The finish, as a property.
+   *
+   * #draw() has always read the finish attribute, but it was missing from
+   * observedAttributes, so setting it at runtime never redrew anything — the
+   * console's flat/sticker switch only worked because it replaced the whole
+   * element from outside.
+   */
+  set finish(value: string) {
+    this.setAttribute('finish', String(value));
+  }
+
+  get finish(): string {
+    return this.getAttribute('finish') ?? 'sticker';
   }
 
   /** One-shot motions. They do not change the state. */

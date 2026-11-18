@@ -30,7 +30,7 @@ function prefs() {
   return {
     work: Math.max(1, Number(focus.work) || 25),
     rest: Math.max(1, Number(focus.rest) || 5),
-    enabled: focus.enabled !== false,
+    enabled: focus.enabled === true,
   };
 }
 

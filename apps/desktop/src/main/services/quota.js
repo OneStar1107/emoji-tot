@@ -6,7 +6,7 @@
  * balance request runs in a child process with the key in its environment,
  * because argv is readable by every process on the machine.
  */
-const { execFile } = require('node:child_process');
+const platform = require('../platform');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { readJson, writeJson, userDir, readPrefs, scriptFile } = require('../paths');
@@ -63,24 +63,19 @@ function emit() {
   }
 }
 
-function fetchBalance(key, provider = 'deepseek') {
-  return new Promise((resolve) => {
-    execFile(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-KeyVar', KEY_VAR, '-Provider', provider],
-      { windowsHide: true, timeout: 20000, env: { ...process.env, [KEY_VAR]: key } },
-      (error, stdout) => {
-        if (error) return resolve(null);
-        const text = String(stdout).trim();
-        if (!text || text === 'null') return resolve(null);
-        try {
-          resolve(JSON.parse(text));
-        } catch {
-          resolve(null);
-        }
-      },
-    );
-  });
+async function fetchBalance(key, provider = 'deepseek') {
+  const result = await platform.runPowerShell(
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-KeyVar', KEY_VAR, '-Provider', provider],
+    { timeout: 20000, env: { ...process.env, [KEY_VAR]: key } },
+  );
+  if (!result.ok) return null;
+  const text = result.stdout.trim();
+  if (!text || text === 'null') return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 async function refresh() {

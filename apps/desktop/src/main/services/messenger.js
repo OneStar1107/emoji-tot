@@ -7,7 +7,7 @@
  * filters by the user's enabled apps and emits only when something actually
  * changed, so a quiet desktop costs nothing downstream.
  */
-const { spawn } = require('node:child_process');
+const platform = require('../platform');
 const path = require('node:path');
 const { scriptFile } = require('../paths');
 
@@ -89,11 +89,15 @@ function start() {
 function spawnChild() {
   if (stopped) return;
   try {
-    child = spawn(
-      'powershell',
+    child = platform.spawnPowerShell(
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath()],
-      { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] },
+      { stdio: ['ignore', 'pipe', 'ignore'] },
     );
+    if (!child) {
+      // Unsupported platform: leave the feature off instead of retrying.
+      stopped = true;
+      return;
+    }
   } catch {
     child = null;
     setTimeout(spawnChild, RESPAWN_MS);
@@ -150,7 +154,7 @@ function activate(handle) {
       'if ([MsgWin]::IsIconic($h)) { [MsgWin]::ShowWindow($h, 9) | Out-Null }',
       '[MsgWin]::SetForegroundWindow($h) | Out-Null',
     ].join('\n');
-    spawn('powershell', ['-NoProfile', '-Command', ps], { windowsHide: true, stdio: 'ignore' });
+    platform.spawnPowerShell(['-NoProfile', '-Command', ps], { stdio: 'ignore' });
     return true;
   } catch {
     return false;

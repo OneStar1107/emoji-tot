@@ -5,32 +5,24 @@
  * that can drift. Every control carries its own key, so adding a row is adding
  * one line — there is no handler to register.
  */
+import {
+  DEFAULTS,
+  PAGE_MANIFEST,
+  STATUS_MANIFEST,
+  withDefaults,
+  orderedPageKeys,
+  orderedStatusKeys,
+  enabledStatusKeys,  SETTINGS_NAV,
+} from '../shared/schema.js';
+
+/** The rail, from the one manifest. */
+const NAV = SETTINGS_NAV;
+
 const api = window.settingsAPI;
 
 /* ------------------------------------------------------------------- nav */
 
-const NAV = [
-  { group: '形态', items: [
-    { key: 'general', label: '常规', icon: 'gear' },
-    { key: 'appearance', label: '外观', icon: 'palette' },
-    { key: 'layout', label: '尺寸与位置', icon: 'move' },
-    { key: 'behavior', label: '隐藏与交互', icon: 'eye' },
-    { key: 'cast', label: '角色与表情', icon: 'palette' },
-    { key: 'pages', label: '页面管理', icon: 'grid' },
-  ] },
-  { group: '内容', items: [
-    { key: 'music', label: '音乐与歌词', icon: 'music' },
-    { key: 'focus', label: '专注与饮水', icon: 'timer' },
-    { key: 'todo', label: '待办与置物', icon: 'check' },
-    { key: 'comm', label: '通知、邮箱与日程', icon: 'mail' },
-    { key: 'quota', label: 'AI 额度', icon: 'coin' },
-    { key: 'weather', label: '天气', icon: 'sun' },
-  ] },
-  { group: '系统', items: [
-    { key: 'plugins', label: '插件', icon: 'plug' },
-    { key: 'about', label: '关于', icon: 'info' },
-  ] },
-];
+
 
 const ICON = {
   gear: '<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.52 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.14.4.44.73.85.94.27.13.57.2.87.2H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/>',
@@ -48,69 +40,18 @@ const ICON = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
 };
 
-const PAGES_TABLE = [
-  { key: 'music', label: '音乐', stage: 1, sub: '播放控制与同步歌词' },
-  { key: 'weather', label: '天气', stage: 1, sub: '当地天气与七日预报' },
-  { key: 'quota', label: 'AI 额度', stage: 1, sub: '余额与账号切换' },
-  { key: 'mail', label: '邮箱', stage: 1, sub: '摘要与验证码' },
-  { key: 'focus', label: '专注', stage: 1, sub: '番茄钟与休息计时' },
-  { key: 'todo', label: '待办', stage: 1, sub: '清单与到期提醒' },
-  { key: 'health', label: '健康', stage: 1, sub: '喝水与久坐提醒' },
-  { key: 'shelf', label: '置物架', stage: 1, sub: '临时收纳文件位置' },
-  { key: 'calendar', label: '日程', stage: 3, sub: '月历、邮件邀请与工作日程' },
-];
-
-const STATUS_TABLE = [
-  { key: 'battery', label: '电量' },
-  { key: 'clock', label: '时间' },
-  { key: 'weather', label: '温度' },
-  { key: 'quota', label: '余额' },
-  { key: 'volume', label: '音量' },
-];
-
-const DEFAULTS = {
-  motion: true,
-  form: 'island',
-  formBoth: false,
-  launchAtLogin: false,
-  theme: 'dark',
-  skin: 'frost',
-  blur: true,
-  uiScale: 100,
-  radius: 22,
-  font: 'system',
-  weight: 400,
-  fontSize: 0,
-  islandWidth: 420,
-  pillHeight: 34,
-  displayId: null,
-  avoidTopBar: true,
-  timeFormat: '24h',
-  clickThrough: true,
-  hideFullscreen: true,
-  trayIcon: true,
-  hotkey: true,
-  wheelPaging: true,
-  blurCollapse: true,
-  hoverOpenDelay: 100,
-  hoverCloseDelay: 120,
-  hoverAutoHide: true,
-  statusItems: ['battery', 'clock', 'weather'],
-  pages: { music: true, weather: true, quota: true, mail: true },
-  pageOrder: ['music', 'weather', 'quota', 'mail'],
-  defaultPage: 'music',
-  weather: { city: '香港', unit: 'c', intervalMin: 15 },
-  music: { lyrics: true, islandLyrics: true, offset: 0.35 },
-  focus: { work: 25, rest: 5, enabled: false },
-  health: { waterMin: 45, standMin: 60, enabled: false },
-  todo: { enabled: true, notify: true },
-  shelf: { enabled: true, dir: '' },
-  calendar: { leadMin: 10, fromMail: true },
-  quota: { provider: 'deepseek', intervalMin: 15, alert: true, threshold: 5 },
-  notify: { system: true, body: true },
-  messenger: { wechat: true, qq: true, wecom: true, feishu: true, dingtalk: true },
-  mail: [],
-};
+/*
+ * Page and status tables come from the shared schema — the one file the island
+ * also reads. They used to be copied here, and the copy had drifted: devices
+ * had no row in this table, so the page could not be switched on from the UI
+ * even though the island knew how to draw it.
+ */
+const PAGES_TABLE = PAGE_MANIFEST.map((page) => ({
+  key: page.key,
+  label: page.title,
+  sub: page.sub,
+}));
+const STATUS_TABLE = STATUS_MANIFEST.map((item) => ({ key: item.key, label: item.label }));
 
 let prefs = { ...DEFAULTS };
 let page = 'general';
@@ -127,26 +68,7 @@ const content = document.getElementById('content');
 
 /* --------------------------------------------------------------- rendering */
 
-function merge(raw) {
-  const source = raw && typeof raw === 'object' ? raw : {};
-  return {
-    ...DEFAULTS,
-    ...source,
-    weather: { ...DEFAULTS.weather, ...(source.weather || {}) },
-    music: { ...DEFAULTS.music, ...(source.music || {}) },
-    focus: { ...DEFAULTS.focus, ...(source.focus || {}) },
-    health: { ...DEFAULTS.health, ...(source.health || {}) },
-    quota: { ...DEFAULTS.quota, ...(source.quota || {}) },
-    todo: { ...DEFAULTS.todo, ...(source.todo || {}) },
-    shelf: { ...DEFAULTS.shelf, ...(source.shelf || {}) },
-    calendar: { ...DEFAULTS.calendar, ...(source.calendar || {}) },
-    notify: { ...DEFAULTS.notify, ...(source.notify || {}) },
-    messenger: { ...DEFAULTS.messenger, ...(source.messenger || {}) },
-    pages: { ...DEFAULTS.pages, ...(source.pages || {}) },
-    statusItems: Array.isArray(source.statusItems) ? source.statusItems : [...DEFAULTS.statusItems],
-    pageOrder: Array.isArray(source.pageOrder) ? source.pageOrder : [...DEFAULTS.pageOrder],
-  };
-}
+const merge = (raw) => withDefaults(raw);
 
 const escapeHtml = (value) =>
   String(value ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -157,17 +79,17 @@ const row = (label, sub, control) =>
   '<span class="row-control">' + control + '</span></div>';
 
 const rowToggle = (label, sub, key) =>
-  row(label, sub, '<button type="button" class="switch" role="switch" aria-checked="' + Boolean(prefs[key]) +
+  row(label, sub, '<button type="button" class="switch" role="switch" aria-checked="' + Boolean(valueOf(key)) +
     '" data-act="toggle" data-key="' + key + '" aria-label="' + escapeHtml(label) + '"></button>');
 
 const rowSeg = (label, sub, key, options) =>
   row(label, sub, '<span class="seg">' + options.map(([value, text]) =>
     '<button type="button" data-act="seg" data-key="' + key + '" data-value="' + value + '" aria-pressed="' +
-    (String(prefs[key]) === String(value)) + '">' + escapeHtml(text) + '</button>').join('') + '</span>');
+    (String(valueOf(key)) === String(value)) + '">' + escapeHtml(text) + '</button>').join('') + '</span>');
 
 const rowSelect = (label, sub, key, options, selected) =>
   row(label, sub, '<select class="ctl" data-act="set" data-key="' + key + '">' + options.map(([value, text]) =>
-    '<option value="' + value + '"' + (String(selected ?? prefs[key]) === String(value) ? ' selected' : '') + '>' +
+    '<option value="' + value + '"' + (String(selected ?? valueOf(key)) === String(value) ? ' selected' : '') + '>' +
     escapeHtml(text) + '</option>').join('') + '</select>');
 
 const rowInput = (label, sub, key, value, placeholder) =>
@@ -176,9 +98,9 @@ const rowInput = (label, sub, key, value, placeholder) =>
 
 const rowRange = (label, sub, key, min, max, step, suffix) =>
   row(label, sub, '<input class="ctl" type="range" min="' + min + '" max="' + max + '" step="' + step +
-    '" value="' + Number(prefs[key] ?? min) + '" data-act="set" data-key="' + key + '" data-suffix="' +
+    '" value="' + Number(valueOf(key) ?? min) + '" data-act="set" data-key="' + key + '" data-suffix="' +
     escapeHtml(suffix ?? '') + '" /><b style="min-width:44px;text-align:right;font-weight:400;color:var(--dim);font-size:11.5px">' +
-    Number(prefs[key] ?? min) + escapeHtml(suffix ?? '') + '</b>');
+    Number(valueOf(key) ?? min) + escapeHtml(suffix ?? '') + '</b>');
 
 /**
  * Action controls. Unlike the preference rows above they do not write prefs —
@@ -293,7 +215,7 @@ function pageBehavior() {
     group('快捷键', card([
       rowToggle('全局快捷键', 'Alt+Shift+T 展开或收起岛', 'hotkey'),
     ])) +
-    '<p class="note">阶段 1 里，全屏隐藏、快捷键与滚轮开关只保存偏好；真正生效在阶段 2 接入窗口事件后。</p>';
+    '';
 }
 
 function orderList(listId, items, enabledOf) {
@@ -301,7 +223,7 @@ function orderList(listId, items, enabledOf) {
     '<div class="order-item" draggable="true" data-order="' + item.key + '">' +
       '<span class="order-grip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>' +
       '<span class="order-name">' + escapeHtml(item.label) +
-        (item.stage > 1 ? '<em>阶段 ' + item.stage + '</em>' : '') +
+        '' +
         (item.sub ? '<em>' + escapeHtml(item.sub) + '</em>' : '') +
       '</span>' +
       (enabledOf ? '<button type="button" class="switch" role="switch" aria-checked="' + Boolean(enabledOf(item.key)) +
@@ -310,18 +232,27 @@ function orderList(listId, items, enabledOf) {
 }
 
 function pagePages() {
-  const order = prefs.pageOrder.filter((key) => PAGES_TABLE.some((p) => p.key === key));
-  for (const item of PAGES_TABLE) if (!order.includes(item.key)) order.push(item.key);
-  const pageItems = order.map((key) => PAGES_TABLE.find((p) => p.key === key)).filter(Boolean);
-  const statusItems = prefs.statusItems
+  const pageItems = orderedPageKeys(prefs)
+    .map((key) => PAGES_TABLE.find((p) => p.key === key))
+    .filter(Boolean);
+  const statusOrder = orderedStatusKeys(prefs);
+  const statusItems = statusOrder
+    .slice(0, enabledStatusKeys(prefs).length)
     .map((key) => STATUS_TABLE.find((s) => s.key === key))
     .filter(Boolean);
-  const missing = STATUS_TABLE.filter((s) => !prefs.statusItems.includes(s.key));
+  const missing = statusOrder
+    .slice(enabledStatusKeys(prefs).length)
+    .map((key) => STATUS_TABLE.find((s) => s.key === key))
+    .filter(Boolean);
 
+  const defaultOptions = pageItems.map((item) => [item.key, item.label]);
   return head('页面管理', '决定岛上有哪些页，以及它们出现的顺序') +
     group('状态组件 · 常驻胶囊', '<div class="card">' + orderList('status', statusItems.concat(missing), null) + '</div>') +
     group('功能页面 · 展开后左右翻', '<div class="card">' + orderList('pages', pageItems, (key) => prefs.pages[key] !== false) + '</div>') +
-    '<p class="note">拖动排序；关掉的页面不在岛上出现，也不在后台运行。阶段 2、3 的页面会随对应功能一起上线。</p>';
+    group('打开时', card([
+      rowSelect('默认页', '每次打开面板先停在这一页', 'defaultPage', defaultOptions, prefs.defaultPage),
+    ])) +
+    '<p class="note">拖动排序。关掉的页面既不在岛上出现，也不再在后台运行——它的服务会一起停掉，除非胶囊里有状态组件还要用它。</p>';
 }
 
 function pageMusic() {
@@ -331,7 +262,7 @@ function pageMusic() {
       rowToggle('岛上歌词', '收起时显示当前句', 'music.islandLyrics'),
       rowRange('时间偏移', '正数提前，负数延后', 'music.offset', -1, 2, 0.05, ' 秒'),
     ])) +
-    '<p class="note">阶段 1 已完成 SMTC 桥的调研与协议设计；阶段 2 接入 PowerShell + WinRT，无需原生编译。</p>';
+    '<p class="note">歌词按时间轴滚动；时间偏移用来校正平台之间的延迟。</p>';
 }
 
 function pageFocus() {
@@ -346,7 +277,7 @@ function pageFocus() {
       rowRange('喝水间隔', '', 'health.waterMin', 20, 120, 5, ' 分钟'),
       rowRange('久坐提醒', '', 'health.standMin', 30, 180, 10, ' 分钟'),
     ])) +
-    '<p class="note">这一页的开关会写进偏好；计时与通知在阶段 2 接上。</p>';
+    '<p class="note">计时以「结束时间戳」存盘，关掉设置窗口或重启应用都还在走。</p>';
 }
 
 function pageTodo() {
@@ -360,10 +291,11 @@ function pageTodo() {
       rowInput('收纳目录', '留空使用默认目录', 'shelf.dir', prefs.shelf?.dir ?? '', '默认：资料库/EmojiTot/shelf'),
     ])) +
     group('文字剪贴板', card([
-      rowToggle('记录剪贴板', '保留最近复制的文字，点一下就能再复制', 'shelf.clipboard'),
+      rowToggle('记录剪贴板', '默认关。开启后保留最近复制的文字；关掉时清空未固定的记录', 'shelf.clipboard'),
       row('保存位置', 'clipboard.json，只在本机', '<span class="badge">本机</span>'),
+      row('清除全部记录', '删除所有剪贴板历史，包括已固定的条目', '<button type="button" class="btn" data-act="button" data-key="clipboard-clear">清除</button>'),
     ])) +
-    '<p class="note">阶段 2 实现：本地 JSON 存储，不联云。</p>';
+    '<p class="note">数据只写在本机 JSON 文件里，不联云。剪贴板历史默认关闭；关掉开关会清掉未固定的记录，固定项要在这里手动清除。</p>';
 }
 
 function pageComm() {
@@ -501,7 +433,7 @@ function emptyCardRow() {
 function pageWeather() {
   return head('天气', '城市、单位与刷新') +
     group('位置', card([
-      rowToggle('自动定位', '按网络位置识别城市，比手填更接近你所在的地方', 'weatherAutoLocate'),
+      rowToggle('自动定位', '按网络位置识别城市，比手填更接近你所在的地方', 'weather.autoLocate'),
       rowInput('城市', '关掉自动定位时使用；中文或英文都行', 'weather.city', prefs.weather.city, '香港'),
       rowSeg('单位', '', 'weather.unit', [['c', '摄氏'], ['f', '华氏']]),
     ])) +
@@ -519,8 +451,14 @@ function pagePlugins() {
 }
 
 function pageAbout() {
+  const caps = meta?.platform?.features ?? {};
+  const missing = Object.entries(caps).filter(([, on]) => !on).map(([name]) => name);
+  const platformRow = missing.length
+    ? row('平台', '部分功能在当前系统不可用：' + escapeHtml(missing.join('、')), '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>')
+    : row('平台', '全部功能可用', '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>');
   return head('关于', 'EmojiTot') +
     group('版本', card([
+      platformRow,
       row('当前版本', '双形态、十一个功能页、设置十四个分区', '<span class="badge">v' + escapeHtml(version) + '</span>'),
       row('数据目录', 'prefs.json、state.json 与缓存', '<button type="button" class="btn" data-act="button" data-key="open-data">打开</button>'),
       row('状态文件', '当前表情与状态，可给别的工具读', '<button type="button" class="btn" data-act="button" data-key="open-state">打开</button>'),
@@ -682,7 +620,9 @@ content.addEventListener('click', async (event) => {
   const key = target.dataset.key;
 
   if (act === 'toggle') {
-    await patch({ [key]: !prefs[key] });
+    // setPath, not { [key]: … }: a key like focus.enabled used to be written as
+    // one literal property named "focus.enabled", which no reader ever found.
+    await patch(setPath(key, !valueOf(key)));
     return;
   }
   if (act === 'action-toggle') {
@@ -707,14 +647,13 @@ content.addEventListener('click', async (event) => {
     return;
   }
   if (act === 'toggle-nested') {
-    const current = valueOf(key);
-    await patch(setPath(key, current === false));
+    await patch(setPath(key, !valueOf(key)));
     return;
   }
   if (act === 'seg') {
     const value = target.dataset.value;
     const numeric = ['uiScale', 'radius', 'fontSize', 'pillHeight', 'islandWidth', 'hoverOpenDelay', 'hoverCloseDelay'].includes(key);
-    await patch({ [key]: numeric ? Number(value) : value });
+    await patch(setPath(key, numeric ? Number(value) : value));
     return;
   }
   if (act === 'button') {
@@ -723,6 +662,14 @@ content.addEventListener('click', async (event) => {
       const result = await api.refreshWeather?.();
       target.textContent = result?.ok ? '已刷新' : '失败';
       setTimeout(() => { target.textContent = '刷新'; }, 1600);
+      return;
+    }
+    if (key === 'clipboard-clear') {
+      // The only control that deletes data, so it asks first.
+      if (!window.confirm('删除全部剪贴板历史（包括固定的条目）？')) return;
+      await api.clipboardClear?.();
+      target.textContent = '已清除';
+      setTimeout(() => { target.textContent = '清除'; }, 1600);
       return;
     }
     if (key === 'open-data') { await api.openData?.(); return; }

@@ -10,7 +10,7 @@
  * Results are cached so a flaky network shows the last good reading instead of
  * an empty card, and a failed lookup never throws.
  */
-const { execFile } = require('node:child_process');
+const platform = require('../platform');
 const path = require('node:path');
 const { cachePath, readJson, writeJson, scriptFile } = require('../paths');
 
@@ -52,34 +52,16 @@ function cacheFile() {
 }
 
 /** Ask the child process; resolve the raw object or reject with a reason. */
-function fetchRemote(city, autoLocate) {
-  return new Promise((resolve, reject) => {
-    const encoded = Buffer.from(city, 'utf8').toString('base64');
-    const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT];
-    if (autoLocate) args.push('-AutoLocate');
-    else args.push('-CityB64', encoded);
-    execFile(
-      'powershell.exe',
-      args,
-      { windowsHide: true, timeout: 30000, maxBuffer: 2 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(new Error(String(stderr || error.message).trim().slice(0, 200)));
-          return;
-        }
-        const text = String(stdout).trim();
-        if (!text || text === 'null') {
-          reject(new Error('city not found'));
-          return;
-        }
-        try {
-          resolve(JSON.parse(text));
-        } catch (parseError) {
-          reject(parseError);
-        }
-      },
-    );
-  });
+async function fetchRemote(city, autoLocate) {
+  const encoded = Buffer.from(city, 'utf8').toString('base64');
+  const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT];
+  if (autoLocate) args.push('-AutoLocate');
+  else args.push('-CityB64', encoded);
+  const result = await platform.runPowerShell(args, { timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
+  if (!result.ok) throw new Error(String(result.stderr || result.error).trim().slice(0, 200));
+  const text = result.stdout.trim();
+  if (!text || text === 'null') throw new Error('city not found');
+  return JSON.parse(text);
 }
 
 function normalize(raw) {

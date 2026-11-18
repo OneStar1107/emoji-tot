@@ -100,10 +100,29 @@ function remove(id) {
   emit();
 }
 
+/** Everything, pinned or not — the settings page's "forget all" action. */
 function clear() {
   items = [];
   save();
   emit();
+}
+
+/**
+ * Drop every unpinned entry.
+ *
+ * Called when the feature is switched off: the switch says "do not keep a
+ * clipboard history", so what was collected under it must not sit in
+ * clipboard.json waiting to be read. Pinned entries are user-marked keepsakes
+ * and survive, which is also why the settings page has a separate "forget
+ * everything" action.
+ */
+function clearUnpinned() {
+  const kept = items.filter((item) => item.pinned);
+  if (kept.length === items.length) return false;
+  items = kept;
+  save();
+  emit();
+  return true;
 }
 
 function start() {
@@ -125,10 +144,13 @@ function start() {
 function stop() {
   if (timer) clearInterval(timer);
   timer = null;
+  // The history must not outlive the switch that created it.
+  clearUnpinned();
+  last = '';
 }
 
 function onChange(fn) {
   listeners.add(fn);
 }
 
-module.exports = { start, stop, list, copy, togglePin, remove, clear, onChange };
+module.exports = { start, stop, list, copy, togglePin, remove, clear, clearUnpinned, onChange };

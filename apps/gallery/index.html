@@ -2,10 +2,37 @@
 <html lang="zh-CN" data-mono="light">
 <head>
 <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>EmojiTot — 一个两位数，一个会表达的角色</title>
 <meta name="description" content="71 cast members, 3 style series, 18 colours, 7 themes — driven by a two-digit emotionId. Tune it, copy the snippet, ship it." />
 <link rel="stylesheet" href="/src/style.css" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="EmojiTot — an SVG character engine" />
+  <meta property="og:description" content="15 characters, 44 expressions, 12 colours, two finishes — a two-digit emotionId drives the face. Tune it, copy the snippet, ship it." />
+  <meta property="og:url" content="https://onestar1107.github.io/emoji-tot/" />
+  <meta property="og:image" content="https://onestar1107.github.io/emoji-tot/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="EmojiTot — an SVG character engine" />
+  <meta name="twitter:description" content="15 characters, 44 expressions, one two-digit emotionId." />
+  <meta name="twitter:image" content="https://onestar1107.github.io/emoji-tot/og.png" />
+  <link rel="canonical" href="https://onestar1107.github.io/emoji-tot/" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "EmojiTot",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Windows 10, Windows 11",
+      "description": "A character engine drawn in SVG: 15 characters, 44 expressions, two finishes, one two-digit protocol.",
+      "url": "https://onestar1107.github.io/emoji-tot/",
+      "license": "https://opensource.org/licenses/MIT"
+    }
+  </script>
 </head>
 <body>
 <header class="bar">

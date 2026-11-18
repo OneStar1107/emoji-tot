@@ -2,16 +2,16 @@
 
 # EmojiTot
 
-**A character engine for the desktop and the web — 15 characters from 15 bodies × hand-written outlines × 12 colours, 44 expressions driven by one two-digit number. Visible in a page, and now both a ball on the desktop and a pill at the top of the screen.**
+**A character engine for the desktop and the web — <!--facts:cast-->15<!--/facts--> characters from <!--facts:bodies-->15<!--/facts--> bodies × hand-written outlines × <!--facts:colors-->12<!--/facts--> colours, <!--facts:faceStates-->44<!--/facts--> expressions driven by one two-digit number. Visible in a page, and now both a ball on the desktop and a pill at the top of the screen.**
 
 [Console](https://onestar1107.github.io/emoji-tot/#/console) · [Faces](https://onestar1107.github.io/emoji-tot/#/gallery) · [Scene](https://onestar1107.github.io/emoji-tot/#/scene) · [Docs](https://onestar1107.github.io/emoji-tot/#/docs) · [中文](README.md)
 
 ![Cast](docs/screenshots/hero.png)
 
 > **About**
-> A character engine drawn from formulas: 15 characters from 15 hand-written outlines × 12 colours, and 44 expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
+> A character engine drawn from hand-written outlines: <!--facts:cast-->15<!--/facts--> characters from <!--facts:bodies-->15<!--/facts--> bodies × <!--facts:colors-->12<!--/facts--> colours, and <!--facts:faceStates-->44<!--/facts--> expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
 >
-> 一个用 SVG 画出来的角色引擎：15 个角色各有自己手写的闭合轮廓，44 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
+> 一个用 SVG 画出来的角色引擎：<!--facts:cast-->15<!--/facts--> 个角色各有自己手写的闭合轮廓，<!--facts:faceStates-->44<!--/facts--> 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
 
 </div>
 
@@ -19,12 +19,16 @@
 
 ## Download
 
+<!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot Setup 0.2.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.2.1/EmojiTot-Setup-0.2.1.exe) | Installer — starts from the Start menu |
-| [EmojiTot Portable 0.2.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.2.1/EmojiTot-Portable-0.2.1.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot Setup 0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot-Setup-0.3.32.exe) | Installer — starts from the Start menu |
+| [EmojiTot Portable 0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot-Portable-0.3.32.exe) | Portable — double-click, writes nothing to the registry |
+<!--downloads:end-->
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases)
+
+> The version in the download table is kept in sync with `package.json` by `pnpm docs:sync`. If that release has not been tagged yet the links 404 — take the current published build from **all releases** above in that case.
 
 ## Two forms
 
@@ -37,7 +41,7 @@ The desktop app has two forms, switchable from the tray or the settings window w
 
 Both can be on at once. The form is one field in `prefs.json`; both windows are created up front and the switch only toggles visibility, so nothing reloads and the island keeps the page it was on.
 
-The island sizes itself from its content: the page measures its own box with `ResizeObserver` and the main process calls `setBounds`, centred. The settings window has 13 pages — general, appearance, size and position, hiding and interaction, page manager, music and lyrics, focus and water, todos and shelf, notifications / mail / calendar, AI quota, weather, plugins, about — and every control writes straight to prefs with no save button.
+The island sizes itself from its content: the page measures its own box with `ResizeObserver` and the main process calls `setBounds`, centred. The settings window has <!--facts:settingsPages-->14<!--/facts--> pages — general, appearance, size and position, hiding and interaction, cast and expressions, page manager, music and lyrics, focus and water, todos and shelf, notifications / mail / calendar, AI quota, weather, plugins, about — and every control writes straight to prefs with no save button.
 
 ## What this is
 
@@ -45,11 +49,12 @@ The island sizes itself from its content: the page measures its own box with `Re
 
 | Axis | Count | How |
 | --- | --- | --- |
-| Bodies | 15 | circle, egg, squircle, drop, star, gem, petal, cloud, heart, ghost, tot… all sampled from `r(t)` or a short parametric curve |
-| Finish | 2 | 6 ears, 8 things on top, 5 on the sides, 6 surface markings; each anchors to the body's height and pointiness |
-| Colours | 12 | flat hexes; the face ink inverts by luminance |
-| Expressions | 44 | 9 eye styles × 10 mouth styles plus lean, indexed by the protocol's state names |
-| Characters | 15 | One per body, each with its own expression and motion |
+| Bodies | <!--facts:bodies-->15<!--/facts--> | circle, egg, squircle, blob, pear, drop, star, gem, loaf, blossom, clover, cloud, heart, ghost, tot — each outline written out by hand |
+| Traits | <!--facts:traits-->26<!--/facts--> | <!--facts:earTraits-->6<!--/facts--> ears, <!--facts:topTraits-->8<!--/facts--> on top, <!--facts:sideTraits-->5<!--/facts--> on the sides, <!--facts:surfaceTraits-->6<!--/facts--> surface markings; each anchors to the body's height and pointiness |
+| Finish | 2 | die-cut sticker (default) and flat, switched on the same outline |
+| Colours | <!--facts:colors-->12<!--/facts--> | flat hexes; the face ink inverts by luminance |
+| Expressions | <!--facts:faceStates-->44<!--/facts--> | <!--facts:eyeStyles-->9<!--/facts--> eye styles × <!--facts:mouthStyles-->10<!--/facts--> mouth styles plus lean, indexed by the protocol's state names |
+| Characters | <!--facts:cast-->15<!--/facts--> | One per body, each with its own expression and motion |
 | Offspring | unbounded | `breed(a, b, seed)` crosses two genomes; nothing is stored |
 
 Three parts, all written from scratch in this repository:
@@ -83,9 +88,9 @@ feed('thinking');              // a bare state name works too
 
 | Page | What is there |
 | --- | --- |
-| **Console** | Pick one of 15 characters, then adjust body, colour, traits and expression; the component snippet and the JSON genome follow every change |
-| **Faces** | Two walls: the 15-member cast wall (filter by family) and the 44-expression wall; clicking a character jumps to the console |
-| **Scene** | Fourteen characters on one stage, each changing expression on its own timer; click one and it answers; party / sleep / reshuffle |
+| **Console** | Pick one of <!--facts:cast-->15<!--/facts--> characters, then adjust body, colour, traits and expression; the component snippet and the JSON genome follow every change |
+| **Faces** | Two walls: the <!--facts:cast-->15<!--/facts-->-member cast wall (filter by family) and the <!--facts:faceStates-->44<!--/facts-->-expression wall; clicking a character jumps to the console |
+| **Scene** | <!--facts:sceneHerd-->12<!--/facts--> characters on one stage, each changing expression on its own timer; click one and it answers; party / sleep / reshuffle |
 | **Docs** | How the engine draws, how a genome is composed, what each digit means, how to call it — generated from code, so it cannot go stale |
 
 ![Scene](docs/screenshots/scene.png)
@@ -94,12 +99,12 @@ feed('thinking');              // a bare state name works too
 
 ![Faces](docs/screenshots/faces.png)
 
-The same ball can live on any desktop (Windows / macOS):
+The same ball can live on any desktop (Windows 10/11):
 
 - **Edge docking** — drag it to a left or right edge and it tucks away, leaving 30% on screen; hover the sliver and it slides back out. The drop happens with the cursor on the edge, so it only opens after the pointer has left once.
 - **Click-through** — the window never eats a click meant for the desktop behind it; input is taken back only when the pointer is on the ball.
 - **Agent linkage** — DeepSeek Harness, Claude Code and Codex can each drive the face from their own status file.
-- **One file is the whole interface** — `%APPDATA%/EmojiTot/state.json` on Windows, `~/Library/Application Support/EmojiTot/` on macOS. A bare id, a JSON string or a JSON object all work; malformed writes keep the current face.
+- **One file is the whole interface** — `%APPDATA%/EmojiTot/state.json`. A bare id, a JSON string or a JSON object all work; malformed writes keep the current face.
 
 ```bash
 echo '{"emotionId":"34","tips":"build failed"}' > "$APPDATA/EmojiTot/state.json"
@@ -108,23 +113,28 @@ echo '{"emotionId":"34","tips":"build failed"}' > "$APPDATA/EmojiTot/state.json"
 ## Quick start
 
 ```bash
-pnpm install     # builds the protocol package automatically (postinstall)
+pnpm approve-builds --all   # pnpm 12 skips dependency build scripts by default; Electron needs one
+pnpm install
+pnpm build       # builds core and protocol
+pnpm typecheck   # type checks for both libraries
+pnpm test        # protocol and engine tests
+pnpm preview     # renders all <!--facts:protocolIds-->51<!--/facts--> protocol ids to out/preview.html
 pnpm dev         # site at http://localhost:5173
 pnpm desktop     # the desktop pet
-pnpm test        # 27 protocol tests, including a row-by-row comparison with upstream
+pnpm scan        # sensitive-information scan, run before publishing
 ```
 
 Package the app:
 
 ```bash
-pnpm --filter @emojitot/desktop dist   # Windows installer lands in release/
+pnpm dist        # Windows installer lands in release/
 ```
 
 ## Layout
 
 ```
-packages/protocol    zero runtime dependencies: 51 ids, parsing, arbitration, event bridge (ESM + CJS)
-apps/gallery         the site: console / faces / scene / themes / docs
+packages/protocol    zero runtime dependencies: <!--facts:protocolIds-->51<!--/facts--> ids, parsing, arbitration, event bridge (ESM + CJS)
+apps/gallery         the site: console / faces / scene / docs
 apps/desktop         the pet: docking, click-through, agent linkage, tray
 ```
 
@@ -135,7 +145,7 @@ Not "it should run" — it was run:
 | Check | Evidence |
 | --- | --- |
 | Protocol table | 23 tests covering id validity, state mapping, event flags and segment bounds |
-| 51 states render | `node apps/gallery/scripts/preview.mjs` — 51/51, 0 failures, in Node with no browser |
+| <!--facts:protocolIds-->51<!--/facts--> protocol ids render | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> ids → <!--facts:faceStates-->44<!--/facts--> faces, 51/51 and 44/44 pass, 0 failures, in Node with no browser |
 | Desktop window behaviour | `node apps/desktop/scripts/ui-check.mjs <port>` — drives the real cursor, 7/7 (dock, open, tuck, click-through) |
 | Desktop protocol | write `34` → `alerting`, `33` → `celebrate`, malformed JSON → keeps the current face |
 

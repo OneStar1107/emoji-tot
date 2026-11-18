@@ -9,7 +9,7 @@
  * PNG every second would be megabytes of IPC — so the last art is carried
  * forward here.
  */
-const { spawn } = require('node:child_process');
+const platform = require('../platform');
 const path = require('node:path');
 const { scriptFile } = require('../paths');
 
@@ -85,10 +85,15 @@ function start() {
   if (proc) return;
   stopping = false;
   buffer = '';
-  proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, 'watch'], {
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
+  proc = platform.spawnPowerShell(
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, 'watch'],
+    { stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+  if (!proc) {
+    // No shell on this platform: media is unavailable, not broken.
+    proc = null;
+    return;
+  }
   proc.stdout.setEncoding('utf8');
   proc.stdout.on('data', (chunk) => {
     buffer += chunk;
@@ -122,8 +127,8 @@ function command(kind, arg = 0) {
   if (!['toggle', 'next', 'prev', 'seek'].includes(kind)) return;
   const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, kind];
   if (kind === 'seek') args.push(String(arg));
-  const child = spawn('powershell.exe', args, { windowsHide: true, stdio: 'ignore' });
-  child.on('error', () => {});
+  const child = platform.spawnPowerShell(args, { stdio: 'ignore' });
+  child?.on('error', () => {});
 }
 
 /** Called after a control action so the UI does not wait a full second. */

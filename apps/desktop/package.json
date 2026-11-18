@@ -12,11 +12,12 @@
     "dev": "electron . --dev",
     "prepack": "node scripts/copy-vendor.mjs",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "test": "node --test"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.8",
+    "electron": "^45.3.4",
+    "electron-builder": "^26.18.0",
     "sharp": "^0.35.5"
   },
   "build": {
@@ -38,13 +39,6 @@
         "portable"
       ],
       "icon": "assets/icon.png"
-    },
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "icon": "assets/icon.png",
-      "category": "public.app-category.entertainment"
     }
   },
   "license": "MIT",

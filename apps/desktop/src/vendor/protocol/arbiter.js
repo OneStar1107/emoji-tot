@@ -51,8 +51,18 @@ function createArbiter(options = {}) {
     let shown = null;
     let dwellUntil = 0;
     let timer = null;
-    /** Events that arrived during a dwell, played when it ends. */
-    let queued = null;
+    /**
+     * Events that arrived during a dwell, played when it ends.
+     *
+     * This used to be a single slot: a second event either replaced the first
+     * (when it outranked it) or was dropped (when it did not), so a burst of
+     * "done" from one sub-agent and "error" from another lost one of them. It is
+     * a sorted list now — highest priority first, arrival order within a
+     * priority, nothing overwritten.
+     */
+    let queue = [];
+    let seq = 0;
+    let ttlTimer = null;
     const idleResult = () => ({
         state: (0, emotions_js_1.stateForEmotion)(idleEmotionId),
         emotionId: idleEmotionId,
@@ -97,6 +107,18 @@ function createArbiter(options = {}) {
             }
         }
     };
+    /** Insert into the play queue: priority desc, arrival order within a priority. */
+    const enqueue = (result) => {
+        const item = { result, priority: priorityOf(result.state, priority), seq: seq++ };
+        let index = queue.findIndex((entry) => entry.priority < item.priority);
+        if (index < 0)
+            index = queue.length;
+        queue.splice(index, 0, item);
+    };
+    const dequeue = () => {
+        const next = queue.shift();
+        return next ? next.result : null;
+    };
     const clearTimer = () => {
         if (timer != null) {
             cancel(timer);
@@ -110,13 +132,28 @@ function createArbiter(options = {}) {
         dwellUntil = now() + minDisplayMs;
         timer = schedule(() => {
             timer = null;
-            const pending = queued;
-            queued = null;
+            /*
+             * An event holds the screen for minDisplayMs, then the next queued event
+             * plays. When the queue empties the arbiter re-resolves, so the character
+             * returns to the highest-priority *condition* rather than staying on the
+             * last event — "done" is a moment, not a mode.
+             */
+            const pending = dequeue();
             if (pending) {
                 apply(pending);
                 return;
             }
-            apply(resolve());
+            const next = resolve();
+            /*
+             * Stop re-arming when nothing changed.
+             *
+             * Without this guard an idle arbiter reschedules itself every
+             * minDisplayMs forever: apply() always arms a dwell, so a steady state
+             * became an endless chain of timers that never published anything.
+             */
+            if (shown && shown.state === next.state && shown.emotionId === next.emotionId)
+                return;
+            apply(next);
         }, minDisplayMs);
     };
     const update = (update) => {
@@ -156,11 +193,12 @@ function createArbiter(options = {}) {
             const shownPriority = shown ? priorityOf(shown.state, priority) : -1;
             const urgent = priorityOf(state, priority) > shownPriority;
             if (inDwell && !urgent) {
-                if (!queued || priorityOf(queued.state, priority) <= priorityOf(state, priority)) {
-                    queued = next;
-                }
+                // Never dropped: the queue keeps every event until it is played.
+                enqueue(next);
                 return;
             }
+            // Urgent, or the screen is free: show it now. Whatever is still queued
+            // plays afterwards, in priority order.
             apply(next);
             return;
         }
@@ -184,8 +222,30 @@ function createArbiter(options = {}) {
         // that is no longer happening.
         apply(resolve());
     };
+    /*
+     * Expiry on a schedule.
+     *
+     * sessionTtlMs is what makes a tool with no end-of-session hook eventually
+     * let go, but that only works if something sweeps. The interval is a quarter
+     * of the TTL so a session cannot outlive it by more than that, and it is
+     * unref'd where the platform allows so a forgotten arbiter does not keep a
+     * process alive.
+     */
+    const autoTick = options.autoTick !== false;
+    const ttlInterval = Math.max(1000, Math.min(Math.round(sessionTtlMs / 4), 15000));
+    const armTtl = () => {
+        if (!autoTick)
+            return;
+        ttlTimer = schedule(() => {
+            ttlTimer = null;
+            tick();
+            armTtl();
+        }, ttlInterval);
+        ttlTimer?.unref?.();
+    };
     publish(idleResult());
     dwellUntil = now();
+    armTtl();
     return {
         update,
         remove(sessionId) {
@@ -210,7 +270,11 @@ function createArbiter(options = {}) {
             sessions.clear();
             listeners.clear();
             shown = null;
-            queued = null;
+            queue = [];
+            if (ttlTimer != null) {
+                cancel(ttlTimer);
+                ttlTimer = null;
+            }
         },
     };
 }

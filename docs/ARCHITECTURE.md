@@ -16,7 +16,7 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 | --- | --- | --- | --- |
 | 球 | `src/renderer/index.html` | `src/main.js` | 贴边、穿透、拖拽、Agent 联动 |
 | 灵动岛 | `src/renderer/island.html` | `src/main/island.js` | 顶部居中的胶囊，点开成功能面板 |
-| 设置中心 | `src/renderer/settings.html` | `src/main/settings.js` | 13 页，改动即写 `prefs.json` |
+| 设置中心 | `src/renderer/settings.html` | `src/main/settings.js` | <!--facts:settingsPages-->14<!--/facts--> 页，改动即写 `prefs.json` |
 
 三个窗口都提前创建，形态切换只改可见性：重建窗口会重载页面，岛会丢掉当前页，球会丢掉位置。两个 preload（`preload-island.js`、`preload-settings.js`）各自只暴露自己的几个调用。
 
@@ -58,12 +58,12 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 
 | 项 | 来源 | 数量 |
 | --- | --- | --- |
-| `body` | `core/src/body.ts` 里的参数化轮廓（`r(t)` 或参数曲线采样） | 15 |
-| `color` | `core/src/palette.ts` 的实色 | 12 |
-| `traits` | `core/src/traits.ts`，**每个角色最多一个** | 26 |
-| `state` | `core/src/face.ts` 的眼型 × 嘴型词汇 | 44 |
+| `body` | `core/src/body.ts` 里手写的闭合轮廓（梨有腰和梗叶，星星有五真角） | <!--facts:bodies-->15<!--/facts--> |
+| `color` | `core/src/palette.ts` 的实色 | <!--facts:colors-->12<!--/facts--> |
+| `traits` | `core/src/traits.ts`，**每个角色最多一个** | <!--facts:traits-->26<!--/facts--> |
+| `state` | `core/src/face.ts` 的眼型 × 嘴型词汇 | <!--facts:faceStates-->44<!--/facts--> |
 
-`core/src/cast.ts` 把 135 个组合钉成有名有姓的成员，每个还带一个招牌表情（`face`）和一个招牌动作（`motion`）。`breed(a, b, seed)` 能交叉两个基因组，用于演示「阵容不是枚举出来的」。
+`core/src/cast.ts` 把 <!--facts:cast-->15<!--/facts--> 个组合钉成有名有姓的成员（每种身体一个代表），每个还带一个招牌表情（`face`）和一个招牌动作（`motion`）。`breed(a, b, seed)` 能交叉两个基因组，用于演示「阵容不是枚举出来的」。
 
 **为什么一个角色只给一个特征**：特征都抢同一块空间（耳朵、光环、尾巴都在身体外沿）。堆四个不如放一个 —— 72px 下能看清的是一个想法，不是四个零件。
 

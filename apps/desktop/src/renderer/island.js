@@ -5,7 +5,10 @@
  * to the main process), states arrive from services, and every page has an
  * empty state with one action instead of a blank box.
  */
-import { PAGES, STATUS_ITEMS, DEFAULT_PAGES } from './shared/pages.js';
+import {
+  PAGE_MANIFEST as PAGES,
+  STATUS_MANIFEST as STATUS_ITEMS,
+} from '../shared/schema.js';
 
 const api = window.islandAPI;
 
@@ -99,10 +102,9 @@ const enabledPages = () => {
   const order = Array.isArray(prefs.pageOrder) && prefs.pageOrder.length
     ? prefs.pageOrder
     : PAGES.map((p) => p.key);
-  const isOn = (key) => {
-    if (on && key in on) return on[key] !== false;
-    return DEFAULT_PAGES.includes(key);
-  };
+  // The main process fills in every schema default, so a missing key here only
+  // happens before the first prefs payload arrives — then show everything.
+  const isOn = (key) => (on && key in on ? on[key] !== false : true);
   return order
     .map((key) => PAGES.find((p) => p.key === key))
     .filter((page) => page && isOn(page.key));
@@ -324,8 +326,18 @@ function renderPillStatus() {
         parts.push(`<span class="stat" data-clock>${hhmm()}</span>`);
       } else if (key === 'weather' && weather) {
         const celsius = Number(weather.current?.temp) || 0;
-      const temp = prefs.weather?.unit === 'f' ? Math.round((celsius * 9) / 5 + 32) : Math.round(celsius);
-      parts.push(`<span class="stat dim">${temp}°</span>`);
+        const temp = prefs.weather?.unit === 'f' ? Math.round((celsius * 9) / 5 + 32) : Math.round(celsius);
+        parts.push(`<span class="stat dim">${temp}°</span>`);
+      } else if (key === 'quota') {
+        /*
+         * The pill used to offer a balance toggle that drew nothing, because
+         * this loop only knew battery, clock and weather. A status item with no
+         * renderer is worse than no status item: it looks switched on.
+         */
+        const last = quotaState?.last;
+        if (last && !last.error && last.total !== undefined) {
+          parts.push(`<span class="stat dim" title="AI 余额">¥${escapeHtml(String(last.total))}</span>`);
+        }
       }
     }
     pillStatus.innerHTML = parts.join('');
@@ -529,14 +541,14 @@ function weatherPage() {
   return `<div class="weather">
     <div class="weather-now">
       <div class="weather-temp">${show(now.temp)}<sup>°</sup></div>
-      <div class="weather-desc"><b>${now.text}</b><span>${placeZh(weather.place.name)}${weather.place.country ? ' · ' + countryZh(weather.place.country) : ''}</span></div>
+      <div class="weather-desc"><b>${escapeHtml(now.text)}</b><span>${escapeHtml(placeZh(weather.place.name))}${weather.place.country ? ' · ' + escapeHtml(countryZh(weather.place.country)) : ''}</span></div>
       <span class="weather-icon">${svg(WEATHER_ICON[now.icon] ?? WEATHER_ICON.cloud)}</span>
     </div>
     <div class="weather-grid">
       <div class="weather-cell"><em>体感</em><b>${show(now.feels)}°</b></div>
-      <div class="weather-cell"><em>湿度</em><b>${now.humidity}%</b></div>
-      <div class="weather-cell"><em>风速</em><b>${now.wind} km/h</b></div>
-      <div class="weather-cell"><em>日出</em><b>${(now.sunrise || '').slice(11, 16) || '--'} / ${(now.sunset || '').slice(11, 16) || '--'}</b></div>
+      <div class="weather-cell"><em>湿度</em><b>${Number(now.humidity) || 0}%</b></div>
+      <div class="weather-cell"><em>风速</em><b>${Number(now.wind) || 0} km/h</b></div>
+      <div class="weather-cell"><em>日出</em><b>${escapeHtml((now.sunrise || '').slice(11, 16) || '--')} / ${escapeHtml((now.sunset || '').slice(11, 16) || '--')}</b></div>
     </div>
     <div class="weather-days">${dayCells}</div>
   </div>`;
@@ -666,6 +678,12 @@ const FESTIVALS = {
 };
 
 function calendarPage() {
+  const failedSubs = (calendarState.subscriptions ?? []).filter((sub) => sub.error);
+  const subErrorBar = failedSubs.length
+    ? '<p class="cal-error">' + failedSubs.length + ' 个日历订阅拉取失败：'
+      + escapeHtml(failedSubs.map((sub) => sub.name || sub.id).join('、'))
+      + '。在设置 → 通知、邮箱与日程里检查链接。</p>'
+    : '';
   const events = calendarState.events ?? [];
   const byDay = new Map();
   for (const event of events) {
@@ -791,7 +809,7 @@ function healthPage() {
       <div class="health-bar"><i style="width:${waterPct.toFixed(0)}%" data-due="${state.waterDue}"></i></div>
       <div class="health-actions">
         <button type="button" class="btn" data-local="health:drink">我喝过了</button>
-        <button type="button" class="btn ghost" data-local="health:reset" aria-label="清除喝水记录">清除</button>
+        <button type="button" class="btn ghost" data-local="health:resetWater" aria-label="清除喝水记录">清除</button>
       </div>
     </div>
     <div class="health-block">
@@ -799,7 +817,7 @@ function healthPage() {
       <div class="health-bar"><i style="width:${standPct.toFixed(0)}%" data-due="${state.standDue}"></i></div>
       <div class="health-actions">
         <button type="button" class="btn" data-local="health:stand">我起来了</button>
-        <button type="button" class="btn ghost" data-local="health:reset" aria-label="清除久坐记录">清除</button>
+        <button type="button" class="btn ghost" data-local="health:resetStand" aria-label="清除久坐记录">清除</button>
       </div>
     </div>
   </div>`;
@@ -970,6 +988,7 @@ function applyPrefs() {
   document.body.dataset.skin = prefs.skin ?? 'frost';
   document.body.dataset.blur = prefs.blur === false ? 'off' : 'on';
   document.body.dataset.motion = prefs.motion === false ? 'off' : 'on';
+  document.body.dataset.reduceMotion = prefs.reduceMotion === true ? 'on' : 'off';
   document.body.dataset.theme = resolveTheme();
   timeFormat24 = prefs.timeFormat !== '12h';
 }

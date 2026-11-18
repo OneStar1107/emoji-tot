@@ -1,151 +1,137 @@
 /**
- * The gallery: the cast wall, and the expression wall.
+ * The wall: every character, and every expression, as a grid you can click.
  *
- * Two walls, because there are two things to browse. The cast wall answers
- * "what characters are there" — fifteen, one per hand-written outline. The
- * expression wall answers "what does a character look like when it feels
- * something" — all forty-four states, grouped by whether the ball is alive,
- * feeling, or working.
- *
- * Every tile is a real render from the engine, produced once and left as
- * static SVG: the wall never runs a frame loop.
+ * Clicking a character adopts it in the console; clicking an expression deep
+ * links to `#/console?state=<id>` so a shared link opens on that face.
  */
-import { CAST, FACE_META, FAMILIES, MOTION_ZH, castMember, facesInGroup, renderCast } from '@emojitot/core';
-import { look, onLookChange, selectCast } from './store';
-import { t } from './i18n';
+import { CAST, FACE_META, castMember, renderCast } from '@emojitot/core';
+import { EMOTIONS } from '@emojitot/protocol';
+import { getLang, t } from './i18n';
+import { onLookChange, selectCast } from './store';
+import type { View } from './main';
 
-const THUMB = 108;
+const SEGMENTS = [
+  { id: 'all', label: 'wall.all' },
+  { id: 'life', label: 'wall.group.life' },
+  { id: 'emotion', label: 'wall.group.emotion' },
+  { id: 'agent', label: 'wall.group.agent' },
+] as const;
 
-function currentSvg(state: string, size = THUMB): string {
-  return renderCast({ id: look.cast || CAST[0].id, state, size, style: look.finish });
-}
+type Segment = (typeof SEGMENTS)[number]['id'];
 
-function castSvg(id: string, state: string, size = THUMB): string {
-  return renderCast({ id, state, size, style: look.finish });
-}
-
-function castCard(id: string): string {
+function castTile(id: string): string {
   const member = castMember(id)!;
-  return `<button type="button" class="tile" data-cast="${id}" data-motion="${member.motion}" title="${member.desc} · 悬停看动作">
-    ${castSvg(id, member.face, THUMB)}
-    <span class="tile-name">${member.name.zh}</span>
-    <span class="tile-sub">${MOTION_ZH[member.motion] ?? member.motion}</span>
+  return `<button type="button" class="tile" data-cast="${id}" data-motion="${member.motion}" title="${member.desc} · ${t('wall.hover.motion')}">
+    <span class="tile-art">${renderCast({ id, state: member.face, size: 96 })}</span>
+    <span class="tile-name">${getLang() === 'zh' ? member.name.zh : member.name.en}</span>
   </button>`;
 }
 
-function stateCard(id: string, state: string, name: string): string {
-  return `<button type="button" class="tile" data-state="${state}" data-id="${id}" data-motion="pop" title="悬停看动作">
-    ${currentSvg(state, THUMB)}
-    <span class="tile-name">${name}</span>
-    <span class="tile-sub">#${id}</span>
+/** The expression's own name, from the protocol — zh and en both live there. */
+function faceLabel(state: string): string {
+  const emotion = EMOTIONS.find((item) => item.state === state);
+  if (!emotion) return state;
+  return getLang() === 'zh' ? emotion.name.zh : emotion.name.en;
+}
+
+function faceTile(id: string): string {
+  return `<button type="button" class="tile" data-state="${id}" data-id="${id}" data-motion="pop" title="${t('wall.hover.motionShort')}">
+    <span class="tile-art">${renderCast({ id: 'tot', state: id, size: 76 })}</span>
+    <span class="tile-name">${faceLabel(id)}</span>
   </button>`;
 }
 
-export function createWall(): HTMLElement {
+export function createWall(): View {
   const el = document.createElement('div');
   el.className = 'wall-view';
 
   let tab: 'cast' | 'emotion' = 'cast';
-  let family = 'all';
-  let segment: 'all' | 'life' | 'emotion' | 'agent' = 'all';
+  let segment: Segment = 'all';
 
   el.innerHTML = `
-    <section class="wall-head">
-      <div class="tabs" id="tabs">
-        <button type="button" data-tab="cast" aria-pressed="true">角色 <b id="castCount"></b></button>
-        <button type="button" data-tab="emotion" aria-pressed="false">表情 <b>44</b></button>
-      </div>
-      <span class="count" id="count"></span>
-    </section>
-    <section class="filters" id="filters"></section>
-    <section class="grid" id="grid"></section>
+    <header class="wall-head">
+      <h2>${t('wall.title')}</h2>
+      <p>${t('wall.lead')}</p>
+    </header>
+    <div class="wall-tabs">
+      <button type="button" data-tab="cast" aria-pressed="true">${t('wall.tab.cast')} <b id="castCount"></b></button>
+      <button type="button" data-tab="emotion" aria-pressed="false">${t('wall.tab.emotion')} <b>${FACE_META.length}</b></button>
+    </div>
+    <div class="wall-filters" id="wallFilters"></div>
+    <div class="wall-grid" id="wallGrid"></div>
+    <p class="wall-count" id="wallCount"></p>
   `;
 
-  const grid = el.querySelector<HTMLElement>('#grid')!;
-  const filters = el.querySelector<HTMLElement>('#filters')!;
-  const count = el.querySelector<HTMLElement>('#count')!;
-  el.querySelector('#castCount')!.textContent = String(CAST.length);
+  const filters = el.querySelector<HTMLElement>('#wallFilters')!;
+  const grid = el.querySelector<HTMLElement>('#wallGrid')!;
+  const count = el.querySelector<HTMLElement>('#wallCount')!;
 
   function paintFilters(): void {
-    if (tab === 'cast') {
-      const options = [{ id: 'all', label: t('wall.all') }, ...FAMILIES.map((f) => ({ id: f.id, label: f.zh }))];
-      filters.innerHTML = options
-        .map((o) => `<button type="button" data-family="${o.id}" aria-pressed="${o.id === family}">${o.label}</button>`)
-        .join('');
-    } else {
-      const groups = [
-        { id: 'all', label: t('wall.all') },
-        { id: 'life', label: '生命周期' },
-        { id: 'emotion', label: '情绪反应' },
-        { id: 'agent', label: '代理工作' },
-      ];
-      filters.innerHTML = groups
-        .map((o) => `<button type="button" data-segment="${o.id}" aria-pressed="${o.id === segment}">${o.label}</button>`)
-        .join('');
-    }
+    filters.innerHTML = SEGMENTS.map(
+      (item) =>
+        `<button type="button" data-segment="${item.id}" aria-pressed="${item.id === segment}">${t(item.label)}</button>`,
+    ).join('');
   }
 
   function paintGrid(): void {
     if (tab === 'cast') {
-      const list = family === 'all' ? CAST : CAST.filter((m) => m.family === family);
-      count.textContent = `${list.length} / ${CAST.length} 个角色`;
-      grid.innerHTML = list.map((m) => castCard(m.id)).join('');
+      grid.innerHTML = CAST.filter(() => segment === 'all' || segment === 'cast').map((m) => castTile(m.id)).join('');
+      count.textContent = t('wall.count.cast', { n: CAST.length, total: CAST.length });
       return;
     }
-    const list = segment === 'all' ? FACE_META : facesInGroup(segment);
-    count.textContent = `${list.length} / ${FACE_META.length} 个状态`;
-    grid.innerHTML = list.map((m) => stateCard(m.id, m.id, m.name)).join('');
+    const list = FACE_META.map((item) => item.id);
+    grid.innerHTML = list.map((id) => faceTile(id)).join('');
+    count.textContent = t('wall.count.state', { n: list.length, total: FACE_META.length });
   }
 
   function paintTabs(): void {
-    for (const b of el.querySelectorAll<HTMLElement>('#tabs button')) {
-      b.setAttribute('aria-pressed', String(b.dataset.tab === tab));
+    for (const button of el.querySelectorAll<HTMLElement>('[data-tab]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.tab === tab));
     }
-  }
-
-  function paintAll(): void {
-    paintTabs();
-    paintFilters();
-    paintGrid();
+    // Family filters only make sense for characters.
+    filters.hidden = tab !== 'cast';
   }
 
   el.addEventListener('click', (event) => {
-    const target = event.target as HTMLElement;
-    const tabBtn = target.closest<HTMLElement>('[data-tab]');
-    if (tabBtn) {
-      tab = tabBtn.dataset.tab as 'cast' | 'emotion';
-      paintAll();
-      return;
-    }
-    const famBtn = target.closest<HTMLElement>('[data-family]');
-    if (famBtn) {
-      family = famBtn.dataset.family!;
+    const target = (event.target as HTMLElement).closest<HTMLElement>(
+      '[data-tab], [data-segment], [data-cast], [data-state]',
+    );
+    if (!target) return;
+    if (target.dataset.tab) {
+      tab = target.dataset.tab as 'cast' | 'emotion';
+      segment = 'all';
+      paintTabs();
       paintFilters();
       paintGrid();
       return;
     }
-    const segBtn = target.closest<HTMLElement>('[data-segment]');
-    if (segBtn) {
-      segment = segBtn.dataset.segment as 'all' | 'life' | 'emotion' | 'agent';
+    if (target.dataset.segment) {
+      segment = target.dataset.segment as Segment;
       paintFilters();
       paintGrid();
       return;
     }
-    const cast = target.closest<HTMLElement>('[data-cast]');
+    const cast = target.dataset.cast;
     if (cast) {
-      selectCast(cast.dataset.cast!);
+      selectCast(cast);
       location.hash = '#/console';
       return;
     }
-    const state = target.closest<HTMLElement>('[data-state]');
-    if (state) {
-      location.hash = `#/console?state=${state.dataset.state}`;
-    }
+    const state = target.dataset.state;
+    if (state) location.hash = `#/console?state=${state}`;
   });
 
-  paintAll();
-  onLookChange(() => {
+  paintTabs();
+  paintFilters();
+  paintGrid();
+  const unsubscribe = onLookChange(() => {
     if (tab === 'emotion') paintGrid();
   });
-  return el;
+
+  return {
+    el,
+    dispose(): void {
+      unsubscribe();
+    },
+  };
 }
