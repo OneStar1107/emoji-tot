@@ -14,7 +14,10 @@ const { encrypt, decrypt } = require('../secrets');
 const { notify } = require('./notify');
 
 const SCRIPT = path.join(__dirname, 'quota.ps1');
-const KEY_VAR = 'EMOJITOT_DEEPSEEK_KEY';
+const KEY_VAR = 'EMOJITOT_QUOTA_KEY';
+
+/** Providers this module can read a balance from. */
+const PROVIDERS = ['deepseek', 'moonshot', 'siliconflow', 'openrouter'];
 let lowBalanceWarned = false;
 
 let accounts = [];
@@ -60,11 +63,11 @@ function emit() {
   }
 }
 
-function fetchBalance(key) {
+function fetchBalance(key, provider = 'deepseek') {
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-KeyVar', KEY_VAR],
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-KeyVar', KEY_VAR, '-Provider', provider],
       { windowsHide: true, timeout: 20000, env: { ...process.env, [KEY_VAR]: key } },
       (error, stdout) => {
         if (error) return resolve(null);
@@ -93,21 +96,21 @@ async function refresh() {
     emit();
     return last;
   }
-  const data = await fetchBalance(key);
+  const data = await fetchBalance(key, account.provider ?? 'deepseek');
   if (!data) {
     last = { accountId: account.id, error: '查询失败', at: Date.now() };
     emit();
     return last;
   }
-  const info = (data.balance_infos ?? [])[0] ?? {};
   last = {
     accountId: account.id,
     name: account.name,
-    available: Boolean(data.is_available),
-    currency: info.currency ?? 'CNY',
-    total: info.total_balance ?? '0.00',
-    granted: info.granted_balance ?? '0.00',
-    topped: info.topped_up_balance ?? '0.00',
+    provider: data.provider ?? account.provider ?? 'deepseek',
+    available: Boolean(data.available),
+    currency: data.currency ?? 'CNY',
+    total: data.total ?? '0.00',
+    granted: data.granted ?? '0.00',
+    topped: data.topped ?? '0.00',
     at: Date.now(),
   };
   /*
@@ -143,14 +146,15 @@ function reschedule() {
   timer = setInterval(refresh, intervalMs());
 }
 
-function add(name, key) {
+function add(name, key, provider = 'deepseek') {
   const label = String(name ?? '').trim().slice(0, 40) || 'DeepSeek';
   const secret = String(key ?? '').trim();
+  const chosen = PROVIDERS.includes(provider) ? provider : 'deepseek';
   if (!secret) return { ok: false, error: '密钥不能为空' };
   const account = {
     id: crypto.randomBytes(4).toString('hex'),
     name: label,
-    provider: 'deepseek',
+    provider: chosen,
     secret: encrypt(secret),
     createdAt: Date.now(),
   };

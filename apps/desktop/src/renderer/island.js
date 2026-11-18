@@ -76,6 +76,7 @@ let healthState = { enabled: false, waterMin: 45, standMin: 60, sinceWater: 0, s
 let todos = [];
 let shelfFiles = [];
 let clipboardItems = [];
+let messengerState = { apps: [], unread: 0 };
 let quotaState = { accounts: [], current: null, last: null };
 let mailState = { accounts: [], messages: [], syncing: false, error: '', lastSync: 0 };
 let calendarState = { events: [], upcoming: [] };
@@ -380,10 +381,35 @@ function quotaPage() {
   </div>`;
 }
 
+/**
+ * Message apps: who is running, and how many unread the title admits.
+ *
+ * It lives above the mailbox because both answer "is anyone waiting for me?",
+ * and a row's button brings that app's window forward — the island is a
+ * switchboard, not a reader.
+ */
+function messengerBlock() {
+  const apps = messengerState?.apps ?? [];
+  if (!apps.length) return '';
+  const rows = apps
+    .map((app) => `<div class="msg-item">
+      <span class="msg-dot${app.unread ? ' on' : ''}"></span>
+      <span class="msg-name">${escapeHtml(app.label)}</span>
+      <span class="msg-count">${app.unread ? app.unread + ' 条' : '运行中'}</span>
+      <button type="button" class="msg-open" data-local="messenger:activate" data-id="${app.handle}">切过去</button>
+    </div>`)
+    .join('');
+  const unread = apps.reduce((sum, app) => sum + (Number(app.unread) || 0), 0);
+  return `<div class="msg">
+    <div class="msg-head"><span>消息</span><span class="spacer"></span><span>${unread ? unread + ' 条未读' : '没有未读'}</span></div>
+    ${rows}
+  </div>`;
+}
+
 function mailPage() {
   const state = mailState ?? { accounts: [], messages: [] };
   if (!state.accounts.length) {
-    return empty(
+    return messengerBlock() + empty(
       ICON.mail,
       '还没有添加邮箱',
       '支持 163、QQ、Gmail。授权码只保存在本机。',
@@ -393,7 +419,7 @@ function mailPage() {
   }
   if (!state.messages.length) {
     const hint = state.syncing ? '正在同步…' : state.error ? state.error : '还没有拉取到邮件';
-    return `<div class="mail">
+    return messengerBlock() + `<div class="mail">
       <div class="mail-head"><b>${state.accounts.length} 个邮箱</b><span class="spacer"></span><span>${escapeHtml(hint)}</span></div>
       <p class="todo-empty">${state.error ? '检查一下授权码或网络，然后在设置里点同步。' : '新邮件到达后会出现在这里。'}</p>
     </div>`;
@@ -408,7 +434,7 @@ function mailPage() {
         <em>${timeOf(message.date)}</em>
       </div>`)
     .join('');
-  return `<div class="mail">
+  return messengerBlock() + `<div class="mail">
     <div class="mail-head">
       <b>${state.accounts.length} 个邮箱</b>
       <span class="spacer"></span>
@@ -685,6 +711,7 @@ function applyLocal(snapshot) {
   if (Array.isArray(snapshot.todos)) todos = snapshot.todos;
   if (Array.isArray(snapshot.shelf)) shelfFiles = snapshot.shelf;
   if (Array.isArray(snapshot.clipboard)) clipboardItems = snapshot.clipboard;
+  if (snapshot.messenger) messengerState = snapshot.messenger;
 }
 
 /** +1 = next page, -1 = previous; the panel slides in from the side it came from. */
@@ -1001,6 +1028,12 @@ api.onClipboard((value) => {
   if (!Array.isArray(value)) return;
   clipboardItems = value;
   if (open && enabledPages()[pageIndex]?.key === 'shelf') renderPage();
+});
+
+api.onMessenger((value) => {
+  if (!value || !Array.isArray(value.apps)) return;
+  messengerState = value;
+  if (open && enabledPages()[pageIndex]?.key === 'mail') renderPage();
 });
 
 api.onQuota((value) => {

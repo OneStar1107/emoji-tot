@@ -106,6 +106,7 @@ const DEFAULTS = {
   calendar: { leadMin: 10, fromMail: true },
   quota: { provider: 'deepseek', intervalMin: 15, alert: true, threshold: 5 },
   notify: { system: true, body: true },
+  messenger: { wechat: true, qq: true, wecom: true, feishu: true, dingtalk: true },
   mail: [],
 };
 
@@ -138,6 +139,7 @@ function merge(raw) {
     shelf: { ...DEFAULTS.shelf, ...(source.shelf || {}) },
     calendar: { ...DEFAULTS.calendar, ...(source.calendar || {}) },
     notify: { ...DEFAULTS.notify, ...(source.notify || {}) },
+    messenger: { ...DEFAULTS.messenger, ...(source.messenger || {}) },
     pages: { ...DEFAULTS.pages, ...(source.pages || {}) },
     statusItems: Array.isArray(source.statusItems) ? source.statusItems : [...DEFAULTS.statusItems],
     pageOrder: Array.isArray(source.pageOrder) ? source.pageOrder : [...DEFAULTS.pageOrder],
@@ -399,6 +401,13 @@ function pageComm() {
       rowToggle('系统通知', '任务完成、提醒到点时发通知', 'notify.system'),
       rowToggle('通知显示正文', '关闭后只显示来源', 'notify.body'),
     ])) +
+    group('消息应用', card([
+      rowToggle('微信', '未读数读自窗口标题，不读聊天内容', 'messenger.wechat'),
+      rowToggle('QQ', 'QQ 不在标题里显示未读数，只显示是否在运行', 'messenger.qq'),
+      rowToggle('企业微信', '', 'messenger.wecom'),
+      rowToggle('飞书', '', 'messenger.feishu'),
+      rowToggle('钉钉', '', 'messenger.dingtalk'),
+    ])) +
     group('邮箱', '<div class="card">' + accountRows + mailStatus + '</div>') +
     group('添加邮箱', card([
       rowSelect('服务商', '163 / QQ 需要授权码，不是登录密码', 'mailProvider', [
@@ -446,8 +455,11 @@ function pageQuota() {
   return head('AI 额度', 'Agent 余额与账号切换') +
     group('账号', '<div class="card">' + (accounts || emptyCardRow()) + balance + '</div>') +
     group('添加账号', card([
-      row('名称', '显示在岛上的名字，留空就是 DeepSeek', '<input class="ctl" data-quota-input="name" placeholder="可选" spellcheck="false" />'),
-      row('API Key', 'DeepSeek 平台 → API Keys，只保存在本机', '<input class="ctl" type="password" data-quota-input="key" placeholder="sk-..." spellcheck="false" />'),
+      row('服务商', '余额接口各不相同，选错会查询失败', '<select class="ctl" data-quota-input="provider">' +
+        [['deepseek', 'DeepSeek'], ['moonshot', 'Kimi（Moonshot）'], ['siliconflow', 'SiliconFlow'], ['openrouter', 'OpenRouter']]
+          .map(([value, text]) => '<option value="' + value + '">' + text + '</option>').join('') + '</select>'),
+      row('名称', '显示在岛上的名字，留空用服务商名字', '<input class="ctl" data-quota-input="name" placeholder="可选" spellcheck="false" />'),
+      row('API Key', '在对应平台的 API Keys 页面生成，只保存在本机', '<input class="ctl" type="password" data-quota-input="key" placeholder="sk-..." spellcheck="false" />'),
       row('', '密钥用系统凭据加密，不写进 prefs.json', '<button type="button" class="btn primary" data-act="button" data-key="quota-add">添加并查询</button>'),
     ])) +
     group('刷新', card([
@@ -682,13 +694,14 @@ content.addEventListener('click', async (event) => {
     if (key === 'add-mail') { page = 'comm'; return; }
     if (key === 'add-quota') { page = 'quota'; return; }
     if (key === 'quota-add') {
+      const provider = content.querySelector('[data-quota-input="provider"]')?.value ?? 'deepseek';
       const name = content.querySelector('[data-quota-input="name"]')?.value?.trim() ?? '';
       const secret = content.querySelector('[data-quota-input="key"]')?.value?.trim() ?? '';
       if (!secret) {
         content.querySelector('[data-quota-input="key"]')?.focus();
         return;
       }
-      quotaState = await api.quotaDo('add', { name, key: secret });
+      quotaState = await api.quotaDo('add', { name, key: secret, provider });
       paint();
       return;
     }

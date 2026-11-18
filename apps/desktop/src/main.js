@@ -31,6 +31,7 @@ const health = require('./main/services/health');
 const todo = require('./main/services/todo');
 const shelf = require('./main/services/shelf');
 const clipboardHistory = require('./main/services/clipboard');
+const messenger = require('./main/services/messenger');
 const quota = require('./main/services/quota');
 const mail = require('./main/services/mail');
 const calendar = require('./main/services/calendar');
@@ -984,6 +985,9 @@ function startServices() {
   shelf.onChange((value) => island.send('island:shelf', value));
   clipboardHistory.onChange((value) => island.send('island:clipboard', value));
   clipboardHistory.start();
+  messenger.setPrefsReader(readPrefs);
+  messenger.onChange((value) => island.send('island:messenger', value));
+  messenger.start();
   quota.onChange((value) => island.send('island:quota', value));
   mail.onChange((value) => island.send('island:mail', value));
   // Same shape as the bootstrap payload: the page reads .events, and a bare
@@ -1011,7 +1015,7 @@ function startServices() {
   ipcMain.handle('quota:get', () => quota.snapshot());
   ipcMain.handle('quota:do', async (_event, payload) => {
     const { action, data } = payload ?? {};
-    if (action === 'add') quota.add(data?.name, data?.key);
+    if (action === 'add') quota.add(data?.name, data?.key, data?.provider);
     else if (action === 'remove') quota.remove(data?.id);
     else if (action === 'select') quota.select(data?.id);
     else if (action === 'refresh') await quota.refresh();
@@ -1024,6 +1028,7 @@ function startServices() {
     todos: todo.list(),
     shelf: shelf.list(),
     clipboard: clipboardHistory.list(),
+    messenger: messenger.snapshot(),
   }));
 
   ipcMain.handle('local:do', async (_event, payload) => {
@@ -1055,6 +1060,8 @@ function startServices() {
       else if (action === 'togglePin') clipboardHistory.togglePin(data?.id);
       else if (action === 'remove') clipboardHistory.remove(data?.id);
       else if (action === 'clear') clipboardHistory.clear();
+    } else if (service === 'messenger') {
+      if (action === 'activate') messenger.activate(data?.handle);
     }
     return {
       focus: focus.snapshot(),
@@ -1077,6 +1084,7 @@ function startServices() {
     todos: todo.list(),
     shelf: shelf.list(),
     clipboard: clipboardHistory.list(),
+    messenger: messenger.snapshot(),
     quota: quota.snapshot(),
     mail: mail.snapshot(),
     calendar: { events: calendar.list(), upcoming: calendar.upcoming() },
@@ -1172,6 +1180,7 @@ if (!gotTheLock) {
       applyMainPrefs();
       scheduleWeather();
       quota.reschedule();
+      messenger.refresh();
       island.send('settings:changed', next);
       refreshWeather();
     });
