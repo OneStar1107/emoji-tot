@@ -22,6 +22,9 @@ let stopping = false;
 const listeners = new Set();
 /** One decoder for the whole stream: a character split across chunks stays whole. */
 let buffer = '';
+/** Last time a frame reached the renderer; see the heartbeat note in handleLine. */
+let lastEmit = 0;
+const HEARTBEAT_MS = 5000;
 
 function emit() {
   for (const fn of listeners) {
@@ -58,7 +61,23 @@ function handleLine(line) {
     // The progress bar needs a frame per second; everything else is change-only.
     Math.floor(next.position) !== Math.floor(state.position);
   state = next;
-  if (changed) emit();
+  /*
+   * Push on change, and at least every few seconds regardless.
+   *
+   * A live stream reports duration 0 and a position that never advances, so a
+   * playing stream can leave every single field identical forever — that made
+   * `changed` permanently false. The one push that did happen is emitted the
+   * moment the child prints its first line, which is usually before the island
+   * page has loaded and registered its listener, so that frame was dropped and
+   * the page then never heard from us again: the media page said "nothing is
+   * playing" while audio played for hours. A slow heartbeat makes a dropped
+   * frame recoverable instead of permanent.
+   */
+  const now = Date.now();
+  if (changed || now - lastEmit > HEARTBEAT_MS) {
+    lastEmit = now;
+    emit();
+  }
 }
 
 function start() {
