@@ -1,6 +1,6 @@
 # EmojiTot UI and Product Polish Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Repair the two confirmed UI defects, consolidate display state, and improve first-run and accessibility behavior without adding new subsystems.
 
@@ -39,27 +39,27 @@
 - Consumes: existing `#wallGrid`, `#wallFilters`, `.wall-tabs` DOM.
 - Produces: computed grid layout with at least two desktop columns.
 
-- [ ] **Step 1: Add failing computed-layout browser checks**
+- [x] **Step 1: Add failing computed-layout browser checks**
 
 Assert `getComputedStyle(wallGrid).display === 'grid'`, the first two cast tiles
 share a row, and the tabs container has a non-transparent background.
 
-- [ ] **Step 2: Run browser acceptance and verify failure**
+- [x] **Step 2: Run browser acceptance and verify failure**
 
 Run: `pnpm --filter @emojitot/gallery build && node apps/gallery/scripts/browser-check.mjs`
 
 Expected: FAIL because `#wallGrid` computes to `display: block`.
 
-- [ ] **Step 3: Align CSS selectors with the view markup**
+- [x] **Step 3: Align CSS selectors with the view markup**
 
 Use `.wall-tabs`, `.wall-filters`, and `.wall-grid`; retain the responsive
 override for narrow screens.
 
-- [ ] **Step 4: Run browser acceptance**
+- [x] **Step 4: Run browser acceptance**
 
 Run the same command. Expected: PASS with the new layout checks.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/gallery/src/style.css apps/gallery/scripts/browser-check.mjs
@@ -81,29 +81,29 @@ git commit -m "fix: restore gallery wall grid layout"
 - Produces: `displayMode: 'island' | 'ball' | 'both'`; main reads and writes
   only this value.
 
-- [ ] **Step 1: Add failing migration and source-shape tests**
+- [x] **Step 1: Add failing migration and source-shape tests**
 
 Test legacy migration, new-value precedence, patch acceptance, and absence of
 duplicate mode controls in settings.
 
-- [ ] **Step 2: Run desktop tests and verify failure**
+- [x] **Step 2: Run desktop tests and verify failure**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: FAIL because `displayMode` is not in the schema.
 
-- [ ] **Step 3: Implement canonical display mode**
+- [x] **Step 3: Implement canonical display mode**
 
 Add schema migration, update `applyForm`, remove form/both writes, render one
 segmented control, and remove stale visibility actions.
 
-- [ ] **Step 4: Run desktop tests**
+- [x] **Step 4: Run desktop tests**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/shared/schema.js apps/desktop/src/main.js apps/desktop/src/main/settings.js apps/desktop/src/renderer/settings.js apps/desktop/test/schema.test.mjs apps/desktop/test/security.test.mjs
@@ -122,30 +122,30 @@ git commit -m "refactor: unify desktop display mode"
 - Produces: stable page title, secondary media title, hidden pager for one page,
   and larger pointer targets.
 
-- [ ] **Step 1: Add failing desktop smoke checks**
+- [x] **Step 1: Add failing desktop smoke checks**
 
 With synthetic media active, assert the page title stays equal to the page name
 and `.top-media` contains the media title. With one page, assert dots and pagers
 are hidden. Assert dot/pager hit boxes meet the spec.
 
-- [ ] **Step 2: Run desktop smoke and verify failure**
+- [x] **Step 2: Run desktop smoke and verify failure**
 
 Run: `pnpm smoke:desktop`
 
 Expected: FAIL on title/media or target-size checks.
 
-- [ ] **Step 3: Implement presentation changes**
+- [x] **Step 3: Implement presentation changes**
 
 Render media into the existing secondary slot, keep page title page-oriented,
 hide all paging affordances for one page, and enlarge transparent hit areas.
 
-- [ ] **Step 4: Run desktop smoke**
+- [x] **Step 4: Run desktop smoke**
 
 Run: `pnpm smoke:desktop`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/renderer/island.js apps/desktop/src/renderer/island.css apps/desktop/scripts/window-smoke.mjs
@@ -164,30 +164,30 @@ git commit -m "fix: clarify island hierarchy and paging targets"
 - Produces: accessible search across page/control labels, move-up/down buttons,
   keyboard reordering, and readable faint text.
 
-- [ ] **Step 1: Add failing source-shape tests**
+- [x] **Step 1: Add failing source-shape tests**
 
 Assert an accessible search label, page-content search helper, move buttons in
 order rows, keyboard handling, and dark faint opacity of at least 0.5.
 
-- [ ] **Step 2: Run desktop tests and verify failure**
+- [x] **Step 2: Run desktop tests and verify failure**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: FAIL on missing search/reorder/accessibility markers.
 
-- [ ] **Step 3: Implement settings usability changes**
+- [x] **Step 3: Implement settings usability changes**
 
 Build a memoized search index from page render output, preserve the filter while
 typing, add search-result context, render move controls, and support arrow-key
 reordering from the order row.
 
-- [ ] **Step 4: Run desktop tests**
+- [x] **Step 4: Run desktop tests**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/renderer/settings.js apps/desktop/src/renderer/settings.css apps/desktop/test/schema.test.mjs
@@ -204,31 +204,31 @@ git commit -m "feat: improve settings search and keyboard ordering"
 
 **Interfaces:**
 - Consumes: `PAGE_MANIFEST`, `STATUS_MANIFEST`, `DEFAULTS`.
-- Produces: `PRESET_MANIFEST` and `presetPatch(key)`.
+- Produces: `PRESET_MANIFEST` and `presetPatch(key, currentPrefs)`.
 
-- [ ] **Step 1: Add failing preset tests**
+- [x] **Step 1: Add failing preset tests**
 
 Assert each preset sets the documented pages/status/features, `full` restores the
-default surface set, and every preset keeps clipboard history off.
+default surface set, and no preset turns clipboard history on.
 
-- [ ] **Step 2: Run desktop tests and verify failure**
+- [x] **Step 2: Run desktop tests and verify failure**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: FAIL because preset exports do not exist.
 
-- [ ] **Step 3: Implement pure presets and render them**
+- [x] **Step 3: Implement pure presets and render them**
 
 Add schema data/helper and a General-settings card with four plain-language
 choices that apply one patch.
 
-- [ ] **Step 4: Run desktop tests and settings/docs checks**
+- [x] **Step 4: Run desktop tests and settings/docs checks**
 
 Run: `pnpm --filter @emojitot/desktop test && pnpm settings:check && pnpm docs:check`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/shared/schema.js apps/desktop/src/renderer/settings.js apps/desktop/test/schema.test.mjs docs/SETTINGS.md docs/SETTINGS-AUDIT.md
