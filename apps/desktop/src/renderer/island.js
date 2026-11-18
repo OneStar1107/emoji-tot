@@ -1028,17 +1028,42 @@ window.addEventListener('blur', () => {
  * mouse, and from that moment this document receives real mouse events — so
  * the whole window is a hover target, not just the pill element.
  */
-let hoverTimer = null;
+let hoverOpenTimer = null;
+let hoverCloseTimer = null;
+
+/**
+ * Hover in opens after a beat; leaving closes after a longer beat.
+ *
+ * Both delays are user settings. Opening is the eager one — 120-200ms reads as
+ * responsiveness — while closing waits, because a pointer that briefly leaves
+ * the island (reaching for the taskbar, crossing a corner) should not collapse
+ * the panel under your hand.
+ */
 function scheduleHoverOpen() {
-  clearTimeout(hoverTimer);
+  clearTimeout(hoverCloseTimer);
   if (open) return;
-  const delay = Number(prefs.hoverOpenDelay);
+  clearTimeout(hoverOpenTimer);
+  // A profile written before this setting existed has no value: default on.
+  const raw = prefs.hoverOpenDelay;
+  const delay = raw === undefined ? 180 : Number(raw);
   if (!Number.isFinite(delay) || delay <= 0) return;
-  hoverTimer = setTimeout(() => setOpen(true), Math.min(800, delay));
+  hoverOpenTimer = setTimeout(() => setOpen(true), Math.min(800, delay));
 }
+
+function scheduleHoverClose() {
+  clearTimeout(hoverOpenTimer);
+  if (!open || prefs.hoverAutoHide === false) return;
+  clearTimeout(hoverCloseTimer);
+  const raw = Number(prefs.hoverCloseDelay);
+  const delay = Number.isFinite(raw) && raw > 0 ? raw : 450;
+  hoverCloseTimer = setTimeout(() => {
+    if (open) setOpen(false);
+  }, Math.max(120, Math.min(2000, delay)));
+}
+
 document.documentElement.addEventListener('mouseenter', scheduleHoverOpen);
-document.addEventListener('mousemove', scheduleHoverOpen, { once: true });
-document.documentElement.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
+document.addEventListener('mousemove', scheduleHoverOpen);
+document.documentElement.addEventListener('mouseleave', scheduleHoverClose);
 
 api.onBattery((value) => {
   battery = value;

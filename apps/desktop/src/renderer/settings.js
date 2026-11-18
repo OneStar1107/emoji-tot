@@ -92,7 +92,9 @@ const DEFAULTS = {
   hotkey: true,
   wheelPaging: true,
   blurCollapse: true,
-  hoverOpenDelay: 0,
+  hoverOpenDelay: 180,
+  hoverCloseDelay: 450,
+  hoverAutoHide: true,
   statusItems: ['battery', 'clock', 'weather'],
   pages: { music: true, weather: true, quota: true, mail: true },
   pageOrder: ['music', 'weather', 'quota', 'mail'],
@@ -280,7 +282,9 @@ function pageBehavior() {
     group('显示', card([
       rowToggle('全屏时隐藏', '看视频、演示时不挡住画面', 'hideFullscreen'),
       rowToggle('托盘图标', '关掉后只能从任务管理器退出', 'trayIcon'),
-      rowRange('悬停展开延迟', '鼠标停在胶囊上多久才展开', 'hoverOpenDelay', 0, 500, 20, 'ms'),
+      rowRange('悬停展开延迟', '鼠标进入后多久展开，0 为关闭悬停', 'hoverOpenDelay', 0, 500, 20, 'ms'),
+      rowToggle('移开自动收起', '鼠标离开岛后收成胶囊', 'hoverAutoHide'),
+      rowRange('收起延迟', '离开后多久收起，留一点容错', 'hoverCloseDelay', 120, 1200, 60, 'ms'),
     ])) +
     group('交互', card([
       rowToggle('滚轮换页', '在面板上横向滚动切换页面', 'wheelPaging'),
@@ -708,7 +712,7 @@ content.addEventListener('click', async (event) => {
   }
   if (act === 'seg') {
     const value = target.dataset.value;
-    const numeric = ['uiScale', 'radius', 'fontSize', 'pillHeight', 'islandWidth', 'hoverOpenDelay'].includes(key);
+    const numeric = ['uiScale', 'radius', 'fontSize', 'pillHeight', 'islandWidth', 'hoverOpenDelay', 'hoverCloseDelay'].includes(key);
     await patch({ [key]: numeric ? Number(value) : value });
     return;
   }

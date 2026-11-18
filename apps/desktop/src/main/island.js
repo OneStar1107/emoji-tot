@@ -145,7 +145,7 @@ function startCursorWatch() {
       wasInside = inside;
       win.webContents.send('island:hover', inside);
     }
-  }, 60);
+  }, 40);
 }
 
 function create() {
