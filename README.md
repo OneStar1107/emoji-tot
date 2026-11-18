@@ -21,12 +21,12 @@
 
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot Setup 0.2.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.2.1/EmojiTot-Setup-0.2.1.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot Portable 0.2.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.2.1/EmojiTot-Portable-0.2.1.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot Setup 0.3.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.1/EmojiTot-Setup-0.3.1.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot Portable 0.3.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.1/EmojiTot-Portable-0.3.1.exe) | 便携版，双击即用，不写注册表 |
 
 Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases)
 
-> **0.3.1 已构建**：双形态、十页功能、设置中心、新图标、浅色主题，产物在 `release/`（本地构建，尚未上传 Release）。
+> **0.3.1**：双形态（灵动岛 + 桌面球）、十个功能页、设置中心 13 页、浅色主题、新图标。安装版会保留你的账号与偏好数据。
 
 ## 这是什么
 
