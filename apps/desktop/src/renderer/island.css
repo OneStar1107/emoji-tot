@@ -16,7 +16,7 @@
    * "frost" and "solid" are the same card twice. 0.62 is the point where text
    * still passes contrast while the background is visibly moving behind it.
    */
-  --card: rgba(21, 21, 25, 0.62);
+  --card: rgba(21, 21, 25, 0.78);
   --card-solid: #151519;
   --accent: #8f7bff;
   --good: #45d483;
@@ -55,7 +55,8 @@ body[data-theme="light"] {
   --dim: rgba(26, 26, 30, 0.68);
   --faint: rgba(26, 26, 30, 0.5);
   --line: rgba(0, 0, 0, 0.1);
-  --card: #ffffff;
+  /* Frost needs a translucent light surface too, or light mode has no frost. */
+  --card: rgba(255, 255, 255, 0.82);
   --card-solid: #fbfbfd;
   --accent: #5b48d9;
   --good: #1a8d4c;
@@ -343,7 +344,12 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
 .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
 .icon-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
-.pages { padding: 12px 2px 0; min-height: 92px; max-height: 396px; overflow-y: auto; overflow-x: hidden; }
+/*
+ * Every page gets the same height. Pages have different amounts of content, and
+ * letting the panel grow to fit each one moved the paging arrows on every
+ * switch — you end up aiming at wherever they were, not where they are.
+ */
+.pages { padding: 12px 2px 0; height: 300px; overflow-y: auto; overflow-x: hidden; }
 .pages::-webkit-scrollbar { width: 3px; }
 .pages::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 2px; }
 

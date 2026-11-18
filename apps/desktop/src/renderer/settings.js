@@ -92,8 +92,8 @@ const DEFAULTS = {
   hotkey: true,
   wheelPaging: true,
   blurCollapse: true,
-  hoverOpenDelay: 180,
-  hoverCloseDelay: 450,
+  hoverOpenDelay: 100,
+  hoverCloseDelay: 120,
   hoverAutoHide: true,
   statusItems: ['battery', 'clock', 'weather'],
   pages: { music: true, weather: true, quota: true, mail: true },
@@ -284,7 +284,7 @@ function pageBehavior() {
       rowToggle('托盘图标', '关掉后只能从任务管理器退出', 'trayIcon'),
       rowRange('悬停展开延迟', '鼠标进入后多久展开，0 为关闭悬停', 'hoverOpenDelay', 0, 500, 20, 'ms'),
       rowToggle('移开自动收起', '鼠标离开岛后收成胶囊', 'hoverAutoHide'),
-      rowRange('收起延迟', '离开后多久收起，留一点容错', 'hoverCloseDelay', 120, 1200, 60, 'ms'),
+      rowRange('收起延迟', '离开后多久收起，越接近 0 越干脆', 'hoverCloseDelay', 60, 1200, 60, 'ms'),
     ])) +
     group('交互', card([
       rowToggle('滚轮换页', '在面板上横向滚动切换页面', 'wheelPaging'),

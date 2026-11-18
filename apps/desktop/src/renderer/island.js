@@ -828,12 +828,17 @@ function setOpen(next) {
 
 /* ------------------------------------------------------------------- wiring */
 
-pillEl.addEventListener('click', () => setOpen(true));
-/* Clicking anywhere in the collapsed window opens it, not just the pill. */
-document.addEventListener('click', () => {
+/*
+ * pointerdown, not click. A click needs press and release to land on the same
+ * element, and the island resizes itself under the pointer the moment it
+ * opens — which is exactly how a click gets lost. Pressing is unambiguous.
+ */
+function openFromPointer(event) {
   if (open) return;
+  if (event && event.button !== 0) return;
   setOpen(true);
-});
+}
+document.addEventListener('pointerdown', openFromPointer, true);
 
 
 btnSettings.addEventListener('click', () => api.openSettings());
@@ -1047,7 +1052,7 @@ function scheduleHoverOpen() {
   clearTimeout(hoverOpenTimer);
   // A profile written before this setting existed has no value: default on.
   const raw = prefs.hoverOpenDelay;
-  const delay = raw === undefined ? 180 : Number(raw);
+  const delay = raw === undefined ? 100 : Number(raw);
   if (!Number.isFinite(delay) || delay <= 0) return;
   hoverOpenTimer = setTimeout(() => setOpen(true), Math.min(800, delay));
 }
@@ -1057,7 +1062,7 @@ function scheduleHoverClose() {
   if (!open || prefs.hoverAutoHide === false) return;
   clearTimeout(hoverCloseTimer);
   const raw = Number(prefs.hoverCloseDelay);
-  const delay = Number.isFinite(raw) && raw > 0 ? raw : 450;
+  const delay = Number.isFinite(raw) && raw > 0 ? raw : 120;
   hoverCloseTimer = setTimeout(() => {
     if (open) setOpen(false);
   }, Math.max(120, Math.min(2000, delay)));

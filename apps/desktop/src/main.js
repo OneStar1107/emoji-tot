@@ -885,11 +885,8 @@ function createTray() {
   tray = new Tray(icon);
   tray.setToolTip('EmojiTot');
   tray.setContextMenu(buildMenu());
-  /*
-   * Left click is the ball's switch, not the island's. The ball is the pet you
-   * reach for; the island is already on screen and has its own gestures.
-   */
-  tray.on('click', toggleBall);
+  // Left click intentionally does nothing: the tray is a menu here, and a
+  // click that silently toggles a window reads as an accident.
 }
 
 /* -------------------------------------------------------------- IPC glue */
