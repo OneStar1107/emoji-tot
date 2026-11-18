@@ -1071,6 +1071,17 @@ function scheduleHoverClose() {
 document.documentElement.addEventListener('mouseenter', scheduleHoverOpen);
 document.addEventListener('mousemove', scheduleHoverOpen);
 document.documentElement.addEventListener('mouseleave', scheduleHoverClose);
+/*
+ * Leaving is also reported by the main process. Once the pointer is outside,
+ * the window goes click-through within ~25ms and the page stops receiving
+ * mouse events — so a mouseleave that lands after that moment never arrives.
+ * The main process knows the cursor position regardless, and its "inside became
+ * false" is the dependable close signal.
+ */
+api.onHover((inside) => {
+  if (inside) scheduleHoverOpen();
+  else scheduleHoverClose();
+});
 
 api.onBattery((value) => {
   battery = value;
