@@ -125,16 +125,26 @@ function setClickThrough(on) {
  */
 function startCursorWatch() {
   clearInterval(cursorTimer);
+  let wasInside = false;
   cursorTimer = setInterval(() => {
     if (!win || win.isDestroyed() || !win.isVisible()) return;
     const bounds = win.getBounds();
     const cursor = screen.getCursorScreenPoint();
+    /*
+     * The whole window is the target, not the pill inside it. A 28px band of
+     * "transparent" padding that swallows clicks reads as "it ignores me" —
+     * and the window is only ever as big as the island needs anyway.
+     */
     const inside =
-      cursor.x >= bounds.x + PAD_X &&
-      cursor.x <= bounds.x + bounds.width - PAD_X &&
-      cursor.y >= bounds.y + PAD_Y &&
-      cursor.y <= bounds.y + bounds.height - PAD_Y;
+      cursor.x >= bounds.x &&
+      cursor.x <= bounds.x + bounds.width &&
+      cursor.y >= bounds.y &&
+      cursor.y <= bounds.y + bounds.height;
     setClickThrough(!inside);
+    if (inside !== wasInside) {
+      wasInside = inside;
+      win.webContents.send('island:hover', inside);
+    }
   }, 60);
 }
 

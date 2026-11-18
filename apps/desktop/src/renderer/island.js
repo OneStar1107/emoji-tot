@@ -833,14 +833,7 @@ document.addEventListener('click', () => {
   setOpen(true);
 });
 
-let hoverTimer = null;
-pillEl.addEventListener('mouseenter', () => {
-  const delay = Number(prefs.hoverOpenDelay);
-  if (!Number.isFinite(delay) || delay <= 0) return;
-  clearTimeout(hoverTimer);
-  hoverTimer = setTimeout(() => setOpen(true), Math.min(800, delay));
-});
-pillEl.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
+
 btnSettings.addEventListener('click', () => api.openSettings());
 
 panelEl.addEventListener('click', (event) => {
@@ -1028,10 +1021,24 @@ window.addEventListener('blur', () => {
 
 /* -------------------------------------------------------------------- boot */
 
-api.onHover(() => {
-  // The main process owns click-through by polling the cursor; the page has
-  // nothing to do here yet. Kept so a future hover preview has a seam.
-});
+/*
+ * Hover to open, driven by the page itself.
+ *
+ * Once the pointer is over the window the main process stops ignoring the
+ * mouse, and from that moment this document receives real mouse events — so
+ * the whole window is a hover target, not just the pill element.
+ */
+let hoverTimer = null;
+function scheduleHoverOpen() {
+  clearTimeout(hoverTimer);
+  if (open) return;
+  const delay = Number(prefs.hoverOpenDelay);
+  if (!Number.isFinite(delay) || delay <= 0) return;
+  hoverTimer = setTimeout(() => setOpen(true), Math.min(800, delay));
+}
+document.documentElement.addEventListener('mouseenter', scheduleHoverOpen);
+document.addEventListener('mousemove', scheduleHoverOpen, { once: true });
+document.documentElement.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
 
 api.onBattery((value) => {
   battery = value;
