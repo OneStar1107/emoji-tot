@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +56,7 @@ const focus = require('../src/main/services/focus.js');
 const lyrics = require('../src/main/services/lyrics.js');
 const calendar = require('../src/main/services/calendar.js');
 const mail = require('../src/main/services/mail.js');
+const paths = require('../src/main/paths.js');
 
 const cal = (body) => ['BEGIN:VCALENDAR', 'VERSION:2.0', body, 'END:VCALENDAR'].join('\r\n');
 const vevent = (lines) => ['BEGIN:VEVENT', ...lines, 'END:VEVENT'].join('\r\n');
@@ -255,5 +257,22 @@ describe('errors are visible, not swallowed', () => {
     const source = src('main/services/calendar.js');
     assert.ok(source.includes("sub.error = '拉取失败'"));
     assert.ok(source.includes("sub.error = '不是日历文件'"));
+  });
+});
+
+describe('atomic JSON writes', () => {
+  it('keeps the previous file when the final rename fails', () => {
+    const target = join(dataDir, 'atomic.json');
+    writeFileSync(target, JSON.stringify({ old: true }));
+    const rename = fs.renameSync;
+    fs.renameSync = () => {
+      throw new Error('rename failed');
+    };
+    try {
+      assert.doesNotThrow(() => paths.writeJson(target, { next: true }));
+    } finally {
+      fs.renameSync = rename;
+    }
+    assert.deepEqual(JSON.parse(readFileSync(target, 'utf8')), { old: true });
   });
 });

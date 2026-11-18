@@ -37,12 +37,29 @@ function readJson(file, fallback) {
   }
 }
 
+let writeSequence = 0;
+
 function writeJson(file, value) {
+  const temp = `${file}.${process.pid}.${Date.now()}.${writeSequence++}.tmp`;
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(value, null, 2));
+    const text = JSON.stringify(value, null, 2);
+    const fd = fs.openSync(temp, 'w');
+    try {
+      fs.writeFileSync(fd, text, 'utf8');
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(temp, file);
   } catch {
-    // A read-only profile is not worth crashing the app over.
+    try {
+      fs.unlinkSync(temp);
+    } catch {
+      // The temporary file may never have been created.
+    }
+    // A read-only profile is not worth crashing the app over, and the previous
+    // target file remains intact when rename fails.
   }
 }
 

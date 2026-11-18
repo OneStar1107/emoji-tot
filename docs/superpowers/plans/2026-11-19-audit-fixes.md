@@ -281,27 +281,27 @@ git commit -m "fix: correct gallery filters and localization"
 - Consumes: `byteSize`, `frameOf`, `writeJson`.
 - Produces: conservative deep payload sizing; empty frame rejection; atomic write helper.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Test a six-level payload with a 1 MB leaf is over limit, empty sender frame is invalid, and atomic write survives a pre-existing target.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement hardening**
+- [x] **Step 3: Implement hardening**
 
 Add iterative/depth-safe accounting, reject empty frames, and write to a sibling temp file before rename.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/main apps/desktop/test/security.test.mjs apps/desktop/test/services.test.mjs

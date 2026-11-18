@@ -16,18 +16,44 @@ const isNumber = (value, min = -Infinity, max = Infinity) =>
 const isId = (value) => typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value);
 const oneOf = (value, allowed) => allowed.includes(value);
 
-/** Cheap size estimate that understands the binary payloads we actually send. */
-function byteSize(value, depth = 0) {
-  if (value == null) return 0;
-  if (typeof value === 'string') return value.length * 2;
-  if (typeof value === 'number' || typeof value === 'boolean') return 8;
-  if (value instanceof ArrayBuffer) return value.byteLength;
-  if (ArrayBuffer.isView(value)) return value.byteLength;
-  if (Array.isArray(value)) return value.reduce((total, item) => total + byteSize(item, depth + 1), 0);
-  if (typeof value === 'object' && depth < 4) {
-    return Object.values(value).reduce((total, item) => total + byteSize(item, depth + 1), 0);
+/**
+ * Size estimate that understands binary payloads and cannot be hidden behind
+ * deep object nesting. Iteration also makes self-references harmless.
+ */
+function byteSize(root) {
+  let total = 0;
+  const stack = [root];
+  const seen = new WeakSet();
+  while (stack.length) {
+    const value = stack.pop();
+    if (value == null) continue;
+    if (typeof value === 'string') {
+      total += value.length * 2;
+      continue;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+      total += 8;
+      continue;
+    }
+    if (value instanceof ArrayBuffer) {
+      total += value.byteLength;
+      continue;
+    }
+    if (ArrayBuffer.isView(value)) {
+      total += value.byteLength;
+      continue;
+    }
+    if (typeof value === 'object') {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      const entries = Object.entries(value);
+      total += entries.length * 16;
+      for (const [, item] of entries) stack.push(item);
+      continue;
+    }
+    total += 8;
   }
-  return 8;
+  return total;
 }
 
 /** A payload that must be exactly { action: <one of …>, data?: object }. */

@@ -19,22 +19,10 @@
 
 const { ipcMain } = require('electron');
 const shape = require('./ipc-shape');
+const { frameMatches } = require('./ipc-frame');
 
 /** webContents id → which window it is. */
 const claims = new Map();
-
-/**
- * The frame URL a role is allowed to speak from.
- *
- * A prefix match on the packaged path: the file name is fixed, and the id is
- * what actually proves the sender, so this only has to catch the case where a
- * window navigated somewhere else.
- */
-const FRAME = {
-  ball: /renderer[\\/]index\.html$/,
-  island: /renderer[\\/]island\.html$/,
-  settings: /renderer[\\/]settings\.html$/,
-};
 
 /** Remember a window so it is allowed to call guarded channels. */
 function claim(role, webContents) {
@@ -58,20 +46,6 @@ function frameOf(event) {
     // A frame that has already gone away.
     return '';
   }
-}
-
-/** Cheap size estimate that understands the binary payloads we actually send. */
-function byteSize(value, depth = 0) {
-  if (value == null) return 0;
-  if (typeof value === 'string') return value.length * 2;
-  if (typeof value === 'number' || typeof value === 'boolean') return 8;
-  if (value instanceof ArrayBuffer) return value.byteLength;
-  if (ArrayBuffer.isView(value)) return value.byteLength;
-  if (Array.isArray(value)) return value.reduce((total, item) => total + byteSize(item, depth + 1), 0);
-  if (typeof value === 'object' && depth < 4) {
-    return Object.values(value).reduce((total, item) => total + byteSize(item, depth + 1), 0);
-  }
-  return 8;
 }
 
 const DEFAULT_MAX_BYTES = 64 * 1024;
@@ -101,11 +75,11 @@ function guardedHandle(channel, roles, handler, options = {}) {
       return null;
     }
     const frame = frameOf(event);
-    if (frame && !FRAME[role].test(frame.split('?')[0])) {
+    if (!frameMatches(role, frame)) {
       refuse(channel, 'frame', role);
       return null;
     }
-    if (byteSize(payload) > maxBytes) {
+    if (shape.byteSize(payload) > maxBytes) {
       refuse(channel, 'size', role);
       return null;
     }
@@ -131,11 +105,11 @@ function guardedSend(channel, roles, handler, options = {}) {
       return;
     }
     const frame = frameOf(event);
-    if (frame && !FRAME[role].test(frame.split('?')[0])) {
+    if (!frameMatches(role, frame)) {
       refuse(channel, 'frame', role);
       return;
     }
-    if (byteSize(payload) > maxBytes) {
+    if (shape.byteSize(payload) > maxBytes) {
       refuse(channel, 'size', role);
       return;
     }

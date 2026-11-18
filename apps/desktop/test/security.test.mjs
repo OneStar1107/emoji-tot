@@ -39,6 +39,12 @@ describe('ipc: size accounting', () => {
     assert.doesNotThrow(() => shape.byteSize(loop));
     assert.ok(Number.isFinite(shape.byteSize(loop)));
   });
+
+  it('counts deep payloads instead of treating them as eight bytes', () => {
+    let value = 'x'.repeat(1024 * 1024);
+    for (let i = 0; i < 6; i += 1) value = { value };
+    assert.ok(shape.byteSize(value) > shape.BUS_LIMIT);
+  });
 });
 
 describe('ipc: local:do allowlist', () => {
