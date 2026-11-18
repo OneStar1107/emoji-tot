@@ -10,6 +10,7 @@
 const { clipboard } = require('electron');
 const path = require('node:path');
 const { userDir, readJson, writeJson } = require('../paths');
+const { readClipboardText } = require('./clipboard-text');
 
 const MAX_ITEMS = 60;
 const MAX_LENGTH = 8000;
@@ -41,12 +42,7 @@ function list() {
 }
 
 function poll() {
-  let text = '';
-  try {
-    text = clipboard.readText() || '';
-  } catch {
-    return;
-  }
+  const text = readClipboardText(() => clipboard.readText());
   if (!text || text === last) return;
   last = text;
   const trimmed = text.trim();
@@ -127,11 +123,7 @@ function clearUnpinned() {
 
 function start() {
   load();
-  try {
-    last = clipboard.readText() || '';
-  } catch {
-    last = '';
-  }
+  last = readClipboardText(() => clipboard.readText());
   /*
    * 1.5s rather than 0.9s. Every poll is a synchronous cross-process read of the
    * whole clipboard, so a large copied block makes that read expensive — and a
