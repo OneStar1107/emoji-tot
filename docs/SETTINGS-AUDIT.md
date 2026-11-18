@@ -41,8 +41,7 @@
 
 | preference path | 默认值 | 设置页 | 消费进程 | 消费位置 | 生效 | 说明 | 覆盖测试 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `form` | `island` | 常规 | 主进程 | `main.js applyForm()` | 即时 | 岛 / 球 / 双形态 | has a SERVICE_PLAN entry · lists every path |
-| `formBoth` | `false` | 常规 | 主进程 | `main.js applyForm()` | 即时 | 两种形态同时显示 | has a SERVICE_PLAN entry · lists every path |
+| `displayMode` | `island` | 常规 | 主进程 | `main.js applyForm()` | 即时 | 岛 / 球 / 双形态 | has a SERVICE_PLAN entry · lists every path |
 | `launchAtLogin` | `false` | 常规 | 主进程 | `main/settings.js app.setLoginItemSettings` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `cast` | `tot` | 常规 | 主进程 | `main.js setCast() · island:cast · cast:changed` | 即时 | 当前角色 | has a SERVICE_PLAN entry · lists every path |
 | `position` | `null` | 常规 | 主进程 | `main.js createWindow() / savePrefs()` | 即时 | 非控件：球拖拽后自动写入 | has a SERVICE_PLAN entry · lists every path |

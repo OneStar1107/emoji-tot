@@ -204,12 +204,11 @@ function setCast(id) {
   refreshMenus();
 }
 
-/** Which form is on screen: the island, the ball, or both. */
-let form = 'island';
-let both = false;
+/** Which surface set is on screen. This is the only display-state source. */
+let displayMode = 'island';
 
-const showBall = () => form === 'ball' || both;
-const showIsland = () => form === 'island' || both;
+const showBall = () => displayMode !== 'island';
+const showIsland = () => displayMode !== 'ball';
 
 function savePrefs() {
   const position = win && !win.isDestroyed() ? win.getPosition() : undefined;
@@ -749,11 +748,7 @@ function stopAgentWatch() {
 /* ------------------------------------------------------------- forms */
 
 /**
- * Switch the visible form, or both.
- *
- * The two windows are both created and only shown or hidden: a window that is
- * created on every switch would reload its page and lose the island's open
- * page, and creating both is cheaper than a stale state machine.
+ * Apply the one canonical three-state display mode.
  */
 function applyForm() {
   if (showIsland()) island.show();
@@ -762,18 +757,6 @@ function applyForm() {
   if (showBall()) win.showInactive();
   else win.hide();
   refreshMenus();
-}
-
-function setForm(next) {
-  form = next === 'ball' ? 'ball' : 'island';
-  writePrefs({ form });
-  applyForm();
-}
-
-function setBoth(on) {
-  both = Boolean(on);
-  writePrefs({ formBoth: both });
-  applyForm();
 }
 
 /* ---------------------------------------------------------------- menus */
@@ -820,8 +803,7 @@ function handleSettingsAction({ kind, value } = {}) {
       const prefs = readPrefs();
       return {
       platform: { id: platform.id, supported: platform.supported, features: platform.capabilities() },
-        form,
-        both,
+        displayMode,
         pinned,
         clickThrough,
         dockSide,
@@ -855,19 +837,6 @@ function handleSettingsAction({ kind, value } = {}) {
           on: Boolean(prefs[`agent_${source.id}`]),
         })),
       };
-    }
-    case 'island': {
-      if (value) island.show();
-      else island.hide();
-      refreshMenus();
-      return { ok: true, visible: island.isVisible() };
-    }
-    case 'ball': {
-      if (!win) return { ok: false };
-      if (value) win.show();
-      else win.hide();
-      refreshMenus();
-      return { ok: true, visible: win.isVisible() };
     }
     case 'dock': {
       if (value === 'none') undock();
@@ -1118,8 +1087,7 @@ guard.guardedHandle('debug:state', ['ball', 'island', 'settings'], () => {
     cast: castId,
     size: SIZES[sizeKey],
     sizeKey,
-    form,
-    both,
+    displayMode,
     bounds: win.getBounds(),
     visible: win.isVisible(),
     workArea: workArea(),
@@ -1537,8 +1505,7 @@ if (!gotTheLock) {
     await loadSchema();
     const stored = readPrefs();
     castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'tot';
-    form = stored.form === 'ball' ? 'ball' : 'island';
-    both = Boolean(stored.formBoth);
+    displayMode = stored.displayMode;
     createWindow();
     if (win) win.webContents.on('did-finish-load', () => safeSend(win, 'cast:changed', castId));
     settings.registerIpc();
@@ -1567,8 +1534,7 @@ if (!gotTheLock) {
     settings.onPrefs(() => {
       const next = readPrefs();
       const changes = SCHEMA?.serviceChanges(previousPrefs, next) ?? {};
-      form = next.form === 'ball' ? 'ball' : 'island';
-      both = Boolean(next.formBoth);
+      displayMode = next.displayMode;
       applyForm();
       applyMainPrefs();
       applyServicePlan();

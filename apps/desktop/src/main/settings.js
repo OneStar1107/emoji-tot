@@ -76,7 +76,7 @@ function broadcastPrefs(next) {
 /* ----------------------------------------------------------------- guard */
 
 /** Action kinds the settings page may ask for, and nothing else. */
-const ACTION_KINDS = ['meta', 'island', 'ball', 'dock', 'demo', 'cast', 'agent', 'settings'];
+const ACTION_KINDS = ['meta', 'dock', 'demo', 'cast', 'agent', 'settings'];
 const SIDES = ['top', 'left', 'right', 'none'];
 const PATCH_LIMIT = 32 * 1024;
 

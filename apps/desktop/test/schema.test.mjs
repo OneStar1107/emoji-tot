@@ -136,6 +136,33 @@ describe('schema: patches', () => {
       rejected: [],
     });
   });
+
+  it('accepts one display mode and rejects the legacy pair', () => {
+    assert.deepEqual(filterPatch({ displayMode: 'both' }), {
+      accepted: { displayMode: 'both' },
+      rejected: [],
+    });
+    assert.deepEqual(filterPatch({ form: 'ball', formBoth: true }), {
+      accepted: {},
+      rejected: ['form', 'formBoth'],
+    });
+  });
+});
+
+describe('schema: display mode migration', () => {
+  it('maps the legacy pair onto one canonical value', () => {
+    assert.equal(withDefaults({ displayMode: 'island' }).displayMode, 'island');
+    assert.equal(withDefaults({ form: 'ball', formBoth: false }).displayMode, 'ball');
+    assert.equal(withDefaults({ form: 'island', formBoth: true }).displayMode, 'both');
+    assert.equal(withDefaults({ form: 'ball', formBoth: true }).displayMode, 'both');
+  });
+
+  it('lets a new value beat stale legacy keys', () => {
+    assert.equal(
+      withDefaults({ displayMode: 'ball', form: 'island', formBoth: true }).displayMode,
+      'ball',
+    );
+  });
 });
 
 describe('schema: pages drive services', () => {
@@ -237,6 +264,12 @@ describe('settings UI actually reads and writes the schema', () => {
     assert.ok(settings.includes('setPath(key, !valueOf(key))'), 'toggles must flip the value at the path');
   });
 
+  it('renders one canonical display mode control', () => {
+    assert.ok(settings.includes("'displayMode'"), 'settings must write displayMode');
+    assert.ok(!settings.includes("'formBoth'"), 'settings must not expose the legacy formBoth switch');
+    assert.ok(!settings.includes("rowActionToggle('显示灵动岛'"), 'visibility is owned by displayMode');
+  });
+
   it('draws every status item that the manifest offers', () => {
     const body = functionBody(island, 'renderPillStatus');
     for (const item of STATUS_MANIFEST) {
@@ -273,5 +306,11 @@ describe('main process implements every service a page can ask for', () => {
   it('applies a pref change to the running app instead of the next launch', () => {
     assert.ok(main.includes('applyServicePlan();'), 'a pref change must re-plan the services');
     assert.ok(main.includes('applyWindowFlags();'), 'a pref change must re-apply window flags');
+  });
+
+  it('reads and applies only the canonical display mode', () => {
+    assert.ok(main.includes('displayMode'), 'main must read displayMode');
+    assert.ok(!main.includes('next.formBoth'), 'main must not read the legacy pair');
+    assert.ok(!main.includes('writePrefs({ form }'), 'main must not write form');
   });
 });

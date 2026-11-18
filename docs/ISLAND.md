@@ -64,6 +64,6 @@ main --island:* data---------------> renderer
 
 ## 6. 与球形态的关系
 
-- 设置项 `form: 'island' | 'ball'`，默认 `island`（用户指定开机默认岛）。
-- `formBoth: boolean`，勾选后两种窗口同时存在；同屏时岛贴顶、球贴边，互不抢焦点。
+- 设置项 `displayMode: 'island' | 'ball' | 'both'`，默认 `island`。它同时决定当前显示和下次启动；同屏时岛贴顶、球贴边，互不抢焦点。
+- 旧版 `form` / `formBoth` 在读取时迁移到 `displayMode`，新值存在时优先使用新值。
 - 托盘菜单永远提供另一个形态的一键切换。

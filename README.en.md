@@ -39,7 +39,7 @@ The desktop app has two forms, switchable from the tray or the settings window w
 | **Island** (default) | top centre of the screen | a pill showing the face, battery, time and temperature; click and it expands into a 420px card |
 | **Ball** | anywhere, docks to an edge | the original ball that hops, sulks and gets dragged around |
 
-Both can be on at once. The form is one field in `prefs.json`; the ball is created at startup, while the island is created on first display. Switching only changes visibility, so the island keeps the page it was on.
+One three-way `displayMode` field chooses Island, Ball or Both. The ball is created at startup, while the island is created on first display. Switching only changes visibility, so the island keeps the page it was on.
 
 The island sizes itself from its content: the page measures its own box with `ResizeObserver` and the main process calls `setBounds`, centred. The settings window has <!--facts:settingsPages-->14<!--/facts--> pages — general, appearance, size and position, hiding and interaction, cast and expressions, page manager, music and lyrics, focus and water, todos and shelf, notifications / mail / calendar, AI quota, weather, plugins, about — and every control writes straight to prefs with no save button.
 

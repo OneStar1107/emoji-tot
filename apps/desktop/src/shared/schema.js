@@ -116,9 +116,8 @@ export const STATUS_MANIFEST = [
  * window was pinned.
  */
 export const DEFAULTS = {
-  /* form */
-  form: 'island',
-  formBoth: false,
+  /* display */
+  displayMode: 'island',
   launchAtLogin: false,
   cast: 'tot',
   /** Last window position; written by the ball itself, not by a control. */
@@ -205,7 +204,16 @@ const NESTED = Object.keys(DEFAULTS).filter((key) => {
  */
 export function withDefaults(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
-  const next = { ...DEFAULTS, ...source };
+  const displayMode = ['island', 'ball', 'both'].includes(source.displayMode)
+    ? source.displayMode
+    : source.formBoth === true
+      ? 'both'
+      : source.form === 'ball'
+        ? 'ball'
+        : DEFAULTS.displayMode;
+  const next = { ...DEFAULTS, ...source, displayMode };
+  delete next.form;
+  delete next.formBoth;
   for (const key of NESTED) {
     next[key] = { ...DEFAULTS[key], ...(source[key] && typeof source[key] === 'object' ? source[key] : {}) };
   }
@@ -372,8 +380,7 @@ export function serviceChanges(before, after) {
 export function pageOfPath(path) {
   const head = String(path).split('.')[0];
   const map = {
-    form: 'general',
-    formBoth: 'general',
+    displayMode: 'general',
     launchAtLogin: 'general',
     theme: 'appearance',
     skin: 'appearance',
@@ -440,8 +447,7 @@ export function pageOfPath(path) {
 export const CONSUMERS = {
   cast: { scope: 'main', at: 'main.js setCast() · island:cast · cast:changed', live: true, note: '当前角色' },
   position: { scope: 'main', at: 'main.js createWindow() / savePrefs()', live: true, note: '非控件：球拖拽后自动写入' },
-  form: { scope: 'main', at: 'main.js applyForm()', live: true, note: '岛 / 球 / 双形态' },
-  formBoth: { scope: 'main', at: 'main.js applyForm()', live: true, note: '两种形态同时显示' },
+  displayMode: { scope: 'main', at: 'main.js applyForm()', live: true, note: '岛 / 球 / 双形态' },
   launchAtLogin: { scope: 'main', at: 'main/settings.js app.setLoginItemSettings', live: true },
 
   theme: { scope: 'renderer', at: 'island.js resolveTheme() · settings.js applyChrome()', live: true },

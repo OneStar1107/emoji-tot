@@ -27,8 +27,7 @@
 
 ```json
 {
-  "form": "island",
-  "formBoth": false,
+  "displayMode": "island",
   "skin": "frost",
   "blur": true,
   "displayId": null,

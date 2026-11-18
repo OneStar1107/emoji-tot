@@ -154,13 +154,14 @@ function clearFormError(scope) {
 
 function pageGeneral() {
   return head('常规', '形态、启动与基础外观') +
-    group('形态', card([
-      rowSeg('默认形态', '开机时先显示哪一个', 'form', [['island', '灵动岛'], ['ball', '桌面球']]),
-      rowToggle('同时显示两种', '岛贴屏幕顶部，球留在桌面', 'formBoth'),
+    group('显示方式', card([
+      rowSeg('桌面形态', '同时决定当前显示和下次启动', 'displayMode', [
+        ['island', '灵动岛'],
+        ['ball', '桌面球'],
+        ['both', '两者'],
+      ]),
     ])) +
-    group('显示', card([
-      rowActionToggle('显示灵动岛', '关掉后只留桌面球', 'island', meta?.islandVisible),
-      rowActionToggle('显示球球', '关掉后只留灵动岛', 'ball', meta?.ballVisible),
+    group('窗口', card([
       rowActionSeg('贴边收起', '把球收到屏幕边缘，移到边缘就贴上去', 'dock',
         [['top', '顶部'], ['left', '左侧'], ['right', '右侧'], ['none', '不收']], meta?.dockSide ?? 'none'),
     ])) +

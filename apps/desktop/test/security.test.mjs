@@ -152,6 +152,16 @@ describe('hardening: navigation and permissions are refused', () => {
   });
 });
 
+describe('hardening: settings actions stay closed', () => {
+  it('does not expose direct surface show/hide actions once displayMode owns visibility', () => {
+    const settingsMain = src('main/settings.js');
+    const match = settingsMain.match(/const ACTION_KINDS = \[(.*?)\];/s);
+    assert.ok(match, 'ACTION_KINDS not found');
+    assert.ok(!match[1].includes("'island'"), 'island must not be a separate action');
+    assert.ok(!match[1].includes("'ball'"), 'ball must not be a separate action');
+  });
+});
+
 describe('hardening: gallery ships a CSP', () => {
   it('declares a policy that forbids inline script and remote origins', () => {
     const html = repo('apps/gallery/index.html');
