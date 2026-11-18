@@ -516,17 +516,25 @@ function pagePlugins() {
 function pageAbout() {
   return head('关于', 'EmojiTot') +
     group('版本', card([
-      row('当前版本', '一个两位数，一个会表达的角色', '<span class="badge">v' + escapeHtml(version) + '</span>'),
+      row('当前版本', '双形态、十一个功能页、设置十四个分区', '<span class="badge">v' + escapeHtml(version) + '</span>'),
       row('数据目录', 'prefs.json、state.json 与缓存', '<button type="button" class="btn" data-act="button" data-key="open-data">打开</button>'),
       row('状态文件', '当前表情与状态，可给别的工具读', '<button type="button" class="btn" data-act="button" data-key="open-state">打开</button>'),
       row('项目主页', 'MIT 许可，代码与美术全部自研', '<button type="button" class="btn" data-act="button" data-key="open-repo">GitHub</button>'),
+    ])) +
+    group('能力与数据', card([
+      row('托盘', '只有设置 / 置顶 / 退出，其余在设置里', '<span class="badge">精简</span>'),
+      row('消息未读', '读窗口标题，不读聊天内容', '<span class="badge">本机</span>'),
+      row('剪贴板', '最近 60 条，存在 clipboard.json', '<span class="badge">本机</span>'),
+      row('AI 余额', 'DeepSeek / Kimi / SiliconFlow / OpenRouter', '<span class="badge">环境变量</span>'),
+      row('日历订阅', 'ICS 链接，按来源整体替换', '<span class="badge">只读</span>'),
     ])) +
     group('素材与许可', card([
       row('角色引擎', '@emojitot/core · MIT', '<span class="badge">自研</span>'),
       row('两位协议', '@emojitot/protocol · MIT', '<span class="badge">自研</span>'),
       row('天气', 'Open-Meteo · 免费 API', '<span class="badge">外部</span>'),
+      row('歌词', 'LRCLIB · 公开曲库', '<span class="badge">外部</span>'),
     ])) +
-    '<p class="note">参考过 Islet、Istel、dsh-island、toki 的架构（均为 MIT），未复制其代码。</p>';
+    '<p class="note">架构参考过 Islet、Istel、dsh-island、toki、岛仔（均为 MIT），代码按本项目风格重写，未复制。</p>';
 }
 
 function pageCast() {
