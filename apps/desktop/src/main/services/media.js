@@ -11,8 +11,9 @@
  */
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const { scriptFile } = require('../paths');
 
-const SCRIPT = path.join(__dirname, 'media.ps1');
+const SCRIPT = scriptFile('media.ps1');
 const EMPTY = Object.freeze({ active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '' });
 
 let state = { ...EMPTY };

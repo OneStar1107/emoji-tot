@@ -8,6 +8,7 @@
  */
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const { scriptFile } = require('../paths');
 
 const RESPAWN_MS = 30000;
 
@@ -17,7 +18,7 @@ let devices = [];
 let stopped = true;
 const listeners = new Set();
 
-const scriptPath = () => path.join(__dirname, 'devices.ps1');
+const scriptPath = () => scriptFile('devices.ps1');
 
 function emit() {
   const value = snapshot();

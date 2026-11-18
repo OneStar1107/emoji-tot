@@ -8,8 +8,9 @@
  */
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const { scriptFile } = require('../paths');
 
-const SCRIPT = path.join(__dirname, 'fullscreen.ps1');
+const SCRIPT = scriptFile('fullscreen.ps1');
 let proc = null;
 let last = null;
 let stopped = true;

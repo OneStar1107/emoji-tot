@@ -1,7 +1,7 @@
 {
   "name": "@emojitot/desktop",
   "private": true,
-  "version": "0.3.18",
+  "version": "0.3.19",
   "description": "EmojiTot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
   "main": "src/main.js",
   "type": "commonjs",
@@ -25,6 +25,9 @@
     "files": [
       "src/**/*",
       "assets/**/*"
+    ],
+    "asarUnpack": [
+      "src/main/services/*.ps1"
     ],
     "directories": {
       "output": "../../release"

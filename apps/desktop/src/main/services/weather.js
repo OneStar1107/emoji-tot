@@ -12,10 +12,10 @@
  */
 const { execFile } = require('node:child_process');
 const path = require('node:path');
-const { cachePath, readJson, writeJson } = require('../paths');
+const { cachePath, readJson, writeJson, scriptFile } = require('../paths');
 
 const CACHE_TTL = 10 * 60 * 1000;
-const SCRIPT = path.join(__dirname, 'weather.ps1');
+const SCRIPT = scriptFile('weather.ps1');
 
 /** WMO weather codes, the vocabulary Open-Meteo answers in. */
 const CODE_ZH = {

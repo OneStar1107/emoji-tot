@@ -9,9 +9,9 @@
 const { execFile } = require('node:child_process');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { cachePath, readJson, writeJson } = require('../paths');
+const { cachePath, readJson, writeJson, scriptFile } = require('../paths');
 
-const SCRIPT = path.join(__dirname, 'lyrics.ps1');
+const SCRIPT = scriptFile('lyrics.ps1');
 const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
 let current = null;

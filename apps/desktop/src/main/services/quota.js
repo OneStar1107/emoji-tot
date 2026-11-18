@@ -9,11 +9,11 @@
 const { execFile } = require('node:child_process');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { readJson, writeJson, userDir, readPrefs } = require('../paths');
+const { readJson, writeJson, userDir, readPrefs, scriptFile } = require('../paths');
 const { encrypt, decrypt } = require('../secrets');
 const { notify } = require('./notify');
 
-const SCRIPT = path.join(__dirname, 'quota.ps1');
+const SCRIPT = scriptFile('quota.ps1');
 const KEY_VAR = 'EMOJITOT_QUOTA_KEY';
 
 /** Providers this module can read a balance from. */

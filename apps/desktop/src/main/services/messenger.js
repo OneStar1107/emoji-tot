@@ -9,6 +9,7 @@
  */
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const { scriptFile } = require('../paths');
 
 const POLL_MS = 1800;
 const RESPAWN_MS = 6000;
@@ -20,7 +21,7 @@ let signature = '';
 let stopped = true;
 const listeners = new Set();
 
-const scriptPath = () => path.join(__dirname, 'messenger.ps1');
+const scriptPath = () => scriptFile('messenger.ps1');
 
 /** Enabled apps come from prefs; a missing key means "all five". */
 function enabledSet(prefs) {

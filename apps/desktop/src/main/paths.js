@@ -14,6 +14,21 @@ const prefsPath = () => path.join(userDir(), 'prefs.json');
 const statePath = () => path.join(userDir(), 'state.json');
 const cachePath = (name) => path.join(userDir(), `cache-${name}.json`);
 
+/**
+ * Absolute path to one of the PowerShell scripts next to the services.
+ *
+ * PowerShell cannot open a file inside app.asar — only Electron's own fs shim
+ * understands that archive — so the packaged build writes the scripts to
+ * app.asar.unpacked (see asarUnpack in the app package.json). __dirname still
+ * points into the archive at runtime, so the path is redirected here rather
+ * than at seven call sites. In development nothing is unpacked and the plain
+ * path is already correct.
+ */
+function scriptFile(name) {
+  const inside = path.join(__dirname, 'services', name);
+  return inside.includes(`app.asar${path.sep}`) ? inside.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`) : inside;
+}
+
 function readJson(file, fallback) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -44,4 +59,4 @@ function writePrefs(patch) {
   return next;
 }
 
-module.exports = { userDir, prefsPath, statePath, cachePath, readJson, writeJson, readPrefs, writePrefs };
+module.exports = { userDir, prefsPath, statePath, cachePath, scriptFile, readJson, writeJson, readPrefs, writePrefs };
