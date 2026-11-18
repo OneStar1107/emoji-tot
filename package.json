@@ -5,6 +5,9 @@
   "description": "EmojiTot: an expressive character for the desktop and the web, driven by a two-digit protocol",
   "type": "commonjs",
   "license": "MIT",
+  "scripts": {
+    "scan": "node scripts/scan-sensitive.mjs"
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
