@@ -435,7 +435,9 @@ function mailPage() {
       '还没有添加邮箱',
       '支持 163、QQ、Gmail。授权码只保存在本机。',
       '添加邮箱',
-      'settings:mail',
+      // The settings page is called comm; a stale key opens the window on the
+      // wrong page, which reads as "the button does nothing".
+      'settings:comm',
     );
   }
   if (!state.messages.length) {

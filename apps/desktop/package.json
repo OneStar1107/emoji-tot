@@ -1,7 +1,7 @@
 {
   "name": "@emojitot/desktop",
   "private": true,
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "EmojiTot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
   "main": "src/main.js",
   "type": "commonjs",
