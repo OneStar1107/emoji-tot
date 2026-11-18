@@ -110,6 +110,39 @@ describe('ics: recurrence', () => {
     ])));
     assert.equal(out.length, 1, 'an unsupported rule yields the base event, not a wrong expansion');
   });
+
+  it('skips invalid month days instead of rolling into the next month', () => {
+    const out = ics.parseIcs(cal(vevent([
+      'UID:month-end-1',
+      'SUMMARY:Month end',
+      'DTSTART:20260131T090000',
+      'RRULE:FREQ=MONTHLY;COUNT=4',
+    ])));
+    const dates = out.map((event) => {
+      const date = new Date(event.start);
+      return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    });
+    assert.deepEqual(dates, [
+      '2026-1-31',
+      '2026-3-31',
+      '2026-5-31',
+      '2026-7-31',
+    ]);
+  });
+
+  it('skips invalid leap days in yearly recurrence', () => {
+    const out = ics.parseIcs(cal(vevent([
+      'UID:leap-day-1',
+      'SUMMARY:Leap day',
+      'DTSTART:20240229T090000',
+      'RRULE:FREQ=YEARLY;COUNT=3',
+    ])));
+    const dates = out.map((event) => {
+      const date = new Date(event.start);
+      return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    });
+    assert.deepEqual(dates, ['2024-2-29', '2028-2-29', '2032-2-29']);
+  });
 });
 
 describe('ics: identity', () => {

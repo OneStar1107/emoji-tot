@@ -10,6 +10,7 @@ const crypto = require('node:crypto');
 const platform = require('../platform');
 const { cachePath, readJson, writeJson, readPrefs } = require('../paths');
 const secrets = require('../secrets');
+const { reminderKey, pruneReminderKeys } = require('../reminders');
 
 let events = [];
 let subscriptions = [];
@@ -43,6 +44,7 @@ function load() {
     ...sub,
     url: decodeUrl(sub.url),
   }));
+  reminded = pruneReminderKeys(reminded, events);
 }
 
 function save() {
@@ -94,6 +96,7 @@ function add(payload) {
 
 function remove(id) {
   events = events.filter((event) => event.id !== id);
+  reminded = pruneReminderKeys(reminded, events);
   save();
   emit();
 }
@@ -168,6 +171,7 @@ function applySubscription(sub, text) {
       importedAt: stamp,
     });
   }
+  reminded = pruneReminderKeys(reminded, events);
 }
 
 async function refreshSubscriptions(force) {
@@ -217,6 +221,7 @@ async function addSubscription(name, url) {
 function removeSubscription(id) {
   subscriptions = subscriptions.filter((sub) => sub.id !== id);
   events = events.filter((event) => event.source !== id);
+  reminded = pruneReminderKeys(reminded, events);
   save();
   emit();
 }
@@ -237,7 +242,7 @@ function tick() {
   const leadMs = leadMin * 60 * 1000;
   const now = Date.now();
   for (const event of events) {
-    const key = event.id + ':' + event.start;
+    const key = reminderKey(event);
     if (reminded.has(key)) continue;
     // Fire once, at the configured lead time; a 0 lead means "at start".
     if (event.start - leadMs > now || event.start < now - 60 * 1000) continue;

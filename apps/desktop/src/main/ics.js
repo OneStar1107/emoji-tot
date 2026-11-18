@@ -159,15 +159,38 @@ function expandRecurrence(event, ruleText) {
   const out = [];
   const base = new Date(event.start);
   const duration = event.end - event.start;
-  let cursor = new Date(base.getTime());
 
-  for (let i = 1; i < limit; i += 1) {
-    if (freq === 'DAILY') cursor = new Date(cursor.getTime() + interval * 86400000);
-    else if (freq === 'WEEKLY') cursor = new Date(cursor.getTime() + interval * 7 * 86400000);
-    else if (freq === 'MONTHLY') cursor = new Date(cursor.getFullYear(), cursor.getMonth() + interval, cursor.getDate(), cursor.getHours(), cursor.getMinutes(), cursor.getSeconds());
-    else cursor = new Date(cursor.getFullYear() + interval, cursor.getMonth(), cursor.getDate(), cursor.getHours(), cursor.getMinutes(), cursor.getSeconds());
-    if (until && cursor.getTime() > until) break;
-    out.push({ ...event, start: cursor.getTime(), end: cursor.getTime() + duration });
+  if (freq === 'DAILY' || freq === 'WEEKLY') {
+    const step = freq === 'DAILY' ? interval * 86400000 : interval * 7 * 86400000;
+    for (let i = 1; i < limit; i += 1) {
+      const start = base.getTime() + step * i;
+      if (until && start > until) break;
+      out.push({ ...event, start, end: start + duration });
+    }
+    return out;
+  }
+
+  /*
+   * Calendar months do not all have 29-31 days. A monthly rule anchored on
+   * the 31st must skip shorter months instead of letting JavaScript roll
+   * forward into the next month.
+   */
+  const day = base.getDate();
+  const month = base.getMonth();
+  const year = base.getFullYear();
+  const hours = base.getHours();
+  const minutes = base.getMinutes();
+  const seconds = base.getSeconds();
+  const maxAttempts = Math.max(480, limit * 24);
+  let attempt = 1;
+  while (out.length < limit - 1 && attempt <= maxAttempts) {
+    const candidateYear = freq === 'YEARLY' ? year + interval * attempt : year + Math.floor((month + interval * attempt) / 12);
+    const candidateMonth = freq === 'YEARLY' ? month : ((month + interval * attempt) % 12 + 12) % 12;
+    const candidate = new Date(candidateYear, candidateMonth, day, hours, minutes, seconds);
+    attempt += 1;
+    if (candidate.getMonth() !== candidateMonth || candidate.getDate() !== day) continue;
+    if (until && candidate.getTime() > until) break;
+    out.push({ ...event, start: candidate.getTime(), end: candidate.getTime() + duration });
   }
   return out;
 }

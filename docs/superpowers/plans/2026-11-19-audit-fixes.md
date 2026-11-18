@@ -199,27 +199,27 @@ git commit -m "fix: align service and focus lifecycle behavior"
 - Consumes: `expandRecurrence`, `reminded`.
 - Produces: monthly/yearly recurrence skips invalid dates; reminder keys are pruned when source events disappear.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add a monthly event on Jan 31 expecting Feb 28/29 handling and no March 3. Add a reminder-prune test.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: FAIL with rolled dates and stale keys.
 
-- [ ] **Step 3: Implement recurrence and pruning**
+- [x] **Step 3: Implement recurrence and pruning**
 
 Use explicit month/year arithmetic that rejects invalid days, and remove reminder keys for deleted/replaced events.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/main/ics.js apps/desktop/src/main/services/calendar.js apps/desktop/test/ics.test.mjs apps/desktop/test/services.test.mjs
