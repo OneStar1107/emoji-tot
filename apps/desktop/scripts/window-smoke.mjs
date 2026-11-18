@@ -157,6 +157,29 @@ try {
   console.log('  INFO  shelf metrics: ' + metrics);
   ok('shelf metrics collected', metrics && JSON.parse(metrics).clip > 0, metrics);
 
+  const pagingTargets = JSON.parse(await evaluate(`
+    JSON.stringify((() => {
+      const rect = (selector) => {
+        const node = document.querySelector(selector);
+        if (!node) return null;
+        const box = node.getBoundingClientRect();
+        return { w: box.width, h: box.height };
+      };
+      return {
+        pager: rect('.pager'),
+        dot: rect('.dots button'),
+      };
+    })())
+  `));
+  ok(
+    'island paging targets are usable',
+    pagingTargets.pager?.w >= 32 &&
+      pagingTargets.pager?.h >= 32 &&
+      pagingTargets.dot?.w >= 24 &&
+      pagingTargets.dot?.h >= 24,
+    JSON.stringify(pagingTargets),
+  );
+
   browser.close();
 } catch (error) {
   ok('attach run', false, String(error && error.message));

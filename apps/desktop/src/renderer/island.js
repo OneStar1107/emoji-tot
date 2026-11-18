@@ -9,6 +9,7 @@ import {
   PAGE_MANIFEST as PAGES,
   STATUS_MANIFEST as STATUS_ITEMS,
 } from '../shared/schema.js';
+import { islandHeaderState, pagingVisibility } from './island-header.mjs';
 
 const api = window.islandAPI;
 
@@ -23,6 +24,8 @@ const titleEl = document.getElementById('page-title');
 const subEl = document.getElementById('page-sub');
 const topClock = document.getElementById('top-clock');
 const topBattery = document.getElementById('top-battery');
+const topMedia = document.getElementById('top-media');
+const topMediaText = document.getElementById('top-media-text');
 const btnSettings = document.getElementById('btn-settings');
 
 await customElements.whenDefined('emojitot-ball');
@@ -289,18 +292,20 @@ function ensureBatteryRotation() {
   }, BATTERY_ROTATE_MS);
 }
 
-/* Now-playing in the header: the full title, scrolling only when it overflows. */
+/* The page stays primary; now-playing is a secondary header slot. */
 function renderTopMedia() {
   const page = enabledPages()[pageIndex];
-  const title = media && media.active ? String(media.title || '') : '';
-  /*
-   * Line one is the now-playing title, and falls back to the page name when
-   * nothing is playing — the line is the widest slot in the header, so this is
-   * where a long track title can actually be read.
-   */
-  const text = title || (page ? page.title : '');
-  if (titleEl.textContent !== text) titleEl.textContent = text;
-  titleEl.dataset.over = String(title.length > 0 && titleEl.scrollWidth > titleEl.clientWidth + 2);
+  const state = islandHeaderState(page?.title ?? '', media);
+  if (titleEl.textContent !== state.title) titleEl.textContent = state.title;
+  titleEl.dataset.over = String(
+    state.title.length > 0 && titleEl.scrollWidth > titleEl.clientWidth + 2,
+  );
+  topMedia.hidden = !state.media;
+  if (topMediaText.textContent !== state.media) topMediaText.textContent = state.media;
+  topMedia.dataset.over = String(
+    state.media.length > 0 && topMedia.scrollWidth > topMedia.clientWidth + 2,
+  );
+  topMedia.classList.toggle('scrolling', topMedia.dataset.over === 'true');
 }
 
 function renderPillStatus() {
@@ -1023,11 +1028,7 @@ function renderPage(animate = false) {
   // One page means the paging arrows would be dead controls.
   document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
-  /*
-   * The header now reads top-down as: what is playing, then where you are and
-   * how much battery is left. The page name moved under the ball so the top
-   * line can carry the now-playing title at full width.
-   */
+  /* Page identity owns the header; media is a secondary status. */
   const nameEl = document.getElementById('page-name');
   if (nameEl) nameEl.textContent = page.title;
   renderTopMedia();
@@ -1036,6 +1037,12 @@ function renderPage(animate = false) {
   dotsEl.innerHTML = list
     .map((p, index) => `<button type="button" data-page="${index}" aria-current="${index === pageIndex}" aria-label="${p.title}"></button>`)
     .join('');
+  const paging = pagingVisibility(list.length);
+  document.body.dataset.pages = String(list.length);
+  dotsEl.hidden = !paging.dots;
+  for (const pager of document.querySelectorAll('.pager')) {
+    pager.hidden = !paging.arrows;
+  }
   if (animate) {
     pagesEl.classList.remove('page-in-left', 'page-in-right');
     // Force a style flush so re-adding the class restarts the animation even

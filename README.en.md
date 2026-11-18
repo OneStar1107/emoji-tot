@@ -149,9 +149,9 @@ Not "it should run" — it was run:
 | Protocol table | 33 protocol tests, 18 engine tests and 119 desktop tests covering ids, state mapping, event flags and segment bounds |
 | <!--facts:protocolIds-->51<!--/facts--> protocol ids render | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> ids → <!--facts:faceStates-->44<!--/facts--> faces, 51/51 and 44/44 pass, 0 failures, in Node with no browser |
 | Desktop window behaviour | `node apps/desktop/scripts/ui-check.mjs <port>` — drives the real cursor, 7/7 (dock, open, tuck, click-through) |
-| Desktop window smoke | `pnpm smoke:desktop` — launches the development or packaged app with a temporary profile, 6/6 (sandbox, preload, window size, shelf layout) |
+| Desktop window smoke | `pnpm smoke:desktop` — launches the development or packaged app with a temporary profile, 7/7 (sandbox, preload, window size, shelf layout, paging targets) |
 | Desktop protocol | write `34` → `alerting`, `33` → `celebrate`, malformed JSON → keeps the current face |
-| Windows artifacts | `EmojiTot.Setup.0.3.32.exe` (about 116 MiB) and `EmojiTot.0.3.32.exe` (about 106 MiB); the unpacked build passes the same 6/6 smoke |
+| Windows artifacts | `EmojiTot.Setup.0.3.32.exe` (about 116 MiB) and `EmojiTot.0.3.32.exe` (about 106 MiB); the unpacked build passes the same window smoke |
 
 ## Deliberate trade-offs
 

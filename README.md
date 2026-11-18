@@ -225,7 +225,7 @@ docs/                架构、协议、岛规格、设置规格、调研结论
 | --- | --- |
 | 协议表 | 33 个协议测试、18 个引擎测试、119 个桌面测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
 | <!--facts:protocolIds-->51<!--/facts--> 个协议 id 渲染 | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> 个 id → <!--facts:faceStates-->44<!--/facts--> 个脸部状态，51/51 与 44/44 全通过，0 failures（Node 里跑，无浏览器） |
-| 桌面端窗口行为 | `pnpm smoke:desktop` — 独立用户目录启动开发版或打包版，6/6（沙箱、preload、窗口尺寸、置物架布局）；原生拖拽检查可用 `ui-check.mjs` |
+| 桌面端窗口行为 | `pnpm smoke:desktop` — 独立用户目录启动开发版或打包版，7/7（沙箱、preload、窗口尺寸、置物架布局、分页热区）；原生拖拽检查可用 `ui-check.mjs` |
 | 桌面端协议驱动 | 写 `34` → `alerting`，写 `33` → `celebrate`，写坏 JSON → 保持当前表情 |
 | 灵动岛窗口 | 截图 + CDP 实测：收起 84×34、展开 420×272；窗口在 1707 宽的工作区里 x=628（居中）、y=0（贴顶） |
 | 灵动岛数据 | 收起态显示 `97% 21:10 19°`；天气缓存写入 `cache-weather.json`（香港 19°，7 天） |
@@ -246,7 +246,7 @@ docs/                架构、协议、岛规格、设置规格、调研结论
 | 待办重复 | 加「每周复盘」→ 显示每周与下次日期；勾完成后变为「下次 12/2」 |
 | 设备 | 实测 6 台：键盘 100%、手柄 94%、Xbox 手柄 89%、手机 100%，无电量的显示「—」 |
 | 日历订阅 | 本地 ICS 服务 2 条事件 → 订阅后返回两条，岛上月历出现 2 个事件点，删除后归零 |
-| 打包 | `release/EmojiTot.Setup.0.3.32.exe` 约 116 MiB、`release/EmojiTot.0.3.32.exe` 约 106 MiB；解包版启动并通过 6/6 窗口 smoke |
+| 打包 | `release/EmojiTot.Setup.0.3.32.exe` 约 116 MiB、`release/EmojiTot.0.3.32.exe` 约 106 MiB；解包版启动并通过窗口 smoke |
 
 ## 几处有意的取舍
 
