@@ -51,12 +51,34 @@ Module._load = function patched(request) {
 };
 
 const health = require('../src/main/services/health.js');
+const focus = require('../src/main/services/focus.js');
 const lyrics = require('../src/main/services/lyrics.js');
 const calendar = require('../src/main/services/calendar.js');
 const mail = require('../src/main/services/mail.js');
 
 const cal = (body) => ['BEGIN:VCALENDAR', 'VERSION:2.0', body, 'END:VCALENDAR'].join('\r\n');
 const vevent = (lines) => ['BEGIN:VEVENT', ...lines, 'END:VEVENT'].join('\r\n');
+const writePrefs = (value) => writeFileSync(join(dataDir, 'prefs.json'), JSON.stringify(value));
+
+describe('focus: enabled and skip semantics', () => {
+  it('cannot start while the feature is disabled', () => {
+    writePrefs({ focus: { enabled: false, work: 25, rest: 5 } });
+    focus.restart();
+    assert.equal(focus.start(), false);
+    assert.equal(focus.snapshot().phase, 'idle');
+  });
+
+  it('skipping work does not count a completed cycle', () => {
+    writePrefs({ focus: { enabled: true, work: 25, rest: 5 } });
+    focus.restart();
+    assert.equal(focus.start(), true);
+    focus.skip();
+    const snapshot = focus.snapshot();
+    assert.equal(snapshot.phase, 'rest');
+    assert.equal(snapshot.cycles, 0);
+    focus.restart();
+  });
+});
 
 describe('health: the two clear buttons are separate', () => {
   it('exports what the IPC branch calls', () => {

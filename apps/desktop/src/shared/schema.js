@@ -341,6 +341,33 @@ export function enabledServices(prefs) {
   return running;
 }
 
+/** Which live workers need refresh/reschedule work after a preference change. */
+export function serviceChanges(before, after) {
+  const previous = withDefaults(before);
+  const next = withDefaults(after);
+  const was = enabledServices(previous);
+  const now = enabledServices(next);
+  const weatherWas = was.has('weather');
+  const weatherIs = now.has('weather');
+  const quotaWas = was.has('quota');
+  const quotaIs = now.has('quota');
+  return {
+    weatherRefresh:
+      weatherWas &&
+      weatherIs &&
+      (previous.weather.city !== next.weather.city ||
+        previous.weather.autoLocate !== next.weather.autoLocate),
+    weatherReschedule:
+      weatherWas &&
+      weatherIs &&
+      Number(previous.weather.intervalMin) !== Number(next.weather.intervalMin),
+    quotaReschedule:
+      quotaWas &&
+      quotaIs &&
+      Number(previous.quota.intervalMin) !== Number(next.quota.intervalMin),
+  };
+}
+
 /** The page a preference path belongs to, for grouping an audit. */
 export function pageOfPath(path) {
   const head = String(path).split('.')[0];

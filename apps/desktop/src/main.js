@@ -42,6 +42,7 @@ const guard = require('./main/ipc-guard');
 const { safeSend } = guard;
 const platform = require('./main/platform');
 const { passThroughFor, sameDisplayId } = require('./main/window-state');
+const { nextAgentMtime } = require('./main/agent-file');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -726,11 +727,11 @@ function startAgentWatch(prefs) {
         return;
       }
       if (stat.mtimeMs === last) return;
-      last = stat.mtimeMs;
       // A file caught mid-write parses as null; leave `last` alone so the next
       // tick retries instead of waiting for the writer to touch it again.
       const raw = readJson(file, null);
       if (raw == null) return;
+      last = nextAgentMtime(last, stat.mtimeMs, raw);
       const id = source.map(raw);
       if (id) agentsArbiter().update({ sessionId: 'agent:' + source.id, emotionId: id });
     }, 350);
@@ -1544,8 +1545,8 @@ if (!gotTheLock) {
     island.registerIpc();
     // The island page cannot hold data that was pushed before it listened.
     island.onLoaded(() => {
-      pushBattery();
-      refreshWeather();
+      if (runningServices.has('battery')) pushBattery();
+      if (runningServices.has('weather')) refreshWeather();
       island.send('settings:changed', readPrefs());
     });
     createTray();
@@ -1562,17 +1563,21 @@ if (!gotTheLock) {
     settings.setWeatherRefresher(refreshWeather);
     settings.setActionHook(handleSettingsAction);
     island.startOledShift();
+    let previousPrefs = readPrefs();
     settings.onPrefs(() => {
       const next = readPrefs();
+      const changes = SCHEMA?.serviceChanges(previousPrefs, next) ?? {};
       form = next.form === 'ball' ? 'ball' : 'island';
       both = Boolean(next.formBoth);
       applyForm();
       applyMainPrefs();
       applyServicePlan();
-      quota.reschedule();
+      if (changes.weatherReschedule) scheduleWeather();
+      if (changes.weatherRefresh) refreshWeather();
+      if (changes.quotaReschedule) quota.reschedule();
       messenger.refresh();
       island.send('settings:changed', next);
-      refreshWeather();
+      previousPrefs = next;
     });
   });
 

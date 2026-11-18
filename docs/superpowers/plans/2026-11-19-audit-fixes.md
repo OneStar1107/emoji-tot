@@ -160,27 +160,27 @@ git commit -m "fix: honor click-through and display preferences"
 - Consumes: `enabledServices`, `scheduleWeather`, `focus.enabled`, agent mtime polling.
 - Produces: `focus.start()` returns `false` when disabled; separate `skip()` from `finish()`; cancellable deferred start timers; parse-success mtime update.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add tests for focus-disabled start, skip without cycle increment, disabled-service weather refresh, and agent file retry after invalid JSON.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: FAIL on each current behavior.
 
-- [ ] **Step 3: Implement service and timing fixes**
+- [x] **Step 3: Implement service and timing fixes**
 
 Gate startup/onPrefs work by service plan, reschedule weather when the interval changes, store/cancel initial timeout handles, and separate focus skip from completion.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/main.js apps/desktop/src/main/services/focus.js apps/desktop/src/main/services/quota.js apps/desktop/src/main/services/mail.js apps/desktop/test/services.test.mjs apps/desktop/test/agents.test.mjs

@@ -98,9 +98,11 @@ function tick() {
 }
 
 function start() {
-  const { work } = prefs();
+  const { work, enabled } = prefs();
+  if (!enabled) return false;
   if (state.phase === 'rest') return;
   startPhase('work', work);
+  return true;
 }
 
 function pause() {
@@ -129,8 +131,12 @@ function stop() {
 /** Jump to the next phase: used by "skip" on the island. */
 function skip() {
   if (state.phase === 'idle') return start();
-  if (state.phase === 'work') return finish();
+  if (state.phase === 'work') {
+    startPhase('rest', prefs().rest);
+    return true;
+  }
   stop();
+  return true;
 }
 
 function restart() {

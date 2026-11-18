@@ -12,6 +12,7 @@ const crypto = require('node:crypto');
 const { readJson, writeJson, userDir, readPrefs, scriptFile } = require('../paths');
 const { encrypt, decrypt } = require('../secrets');
 const { notify } = require('./notify');
+const { defer } = require('../deferred');
 
 const SCRIPT = scriptFile('quota.ps1');
 const KEY_VAR = 'EMOJITOT_QUOTA_KEY';
@@ -24,6 +25,7 @@ let accounts = [];
 let current = null;
 let last = null;
 let timer = null;
+let cancelInitial = null;
 const listeners = new Set();
 
 const secretsFile = () => path.join(userDir(), 'secrets.bin');
@@ -183,11 +185,14 @@ function startService() {
   load();
   emit();
   // A short delay keeps app start snappy; the balance is not needed to paint.
-  setTimeout(refresh, 2500);
+  cancelInitial?.();
+  cancelInitial = defer(refresh, 2500);
   reschedule();
 }
 
 function stopService() {
+  cancelInitial?.();
+  cancelInitial = null;
   clearInterval(timer);
   timer = null;
 }

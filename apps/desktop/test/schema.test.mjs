@@ -26,6 +26,7 @@ import {
   knownPaths,
   orderedPageKeys,
   orderedStatusKeys,
+  serviceChanges,
   setStatusItemEnabled,
   withDefaults,
 } from '../src/shared/schema.js';
@@ -163,6 +164,34 @@ describe('schema: pages drive services', () => {
     const prefs = withDefaults({ pages: { music: false }, statusItems: ['battery'] });
     assert.ok(!enabledPageKeys(prefs).includes('music'));
     assert.deepEqual(enabledStatusKeys(prefs), ['battery']);
+  });
+
+  it('only refreshes weather while it is running', () => {
+    const off = serviceChanges(
+      withDefaults({ pages: { weather: false }, statusItems: ['battery'] }),
+      withDefaults({ pages: { weather: false }, statusItems: ['battery'], weather: { city: 'Macau' } }),
+    );
+    assert.equal(off.weatherRefresh, false);
+    assert.equal(off.weatherReschedule, false);
+
+    const on = serviceChanges(
+      withDefaults({}),
+      withDefaults({ weather: { intervalMin: 30 } }),
+    );
+    assert.equal(on.weatherRefresh, false);
+    assert.equal(on.weatherReschedule, true);
+  });
+
+  it('does not reschedule quota after its page is off', () => {
+    const change = serviceChanges(
+      withDefaults({ pages: { quota: false }, statusItems: ['battery'] }),
+      withDefaults({
+        pages: { quota: false },
+        statusItems: ['battery'],
+        quota: { intervalMin: 30 },
+      }),
+    );
+    assert.equal(change.quotaReschedule, false);
   });
 });
 

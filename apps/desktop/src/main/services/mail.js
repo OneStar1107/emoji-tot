@@ -12,6 +12,7 @@ const crypto = require('node:crypto');
 const { readJson, writeJson, userDir } = require('../paths');
 const { encrypt, decrypt } = require('../secrets');
 const calendar = require('./calendar');
+const { defer } = require('../deferred');
 
 const PROVIDERS = {
   '163': { label: '163 邮箱', host: 'imap.163.com', port: 993, secure: true },
@@ -31,6 +32,7 @@ let syncing = false;
 let lastError = '';
 let lastSync = 0;
 let timer = null;
+let cancelInitial = null;
 let lastAttempt = 0;
 const listeners = new Set();
 
@@ -395,12 +397,15 @@ function startService() {
   load();
   emit();
   // First sync is deferred: the island paints before any network happens.
-  setTimeout(() => refresh(true), 4000);
+  cancelInitial?.();
+  cancelInitial = defer(() => refresh(true), 4000);
   clearInterval(timer);
   timer = setInterval(() => refresh(), 5 * 60 * 1000);
 }
 
 function stopService() {
+  cancelInitial?.();
+  cancelInitial = null;
   clearInterval(timer);
   timer = null;
 }
