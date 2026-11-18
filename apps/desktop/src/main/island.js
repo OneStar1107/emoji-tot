@@ -148,15 +148,23 @@ function cursorGap(cursor, rect) {
  * one that sweeps past was not going to click anything anyway.
  */
 const WATCH_NEAR_PX = 180;
+const WATCH_FAR_PX = 700;
 const WATCH_FAST_MS = 25;
-const WATCH_SLOW_MS = 120;
+const WATCH_MID_MS = 120;
+/*
+ * 250ms only once the pointer is a screen away (the island lives at the top
+ * edge, so "far" is where someone is working in another window). A pointer that
+ * travels back up is read long before it arrives: the crossing takes several
+ * intervals at any human speed, and a miss costs one tick, not a click.
+ */
+const WATCH_FAR_MS = 250;
 
 function startCursorWatch() {
   clearTimeout(cursorTimer);
   let wasInside = false;
   const tick = () => {
     if (!win || win.isDestroyed() || !win.isVisible()) {
-      cursorTimer = setTimeout(tick, WATCH_SLOW_MS);
+      cursorTimer = setTimeout(tick, WATCH_FAR_MS);
       return;
     }
     const rect = windowRect;
@@ -173,7 +181,8 @@ function startCursorWatch() {
       wasInside = inside;
       win.webContents.send('island:hover', inside);
     }
-    cursorTimer = setTimeout(tick, inside || gap <= WATCH_NEAR_PX ? WATCH_FAST_MS : WATCH_SLOW_MS);
+    const next = inside || gap <= WATCH_NEAR_PX ? WATCH_FAST_MS : gap <= WATCH_FAR_PX ? WATCH_MID_MS : WATCH_FAR_MS;
+    cursorTimer = setTimeout(tick, next);
   };
   cursorTimer = setTimeout(tick, WATCH_FAST_MS);
 }
