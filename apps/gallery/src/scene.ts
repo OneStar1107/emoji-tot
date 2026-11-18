@@ -80,9 +80,9 @@ export function createScene(): View {
     </section>
 
     <div class="scene-actions">
-      <button type="button" data-act="shuffle">${t('scene.act.report')}</button>
-      <button type="button" data-act="party">${t('scene.act.done')}</button>
-      <button type="button" data-act="sleep">${t('scene.idle')}</button>
+      <button type="button" data-act="shuffle">${t('scene.act.shuffle')}</button>
+      <button type="button" data-act="party">${t('scene.act.party')}</button>
+      <button type="button" data-act="sleep">${t('scene.act.sleep')}</button>
     </div>
 
     <div class="stage scene-stage bg-night" id="scene-stage">

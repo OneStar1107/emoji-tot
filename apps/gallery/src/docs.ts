@@ -7,7 +7,7 @@
  * settings schema for the page count — because a doc with a typed number is a
  * doc that quietly lies the first time something is added.
  */
-import { BODIES, CAST, FACE_META, FAMILIES, breed, castMember } from '@emojitot/core';
+import { BODIES, CAST, FACE_META, FAMILIES, TRAIT_IDS, breed, castMember } from '@emojitot/core';
 import { EMOTIONS } from '@emojitot/protocol';
 import { SETTINGS_NAV } from '@emojitot/settings-schema';
 import { getLang, t } from './i18n';
@@ -71,6 +71,7 @@ export function createDocs(): View {
       <ul>
         <li><b>body</b> — ${t('docs.genomeBody', { bodies: BODIES.length, sample: BODIES.slice(0, 6).map((body) => body.id).join(', ') })}</li>
         <li><b>color</b> — ${t('docs.genomeColor')}</li>
+        <li><b>traits</b> — ${t('docs.genomeTrait', { traits: TRAIT_IDS.length })}</li>
         <li><b>face</b> — ${t('docs.genomeFace', { faces: FACE_META.length })}</li>
       </ul>
       <h3>${t('docs.finishHeading')}</h3>
@@ -106,8 +107,8 @@ facesInGroup('agent');       // every agent state, in table order</code></pre>
       <p>${t('docs.settingsBody', { pages: SETTINGS_NAV.reduce((total, group) => total + group.items.length, 0) })}</p>`;
 
   const extendDoc = `<p>${t('docs.extendIntro')}</p>
-      <pre class="snippet"><code>// renderer/shared/pages.js
-{ key: 'focus', title: 'Focus', sub: 'Pomodoro', icon: 'timer' }
+      <pre class="snippet"><code>// apps/desktop/src/shared/schema.js
+{ key: 'focus', title: '焦点', sub: '番茄钟', icon: 'timer', service: 'focus' }
 
 // renderer/island.js
 function focusPage() { return '&lt;div class=&quot;focus&quot;&gt;…&lt;/div&gt;'; }

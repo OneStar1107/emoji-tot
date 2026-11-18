@@ -241,27 +241,27 @@ git commit -m "fix: harden recurring calendar events"
 - Consumes: `FAMILIES`, `EMOTIONS`, `getLang`.
 - Produces: cast-family filter; distinct scene actions; English drawer names.
 
-- [ ] **Step 1: Write failing browser checks**
+- [x] **Step 1: Write failing browser checks**
 
 Add checks that each cast family returns non-empty tiles and that scene action labels match action keys.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @emojitot/gallery build && node apps/gallery/scripts/browser-check.mjs`
 
 Expected: FAIL on empty family filters/wrong labels.
 
-- [ ] **Step 3: Implement Gallery corrections**
+- [x] **Step 3: Implement Gallery corrections**
 
 Use `FAMILIES` for character filters, add scene action keys, localize drawer and docs strings, and update meta/OG declarations.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @emojitot/gallery build && node apps/gallery/scripts/browser-check.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/gallery/src apps/gallery/index.html apps/gallery/scripts/browser-check.mjs

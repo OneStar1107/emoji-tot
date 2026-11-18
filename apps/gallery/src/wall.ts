@@ -4,20 +4,11 @@
  * Clicking a character adopts it in the console; clicking an expression deep
  * links to `#/console?state=<id>` so a shared link opens on that face.
  */
-import { CAST, FACE_META, castMember, renderCast } from '@emojitot/core';
+import { CAST, FACE_META, FAMILIES, castMember, renderCast } from '@emojitot/core';
 import { EMOTIONS } from '@emojitot/protocol';
 import { getLang, t } from './i18n';
 import { onLookChange, selectCast } from './store';
 import type { View } from './main';
-
-const SEGMENTS = [
-  { id: 'all', label: 'wall.all' },
-  { id: 'life', label: 'wall.group.life' },
-  { id: 'emotion', label: 'wall.group.emotion' },
-  { id: 'agent', label: 'wall.group.agent' },
-] as const;
-
-type Segment = (typeof SEGMENTS)[number]['id'];
 
 function castTile(id: string): string {
   const member = castMember(id)!;
@@ -46,7 +37,7 @@ export function createWall(): View {
   el.className = 'wall-view';
 
   let tab: 'cast' | 'emotion' = 'cast';
-  let segment: Segment = 'all';
+  let family = 'all';
 
   el.innerHTML = `
     <header class="wall-head">
@@ -67,16 +58,24 @@ export function createWall(): View {
   const count = el.querySelector<HTMLElement>('#wallCount')!;
 
   function paintFilters(): void {
-    filters.innerHTML = SEGMENTS.map(
+    const options = [
+      { id: 'all', label: t('wall.all') },
+      ...FAMILIES.map((item) => ({
+        id: item.id,
+        label: getLang() === 'zh' ? item.zh : item.en,
+      })),
+    ];
+    filters.innerHTML = options.map(
       (item) =>
-        `<button type="button" data-segment="${item.id}" aria-pressed="${item.id === segment}">${t(item.label)}</button>`,
+        `<button type="button" data-family="${item.id}" aria-pressed="${item.id === family}">${item.label}</button>`,
     ).join('');
   }
 
   function paintGrid(): void {
     if (tab === 'cast') {
-      grid.innerHTML = CAST.filter(() => segment === 'all' || segment === 'cast').map((m) => castTile(m.id)).join('');
-      count.textContent = t('wall.count.cast', { n: CAST.length, total: CAST.length });
+      const list = family === 'all' ? CAST : CAST.filter((member) => member.family === family);
+      grid.innerHTML = list.map((member) => castTile(member.id)).join('');
+      count.textContent = t('wall.count.cast', { n: list.length, total: CAST.length });
       return;
     }
     const list = FACE_META.map((item) => item.id);
@@ -94,19 +93,19 @@ export function createWall(): View {
 
   el.addEventListener('click', (event) => {
     const target = (event.target as HTMLElement).closest<HTMLElement>(
-      '[data-tab], [data-segment], [data-cast], [data-state]',
+      '[data-tab], [data-family], [data-cast], [data-state]',
     );
     if (!target) return;
     if (target.dataset.tab) {
       tab = target.dataset.tab as 'cast' | 'emotion';
-      segment = 'all';
+      family = 'all';
       paintTabs();
       paintFilters();
       paintGrid();
       return;
     }
-    if (target.dataset.segment) {
-      segment = target.dataset.segment as Segment;
+    if (target.dataset.family) {
+      family = target.dataset.family;
       paintFilters();
       paintGrid();
       return;

@@ -1,7 +1,7 @@
 /**
  * The gene editor: every choice is shown as itself.
  *
- * Nothing here is a word you have to guess at. The 135 members are their own
+ * Nothing here is a word you have to guess at. Every cast member is its own
  * pictures, the bodies are their own silhouettes, the traits are the current
  * character wearing that trait, the colours are their swatches and the
  * expressions are the current character feeling that expression. Text is only
@@ -27,7 +27,7 @@ function castTile(id: string): string {
   const member = castMember(id)!;
   return `<button type="button" class="cast-tile" data-cast="${id}" aria-pressed="${look.cast === id}" title="${member.desc}">
     <span class="cast-art">${renderCast({ id, size: 46 })}</span>
-    <span class="cast-label">${member.name.zh}</span>
+    <span class="cast-label">${getLang() === 'zh' ? member.name.zh : member.name.en}</span>
   </button>`;
 }
 
@@ -36,7 +36,7 @@ function castGrid(query = ''): string {
   return FAMILIES.map((f) => {
     const members = CAST.filter((m) => m.family === f.id && (!q || m.name.zh.includes(q) || m.name.en.includes(q)));
     if (!members.length) return '';
-    return `<div class="cast-family"><span class="cast-family-name">${f.zh}</span>${members.map((m) => castTile(m.id)).join('')}</div>`;
+    return `<div class="cast-family"><span class="cast-family-name">${getLang() === 'zh' ? f.zh : f.en}</span>${members.map((m) => castTile(m.id)).join('')}</div>`;
   }).join('');
 }
 
@@ -47,13 +47,18 @@ export function createDrawer(onChange: () => void): HTMLElement {
 
   function paint(): void {
     const member = look.cast ? castMember(look.cast) : undefined;
+    const memberDescription = member
+      ? getLang() === 'zh'
+        ? `${member.name.zh} · ${member.desc}`
+        : member.name.en
+      : t('drawer.unnamed');
     el.innerHTML = `
       <div class="gene-row cast-row">
         <span class="gene-label">${t('drawer.cast')}<small>${CAST.length}</small></span>
         <div class="cast-picker">
           <input class="cast-search" type="search" placeholder="${t('drawer.search')}" value="${query}">
           <div class="cast-scroll">${castGrid(query)}</div>
-          <p class="gene-desc">${member ? `${member.name.zh} · ${member.desc}` : t('drawer.unnamed')}</p>
+          <p class="gene-desc">${memberDescription}</p>
         </div>
       </div>
 
@@ -62,7 +67,7 @@ export function createDrawer(onChange: () => void): HTMLElement {
         <div class="chips colors">
           ${COLOR_IDS.map(
             (id) =>
-              `<button type="button" class="color-chip" data-color="${id}" aria-pressed="${look.color === id}" title="${COLOR_ZH[id] ?? id}" style="--swatch:${COLORS[id]}"><span class="sr-only">${COLOR_ZH[id] ?? id}</span></button>`,
+              `<button type="button" class="color-chip" data-color="${id}" aria-pressed="${look.color === id}" title="${getLang() === 'zh' ? COLOR_ZH[id] ?? id : id}" style="--swatch:${COLORS[id]}"><span class="sr-only">${getLang() === 'zh' ? COLOR_ZH[id] ?? id : id}</span></button>`,
           ).join('')}
         </div>
       </div>
@@ -73,10 +78,13 @@ export function createDrawer(onChange: () => void): HTMLElement {
           <div class="chips" id="quick-faces">
             ${['idle', 'happy', 'excited', 'laughing', 'shy', 'sad', 'surprised', 'thinking']
               .map((s) => {
-                const zh = EMOTIONS.find((e) => e.state === s)?.name.zh ?? s;
-                return `<button type="button" class="face-chip" data-state="${s}" aria-pressed="${look.state === s}" title="${zh}">
+                const emotion = EMOTIONS.find((entry) => entry.state === s);
+                const label = emotion
+                  ? getLang() === 'zh' ? emotion.name.zh : emotion.name.en
+                  : s;
+                return `<button type="button" class="face-chip" data-state="${s}" aria-pressed="${look.state === s}" title="${label}">
                   <span class="face-art">${faceSwatch(s)}</span>
-                  <span class="face-name">${zh}</span>
+                  <span class="face-name">${label}</span>
                 </button>`;
               })
               .join('')}
@@ -84,12 +92,12 @@ export function createDrawer(onChange: () => void): HTMLElement {
           <select class="state-select">
             ${EMOTION_SEGMENTS.map(
               (seg) =>
-                `<optgroup label="${seg.name.zh}">${EMOTIONS.filter((d) => {
+                `<optgroup label="${getLang() === 'zh' ? seg.name.zh : seg.name.en}">${EMOTIONS.filter((d) => {
                   const [a, b] = seg.range;
                   const n = Number(d.id);
                   return n >= a && n <= b;
                 })
-                  .map((d) => `<option value="${d.state}" ${look.state === d.state ? 'selected' : ''}>#${d.id} ${d.name.zh}</option>`)
+                  .map((d) => `<option value="${d.state}" ${look.state === d.state ? 'selected' : ''}>#${d.id} ${getLang() === 'zh' ? d.name.zh : d.name.en}</option>`)
                   .join('')}</optgroup>`,
             ).join('')}
           </select>

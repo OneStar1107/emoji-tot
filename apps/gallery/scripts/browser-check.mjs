@@ -176,6 +176,44 @@ try {
     ok('route renders: ' + route, state.startsWith('1:') && state.length > 4, state.slice(0, 50));
   }
 
+  const metaDescription = await cdp.evaluate(
+    "document.querySelector('meta[name=description]')?.content || ''",
+  );
+  ok(
+    'social description matches the current cast',
+    metaDescription.includes('15 characters') && !metaDescription.includes('71 cast'),
+    metaDescription,
+  );
+
+  await renderRoute('#/gallery');
+  const allCasts = await cdp.evaluate("document.querySelectorAll('#wallGrid .tile').length");
+  const filtered = await cdp.evaluate(`
+    (() => {
+      const first = document.querySelector('#wallFilters [data-family]:not([data-family="all"])');
+      if (!first) return -1;
+      first.click();
+      return document.querySelectorAll('#wallGrid .tile').length;
+    })()
+  `);
+  ok(
+    'cast-family filters return a non-empty subset',
+    allCasts === 15 && filtered > 0 && filtered < allCasts,
+    'all=' + allCasts + ', filtered=' + filtered,
+  );
+
+  await renderRoute('#/scene');
+  const sceneLabels = await cdp.evaluate(`
+    JSON.stringify(['shuffle', 'party', 'sleep'].map((kind) => {
+      const button = document.querySelector('[data-act="' + kind + '"]');
+      return button ? button.textContent.trim() : '';
+    }))
+  `);
+  ok(
+    'scene actions use their own labels',
+    sceneLabels === JSON.stringify(['换一批', '全体开心', '全体入睡']),
+    sceneLabels,
+  );
+
   // Deep link with an expression.
   await renderRoute('#/console?state=happy');
   const stored = await cdp.evaluate("localStorage.getItem('es.look.v3')");
@@ -186,6 +224,17 @@ try {
   await sleep(300);
   const english = await cdp.evaluate("document.querySelector('#nav a').textContent + '|' + document.documentElement.lang");
   ok('language switch changes the nav and the lang attribute', /Console|Gallery|Faces|Docs/.test(english) && english.includes('en'), english);
+
+  await renderRoute('#/console');
+  await sleep(250);
+  const englishDrawer = await cdp.evaluate(
+    "[...document.querySelectorAll('.cast-label')].map((node) => node.textContent).join('|')",
+  );
+  ok(
+    'drawer cast names switch to English',
+    englishDrawer.includes('Bread') && englishDrawer.includes('Star') && !englishDrawer.includes('面包'),
+    englishDrawer.slice(0, 100),
+  );
   await cdp.evaluate(`document.querySelector('#lang [data-lang="zh"]').click(); true;`);
 
   // Twenty route changes, then a timer census.
