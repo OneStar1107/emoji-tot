@@ -8,10 +8,12 @@
 import {
   DEFAULTS,
   PAGE_MANIFEST,
+  PRESET_MANIFEST,
   STATUS_MANIFEST,
   withDefaults,
   orderedPageKeys,
   orderedStatusKeys,
+  presetPatch,
   SETTINGS_NAV,
   setStatusItemEnabled,
 } from '../shared/schema.js';
@@ -154,6 +156,13 @@ function clearFormError(scope) {
 
 function pageGeneral() {
   return head('常规', '形态、启动与基础外观') +
+    group('快速方案', '<div class="preset-grid">' +
+      PRESET_MANIFEST.map((preset) =>
+        '<button type="button" class="preset-card" data-act="preset" data-key="' + preset.key + '">' +
+          '<b>' + escapeHtml(preset.label) + '</b>' +
+          '<span>' + escapeHtml(preset.description) + '</span>' +
+        '</button>').join('') +
+      '</div><p class="note">只调整页面、状态组件和桌面形态，不改账号、密钥或隐私选项。</p>') +
     group('显示方式', card([
       rowSeg('桌面形态', '同时决定当前显示和下次启动', 'displayMode', [
         ['island', '灵动岛'],
@@ -696,6 +705,11 @@ content.addEventListener('click', async (event) => {
   const act = target.dataset.act;
   const key = target.dataset.key;
 
+  if (act === 'preset') {
+    const next = presetPatch(key, prefs);
+    if (next) await patch(next);
+    return;
+  }
   if (act === 'toggle') {
     // setPath, not { [key]: … }: a key like focus.enabled used to be written as
     // one literal property named "focus.enabled", which no reader ever found.

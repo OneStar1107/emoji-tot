@@ -18,6 +18,7 @@ import {
   CONSUMERS,
   DEFAULTS,
   PAGE_MANIFEST,
+  PRESET_MANIFEST,
   STATUS_MANIFEST,
   enabledPageKeys,
   enabledServices,
@@ -26,6 +27,7 @@ import {
   knownPaths,
   orderedPageKeys,
   orderedStatusKeys,
+  presetPatch,
   serviceChanges,
   setStatusItemEnabled,
   withDefaults,
@@ -243,6 +245,45 @@ describe('schema: status item toggles', () => {
   });
 });
 
+describe('schema: page presets', () => {
+  it('defines the four entry points', () => {
+    assert.deepEqual(PRESET_MANIFEST.map((preset) => preset.key), ['minimal', 'work', 'life', 'full']);
+  });
+
+  it('sets the documented pages, statuses and feature switches', () => {
+    const minimal = withDefaults(presetPatch('minimal', {}));
+    assert.deepEqual(enabledPageKeys(minimal), ['weather']);
+    assert.deepEqual(minimal.statusItems, ['battery', 'clock']);
+
+    const work = withDefaults(presetPatch('work', {}));
+    assert.deepEqual(
+      enabledPageKeys(work),
+      ['music', 'quota', 'focus', 'todo', 'calendar'],
+    );
+    assert.deepEqual(work.statusItems, ['battery', 'clock', 'quota']);
+    assert.equal(work.focus.enabled, true);
+
+    const life = withDefaults(presetPatch('life', {}));
+    assert.deepEqual(
+      enabledPageKeys(life),
+      ['weather', 'todo', 'health', 'shelf', 'devices', 'calendar'],
+    );
+    assert.equal(life.health.enabled, true);
+    assert.equal(life.shelf.clipboard, false);
+  });
+
+  it('keeps full enabled and preserves unrelated custom values', () => {
+    const custom = withDefaults({
+      focus: { work: 50 },
+      shelf: { clipboard: true },
+    });
+    const full = withDefaults({ ...custom, ...presetPatch('full', custom) });
+    assert.deepEqual(enabledPageKeys(full), PAGE_MANIFEST.map((page) => page.key));
+    assert.equal(full.focus.work, 50);
+    assert.equal(full.shelf.clipboard, true);
+  });
+});
+
 describe('settings UI actually reads and writes the schema', () => {
   const settings = src('renderer/settings.js');
   const settingsCss = src('renderer/settings.css');
@@ -281,6 +322,11 @@ describe('settings UI actually reads and writes the schema', () => {
     assert.ok(settings.includes('data-order-move'), 'order rows need move buttons');
     assert.ok(settings.includes("event.key === 'ArrowUp'"), 'orders need an Up key path');
     assert.ok(settings.includes("event.key === 'ArrowDown'"), 'orders need a Down key path');
+  });
+
+  it('renders page presets from the shared manifest', () => {
+    assert.ok(settings.includes('PRESET_MANIFEST.map'), 'preset choices must come from schema');
+    assert.ok(settings.includes('presetPatch('), 'preset cards must apply schema patches');
   });
 
   it('keeps small secondary text at a readable dark-theme opacity', () => {

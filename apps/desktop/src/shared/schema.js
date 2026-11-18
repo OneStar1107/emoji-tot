@@ -101,6 +101,49 @@ export const STATUS_MANIFEST = [
   { key: 'quota', label: '余额', service: 'quota' },
 ];
 
+/**
+ * Quick starting points for the pages a person actually uses.
+ *
+ * Presets are data, not onboarding state: applying one writes ordinary
+ * preferences and can be adjusted afterwards.
+ */
+export const PRESET_MANIFEST = [
+  {
+    key: 'minimal',
+    label: '极简',
+    description: '天气一页，加上电量和时间。',
+    pages: ['weather'],
+    statusItems: ['battery', 'clock'],
+    defaultPage: 'weather',
+  },
+  {
+    key: 'work',
+    label: '工作',
+    description: '音乐、余额、待办、专注和日程。',
+    pages: ['music', 'quota', 'todo', 'focus', 'calendar'],
+    statusItems: ['battery', 'clock', 'quota'],
+    defaultPage: 'todo',
+    features: { focus: true, todo: true },
+  },
+  {
+    key: 'life',
+    label: '生活',
+    description: '天气、待办、健康、置物架、设备和日程。',
+    pages: ['weather', 'todo', 'health', 'shelf', 'devices', 'calendar'],
+    statusItems: ['battery', 'clock', 'weather'],
+    defaultPage: 'weather',
+    features: { health: true, todo: true, shelf: true },
+  },
+  {
+    key: 'full',
+    label: '全部',
+    description: '开启全部十页，保留默认状态组件。',
+    pages: PAGE_MANIFEST.map((page) => page.key),
+    statusItems: ['battery', 'clock', 'weather'],
+    defaultPage: 'music',
+  },
+];
+
 /* --------------------------------------------------------------- defaults */
 
 /**
@@ -220,6 +263,31 @@ export function withDefaults(raw) {
   if (!Array.isArray(source.statusItems)) next.statusItems = [...DEFAULTS.statusItems];
   if (!Array.isArray(source.pageOrder)) next.pageOrder = [...DEFAULTS.pageOrder];
   return next;
+}
+
+/**
+ * One complete preference patch for a preset.
+ *
+ * `current` is required to preserve nested values such as a custom focus
+ * duration. writePrefs replaces a grouped object wholesale, so emitting only
+ * `{ focus: { enabled: true } }` would silently reset the other timer values.
+ */
+export function presetPatch(key, current = {}) {
+  const preset = PRESET_MANIFEST.find((item) => item.key === key);
+  if (!preset) return null;
+  const currentPrefs = withDefaults(current);
+  const enabled = new Set(preset.pages);
+  const patch = {
+    displayMode: 'island',
+    pages: Object.fromEntries(PAGE_MANIFEST.map((page) => [page.key, enabled.has(page.key)])),
+    pageOrder: PAGE_MANIFEST.map((page) => page.key).filter((pageKey) => enabled.has(pageKey)),
+    statusItems: preset.statusItems.slice(),
+    defaultPage: preset.defaultPage,
+  };
+  for (const [group, value] of Object.entries(preset.features ?? {})) {
+    patch[group] = { ...currentPrefs[group], enabled: value };
+  }
+  return patch;
 }
 
 /**

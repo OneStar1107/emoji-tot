@@ -209,6 +209,29 @@ body { display: flex; flex-direction: column; }
   overflow: hidden;
 }
 
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.preset-card {
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.preset-card:hover { background: var(--card-hover); border-color: var(--line-strong); }
+.preset-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.preset-card b { font-size: 12.5px; font-weight: 600; }
+.preset-card span { color: var(--faint); font-size: 10.5px; line-height: 1.45; }
+
 .row {
   display: flex;
   align-items: center;
