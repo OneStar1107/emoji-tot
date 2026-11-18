@@ -541,21 +541,25 @@ function pageCast() {
   const casts = meta?.casts ?? [];
   const demos = meta?.demos ?? [];
   const agents = meta?.agents ?? [];
-  const castGroups = casts.length
-    ? casts.map((family) => group(family.label, card(
-        family.members.map((member) =>
-          row(member.label, member.id, member.id === meta?.castId
-            ? '<span class="badge">当前</span>'
-            : '<button type="button" class="btn" data-act="action" data-kind="cast" data-value="' +
-              escapeHtml(member.id) + '">选用</button>'),
-        ),
-      )))
+  const currentCast = meta?.castId ?? 'tot';
+  const members = casts.reduce((all, family) => all.concat(family.members), []);
+  const castGrid = members.length
+    ? '<div class="cast-grid">' + members.map((member) =>
+        '<button type="button" class="cast-cell' + (member.id === currentCast ? ' on' : '') + '" data-act="action" data-kind="cast" data-value="' + escapeHtml(member.id) + '">' +
+          '<emojitot-ball cast="' + escapeHtml(member.id) + '" size="46" state="idle"></emojitot-ball>' +
+          '<span>' + escapeHtml(member.label) + '</span>' +
+        '</button>').join('') + '</div>'
+    : '<div class="row"><span class="row-label"><b>角色表还没加载</b><span>主进程没有提供角色清单</span></span></div>';
+  const faceGrid = demos.length
+    ? '<div class="face-grid">' + demos.map((demo) =>
+        '<button type="button" class="face-cell" data-act="action" data-kind="demo" data-value="' + escapeHtml(demo.id) + '" title="' + escapeHtml(demo.label) + '">' +
+          '<emojitot-ball cast="' + escapeHtml(currentCast) + '" size="34" state="' + escapeHtml(demo.state || 'idle') + '"></emojitot-ball>' +
+          '<span>' + escapeHtml(demo.label) + '</span>' +
+        '</button>').join('') + '</div>'
     : '';
-  return head('角色与表情', '选一个陪伴者，顺手试一下表情') +
-    (castGroups || group('角色', card([row('角色表', '主进程尚未提供', '<span class="badge">待加载</span>')]))) +
-    group('试一个表情', card(demos.map((demo) =>
-      rowAction(demo.label, demo.id, 'demo', demo.id, '播放'),
-    ))) +
+  return head('角色与表情', '点一个就换，表情会直接播放') +
+    group('角色', castGrid) +
+    group('表情', faceGrid) +
     group('Agent 联动', card(agents.map((agent) =>
       rowActionToggle(agent.label, '读取它的状态文件来驱动表情', 'agent', agent.on, agent.id),
     )));

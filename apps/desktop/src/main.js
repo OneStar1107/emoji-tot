@@ -17,7 +17,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 // Vendored, not resolved: a workspace link does not survive packaging.
-const { parseAgentMessage } = require('./vendor/protocol/index.js');
+const { parseAgentMessage, stateForEmotion, EMOTIONS } = require('./vendor/protocol/index.js');
 // Shared, because the island and the settings window write the same file.
 const { userDir, statePath, prefsPath, readJson, writeJson, readPrefs, writePrefs } = require('./main/paths');
 const island = require('./main/island');
@@ -70,17 +70,6 @@ const BUBBLE_ROOM = 88;
 /** How close to an edge counts as "dock here", and how much of the ball stays visible. */
 const EDGE_SNAP = 8;
 const PEEK_RATIO = 0.5;
-
-/** Ids worth a menu entry. The full table lives in the protocol package. */
-const DEMO_STATES = [
-  ['02', '待机'],
-  ['10', '开心'],
-  ['30', '思考中'],
-  ['32', '处理中'],
-  ['33', '任务完成'],
-  ['34', '出错'],
-  ['50', '通知'],
-];
 
 /**
  * Agents whose status file can drive the pet.
@@ -720,7 +709,16 @@ function handleSettingsAction({ kind, value } = {}) {
               })),
             }))
           : [],
-        demos: DEMO_STATES.map(([id, label]) => ({ id, label })),
+        /*
+         * Every expression, not a shortlist: the settings page draws them as
+         * live characters, so a person picks by looking. Each emotion already
+         * carries its state name and Chinese label.
+         */
+        demos: EMOTIONS.map((emotion) => ({
+          id: emotion.id,
+          label: emotion.name.zh,
+          state: emotion.state,
+        })),
         agents: AGENT_SOURCES.map((source) => ({
           id: source.id,
           label: source.label,
