@@ -119,27 +119,27 @@ git commit -m "fix: add real status component toggles"
 - Consumes: `prefs.clickThrough`, `prefs.displayId`.
 - Produces: dynamic click-through only when preference is true; consistent string display-ID matching.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Test a pure display matcher with numeric and string IDs. Test a click-through decision helper with `(preference:false, inside:false)` returning `false`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: FAIL because helpers do not exist and current click-through always follows the pointer.
 
-- [ ] **Step 3: Implement preference-aware window behavior**
+- [x] **Step 3: Implement preference-aware window behavior**
 
 Use `String(display.id) === String(wanted)`. Gate pointer-driven pass-through on the preference and stop `savePrefs()` from persisting runtime pointer state.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/main.js apps/desktop/src/main/island.js apps/desktop/test/platform.test.mjs

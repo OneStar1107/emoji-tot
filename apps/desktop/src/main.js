@@ -41,6 +41,7 @@ const fullscreen = require('./main/services/fullscreen');
 const guard = require('./main/ipc-guard');
 const { safeSend } = guard;
 const platform = require('./main/platform');
+const { passThroughFor, sameDisplayId } = require('./main/window-state');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -132,6 +133,7 @@ let dockArmed = false;
 let hoverTimer = null;
 let pointerTimer = null;
 let clickThrough = true;
+let clickThroughEnabled = true;
 let agentWatch = {};
 /**
  * One arbiter for the agents.
@@ -213,7 +215,6 @@ function savePrefs() {
   writePrefs({
     sizeKey,
     pinned,
-    clickThrough,
     ...(position && !dockSide ? { position: { x: position[0], y: position[1] } } : {}),
   });
 }
@@ -230,7 +231,7 @@ function displayForBall(prefs = readPrefs()) {
   const all = screen.getAllDisplays();
   const wanted = prefs.displayId;
   if (wanted != null) {
-    const found = all.find((display) => display.id === wanted);
+    const found = all.find((display) => sameDisplayId(display.id, wanted));
     if (found) return found;
   }
   return screen.getPrimaryDisplay();
@@ -263,7 +264,8 @@ function createWindow() {
   const prefs = readPrefs();
   sizeKey = SIZES[prefs.sizeKey] ? prefs.sizeKey : 'md';
   pinned = prefs.pinned !== false;
-  clickThrough = prefs.clickThrough !== false;
+  clickThroughEnabled = prefs.clickThrough !== false;
+  clickThrough = clickThroughEnabled;
   const dim = SIZES[sizeKey];
   const pos = prefs.position ?? defaultPosition(dim);
 
@@ -338,8 +340,9 @@ function startPointerWatch() {
     const cx = wx + outerSize(dim) / 2;
     const cy = wy + outerSize(dim) / 2;
     const onBall = Math.hypot(cursor.x - cx, cursor.y - cy) <= dim / 2;
-    if (onBall === !clickThrough) return;
-    setClickThrough(!onBall);
+    const next = passThroughFor(clickThroughEnabled, onBall);
+    if (next === clickThrough) return;
+    setClickThrough(next);
   }, 60);
 }
 
@@ -970,7 +973,8 @@ function applyWindowFlags() {
   }
   pinned = wantPinned;
   const wantThrough = prefs.clickThrough !== false;
-  if (wantThrough !== clickThrough) setClickThrough(wantThrough);
+  clickThroughEnabled = wantThrough;
+  setClickThrough(wantThrough);
 }
 
 /**
@@ -1015,6 +1019,7 @@ function applyMainPrefs() {
   applyFullscreenWatch();
   applyWindowFlags();
   applyDisplayPreference();
+  island.refreshPrefs?.();
   // The ball's size is a window size, so a prefs change has to reach the
   // browser window — the tray used to be the only path that did.
   const prefs = readPrefs();

@@ -16,6 +16,7 @@ const path = require('node:path');
 const { readPrefs } = require('./paths');
 const guard = require('./ipc-guard');
 const { safeSend } = guard;
+const { passThroughFor } = require('./window-state');
 
 /**
  * Transparent margin around the island.
@@ -45,6 +46,7 @@ let win = null;
 /** Content size as the page measured it. */
 let box = { w: 200, h: 36 };
 let clickThrough = true;
+let clickThroughEnabled = true;
 let cursorTimer = null;
 /**
  * The window rectangle, kept here instead of read from the window each poll.
@@ -180,7 +182,7 @@ function startCursorWatch() {
      */
     const gap = cursorGap(cursor, rect);
     const inside = gap === 0;
-    setClickThrough(!inside);
+    setClickThrough(passThroughFor(clickThroughEnabled, inside));
     if (inside !== wasInside) {
       wasInside = inside;
       safeSend(win, 'island:hover', inside);
@@ -194,6 +196,8 @@ function startCursorWatch() {
 function create() {
   if (win && !win.isDestroyed()) return win;
   const prefs = readPrefs();
+  clickThroughEnabled = prefs.clickThrough !== false;
+  clickThrough = clickThroughEnabled;
   const area = anchorRect(prefs);
   const width = box.w + PAD_X * 2;
   const height = box.h + PAD_Y * 2;
@@ -229,7 +233,10 @@ function create() {
   // survive a full-screen-ish app without stealing the whole screen.
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces?.(true, { visibleOnFullScreen: true });
-  win.setIgnoreMouseEvents(true, { forward: true });
+  win.setIgnoreMouseEvents(
+    clickThroughEnabled,
+    clickThroughEnabled ? { forward: true } : undefined,
+  );
   win.loadFile(path.join(__dirname, '..', 'renderer', 'island.html'));
 
   guard.claim('island', win.webContents);
@@ -356,8 +363,18 @@ function refreshPosition() {
   place();
 }
 
+function refreshPrefs() {
+  if (!win || win.isDestroyed()) return;
+  const prefs = readPrefs();
+  clickThroughEnabled = prefs.clickThrough !== false;
+  place();
+  const gap = cursorGap(screen.getCursorScreenPoint(), windowRect);
+  setClickThrough(passThroughFor(clickThroughEnabled, gap === 0));
+}
+
 module.exports = {
   refreshPosition,
+  refreshPrefs,
   create,
   show,
   hide,

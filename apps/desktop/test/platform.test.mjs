@@ -19,6 +19,7 @@ const src = (rel) => readFileSync(resolve(here, '..', 'src', rel), 'utf8');
 const repo = (rel) => readFileSync(resolve(root, rel), 'utf8');
 
 const platform = require('../src/main/platform.js');
+const { sameDisplayId } = require('../src/main/window-state.js');
 
 describe('platform: one place decides what this machine can do', () => {
   it('reports the features the app actually ships', () => {
@@ -112,7 +113,9 @@ describe('window geometry honours the display origin', () => {
 
   it('picks the display by id and falls back when it is gone', () => {
     const fn = main.slice(main.indexOf('function displayForBall'), main.indexOf('function workArea'));
-    assert.ok(fn.includes('find((display) => display.id === wanted)'));
+    assert.equal(sameDisplayId(42, '42'), true);
+    assert.equal(sameDisplayId(42, '43'), false);
+    assert.ok(fn.includes('sameDisplayId(display.id, wanted)'));
     assert.ok(fn.includes('return screen.getPrimaryDisplay()'), 'a removed display must fall back to primary');
   });
 
