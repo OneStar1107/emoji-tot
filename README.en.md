@@ -126,6 +126,8 @@ pnpm smoke:desktop  # launch a real Electron window and check the sandbox and la
 pnpm check          # full delivery verification on Windows
 ```
 
+On Windows, Electron 45 cannot start from a repository path containing non-ASCII characters. The development launcher creates a one-time ASCII runtime cache (about 374 MB) under `%LOCALAPPDATA%\EmojiTot\electron-runtime`; set `EMOJITOT_ELECTRON_CACHE` to use another ASCII-only directory.
+
 Package the app:
 
 ```bash
@@ -146,7 +148,7 @@ Not "it should run" — it was run:
 
 | Check | Evidence |
 | --- | --- |
-| Protocol table | 33 protocol tests, 18 engine tests and 139 desktop tests covering ids, state mapping, event flags and segment bounds |
+| Protocol table | 33 protocol tests, 18 engine tests and 141 desktop tests covering ids, state mapping, event flags and segment bounds |
 | <!--facts:protocolIds-->51<!--/facts--> protocol ids render | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> ids → <!--facts:faceStates-->44<!--/facts--> faces, 51/51 and 44/44 pass, 0 failures, in Node with no browser |
 | Desktop window behaviour | `node apps/desktop/scripts/ui-check.mjs <port>` — drives the real cursor, 7/7 (dock, open, tuck, click-through) |
 | Desktop window smoke | `pnpm smoke:desktop` — launches the development or packaged app with a temporary profile, 7/7 (sandbox, preload, window size, shelf layout, paging targets) |

@@ -179,6 +179,8 @@ pnpm check                  # Windows 本机的完整交付验收
 
 上面每一条都从仓库根目录执行，不需要先 `cd` 进任何子目录。
 
+Windows 下如果仓库路径含中文，Electron 45 会在启动前崩溃。开发脚本会自动在 `%LOCALAPPDATA%\EmojiTot\electron-runtime` 建立一次 ASCII 运行缓存（约 374 MB）；可用 `EMOJITOT_ELECTRON_CACHE` 改到其它纯 ASCII 目录。
+
 出安装包：
 
 ```bash
@@ -224,7 +226,7 @@ docs/                架构、协议、岛规格、设置规格、调研结论
 
 | 检查 | 证据 |
 | --- | --- |
-| 协议表 | 33 个协议测试、18 个引擎测试、139 个桌面测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
+| 协议表 | 33 个协议测试、18 个引擎测试、141 个桌面测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
 | <!--facts:protocolIds-->51<!--/facts--> 个协议 id 渲染 | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> 个 id → <!--facts:faceStates-->44<!--/facts--> 个脸部状态，51/51 与 44/44 全通过，0 failures（Node 里跑，无浏览器） |
 | 桌面端窗口行为 | `pnpm smoke:desktop` — 独立用户目录启动开发版或打包版，7/7（沙箱、preload、窗口尺寸、置物架布局、分页热区）；原生拖拽检查可用 `ui-check.mjs` |
 | 桌面端协议驱动 | 写 `34` → `alerting`，写 `33` → `celebrate`，写坏 JSON → 保持当前表情 |

@@ -9,8 +9,8 @@
   "scripts": {
     "copy:vendor": "node scripts/copy-vendor.mjs",
     "prestart": "node scripts/copy-vendor.mjs",
-    "start": "electron .",
-    "dev": "electron . --dev",
+    "start": "node scripts/electron-launch.mjs .",
+    "dev": "node scripts/electron-launch.mjs . --dev",
     "prepack": "node scripts/copy-vendor.mjs",
     "pack": "electron-builder --dir",
     "predist": "node scripts/copy-vendor.mjs",

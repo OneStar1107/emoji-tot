@@ -6,15 +6,14 @@
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { resolveElectronBinary } from './electron-runtime.mjs';
 
-const require = createRequire(import.meta.url);
 const PACKAGED_EXE = process.env.EMOJITOT_APP_EXE ? resolve(process.env.EMOJITOT_APP_EXE) : '';
-const ELECTRON = PACKAGED_EXE || require('electron');
+const ELECTRON = PACKAGED_EXE || resolveElectronBinary();
 const DESKTOP_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = 9555;
 const cleanEnv = { ...process.env };
