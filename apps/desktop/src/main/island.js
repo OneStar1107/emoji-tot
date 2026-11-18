@@ -22,8 +22,10 @@ const { readPrefs } = require('./paths');
  * window edge, so Windows clipped them and the panel looked cut on both sides.
  * The margin is now larger than the corner radius and the shadow's near field.
  */
-const PAD_X = 28;
-const PAD_Y = 18;
+const PAD_X = 32;
+/* Taller than the side: the panel's shadow is offset downwards, so the bottom
+   needs blur + offset of room or the OS clips it into a straight edge. */
+const PAD_Y = 36;
 
 /**
  * Anti-burn-in drift, off unless asked for.
@@ -87,8 +89,15 @@ function place() {
   const y = Math.round(prefs.avoidTopBar === false ? display.bounds.y : area.y);
   windowRect = { x, y, width, height };
   const bounds = win.getBounds();
-  if (bounds.x === x && bounds.y === y && bounds.width === width && bounds.height === height) return;
+  const same = bounds.x === x && bounds.y === y && bounds.width === width && bounds.height === height;
+  try {
+    require('node:fs').appendFileSync('C:/Users/hyx11/et-diag.log', JSON.stringify({ t: Date.now(), ev: 'place', want: { x, y, width, height }, have: bounds, same }) + '\n');
+  } catch {}
+  if (same) return;
   win.setBounds({ x, y, width, height });
+  try {
+    require('node:fs').appendFileSync('C:/Users/hyx11/et-diag.log', JSON.stringify({ t: Date.now(), ev: 'after', have: win.getBounds() }) + '\n');
+  } catch {}
 }
 
 /**
@@ -279,7 +288,17 @@ function setBox(next) {
   if (!next || !Number.isFinite(next.w) || !Number.isFinite(next.h)) return;
   const w = Math.max(120, Math.min(720, Math.round(next.w)));
   const h = Math.max(28, Math.min(640, Math.round(next.h)));
-  if (w === box.w && h === box.h) return;
+  /*
+   * Re-place even when the size did not change.
+   *
+   * `box` is what the page asked for, not what the window actually is. If one
+   * setBounds lands while the window is busy (a resize during the open/close
+   * animation, a display change) the two drift apart, and skipping the equal
+   * size meant nothing ever corrected it again: the window stayed at the
+   * expanded size around a collapsed pill until the app restarted. place()
+   * compares against the real bounds, so an unchanged window still costs
+   * nothing.
+   */
   box = { w, h };
   place();
 }

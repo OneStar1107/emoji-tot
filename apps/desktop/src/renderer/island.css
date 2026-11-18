@@ -233,7 +233,7 @@ body[data-playing="false"] .pill-live { display: none; }
 body[data-skin="solid"] .panel,
 body[data-skin="solid"] .pill {
   background: var(--card-solid);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.44);
+  box-shadow: none;
   backdrop-filter: none;
 }
 body[data-skin="solid"] .pill { background: var(--card-solid); }
@@ -308,7 +308,24 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    * behind the page to blur, and it darkens the window margin into a grey band.
    */
   background: var(--card);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--surface-1);
+  /*
+   * Kept inside the window margin on purpose. The shadow used to be 44px of
+   * blur with 18px of offset while the window padding was only 28/18, so the
+   * part that fell outside the window was clipped by the OS and drew a hard
+   * rectangular edge around the panel — the "stray layer" seen around the
+   * island. Blur + offset now stays under the padding below.
+   */
+  /*
+   * No outer shadow on the panel.
+   *
+   * A transparent Electron window clips anything drawn past its edge, and the
+   * padding that would keep a shadow inside is only as wide as the margin we
+   * want around the pill. Any blur that reached the window edge was cut into a
+   * straight rectangle, which is the "stray layer" that appeared around the
+   * panel. The inset highlight stays — it is drawn inside the box, so it cannot
+   * be clipped into an edge.
+   */
+  box-shadow: inset 0 1px 0 var(--surface-1);
   transform-origin: top center;
   animation: panel-in 300ms var(--spring);
 }
