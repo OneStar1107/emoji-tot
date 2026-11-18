@@ -1017,9 +1017,17 @@ function renderPage(animate = false) {
   if (!list.length) {
     document.body.dataset.pages = '0';
     titleEl.textContent = '还没有页面';
-    subEl.textContent = '去设置里打开';
+    const subText = subEl.firstElementChild;
+    if (subText) subText.textContent = '去设置里打开';
+    subEl.dataset.muted = 'false';
+    subEl.dataset.over = 'false';
+    topMedia.hidden = true;
     pagesEl.innerHTML = empty(ICON.check, '页面都是关的', '在设置 → 页面管理里打开至少一个。', '打开设置', 'settings:pages');
     dotsEl.innerHTML = '';
+    dotsEl.hidden = true;
+    for (const pager of document.querySelectorAll('.pager')) {
+      pager.hidden = true;
+    }
     measure();
     return;
   }
