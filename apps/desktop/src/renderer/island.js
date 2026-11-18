@@ -200,6 +200,28 @@ sizeObserver.observe(frameEl);
 
 /* ------------------------------------------------------------- pill status */
 
+/*
+ * The line under the title is a status line, not a per-page caption.
+ *
+ * Whatever page is open, the two facts worth having in sight are "something is
+ * playing right now" and the battery. A caption like "当地与七日" told the user
+ * what they had already opened; this tells them something they did not know.
+ * With nothing playing it falls back to battery alone.
+ */
+function renderSub() {
+  const parts = [];
+  if (media && media.active) {
+    const live = !media.duration;
+    if (live) parts.push('直播');
+    else if (isBrowserMedia()) parts.push('媒体');
+    else parts.push('播放中');
+  }
+  if (battery) parts.push('电量 ' + battery.level + '%');
+  const text = parts.join(' · ');
+  if (subEl.textContent !== text) subEl.textContent = text;
+  subEl.dataset.muted = String(!parts.length);
+}
+
 function renderPillStatus() {
   const playing = Boolean(media.active && media.playing);
   document.body.dataset.playing = String(playing);
@@ -688,7 +710,7 @@ function healthPage() {
       <div class="health-bar"><i style="width:${waterPct.toFixed(0)}%" data-due="${state.waterDue}"></i></div>
       <div class="health-actions">
         <button type="button" class="btn" data-local="health:drink">我喝过了</button>
-        <button type="button" class="btn ghost" data-local="health:reset" aria-label="清空喝水记录">清空</button>
+        <button type="button" class="btn ghost" data-local="health:reset" aria-label="清除喝水记录">清除</button>
       </div>
     </div>
     <div class="health-block">
@@ -696,7 +718,7 @@ function healthPage() {
       <div class="health-bar"><i style="width:${standPct.toFixed(0)}%" data-due="${state.standDue}"></i></div>
       <div class="health-actions">
         <button type="button" class="btn" data-local="health:stand">我起来了</button>
-        <button type="button" class="btn ghost" data-local="health:reset" aria-label="清空久坐记录">清空</button>
+        <button type="button" class="btn ghost" data-local="health:reset" aria-label="清除久坐记录">清除</button>
       </div>
     </div>
   </div>`;
@@ -902,7 +924,7 @@ function renderPage(animate = false) {
   document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
   titleEl.textContent = page.key === 'music' && isBrowserMedia() ? '媒体' : page.title;
-  subEl.textContent = page.sub;
+  renderSub();
   pagesEl.innerHTML = (RENDERERS[page.key] ?? ((p) => fallbackPage(p)))(page);
   dotsEl.innerHTML = list
     .map((p, index) => `<button type="button" data-page="${index}" aria-current="${index === pageIndex}" aria-label="${p.title}"></button>`)
@@ -985,19 +1007,34 @@ document.addEventListener('pointerdown', openFromPointer, true);
 
 btnSettings.addEventListener('click', () => api.openSettings());
 
+/*
+ * Paging runs on pointerdown, not click.
+ *
+ * Switching pages re-renders the panel and the window follows the new content
+ * size, so the pointer can end up over a different element by the time the
+ * release lands — the click never fires and the arrow looks dead until pressed
+ * two or three times. Pressing is unambiguous, and the same reasoning already
+ * drives opening the island.
+ */
+panelEl.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  const pageNav = event.target.closest('[data-page-nav]');
+  if (pageNav) {
+    const delta = Number(pageNav.dataset.pageNav);
+    if (!delta) return;
+    pageDir = delta;
+    pageIndex += delta;
+    renderPage(true);
+    event.stopPropagation();
+    event.preventDefault();
+    return;
+  }
+});
+
 panelEl.addEventListener('click', (event) => {
   const mediaButton = event.target.closest('[data-media]');
   if (mediaButton) {
     api.control(mediaButton.dataset.media);
-    event.stopPropagation();
-    return;
-  }
-  const pageNav = event.target.closest('[data-page-nav]');
-  if (pageNav) {
-    const delta = Number(pageNav.dataset.pageNav);
-    pageDir = delta;
-    pageIndex += delta;
-    renderPage(true);
     event.stopPropagation();
     return;
   }
@@ -1231,6 +1268,7 @@ api.onHover((inside) => {
 api.onBattery((value) => {
   battery = value;
   renderPillStatus();
+  renderSub();
   if (open && enabledPages()[pageIndex]?.key === 'weather') return;
 });
 
@@ -1247,6 +1285,7 @@ api.onMedia((value) => {
   const playingChanged = value.playing !== media.playing;
   media = value;
   renderPillStatus();
+  renderSub();
   if (open && enabledPages()[pageIndex]?.key === 'music') {
     if (trackChanged || playingChanged) {
       lastLyricIndex = -2;
