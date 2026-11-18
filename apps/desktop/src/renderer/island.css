@@ -13,10 +13,14 @@
   --line: var(--surface-2);
   /*
    * Frost is a real translucency: the desktop has to show through, otherwise
-   * "frost" and "solid" are the same card twice. 0.62 is the point where text
-   * still passes contrast while the background is visibly moving behind it.
+   * "frost" and "solid" are the same card twice. 0.90 is where the panel still
+   * reads as glass but text-heavy pages (calendar, todo) keep their contrast —
+   * lower values let busy wallpapers wash the text out.
    */
-  --card: rgba(21, 21, 25, 0.78);
+  --card: rgba(21, 21, 25, 0.90);
+  /* Native widgets (select popups, scrollbars) follow the theme instead of
+     drawing a white menu with white text in dark mode. */
+  color-scheme: dark;
   --card-solid: #151519;
   --accent: #8f7bff;
   --good: #45d483;
@@ -56,7 +60,8 @@ body[data-theme="light"] {
   --faint: rgba(26, 26, 30, 0.5);
   --line: rgba(0, 0, 0, 0.1);
   /* Frost needs a translucent light surface too, or light mode has no frost. */
-  --card: rgba(255, 255, 255, 0.82);
+  --card: rgba(255, 255, 255, 0.92);
+  color-scheme: light;
   --card-solid: #fbfbfd;
   --accent: #5b48d9;
   --good: #1a8d4c;
@@ -623,7 +628,17 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .mail-error { margin: 6px 4px 0; font-size: 10.5px; color: var(--warn); line-height: 1.5; }
 
 /* calendar */
-.calendar { display: flex; flex-direction: column; gap: 6px; }
+/*
+ * Two columns: the month on the left, the picked day and its festivals on the
+ * right. The single-column version spent the whole panel on a calendar whose
+ * bottom half was empty, so the day's detail had nowhere to sit.
+ */
+.calendar { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 10px; height: 100%; min-height: 0; }
+.cal-left { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cal-right { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; padding-left: 10px; border-left: 1px solid var(--line); }
+.cal-day-title { font-size: 12.5px; font-weight: 550; color: var(--ink); }
+.cal-festival { font-size: 11px; color: var(--warn); }
+.health-actions { display: flex; align-items: center; gap: 6px; }
 .cal-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 2px; }
 .cal-head b { font-size: 12.5px; font-weight: 550; }
 .cal-head .icon-btn svg { width: 14px; height: 14px; }
@@ -650,7 +665,8 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .cal-cell.today { color: var(--accent); font-weight: 600; }
 .cal-cell.picked { background: var(--surface-2); transform: scale(1.06); }
 .cal-dot { position: absolute; bottom: 4px; width: 3px; height: 3px; border-radius: 50%; background: var(--accent); }
-.cal-events { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; border-top: 1px solid var(--line); max-height: 108px; overflow-y: auto; }
+.cal-events { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 2px; padding-top: 4px; border-top: 1px solid var(--line); }
+.cal-events::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .cal-event { display: flex; align-items: baseline; gap: 8px; padding: 4px 2px; animation: row-in 200ms var(--ease); }
 .cal-time { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; flex: none; }
 .cal-event b { font-size: 11.5px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -806,12 +822,23 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .todo-repeat-pick select {
   background: var(--surface-1);
   border: 0;
-  color: var(--dim);
+  /*
+   * Full-strength ink, and the options are coloured explicitly. With --dim the
+   * closed control was already hard to read; in the open list the highlighted
+   * row drew system-white behind white text, so picking one made the other two
+   * disappear until the menu closed again.
+   */
+  color: var(--ink);
   border-radius: 7px;
   padding: 3px 4px;
   font: inherit;
   font-size: 11px;
   cursor: pointer;
+}
+
+.todo-repeat-pick select option {
+  background: var(--card-solid);
+  color: var(--ink);
 }
 
 /* Message apps: the switchboard above the mailbox. */

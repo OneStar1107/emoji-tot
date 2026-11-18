@@ -1101,6 +1101,7 @@ function startServices() {
     } else if (service === 'health') {
       if (action === 'drink') health.drink();
       else if (action === 'stand') health.stand();
+      else if (action === 'reset') health.reset();
     } else if (service === 'todo') {
       if (action === 'add') todo.add(data?.text, data?.due, data?.repeat);
       else if (action === 'toggle') todo.toggle(data?.id);

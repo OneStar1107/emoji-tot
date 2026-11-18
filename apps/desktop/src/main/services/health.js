@@ -105,6 +105,24 @@ function stand() {
   emit();
 }
 
+/**
+ * Clear both counters and restart both timers from now.
+ *
+ * The acknowledge buttons only ever add; this is the way back out — after a
+ * test tap, or when the counts were wrong from the start.
+ */
+function reset() {
+  const now = Date.now();
+  state.lastWater = now;
+  state.lastStand = now;
+  state.waterAt = 0;
+  state.standAt = 0;
+  state.waterCount = 0;
+  state.standCount = 0;
+  save();
+  emit();
+}
+
 function startService() {
   load();
   clearInterval(timer);

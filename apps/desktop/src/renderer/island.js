@@ -339,6 +339,69 @@ function updateMusicLive() {
   }
 }
 
+/*
+ * Place names come from the IP locator in English ("Tung Chung", "Hong Kong").
+ * The rest of this page is Chinese, so the common ones are translated here.
+ * Anything not listed keeps its original spelling rather than being guessed.
+ */
+const PLACE_ZH = {
+  'hong kong': '香港',
+  'tung chung': '东涌',
+  'kowloon': '九龙',
+  'tsuen wan': '荃湾',
+  'sha tin': '沙田',
+  'tai po': '大埔',
+  'yuen long': '元朗',
+  'tuenshui wai': '天水围',
+  'tuen mun': '屯门',
+  'central': '中环',
+  'beijing': '北京',
+  'shanghai': '上海',
+  'guangzhou': '广州',
+  'shenzhen': '深圳',
+  'hangzhou': '杭州',
+  'chengdu': '成都',
+  'wuhan': '武汉',
+  'nanjing': '南京',
+  "xi'an": '西安',
+  'tianjin': '天津',
+  'chongqing': '重庆',
+  'singapore': '新加坡',
+  'tokyo': '东京',
+  'osaka': '大阪',
+  'seoul': '首尔',
+  'taipei': '台北',
+  'new york': '纽约',
+  'los angeles': '洛杉矶',
+  'san francisco': '旧金山',
+  'london': '伦敦',
+  'paris': '巴黎',
+  'berlin': '柏林',
+  'sydney': '悉尼',
+  'toronto': '多伦多',
+  'vancouver': '温哥华',
+};
+
+const placeZh = (name) => PLACE_ZH[String(name || '').trim().toLowerCase()] ?? name;
+
+const COUNTRY_ZH = {
+  HK: '中国香港',
+  CN: '中国',
+  TW: '中国台湾',
+  MO: '中国澳门',
+  JP: '日本',
+  KR: '韩国',
+  SG: '新加坡',
+  US: '美国',
+  GB: '英国',
+  FR: '法国',
+  DE: '德国',
+  AU: '澳大利亚',
+  CA: '加拿大',
+};
+
+const countryZh = (code) => COUNTRY_ZH[String(code || '').toUpperCase()] ?? code;
+
 function weatherPage() {
   if (!weather) return empty(ICON.sun, '正在获取天气…', '第一次需要几秒钟。');
   const fahrenheit = prefs.weather?.unit === 'f';
@@ -363,7 +426,7 @@ function weatherPage() {
   return `<div class="weather">
     <div class="weather-now">
       <div class="weather-temp">${show(now.temp)}<sup>°</sup></div>
-      <div class="weather-desc"><b>${now.text}</b><span>${weather.place.name}${weather.place.country ? ' · ' + weather.place.country : ''}</span></div>
+      <div class="weather-desc"><b>${now.text}</b><span>${placeZh(weather.place.name)}${weather.place.country ? ' · ' + countryZh(weather.place.country) : ''}</span></div>
       <span class="weather-icon">${svg(WEATHER_ICON[now.icon] ?? WEATHER_ICON.cloud)}</span>
     </div>
     <div class="weather-grid">
@@ -492,6 +555,13 @@ function mailPage() {
 const WEEK_ZH = ['日', '一', '二', '三', '四', '五', '六'];
 const dayKey = (date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 
+const FESTIVALS = {
+  '1-1': '元旦', '2-14': '情人节', '3-8': '妇女节', '3-12': '植树节',
+  '4-1': '愚人节', '5-1': '劳动节', '5-4': '青年节', '6-1': '儿童节',
+  '7-1': '建党节', '8-1': '建军节', '9-10': '教师节', '10-1': '国庆节',
+  '12-24': '平安夜', '12-25': '圣诞节',
+};
+
 function calendarPage() {
   const events = calendarState.events ?? [];
   const byDay = new Map();
@@ -543,6 +613,7 @@ function calendarPage() {
     : '<p class="cal-empty">这一天没有安排。</p>';
 
   return `<div class="calendar">
+    <div class="cal-left">
     <div class="cal-head">
       <button type="button" class="icon-btn" data-cal-nav="-1" aria-label="上个月"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
       <b>${calendarView.year} 年 ${calendarView.month + 1} 月</b>
@@ -550,7 +621,12 @@ function calendarPage() {
     </div>
     <div class="cal-week">${WEEK_ZH.map((day) => `<span>${day}</span>`).join('')}</div>
     <div class="cal-grid">${grid}</div>
-    <div class="cal-events">${rows}</div>
+    </div>
+    <div class="cal-right">
+      <div class="cal-day-title">${calendarView.month + 1} 月 ${calendarView.selected} 日</div>
+      ${FESTIVALS[calendarView.month + 1 + '-' + calendarView.selected] ? `<div class="cal-festival">${FESTIVALS[calendarView.month + 1 + '-' + calendarView.selected]}</div>` : ''}
+      <div class="cal-events">${rows}</div>
+    </div>
   </div>`;
 }
 
@@ -610,12 +686,18 @@ function healthPage() {
     <div class="health-block">
       <div class="health-head"><b>喝水</b><span>距上次 ${state.sinceWater} 分钟 · 每 ${state.waterMin} 分钟</span></div>
       <div class="health-bar"><i style="width:${waterPct.toFixed(0)}%" data-due="${state.waterDue}"></i></div>
-      <button type="button" class="btn" data-local="health:drink">我喝过了</button>
+      <div class="health-actions">
+        <button type="button" class="btn" data-local="health:drink">我喝过了</button>
+        <button type="button" class="btn ghost" data-local="health:reset" aria-label="清空喝水记录">清空</button>
+      </div>
     </div>
     <div class="health-block">
       <div class="health-head"><b>久坐</b><span>距上次 ${state.sinceStand} 分钟 · 每 ${state.standMin} 分钟</span></div>
       <div class="health-bar"><i style="width:${standPct.toFixed(0)}%" data-due="${state.standDue}"></i></div>
-      <button type="button" class="btn" data-local="health:stand">我起来了</button>
+      <div class="health-actions">
+        <button type="button" class="btn" data-local="health:stand">我起来了</button>
+        <button type="button" class="btn ghost" data-local="health:reset" aria-label="清空久坐记录">清空</button>
+      </div>
     </div>
   </div>`;
 }
@@ -834,6 +916,23 @@ function renderPage(animate = false) {
   }
   measure();
 }
+
+/*
+ * Scrolling inside a scrollable block must stay there.
+ *
+ * The pages container is the island's own scroller and the wheel handler that
+ * flips pages sits above it, so a wheel over the clipboard both scrolled the
+ * list and turned the page. Stopping propagation at the list is the narrowest
+ * fix: everywhere else the wheel still pages as before.
+ */
+document.addEventListener(
+  'wheel',
+  (event) => {
+    const list = event.target instanceof Element ? event.target.closest('.clip-list, .shelf-list') : null;
+    if (list && list.scrollHeight > list.clientHeight + 1) event.stopPropagation();
+  },
+  { capture: true },
+);
 
 function setOpen(next) {
   open = next;
