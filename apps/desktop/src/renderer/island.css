@@ -207,12 +207,63 @@ body {
 body[data-playing="false"] .pill-live { display: none; }
 
 /* Skins: one fill difference each, not three themes to maintain. */
+/* ---------------------------------------------------------------- skins */
+/*
+ * Three skins, three different ideas — not three shades of the same card.
+ *
+ *   frost  translucent, the desktop shows through
+ *   solid  opaque card, no blur, the strongest separation from the desktop
+ *   plain  collapses to a thin line at rest, opens to a plain card on hover
+ */
 body[data-skin="solid"] .panel,
-body[data-skin="solid"] .pill { background: #151519; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.44); }
-body[data-skin="plain"] .panel,
-body[data-skin="plain"] .pill { background: #131316; box-shadow: none; border-color: var(--surface-1); }
+body[data-skin="solid"] .pill {
+  background: var(--card-solid);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.44);
+  backdrop-filter: none;
+}
+body[data-skin="solid"] .pill { background: var(--card-solid); }
+
+body[data-skin="plain"] .panel {
+  background: var(--card-solid);
+  box-shadow: none;
+  border-color: var(--surface-2);
+}
+body[data-skin="plain"] .pill {
+  width: 104px;
+  height: 7px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  opacity: 0.38;
+  box-shadow: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  overflow: hidden;
+  transition: width 200ms var(--spring), height 200ms var(--spring), opacity 160ms ease, background 160ms ease;
+}
+body[data-skin="plain"] .pill > * { opacity: 0; transition: opacity 120ms ease; }
+/* Hovering is how you find it again: the line grows back into the pill. */
+body[data-skin="plain"] .pill:hover,
+body[data-skin="plain"] .pill:focus-visible {
+  width: auto;
+  height: var(--pill-h);
+  padding: 0 13px 0 5px;
+  background: var(--card-solid);
+  opacity: 1;
+  border-color: var(--line);
+}
+body[data-skin="plain"] .pill:hover > *,
+body[data-skin="plain"] .pill:focus-visible > * { opacity: 1; }
+
 body[data-blur="off"] .panel,
-body[data-blur="off"] .pill { background: #0d0d10; }
+body[data-blur="off"] .pill { background: var(--card-solid); backdrop-filter: none; }
+
+/* The light theme needs the same three ideas in light surfaces. */
+body[data-theme="light"][data-skin="solid"] .panel,
+body[data-theme="light"][data-skin="solid"] .pill { background: #ffffff; }
+body[data-theme="light"][data-skin="plain"] .panel { background: #ffffff; }
+body[data-theme="light"][data-skin="plain"] .pill { background: #1a1a1e; opacity: 0.28; }
+body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; opacity: 1; }
 
 /* --------------------------------------------------------------- expanded */
 
@@ -220,6 +271,9 @@ body[data-blur="off"] .pill { background: #0d0d10; }
   position: relative;
   width: var(--island-w);
   padding: 12px 12px 8px;
+  /* Children must not paint outside the rounded corners. The pager used to
+     leak a hard-edged fill into the corner and read as a stray white square. */
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   /*
@@ -278,9 +332,17 @@ body[data-blur="off"] .pill { background: #0d0d10; }
 
 /* Paging arrows on the panel's own left and right edges: the whole surface is
    a swipe target, the arrows are the visible affordance. */
+/*
+ * Paging arrows live on the dots row, not the middle of the panel.
+ *
+ * Vertically centred they sat on top of the second card and read as a hole in
+ * the content. The bottom row is empty by construction — the dots are centred
+ * and the arrows sit in the corners beside them.
+ */
 .pager {
   position: absolute;
-  top: 50%;
+  top: auto;
+  bottom: 4px;
   z-index: 3;
   width: 26px;
   height: 26px;
@@ -304,10 +366,11 @@ body[data-blur="off"] .pill { background: #0d0d10; }
 .pager:active { transform: translateY(-50%) scale(0.92); }
 .pager.prev { left: 4px; }
 .pager.next { right: 4px; }
+.pager:active { transform: scale(0.92); }
 .pager svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 body[data-pages="1"] .pager { display: none; }
 
-.dots { display: flex; justify-content: center; gap: 6px; padding: 10px 0 2px; }
+.dots { display: flex; justify-content: center; gap: 6px; padding: 10px 34px 2px; }
 .dots button {
   width: 5px;
   height: 5px;

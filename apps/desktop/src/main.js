@@ -833,6 +833,10 @@ function applyMainPrefs() {
   applyTrayPreference();
   applyHotkey();
   applyFullscreenWatch();
+  // The ball's size is a window size, so a prefs change has to reach the
+  // browser window — the tray used to be the only path that did.
+  const prefs = readPrefs();
+  if (SIZES[prefs.sizeKey] && prefs.sizeKey !== sizeKey) setSize(prefs.sizeKey);
 }
 
 function createTray() {

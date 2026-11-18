@@ -723,7 +723,15 @@ function applyPrefs() {
   const root = document.documentElement;
   root.style.setProperty('--radius', `${Number(prefs.radius) || 22}px`);
   root.style.setProperty('--island-w', `${Number(prefs.islandWidth) || 420}px`);
-  root.style.setProperty('--pill-h', `${Number(prefs.pillHeight) || 34}px`);
+  /*
+   * Scaling the content, not the window: the island measures its own content
+   * and resizes the window to match, so a CSS transform would scale the box
+   * without changing the layout and leave the two out of sync. Type and chrome
+   * grow together here and the measurement follows.
+   */
+  const scale = Math.min(1.4, Math.max(0.8, (Number(prefs.uiScale) || 100) / 100));
+  root.style.setProperty('--pill-h', `${(Number(prefs.pillHeight) || 34) * scale}px`);
+  root.style.setProperty('--ui-scale', String(scale));
   const fonts = {
     system: 'system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
     pingfang: '"PingFang SC", "Microsoft YaHei", sans-serif',
@@ -731,7 +739,7 @@ function applyPrefs() {
     mono: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace',
   };
   root.style.setProperty('--ui-font', fonts[prefs.font] ?? fonts.system);
-  root.style.setProperty('--ui-size', `${13 + (Number(prefs.fontSize) || 0)}px`);
+  root.style.setProperty('--ui-size', `${(13 + (Number(prefs.fontSize) || 0)) * scale}px`);
   root.style.setProperty('--ui-weight', String(prefs.weight || 400));
   document.body.dataset.skin = prefs.skin ?? 'frost';
   document.body.dataset.blur = prefs.blur === false ? 'off' : 'on';
