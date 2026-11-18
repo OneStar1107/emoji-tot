@@ -1,6 +1,6 @@
 {
   "name": "@emojitot/core",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "description": "A small procedural character engine: shapes, faces and SVG, written from scratch.",
   "license": "MIT",
   "type": "module",

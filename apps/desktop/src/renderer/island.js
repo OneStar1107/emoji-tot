@@ -1079,8 +1079,11 @@ document.documentElement.addEventListener('mouseleave', scheduleHoverClose);
  * false" is the dependable close signal.
  */
 api.onHover((inside) => {
-  if (inside) scheduleHoverOpen();
-  else scheduleHoverClose();
+  // Opening stays with the page (mouseenter/mousemove). The main process only
+  // reports "the pointer left the window", which is the signal the page cannot
+  // observe itself once the window has gone click-through.
+  if (inside || !open) return;
+  scheduleHoverClose();
 });
 
 api.onBattery((value) => {
