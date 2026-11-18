@@ -120,7 +120,9 @@ body {
 #island {
   position: relative;
   display: block;
-  overflow: hidden;
+  /* Not hidden: the panel's shadow is wider than the window padding, and
+     clipping turned it into a hard-edged dark square around each corner. */
+  overflow: visible;
   transition:
     width var(--slow) var(--spring),
     height var(--slow) var(--spring);
@@ -270,7 +272,8 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
 .panel {
   position: relative;
   width: var(--island-w);
-  padding: 12px 12px 8px;
+  /* Left and right padding is the arrows' lane: content never sits under them. */
+  padding: 12px 34px 8px;
   /* Children must not paint outside the rounded corners. The pager used to
      leak a hard-edged fill into the corner and read as a stray white square. */
   overflow: hidden;
@@ -341,8 +344,8 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
  */
 .pager {
   position: absolute;
-  top: auto;
-  bottom: 4px;
+  top: 50%;
+  bottom: auto;
   z-index: 3;
   width: 26px;
   height: 26px;
@@ -363,9 +366,9 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
 .panel:hover .pager,
 .panel:focus-within .pager { opacity: 0.95; }
 .pager:hover { background: var(--surface-3); }
-.pager:active { transform: translateY(-50%) scale(0.92); }
 .pager.prev { left: 4px; }
 .pager.next { right: 4px; }
+.pager:active { transform: translateY(-50%) scale(0.92); }
 .pager:active { transform: scale(0.92); }
 .pager svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 body[data-pages="1"] .pager { display: none; }

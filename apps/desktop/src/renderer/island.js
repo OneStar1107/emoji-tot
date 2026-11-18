@@ -148,7 +148,10 @@ function measure() {
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = 0;
-    const rect = islandEl.getBoundingClientRect();
+    // The island wrapper's own box is not the content's box while the frame is
+    // out of flow; measure the visible surface instead.
+    const rect = (open ? panelEl : pillEl).getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
     api.reportBox({ w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
   });
 }
@@ -773,7 +776,8 @@ function renderPage(animate = false) {
     measure();
     return;
   }
-  pageIndex = Math.max(0, Math.min(list.length - 1, pageIndex));
+  // Wrapping, not clamping: the arrows are a carousel, not a dead end.
+  pageIndex = ((pageIndex % list.length) + list.length) % list.length;
   // One page means the paging arrows would be dead controls.
   document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
@@ -806,6 +810,11 @@ function setOpen(next) {
 /* ------------------------------------------------------------------- wiring */
 
 pillEl.addEventListener('click', () => setOpen(true));
+/* Clicking anywhere in the collapsed window opens it, not just the pill. */
+document.addEventListener('click', () => {
+  if (open) return;
+  setOpen(true);
+});
 
 let hoverTimer = null;
 pillEl.addEventListener('mouseenter', () => {
