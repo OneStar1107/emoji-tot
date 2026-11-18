@@ -1365,10 +1365,23 @@ document.documentElement.addEventListener('mouseleave', scheduleHoverClose);
  * false" is the dependable close signal.
  */
 api.onHover((inside) => {
-  // Opening stays with the page (mouseenter/mousemove). The main process only
-  // reports "the pointer left the window", which is the signal the page cannot
-  // observe itself once the window has gone click-through.
-  if (inside || !open) return;
+  /*
+   * Entry opens; exit closes.
+   *
+   * The page's own mouseenter/mousemove used to be the only open trigger. Both
+   * are unreliable here: while the window is click-through the page may receive
+   * no mousemove at all (Electron's forward option does not promise it on
+   * Windows), and once the main process turns click-through off the pointer is
+   * already resting inside, so no further mousemove is generated. A pointer
+   * that is simply moved onto the island and stopped therefore never opened it.
+   * The main process knows the cursor entered regardless of events, so its
+   * "inside became true" has to open too.
+   */
+  if (inside) {
+    scheduleHoverOpen();
+    return;
+  }
+  if (!open) return;
   scheduleHoverClose();
 });
 
