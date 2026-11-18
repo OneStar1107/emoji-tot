@@ -655,22 +655,18 @@ function setBoth(on) {
 
 /* ---------------------------------------------------------------- menus */
 
+/**
+ * The tray menu is deliberately three entries.
+ *
+ * Everything that used to live here — form, show/hide, click-through, docking,
+ * size, cast, demo expressions, agent hooks, file locations — is a persistent
+ * setting now, and persistent settings belong in the settings window. A tray
+ * menu that mirrors the whole app is a second UI to keep in sync; this one only
+ * carries the things you reach for without opening anything.
+ */
 function buildMenu() {
-  const prefs = readPrefs();
   return Menu.buildFromTemplate([
-    {
-      label: '形态',
-      submenu: [
-        { label: '灵动岛', type: 'radio', checked: form === 'island', click: () => setForm('island') },
-        { label: '桌面球', type: 'radio', checked: form === 'ball', click: () => setForm('ball') },
-        { type: 'separator' },
-        { label: '两种同时显示', type: 'checkbox', checked: both, click: (item) => setBoth(item.checked) },
-      ],
-    },
-    { label: '打开设置…', click: () => settings.create() },
-    { label: island.isVisible() ? '隐藏灵动岛' : '显示灵动岛', click: () => { if (island.isVisible()) island.hide(); else island.show(); refreshMenus(); } },
-    { type: 'separator' },
-    { label: win && win.isVisible() ? '隐藏球球' : '显示球球', click: toggleVisible },
+    { label: '设置…', click: () => settings.create('general') },
     { type: 'separator' },
     {
       label: '置顶',
@@ -680,78 +676,97 @@ function buildMenu() {
         pinned = item.checked;
         if (win) win.setAlwaysOnTop(pinned, 'floating');
         savePrefs();
+        refreshMenus();
       },
     },
-    {
-      label: '点击穿透',
-      type: 'checkbox',
-      checked: clickThrough,
-      click: (item) => {
-        setClickThrough(item.checked);
-        savePrefs();
-      },
-    },
-    {
-      label: '贴边收起',
-      submenu: [
-        { label: '贴左边', click: () => dock('left') },
-        { label: '贴右边', click: () => dock('right') },
-        { label: '贴上边', click: () => dock('top') },
-        { label: '贴下边', click: () => dock('bottom') },
-        { type: 'separator' },
-        { label: dockSide ? '收回桌面' : '收起', click: () => (dockSide ? undock() : dock('right')) },
-      ],
-    },
-    {
-      label: '尺寸',
-      submenu: SIZE_ORDER.map((key) => ({
-        label: `${key} · ${SIZES[key]}px`,
-        type: 'radio',
-        checked: key === sizeKey,
-        click: () => setSize(key),
-      })),
-    },
-    {
-      label: '角色',
-      submenu: CORE
-        ? CORE.FAMILIES.map((family) => ({
-            label: `${family.zh} · ${family.en}`,
-            submenu: CORE.CAST.filter((member) => member.family === family.id).map((member) => ({
-              label: member.name.zh,
-              type: 'radio',
-              checked: member.id === castId,
-              click: () => setCast(member.id),
-            })),
-          }))
-        : [{ label: '（角色表未加载）', enabled: false }],
-    },
-    {
-      label: '试一个表情',
-      submenu: DEMO_STATES.map(([id, label]) => ({
-        label: `${id} · ${label}`,
-        click: () => emitState({ emotionId: id }),
-      })),
-    },
-    {
-      label: 'Agent 联动',
-      submenu: AGENT_SOURCES.map((source) => ({
-        label: source.label,
-        type: 'checkbox',
-        checked: Boolean(prefs[`agent_${source.id}`]),
-        click: (item) => {
-          const next = { ...readJson(prefsPath(), {}), [`agent_${source.id}`]: item.checked };
-          writeJson(prefsPath(), next);
-          startAgentWatch(next);
-          refreshMenus();
-        },
-      })),
-    },
-    { type: 'separator' },
-    { label: '打开状态文件', click: () => shell.openPath(statePath()) },
-    { label: '打开配置目录', click: () => shell.openPath(userDir()) },
     { type: 'separator' },
     { label: '退出', click: () => app.quit() },
   ]);
+}
+
+/**
+ * One channel for everything the settings window can do to the running app.
+ *
+ * `meta` is the read half: the cast table, the demo list, the agent sources and
+ * the live visibility of both surfaces. The rest are the writes the tray menu
+ * used to own, now driven from the settings page instead.
+ */
+function handleSettingsAction({ kind, value } = {}) {
+  switch (kind) {
+    case 'meta': {
+      const prefs = readPrefs();
+      return {
+        form,
+        both,
+        pinned,
+        clickThrough,
+        dockSide,
+        sizeKey,
+        castId,
+        islandVisible: Boolean(island.isVisible()),
+        ballVisible: Boolean(win && win.isVisible()),
+        casts: CORE
+          ? CORE.FAMILIES.map((family) => ({
+              id: family.id,
+              label: `${family.zh} · ${family.en}`,
+              members: CORE.CAST.filter((member) => member.family === family.id).map((member) => ({
+                id: member.id,
+                label: member.name.zh,
+              })),
+            }))
+          : [],
+        demos: DEMO_STATES.map(([id, label]) => ({ id, label })),
+        agents: AGENT_SOURCES.map((source) => ({
+          id: source.id,
+          label: source.label,
+          on: Boolean(prefs[`agent_${source.id}`]),
+        })),
+      };
+    }
+    case 'island': {
+      if (value) island.show();
+      else island.hide();
+      refreshMenus();
+      return { ok: true, visible: island.isVisible() };
+    }
+    case 'ball': {
+      if (!win) return { ok: false };
+      if (value) win.show();
+      else win.hide();
+      refreshMenus();
+      return { ok: true, visible: win.isVisible() };
+    }
+    case 'dock': {
+      if (value === 'none') undock();
+      else dock(value);
+      refreshMenus();
+      return { ok: true, side: dockSide };
+    }
+    case 'demo': {
+      emitState({ emotionId: String(value) });
+      return { ok: true };
+    }
+    case 'cast': {
+      setCast(String(value));
+      refreshMenus();
+      return { ok: true, cast: castId };
+    }
+    case 'agent': {
+      const id = String(value?.id ?? '');
+      if (!id) return { ok: false };
+      const next = { ...readJson(prefsPath(), {}), [`agent_${id}`]: Boolean(value.on) };
+      writeJson(prefsPath(), next);
+      startAgentWatch(next);
+      refreshMenus();
+      return { ok: true };
+    }
+    case 'settings': {
+      settings.create(value || 'general');
+      return { ok: true };
+    }
+    default:
+      return null;
+  }
 }
 
 function refreshMenus() {
@@ -1137,6 +1152,7 @@ if (!gotTheLock) {
     applyMainPrefs();
     // Any window may change prefs; the tray and the visible form follow.
     settings.setWeatherRefresher(refreshWeather);
+    settings.setActionHook(handleSettingsAction);
     settings.onPrefs(() => {
       const next = readPrefs();
       form = next.form === 'ball' ? 'ball' : 'island';

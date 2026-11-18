@@ -8,15 +8,25 @@
  */
 const { BrowserWindow, ipcMain, screen, shell, app } = require('electron');
 const path = require('node:path');
-const { readPrefs, writePrefs, userDir } = require('./paths');
+const { readPrefs, writePrefs, userDir, statePath } = require('./paths');
 
 let win = null;
 const listeners = new Set();
 /** Injected by boot: refreshing weather belongs to main.js, not this module. */
 let refreshWeatherHook = null;
+/**
+ * Injected by boot: showing, hiding, docking, switching cast and demoing an
+ * expression all own state in main.js. The settings window reaches them
+ * through one channel instead of four, so a new action is one case there.
+ */
+let actionHook = null;
 
 function setWeatherRefresher(fn) {
   refreshWeatherHook = fn;
+}
+
+function setActionHook(fn) {
+  actionHook = fn;
 }
 
 function create(page) {
@@ -103,6 +113,22 @@ function registerIpc() {
     }
   });
 
+  ipcMain.handle('settings:action', async (_event, message) => {
+    if (!message || typeof message !== 'object') return null;
+    try {
+      return (await actionHook?.(message)) ?? null;
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) };
+    }
+  });
+  ipcMain.handle('settings:meta', async () => {
+    try {
+      return (await actionHook?.({ kind: 'meta' })) ?? null;
+    } catch {
+      return null;
+    }
+  });
+  ipcMain.handle('settings:open-state', () => shell.openPath(statePath()));
   ipcMain.handle('settings:open-data', () => shell.openPath(userDir()));
   ipcMain.handle('settings:open-repo', () => shell.openExternal('https://github.com/OneStar1107/emoji-tot'));
   ipcMain.handle('app:quit', () => app.quit());
@@ -136,4 +162,4 @@ function isOpen() {
   return Boolean(win && !win.isDestroyed());
 }
 
-module.exports = { create, registerIpc, isOpen, onPrefs, setWeatherRefresher };
+module.exports = { create, registerIpc, isOpen, onPrefs, setWeatherRefresher, setActionHook };

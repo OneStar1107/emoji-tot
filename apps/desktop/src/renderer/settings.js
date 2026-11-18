@@ -15,6 +15,7 @@ const NAV = [
     { key: 'appearance', label: '外观', icon: 'palette' },
     { key: 'layout', label: '尺寸与位置', icon: 'move' },
     { key: 'behavior', label: '隐藏与交互', icon: 'eye' },
+    { key: 'cast', label: '角色与表情', icon: 'palette' },
     { key: 'pages', label: '页面管理', icon: 'grid' },
   ] },
   { group: '内容', items: [
@@ -110,6 +111,8 @@ const DEFAULTS = {
 
 let prefs = { ...DEFAULTS };
 let page = 'general';
+/** Live state of the running app (cast, visibility, dock side, agents). */
+let meta = null;
 let displays = [];
 let version = '0.0.0';
 let quotaState = { accounts: [], current: null, last: null };
@@ -173,6 +176,26 @@ const rowRange = (label, sub, key, min, max, step, suffix) =>
     escapeHtml(suffix ?? '') + '" /><b style="min-width:44px;text-align:right;font-weight:400;color:var(--dim);font-size:11.5px">' +
     Number(prefs[key] ?? min) + escapeHtml(suffix ?? '') + '</b>');
 
+/**
+ * Action controls. Unlike the preference rows above they do not write prefs —
+ * they ask the main process to do something to the running app (show, hide,
+ * dock, switch cast, play an expression) and the page repaints from the new
+ * meta, so the switch reflects reality instead of an intention.
+ */
+const rowActionToggle = (label, sub, kind, checked, extra) =>
+  row(label, sub, '<button type="button" class="switch" role="switch" aria-checked="' + Boolean(checked) +
+    '" data-act="action-toggle" data-kind="' + kind + '"' +
+    (extra ? ' data-extra="' + escapeHtml(extra) + '"' : '') + ' aria-label="' + escapeHtml(label) + '"></button>');
+
+const rowActionSeg = (label, sub, kind, options, current) =>
+  row(label, sub, '<span class="seg">' + options.map(([value, text]) =>
+    '<button type="button" data-act="action-seg" data-kind="' + kind + '" data-value="' + value + '" aria-pressed="' +
+    (String(current ?? '') === String(value)) + '">' + escapeHtml(text) + '</button>').join('') + '</span>');
+
+const rowAction = (label, sub, kind, value, text) =>
+  row(label, sub, '<button type="button" class="btn" data-act="action" data-kind="' + kind + '" data-value="' +
+    escapeHtml(value ?? '') + '">' + escapeHtml(text) + '</button>');
+
 const card = (rows) => '<div class="card">' + rows.filter(Boolean).join('') + '</div>';
 const group = (title, body) => '<section class="group"><h2>' + escapeHtml(title) + '</h2>' + body + '</section>';
 const head = (title, sub) =>
@@ -190,6 +213,12 @@ function pageGeneral() {
     group('形态', card([
       rowSeg('默认形态', '开机时先显示哪一个', 'form', [['island', '灵动岛'], ['ball', '桌面球']]),
       rowToggle('同时显示两种', '岛贴屏幕顶部，球留在桌面', 'formBoth'),
+    ])) +
+    group('显示', card([
+      rowActionToggle('显示灵动岛', '关掉后只留桌面球', 'island', meta?.islandVisible),
+      rowActionToggle('显示球球', '关掉后只留灵动岛', 'ball', meta?.ballVisible),
+      rowActionSeg('贴边收起', '把球收到屏幕边缘，移到边缘就贴上去', 'dock',
+        [['top', '顶部'], ['left', '左侧'], ['right', '右侧'], ['none', '不收']], meta?.dockSide ?? 'none'),
     ])) +
     group('启动', card([
       rowToggle('开机启动', '登录系统时自动打开 EmojiTot', 'launchAtLogin'),
@@ -453,6 +482,7 @@ function pageAbout() {
     group('版本', card([
       row('当前版本', '一个两位数，一个会表达的角色', '<span class="badge">v' + escapeHtml(version) + '</span>'),
       row('数据目录', 'prefs.json、state.json 与缓存', '<button type="button" class="btn" data-act="button" data-key="open-data">打开</button>'),
+      row('状态文件', '当前表情与状态，可给别的工具读', '<button type="button" class="btn" data-act="button" data-key="open-state">打开</button>'),
       row('项目主页', 'MIT 许可，代码与美术全部自研', '<button type="button" class="btn" data-act="button" data-key="open-repo">GitHub</button>'),
     ])) +
     group('素材与许可', card([
@@ -463,11 +493,36 @@ function pageAbout() {
     '<p class="note">参考过 Islet、Istel、dsh-island、toki 的架构（均为 MIT），未复制其代码。</p>';
 }
 
+function pageCast() {
+  const casts = meta?.casts ?? [];
+  const demos = meta?.demos ?? [];
+  const agents = meta?.agents ?? [];
+  const castGroups = casts.length
+    ? casts.map((family) => group(family.label, card(
+        family.members.map((member) =>
+          row(member.label, member.id, member.id === meta?.castId
+            ? '<span class="badge">当前</span>'
+            : '<button type="button" class="btn" data-act="action" data-kind="cast" data-value="' +
+              escapeHtml(member.id) + '">选用</button>'),
+        ),
+      )))
+    : '';
+  return head('角色与表情', '选一个陪伴者，顺手试一下表情') +
+    (castGroups || group('角色', card([row('角色表', '主进程尚未提供', '<span class="badge">待加载</span>')]))) +
+    group('试一个表情', card(demos.map((demo) =>
+      rowAction(demo.label, demo.id, 'demo', demo.id, '播放'),
+    ))) +
+    group('Agent 联动', card(agents.map((agent) =>
+      rowActionToggle(agent.label, '读取它的状态文件来驱动表情', 'agent', agent.on, agent.id),
+    )));
+}
+
 const RENDERERS = {
   general: pageGeneral,
   appearance: pageAppearance,
   layout: pageLayout,
   behavior: pageBehavior,
+  cast: pageCast,
   pages: pagePages,
   music: pageMusic,
   focus: pageFocus,
@@ -532,6 +587,7 @@ function paint() {
 
 async function load() {
   prefs = merge(await api.get());
+  meta = (await api.meta?.()) ?? meta;
   version = (await api.version?.()) ?? version;
   displays = (await api.displays?.()) ?? [];
   quotaState = (await api.quota?.()) ?? quotaState;
@@ -576,6 +632,27 @@ content.addEventListener('click', async (event) => {
     await patch({ [key]: !prefs[key] });
     return;
   }
+  if (act === 'action-toggle') {
+    const kind = target.dataset.kind;
+    const on = target.getAttribute('aria-checked') !== 'true';
+    const value = kind === 'agent' ? { id: target.dataset.extra, on } : on;
+    await api.action?.(kind, value);
+    meta = (await api.meta?.()) ?? meta;
+    paint();
+    return;
+  }
+  if (act === 'action-seg') {
+    await api.action?.(target.dataset.kind, target.dataset.value);
+    meta = (await api.meta?.()) ?? meta;
+    paint();
+    return;
+  }
+  if (act === 'action') {
+    await api.action?.(target.dataset.kind, target.dataset.value);
+    meta = (await api.meta?.()) ?? meta;
+    paint();
+    return;
+  }
   if (act === 'toggle-nested') {
     const current = valueOf(key);
     await patch(setPath(key, current === false));
@@ -596,6 +673,7 @@ content.addEventListener('click', async (event) => {
       return;
     }
     if (key === 'open-data') { await api.openData?.(); return; }
+    if (key === 'open-state') { await api.openState?.(); return; }
     if (key === 'open-repo') { await api.openRepo?.(); return; }
     if (key === 'add-mail') { page = 'comm'; return; }
     if (key === 'add-quota') { page = 'quota'; return; }
