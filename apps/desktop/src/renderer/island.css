@@ -11,7 +11,12 @@
   --dim: rgba(242, 242, 245, 0.55);
   --faint: rgba(242, 242, 245, 0.32);
   --line: var(--surface-2);
-  --card: rgba(21, 21, 25, 0.9);
+  /*
+   * Frost is a real translucency: the desktop has to show through, otherwise
+   * "frost" and "solid" are the same card twice. 0.62 is the point where text
+   * still passes contrast while the background is visibly moving behind it.
+   */
+  --card: rgba(21, 21, 25, 0.62);
   --card-solid: #151519;
   --accent: #8f7bff;
   --good: #45d483;
@@ -286,12 +291,15 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
   border: 1px solid var(--line);
   border-radius: var(--radius);
   /*
-   * A near-opaque fill, not backdrop-filter. Blurring the "backdrop" of a
-   * transparent Electron window has nothing real to blur: it darkens the
-   * window's own margin and reads as a grey band around the panel, which is
-   * what looked like a physical crop on both sides.
+   * The skin decides the fill. --card is the translucent one (frost), and each
+   * solid/plain skin overrides it below. Painting --card-solid here made every
+   * skin look identical once the panel was open — which is exactly what "毛玻璃
+   * 和实色没区别" reports.
+   *
+   * No backdrop-filter: in a transparent Electron window there is nothing real
+   * behind the page to blur, and it darkens the window margin into a grey band.
    */
-  background: var(--card-solid);
+  background: var(--card);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5), inset 0 1px 0 var(--surface-1);
   transform-origin: top center;
   animation: panel-in 300ms var(--spring);

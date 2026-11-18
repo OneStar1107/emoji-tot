@@ -288,13 +288,38 @@ function toggleVisible() {
   refreshMenus();
 }
 
-/** Show or hide the desktop ball. */
+/**
+ * Show or hide the desktop ball.
+ *
+ * "Visible" is not the same as "findable": a ball can be visible and still be
+ * parked half off-screen or docked to an edge where it reads as invisible. So
+ * a click that is meant to bring it back also checks that it is on a screen
+ * and, if not, re-centres it before showing.
+ */
 function toggleBall() {
   if (!win || win.isDestroyed()) return;
-  if (win.isVisible()) win.hide();
-  else {
-    win.showInactive();
+  const bounds = win.getBounds();
+  const onScreen = screen.getAllDisplays().some((display) => {
+    const area = display.workArea;
+    return (
+      bounds.x + bounds.width > area.x &&
+      bounds.x < area.x + area.width &&
+      bounds.y + bounds.height > area.y &&
+      bounds.y < area.y + area.height
+    );
+  });
+  if (win.isVisible() && onScreen && !dockSide) {
+    win.hide();
+  } else {
+    if (!onScreen) {
+      const area = screen.getPrimaryDisplay().workArea;
+      win.setPosition(
+        Math.round(area.x + (area.width - bounds.width) / 2),
+        Math.round(area.y + (area.height - bounds.height) / 2),
+      );
+    }
     if (dockSide) undock();
+    win.show();
   }
   refreshMenus();
 }
@@ -1127,6 +1152,10 @@ function startServices() {
     quota: quota.snapshot(),
     mail: mail.snapshot(),
     calendar: { events: calendar.list(), upcoming: calendar.upcoming() },
+    // Read the file rather than the variable: the island can load before the
+    // startup code has restored castId, and then it would boot on whatever
+    // cast the HTML was written with.
+    cast: readPrefs().cast || castId,
     prefs: readPrefs(),
   }));
 

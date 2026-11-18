@@ -30,14 +30,24 @@ html[data-theme="light"] {
   --line: rgba(0, 0, 0, 0.08);
   --line-strong: rgba(0, 0, 0, 0.16);
   --ink: #1a1a1e;
-  --dim: rgba(26, 26, 30, 0.62);
-  --faint: rgba(26, 26, 30, 0.4);
+  --dim: rgba(26, 26, 30, 0.72);
+  --faint: rgba(26, 26, 30, 0.5);
   --accent: #6c58e8;
   --good: #1f9d55;
 }
 
 html[data-theme="light"] select.ctl,
 html[data-theme="light"] input.ctl { background-color: #fff; color: var(--ink); }
+
+/*
+ * The rail needs its own light-theme pass. --dim on #eaeaea is about 3:1 at
+ * 12.5px, and the selected row was a hard-coded dark block with dark text on
+ * it — which is exactly "I cannot read the left side".
+ */
+html[data-theme="light"] .rail-item { color: rgba(26, 26, 30, 0.8); }
+html[data-theme="light"] .rail-item:hover { background: rgba(0, 0, 0, 0.06); color: #1a1a1e; }
+html[data-theme="light"] .rail-item[aria-current="true"] { background: #1a1a1e; color: #ffffff; }
+html[data-theme="light"] .rail-item .dot { background: #ffffff; }
 
 * { box-sizing: border-box; }
 

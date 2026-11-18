@@ -1198,6 +1198,11 @@ api.onPrefs((next) => {
 
 const boot = await api.bootstrap();
 prefs = boot?.prefs ?? {};
+if (boot?.cast) {
+  for (const face of document.querySelectorAll('emojitot-ball')) {
+    face.setAttribute('cast', String(boot.cast));
+  }
+}
 battery = boot?.battery ?? null;
 weather = boot?.weather ?? null;
 media = boot?.media ?? media;
