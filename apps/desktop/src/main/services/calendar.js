@@ -7,7 +7,7 @@
  * local, and all-day dates.
  */
 const crypto = require('node:crypto');
-const { cachePath, readJson, writeJson } = require('../paths');
+const { cachePath, readJson, writeJson, readPrefs } = require('../paths');
 
 let events = [];
 let timer = null;
@@ -115,6 +115,7 @@ function parseIcs(text) {
 
 /** Import every VEVENT found in a text; returns how many were added. */
 function importIcs(text) {
+  if (readPrefs().calendar?.fromMail === false) return 0;
   const parsed = parseIcs(text);
   let added = 0;
   for (const event of parsed) {
@@ -131,20 +132,21 @@ function upcoming(days = 7) {
 }
 
 function tick() {
+  const prefs = readPrefs();
+  const leadMin = Math.max(0, Number(prefs.calendar?.leadMin) || 0);
+  const leadMs = leadMin * 60 * 1000;
   const now = Date.now();
   for (const event of events) {
     const key = event.id + ':' + event.start;
     if (reminded.has(key)) continue;
-    if (event.start > now || event.start < now - 60 * 1000) continue;
+    // Fire once, at the configured lead time; a 0 lead means "at start".
+    if (event.start - leadMs > now || event.start < now - 60 * 1000) continue;
     reminded.add(key);
-    try {
-      new (require('electron').Notification)({
-        title: '日程开始',
-        body: `${event.title}${event.location ? ' · ' + event.location : ''}`,
-      }).show();
-    } catch {
-      // best effort
-    }
+    const when = leadMin > 0 ? `${leadMin} 分钟后` : '现在';
+    require('./notify').notify(
+      '日程提醒',
+      `${event.title} · ${when}${event.location ? ' · ' + event.location : ''}`,
+    );
   }
 }
 

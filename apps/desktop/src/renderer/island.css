@@ -25,6 +25,13 @@
   --fast: 150ms;
   --base: 240ms;
   --slow: 300ms;
+  /* Filled from prefs by applyPrefs(); these are the defaults a fresh profile
+     gets before settings has ever been opened. */
+  --island-w: 420px;
+  --pill-h: 34px;
+  --ui-font: system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ui-size: 13px;
+  --ui-weight: 400;
 }
 
 * { box-sizing: border-box; }
@@ -61,7 +68,9 @@ body {
   background: transparent;
   overflow: hidden;
   color: var(--ink);
-  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: var(--ui-font);
+  font-size: var(--ui-size);
+  font-weight: var(--ui-weight);
   -webkit-font-smoothing: antialiased;
   user-select: none;
   cursor: default;
@@ -107,7 +116,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  height: 34px;
+  height: var(--pill-h);
   padding: 0 13px 0 5px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -170,21 +179,38 @@ body {
 @keyframes live { 0%, 100% { transform: scaleY(0.55); } 50% { transform: scaleY(1); } }
 body[data-playing="false"] .pill-live { display: none; }
 
+/* Skins: one fill difference each, not three themes to maintain. */
+body[data-skin="solid"] .panel,
+body[data-skin="solid"] .pill { background: #151519; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.44); }
+body[data-skin="plain"] .panel,
+body[data-skin="plain"] .pill { background: #131316; box-shadow: none; border-color: rgba(255, 255, 255, 0.06); }
+body[data-blur="off"] .panel,
+body[data-blur="off"] .pill { background: #0d0d10; }
+
 /* --------------------------------------------------------------- expanded */
 
 .panel {
-  width: 420px;
+  position: relative;
+  width: var(--island-w);
   padding: 12px 12px 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--card);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(22px);
-  animation: panel-in 190ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  /*
+   * A near-opaque fill, not backdrop-filter. Blurring the "backdrop" of a
+   * transparent Electron window has nothing real to blur: it darkens the
+   * window's own margin and reads as a grey band around the panel, which is
+   * what looked like a physical crop on both sides.
+   */
+  background: var(--card-solid);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform-origin: top center;
+  animation: panel-in 300ms var(--spring);
 }
 
+/* Same duration and curve as the window's size transition, so the content and
+   the window arrive together instead of one trailing the other. */
 @keyframes panel-in {
-  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  from { opacity: 0; transform: translateY(-4px) scale(0.94); }
   to { opacity: 1; transform: none; }
 }
 
@@ -222,6 +248,37 @@ body[data-playing="false"] .pill-live { display: none; }
 .pages { padding: 12px 2px 0; min-height: 92px; max-height: 396px; overflow-y: auto; overflow-x: hidden; }
 .pages::-webkit-scrollbar { width: 3px; }
 .pages::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 2px; }
+
+/* Paging arrows on the panel's own left and right edges: the whole surface is
+   a swipe target, the arrows are the visible affordance. */
+.pager {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(28, 28, 34, 0.92);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  /* Always visible but quiet: a control that only appears on hover is a
+     control most people never find. */
+  opacity: 0.5;
+  transform: translateY(-50%) scale(1);
+  transition: opacity 180ms var(--ease), transform 180ms var(--spring), background 140ms var(--ease);
+}
+.panel:hover .pager,
+.panel:focus-within .pager { opacity: 0.95; }
+.pager:hover { background: rgba(48, 48, 58, 0.98); }
+.pager:active { transform: translateY(-50%) scale(0.92); }
+.pager.prev { left: 4px; }
+.pager.next { right: 4px; }
+.pager svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+body[data-pages="1"] .pager { display: none; }
 
 .dots { display: flex; justify-content: center; gap: 6px; padding: 10px 0 2px; }
 .dots button {

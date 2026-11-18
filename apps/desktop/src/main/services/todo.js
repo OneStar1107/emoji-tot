@@ -5,9 +5,9 @@
  * restarting the app does not re-announce yesterday's overdue item every
  * launch. Nothing leaves the machine.
  */
-const { Notification } = require('electron');
 const crypto = require('node:crypto');
-const { cachePath, readJson, writeJson } = require('../paths');
+const { cachePath, readJson, writeJson, readPrefs } = require('../paths');
+const { notify } = require('./notify');
 
 let items = [];
 let timer = null;
@@ -94,17 +94,16 @@ function clearDone() {
 }
 
 function checkDue() {
+  const prefs = readPrefs();
+  if (prefs.todo?.enabled === false) return;
+  const shouldNotify = prefs.todo?.notify !== false;
   const now = Date.now();
   let changed = false;
   for (const item of items) {
     if (item.done || item.reminded || !item.due || item.due > now) continue;
     item.reminded = true;
     changed = true;
-    try {
-      new Notification({ title: '待办到期', body: item.text }).show();
-    } catch {
-      // best effort
-    }
+    if (shouldNotify) notify('待办到期', item.text);
   }
   if (changed) save();
   if (changed) emit();

@@ -15,9 +15,15 @@ const { BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('node:path');
 const { readPrefs } = require('./paths');
 
-/** Transparent margin around the pill for its shadow and hover scale. */
-const PAD_X = 16;
-const PAD_Y = 12;
+/**
+ * Transparent margin around the island.
+ *
+ * 16px was not enough: the panel's 22px corners and its 50px shadow reached the
+ * window edge, so Windows clipped them and the panel looked cut on both sides.
+ * The margin is now larger than the corner radius and the shadow's near field.
+ */
+const PAD_X = 28;
+const PAD_Y = 18;
 
 let win = null;
 /** Content size as the page measured it. */

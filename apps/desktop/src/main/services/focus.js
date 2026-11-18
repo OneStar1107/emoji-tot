@@ -5,8 +5,8 @@
  * the machine can sleep, and reopening the island still shows the truth. The
  * visible countdown is derived from `endsAt`, so there is nothing to drift.
  */
-const { Notification, shell } = require('electron');
 const { cachePath, readJson, writeJson, readPrefs } = require('../paths');
+const { notify: pushNotify } = require('./notify');
 
 const EMPTY = { phase: 'idle', running: false, remaining: 0, total: 0, cycles: 0, endsAt: 0 };
 let state = { ...EMPTY };
@@ -35,12 +35,7 @@ function prefs() {
 }
 
 function notify(title, body) {
-  try {
-    const note = new Notification({ title, body, silent: false });
-    note.show();
-  } catch {
-    // Notifications are best effort; the island still updates.
-  }
+  pushNotify(title, body);
 }
 
 function remaining() {

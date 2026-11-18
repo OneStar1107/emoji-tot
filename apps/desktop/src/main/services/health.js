@@ -5,8 +5,8 @@
  * when the interval has elapsed, and acknowledging resets it. Reminders repeat
  * on a slower cadence so a missed toast does not become a notification storm.
  */
-const { Notification } = require('electron');
 const { cachePath, readJson, writeJson, readPrefs } = require('../paths');
+const { notify: pushNotify } = require('./notify');
 
 const REPEAT_MS = 10 * 60 * 1000;
 let state = {
@@ -40,11 +40,7 @@ function prefs() {
 }
 
 function notify(title, body) {
-  try {
-    new Notification({ title, body }).show();
-  } catch {
-    // best effort
-  }
+  pushNotify(title, body);
 }
 
 function snapshot() {

@@ -105,11 +105,14 @@ const enabledPages = () => {
     .filter((page) => page && isOn(page.key));
 };
 
+let timeFormat24 = true;
+
 const hhmm = () => {
   const now = new Date();
-  const h = String(now.getHours()).padStart(2, '0');
-  const m = String(now.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  if (timeFormat24) return `${String(now.getHours()).padStart(2, '0')}:${minutes}`;
+  const hour = now.getHours() % 12 || 12;
+  return `${hour}:${minutes} ${now.getHours() < 12 ? 'AM' : 'PM'}`;
 };
 
 const escapeHtml = (value) =>
@@ -194,7 +197,9 @@ function renderPillStatus() {
       } else if (key === 'clock') {
         parts.push(`<span class="stat" data-clock>${hhmm()}</span>`);
       } else if (key === 'weather' && weather) {
-        parts.push(`<span class="stat dim">${weather.current.temp}°</span>`);
+        const celsius = Number(weather.current?.temp) || 0;
+      const temp = prefs.weather?.unit === 'f' ? Math.round((celsius * 9) / 5 + 32) : Math.round(celsius);
+      parts.push(`<span class="stat dim">${temp}°</span>`);
       }
     }
     pillStatus.innerHTML = parts.join('');
@@ -261,7 +266,7 @@ function musicPage() {
       </div>
       <span class="music-state">${media.playing ? '播放中' : '已暂停'}</span>
     </div>
-    <div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>
+    ${prefs.music?.lyrics === false ? '' : `<div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>`}
     <div class="music-bar"><i data-progress style="width:${pct.toFixed(1)}%"></i></div>
     <div class="music-times"><span data-pos>${clock(media.position)}</span><span data-dur>${clock(media.duration)}</span></div>
     <div class="music-controls">
@@ -294,6 +299,11 @@ function updateMusicLive() {
 
 function weatherPage() {
   if (!weather) return empty(ICON.sun, '正在获取天气…', '第一次需要几秒钟。');
+  const fahrenheit = prefs.weather?.unit === 'f';
+  const show = (celsius) => {
+    const value = Number(celsius) || 0;
+    return fahrenheit ? Math.round((value * 9) / 5 + 32) : Math.round(value);
+  };
   const now = weather.current;
   const days = (weather.days ?? []).slice(0, 7);
   const weekday = ['日', '一', '二', '三', '四', '五', '六'];
@@ -304,18 +314,18 @@ function weatherPage() {
       return `<div class="weather-day" data-today="${index === 0}">
         <em>${label}</em>
         ${svg(WEATHER_ICON[day.icon] ?? WEATHER_ICON.cloud)}
-        <b>${day.max}°</b><i>${day.min}°</i>
+        <b>${show(day.max)}°</b><i>${show(day.min)}°</i>
       </div>`;
     })
     .join('');
   return `<div class="weather">
     <div class="weather-now">
-      <div class="weather-temp">${now.temp}<sup>°</sup></div>
+      <div class="weather-temp">${show(now.temp)}<sup>°</sup></div>
       <div class="weather-desc"><b>${now.text}</b><span>${weather.place.name}${weather.place.country ? ' · ' + weather.place.country : ''}</span></div>
       <span class="weather-icon">${svg(WEATHER_ICON[now.icon] ?? WEATHER_ICON.cloud)}</span>
     </div>
     <div class="weather-grid">
-      <div class="weather-cell"><em>体感</em><b>${now.feels}°</b></div>
+      <div class="weather-cell"><em>体感</em><b>${show(now.feels)}°</b></div>
       <div class="weather-cell"><em>湿度</em><b>${now.humidity}%</b></div>
       <div class="weather-cell"><em>风速</em><b>${now.wind} km/h</b></div>
       <div class="weather-cell"><em>日出</em><b>${(now.sunrise || '').slice(11, 16) || '--'} / ${(now.sunset || '').slice(11, 16) || '--'}</b></div>
@@ -552,6 +562,9 @@ function dueLabel(due) {
 }
 
 function todoPage() {
+  if (prefs.todo?.enabled === false) {
+    return empty(ICON.check, '待办已关闭', '打开后岛上会显示清单与到期提醒。', '去打开', 'settings:todo');
+  }
   const openItems = todos.filter((item) => !item.done);
   const doneItems = todos.filter((item) => item.done);
   const itemHtml = (item) => `<div class="todo-item${item.done ? ' done' : ''}" data-id="${item.id}">
@@ -583,6 +596,9 @@ const sizeLabel = (bytes) => {
 };
 
 function shelfPage() {
+  if (prefs.shelf?.enabled === false) {
+    return empty(ICON.tray, '置物架已关闭', '打开后可以把文件拖到岛上暂存。', '去打开', 'settings:todo');
+  }
   const rows = shelfFiles.length
     ? shelfFiles
         .map((file) => `<div class="shelf-item" data-id="${escapeHtml(file.name)}">
@@ -611,10 +627,31 @@ const RENDERERS = {
 };
 
 /** Replace local state from any snapshot (bootstrap, push or action reply). */
-function applyMotionPreference() {
-  // Default on: this machine reports prefers-reduced-motion, so "follow the
-  // system" meant no motion at all. Settings can still turn it off.
+/**
+ * Push every visual preference into CSS variables.
+ *
+ * Settings writes prefs; this is the only place that turns them into pixels.
+ * Adding a knob is then two lines here plus one row in settings — not a new
+ * state path.
+ */
+function applyPrefs() {
+  const root = document.documentElement;
+  root.style.setProperty('--radius', `${Number(prefs.radius) || 22}px`);
+  root.style.setProperty('--island-w', `${Number(prefs.islandWidth) || 420}px`);
+  root.style.setProperty('--pill-h', `${Number(prefs.pillHeight) || 34}px`);
+  const fonts = {
+    system: 'system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+    pingfang: '"PingFang SC", "Microsoft YaHei", sans-serif',
+    yahei: '"Microsoft YaHei", "PingFang SC", sans-serif',
+    mono: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace',
+  };
+  root.style.setProperty('--ui-font', fonts[prefs.font] ?? fonts.system);
+  root.style.setProperty('--ui-size', `${13 + (Number(prefs.fontSize) || 0)}px`);
+  root.style.setProperty('--ui-weight', String(prefs.weight || 400));
+  document.body.dataset.skin = prefs.skin ?? 'frost';
+  document.body.dataset.blur = prefs.blur === false ? 'off' : 'on';
   document.body.dataset.motion = prefs.motion === false ? 'off' : 'on';
+  timeFormat24 = prefs.timeFormat !== '12h';
 }
 
 function applyLocal(snapshot) {
@@ -631,6 +668,7 @@ let pageDir = 1;
 function renderPage(animate = false) {
   const list = enabledPages();
   if (!list.length) {
+    document.body.dataset.pages = '0';
     titleEl.textContent = '还没有页面';
     subEl.textContent = '去设置里打开';
     pagesEl.innerHTML = empty(ICON.check, '页面都是关的', '在设置 → 页面管理里打开至少一个。', '打开设置', 'settings:pages');
@@ -639,6 +677,8 @@ function renderPage(animate = false) {
     return;
   }
   pageIndex = Math.max(0, Math.min(list.length - 1, pageIndex));
+  // One page means the paging arrows would be dead controls.
+  document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
   titleEl.textContent = page.title;
   subEl.textContent = page.sub;
@@ -669,12 +709,30 @@ function setOpen(next) {
 /* ------------------------------------------------------------------- wiring */
 
 pillEl.addEventListener('click', () => setOpen(true));
+
+let hoverTimer = null;
+pillEl.addEventListener('mouseenter', () => {
+  const delay = Number(prefs.hoverOpenDelay);
+  if (!Number.isFinite(delay) || delay <= 0) return;
+  clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(() => setOpen(true), Math.min(800, delay));
+});
+pillEl.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
 btnSettings.addEventListener('click', () => api.openSettings());
 
 panelEl.addEventListener('click', (event) => {
   const mediaButton = event.target.closest('[data-media]');
   if (mediaButton) {
     api.control(mediaButton.dataset.media);
+    event.stopPropagation();
+    return;
+  }
+  const pageNav = event.target.closest('[data-page-nav]');
+  if (pageNav) {
+    const delta = Number(pageNav.dataset.pageNav);
+    pageDir = delta;
+    pageIndex += delta;
+    renderPage(true);
     event.stopPropagation();
     return;
   }
@@ -822,6 +880,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 panelEl.addEventListener('wheel', (event) => {
+  if (prefs.wheelPaging === false) return;
   if (Math.abs(event.deltaY) < 8) return;
   const delta = event.deltaY > 0 ? 1 : -1;
   pageDir = delta;
@@ -839,6 +898,7 @@ panelEl.addEventListener('wheel', (event) => {
  * dismiss gestures; the window edge is the third.
  */
 window.addEventListener('blur', () => {
+  if (prefs.blurCollapse === false) return;
   if (open) setOpen(false);
 });
 
@@ -933,7 +993,7 @@ api.onCalendar((value) => {
 
 api.onPrefs((next) => {
   prefs = next ?? prefs;
-  applyMotionPreference();
+  applyPrefs();
   renderPillStatus();
   // A page was switched on or reordered in settings: the dots and the current
   // page have to follow, otherwise the island keeps showing the old set.
@@ -952,8 +1012,12 @@ mailState = boot?.mail ?? mailState;
 calendarState = boot?.calendar ?? calendarState;
 document.body.dataset.playing = String(Boolean(media.active && media.playing));
 
-applyMotionPreference();
+applyPrefs();
 renderPillStatus();
+// Land on the user's default page, not always the first one.
+const bootPages = enabledPages();
+const preferred = bootPages.findIndex((page) => page.key === prefs.defaultPage);
+pageIndex = preferred >= 0 ? preferred : 0;
 setOpen(false);
 setInterval(renderPillStatus, 20000);
 measure();

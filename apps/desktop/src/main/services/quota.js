@@ -9,12 +9,13 @@
 const { execFile } = require('node:child_process');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { readJson, writeJson, userDir } = require('../paths');
+const { readJson, writeJson, userDir, readPrefs } = require('../paths');
 const { encrypt, decrypt } = require('../secrets');
+const { notify } = require('./notify');
 
 const SCRIPT = path.join(__dirname, 'quota.ps1');
-const REFRESH_MS = 15 * 60 * 1000;
 const KEY_VAR = 'EMOJITOT_DEEPSEEK_KEY';
+let lowBalanceWarned = false;
 
 let accounts = [];
 let current = null;
@@ -109,8 +110,37 @@ async function refresh() {
     topped: info.topped_up_balance ?? '0.00',
     at: Date.now(),
   };
+  /*
+   * Warn once when the balance crosses below the threshold, and re-arm when it
+   * comes back up. Warning on every refresh would turn a useful reminder into
+   * a metronome.
+   */
+  const prefs = readPrefs();
+  if (prefs.quota?.alert !== false) {
+    const threshold = Number(prefs.quota?.threshold) || 5;
+    const total = Number(last.total);
+    if (Number.isFinite(total) && total < threshold) {
+      if (!lowBalanceWarned) {
+        lowBalanceWarned = true;
+        notify('AI 额度偏低', `${account.name} 余额 ¥${last.total}，低于 ¥${threshold}`);
+      }
+    } else {
+      lowBalanceWarned = false;
+    }
+  }
   emit();
   return last;
+}
+
+/** The refresh cadence comes from settings, not a constant. */
+function intervalMs() {
+  const prefs = readPrefs();
+  return Math.max(5, Number(prefs.quota?.intervalMin) || 15) * 60 * 1000;
+}
+
+function reschedule() {
+  clearInterval(timer);
+  timer = setInterval(refresh, intervalMs());
 }
 
 function add(name, key) {
@@ -155,8 +185,7 @@ function startService() {
   emit();
   // A short delay keeps app start snappy; the balance is not needed to paint.
   setTimeout(refresh, 2500);
-  clearInterval(timer);
-  timer = setInterval(refresh, REFRESH_MS);
+  reschedule();
 }
 
 function stopService() {
@@ -169,4 +198,4 @@ function onChange(fn) {
   return () => listeners.delete(fn);
 }
 
-module.exports = { startService, stopService, onChange, snapshot, refresh, add, remove, select };
+module.exports = { startService, stopService, onChange, snapshot, refresh, add, remove, select, reschedule };

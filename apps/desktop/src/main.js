@@ -12,7 +12,7 @@
  * 3. **Agent linkage.** It can watch a coding agent's status file and react —
  *    the same file-watching contract the protocol already uses.
  */
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, session } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, session, globalShortcut } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -33,6 +33,7 @@ const shelf = require('./main/services/shelf');
 const quota = require('./main/services/quota');
 const mail = require('./main/services/mail');
 const calendar = require('./main/services/calendar');
+const fullscreen = require('./main/services/fullscreen');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -757,6 +758,65 @@ function refreshMenus() {
   if (tray) tray.setContextMenu(buildMenu());
 }
 
+/**
+ * Preferences that only exist in the main process: tray presence, the global
+ * shortcut, and the full-screen watcher. All three are idempotent, so the prefs
+ * listener can just call them again.
+ */
+let hiddenByFullscreen = false;
+
+function applyTrayPreference() {
+  const prefs = readPrefs();
+  const wanted = prefs.trayIcon !== false;
+  if (wanted && !tray) createTray();
+  else if (!wanted && tray) {
+    tray.destroy();
+    tray = null;
+  }
+}
+
+function applyHotkey() {
+  const prefs = readPrefs();
+  try {
+    globalShortcut.unregisterAll();
+    if (prefs.hotkey === false) return;
+    globalShortcut.register('Alt+Shift+T', () => {
+      if (island.isVisible()) island.hide();
+      else island.show();
+      refreshMenus();
+    });
+  } catch {
+    // A taken shortcut is not a reason to fail startup.
+  }
+}
+
+function applyFullscreenWatch() {
+  const prefs = readPrefs();
+  if (prefs.hideFullscreen === false) {
+    fullscreen.stop();
+    if (hiddenByFullscreen) {
+      hiddenByFullscreen = false;
+      if (showIsland()) island.show();
+    }
+    return;
+  }
+  fullscreen.start((full) => {
+    if (full && showIsland()) {
+      hiddenByFullscreen = true;
+      island.hide();
+    } else if (!full && hiddenByFullscreen) {
+      hiddenByFullscreen = false;
+      if (showIsland()) island.show();
+    }
+  });
+}
+
+function applyMainPrefs() {
+  applyTrayPreference();
+  applyHotkey();
+  applyFullscreenWatch();
+}
+
 function createTray() {
   // Pre-rendered at the tray's own size: scaling 512 down to 16 in the OS
   // produced stepped edges, which is exactly what the icon rework removed.
@@ -856,13 +916,19 @@ async function refreshWeather() {
   }
 }
 
+/** Weather cadence comes from settings; changing it takes effect at once. */
+function scheduleWeather() {
+  clearInterval(weatherTimer);
+  const minutes = Math.max(5, Number(readPrefs().weather?.intervalMin) || 15);
+  weatherTimer = setInterval(refreshWeather, minutes * 60 * 1000);
+}
+
 function startServices() {
   pushBattery();
   clearInterval(batteryTimer);
   batteryTimer = setInterval(pushBattery, 30000);
   refreshWeather();
-  clearInterval(weatherTimer);
-  weatherTimer = setInterval(refreshWeather, 15 * 60 * 1000);
+  scheduleWeather();
 
   /*
    * Media: the bridge streams a line per second. The island only needs a frame
@@ -1068,6 +1134,7 @@ if (!gotTheLock) {
     startAgentWatch(stored);
     startServices();
     applyForm();
+    applyMainPrefs();
     // Any window may change prefs; the tray and the visible form follow.
     settings.setWeatherRefresher(refreshWeather);
     settings.onPrefs(() => {
@@ -1075,6 +1142,9 @@ if (!gotTheLock) {
       form = next.form === 'ball' ? 'ball' : 'island';
       both = Boolean(next.formBoth);
       applyForm();
+      applyMainPrefs();
+      scheduleWeather();
+      quota.reschedule();
       island.send('settings:changed', next);
       refreshWeather();
     });
@@ -1093,6 +1163,12 @@ if (!gotTheLock) {
     clearInterval(pointerTimer);
     clearInterval(batteryTimer);
     clearInterval(weatherTimer);
+    try {
+      globalShortcut.unregisterAll();
+    } catch {
+      // shutting down anyway
+    }
+    fullscreen.stop();
     media.stop();
     focus.stopService();
     health.stopService();
