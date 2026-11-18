@@ -1,7 +1,7 @@
 {
   "name": "emoji-tot",
   "private": true,
-  "version": "0.3.31",
+  "version": "0.3.32",
   "description": "EmojiTot: an expressive character for the desktop and the web, driven by a two-digit protocol",
   "type": "commonjs",
   "license": "MIT",

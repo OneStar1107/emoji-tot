@@ -406,7 +406,9 @@ function musicPage() {
         <b>${escapeHtml(media.title || '未命名')}</b>
         <span>${escapeHtml(media.artist || media.album || (browser ? '媒体 · ' + (media.source || '浏览器') : media.source || ''))}</span>
       </div>
-      <span class="music-state">${live ? '直播' : media.playing ? '播放中' : '已暂停'}</span>
+      <!-- The state badge was removed on request: the header already says what is
+           playing, and the progress row keeps the only 直播 marker that carries
+           information (no duration). -->
     </div>
     ${prefs.music?.lyrics === false ? '' : `<div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>`}
     ${live
