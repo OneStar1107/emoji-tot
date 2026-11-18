@@ -252,7 +252,14 @@ function renderSub() {
   const textEl = subEl.firstElementChild;
   if (textEl && textEl.textContent !== text) textEl.textContent = text;
   subEl.dataset.muted = 'false';
-  subEl.dataset.over = String(subEl.scrollWidth > subEl.clientWidth + 2);
+  /*
+   * Measure the overflow after writing the text, every call: the first write
+   * happens before layout, so a one-off check would answer "fits" forever. The
+   * shift is published as a custom property so the keyframes can use it.
+   */
+  const over = subEl.scrollWidth > subEl.clientWidth + 2;
+  subEl.dataset.over = String(over);
+  if (over && textEl) subEl.style.setProperty('--sub-shift', (textEl.scrollWidth - subEl.clientWidth + 6) + 'px');
   ensureBatteryRotation();
 }
 
