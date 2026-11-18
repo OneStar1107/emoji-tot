@@ -231,15 +231,27 @@ function batteryEntries() {
 function renderSub() {
   const entries = batteryEntries();
   if (!entries.length) {
-    if (subEl.textContent !== '') subEl.textContent = '';
+    /* Clear the inner span, never the host: writing textContent on the host
+       would delete the span the scroller needs. */
+    const empty = subEl.firstElementChild;
+    if (empty && empty.textContent !== '') empty.textContent = '';
     subEl.dataset.muted = 'true';
+    subEl.dataset.over = 'false';
     return;
   }
   if (batteryIndex >= entries.length) batteryIndex = 0;
   const entry = entries[batteryIndex];
-  const text = entry.name + ' · 电量 ' + entry.level + '%';
-  if (subEl.textContent !== text) subEl.textContent = text;
+  /*
+   * The number leads. With the name first, a long device name ("FlyDigi
+   * BS2PRO") filled the whole line and the level it was reporting was the part
+   * that got cut. Leading with the figure means truncation costs a name, not
+   * the reading.
+   */
+  const text = entry.level + '% · ' + entry.name;
+  const textEl = subEl.firstElementChild;
+  if (textEl && textEl.textContent !== text) textEl.textContent = text;
   subEl.dataset.muted = 'false';
+  subEl.dataset.over = String(subEl.scrollWidth > subEl.clientWidth + 2);
   ensureBatteryRotation();
 }
 
