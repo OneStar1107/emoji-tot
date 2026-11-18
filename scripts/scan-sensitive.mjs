@@ -22,17 +22,29 @@ const SKIP_DIR = /(^|\/)(vendor|node_modules|release|dist)\//;
 const TEXT_EXT = /(\.(m?js|cjs|ts|tsx|jsx|json|md|html|css|ps1|xml|yml|yaml|txt|svg))$/i;
 const IMAGE_EXT = /(\.(png|jpe?g|webp|gif))$/i;
 
-/** A local username is the one string a generic pattern cannot guess. */
+/**
+ * A local username is the one string a generic pattern cannot guess.
+ *
+ * The home path also contains directory names that every Windows machine
+ * shares ("Users", "home", "AppData"); treating those as a username flags
+ * documentation that merely mentions the path. Only the leaf is personal.
+ */
+const COMMON_DIRS = new Set([
+  'users', 'home', 'root', 'appdata', 'local', 'roaming', 'documents',
+  'desktop', 'downloads', 'library', 'program', 'programdata', 'public',
+  'shared', 'onedrive', 'temp', 'tmp',
+]);
+
 function localUserNames() {
   const names = new Set();
   const home = homedir();
-  for (const part of home.split(/[\\/]/)) {
-    if (part && !/^[A-Za-z]:$/.test(part)) names.add(part);
-  }
+  const parts = home.split(/[\\/]/).filter((part) => part && !/^[A-Za-z]:$/.test(part));
+  const leaf = parts[parts.length - 1];
+  if (leaf) names.add(leaf);
   for (const key of ['USERNAME', 'USER']) {
     if (process.env[key]) names.add(process.env[key]);
   }
-  return [...names].filter((name) => name.length >= 3);
+  return [...names].filter((name) => name.length >= 3 && !COMMON_DIRS.has(name.toLowerCase()));
 }
 
 const users = localUserNames();
@@ -41,7 +53,7 @@ const textRules = [
   { id: 'email', test: (line) => /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(line), allow: /noreply|example\.(com|org)|you@|user@|someone@|@example/i },
   { id: 'phone', test: (line) => /(^|[^\d])1[3-9]\d{9}([^\d]|$)/.test(line), allow: /0{8,}|1234567890/ },
   { id: 'api-key', test: (line) => /(sk-[A-Za-z0-9_-]{16,}|gh[opsur]_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,})/.test(line), allow: /sk-\.\.\.|sk-xxx|placeholder|your[_-]?key/i },
-  { id: 'local-path', test: (line) => /[A-Za-z]:\\Users\\[^\\\s"']+|\/Users\/[^/\s"']+|\/home\/[^/\s"']+/.test(line), allow: /Users\\Public|\\Users\\<|Example/i },
+  { id: 'local-path', test: (line) => /[A-Za-z]:\\Users\\[^\\\s"']+|\/Users\/[^/\s"']+|\/home\/[^/\s"']+/.test(line), allow: /Users\\Public|\\Users\\<|Users\\…|Users\\\.\.\.|Example/i },
   { id: 'onedrive', test: (line) => /OneDrive/i.test(line), allow: null },
 ];
 
