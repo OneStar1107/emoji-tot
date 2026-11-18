@@ -292,10 +292,10 @@ button.ghost { background: transparent; }
 
 /* ---------- wall ---------- */
 
-.filters { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.wall-filters { display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap; }
 .count { font-size: 12px; color: var(--muted); }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.wall-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
 
 .card {
   display: flex;
@@ -424,12 +424,12 @@ footer a { color: inherit; }
 /* --- the two walls --- */
 .wall-view { display: flex; flex-direction: column; gap: 14px; }
 .wall-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.tabs { display: inline-flex; gap: 6px; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; }
-.tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; color: var(--muted); }
-.tabs button b { font-weight: 600; color: inherit; opacity: .7; margin-left: 4px; }
-.tabs button[aria-pressed="true"] { background: var(--page); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / .1); }
+.wall-tabs { display: inline-flex; gap: 6px; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; align-self: flex-start; }
+.wall-tabs button { border: 0; background: none; padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; color: var(--muted); }
+.wall-tabs button b { font-weight: 600; color: inherit; opacity: .7; margin-left: 4px; }
+.wall-tabs button[aria-pressed="true"] { background: var(--page); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / .1); }
 .count { font-size: 12px; color: var(--muted); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(106px, 1fr)); gap: 10px; }
+.wall-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(106px, 1fr)); gap: 10px; }
 .tile { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px 8px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
 .tile:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgb(0 0 0 / .08); }
 .tile svg { width: 72px; height: 72px; display: block; }

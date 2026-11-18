@@ -210,6 +210,30 @@ try {
 
   await renderRoute('#/gallery');
   const allCasts = await cdp.evaluate("document.querySelectorAll('#wallGrid .tile').length");
+  const wallLayout = JSON.parse(await cdp.evaluate(`
+    JSON.stringify((() => {
+      const grid = document.getElementById('wallGrid');
+      const tabs = document.querySelector('.wall-tabs');
+      const filters = document.getElementById('wallFilters');
+      const tiles = [...grid.querySelectorAll('.tile')];
+      const first = tiles[0].getBoundingClientRect();
+      const second = tiles[1].getBoundingClientRect();
+      return {
+        display: getComputedStyle(grid).display,
+        sameRow: Math.abs(first.top - second.top) < 2 && second.left > first.right,
+        tabsDisplay: getComputedStyle(tabs).display,
+        filtersDisplay: getComputedStyle(filters).display,
+      };
+    })())
+  `));
+  ok(
+    'cast wall uses a multi-column grid and styled tabs',
+    wallLayout.display === 'grid' &&
+      wallLayout.sameRow &&
+      ['inline-flex', 'flex'].includes(wallLayout.tabsDisplay) &&
+      wallLayout.filtersDisplay === 'flex',
+    JSON.stringify(wallLayout),
+  );
   const filtered = await cdp.evaluate(`
     (() => {
       const first = document.querySelector('#wallFilters [data-family]:not([data-family="all"])');
