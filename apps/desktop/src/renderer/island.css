@@ -373,9 +373,14 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
  * letting the panel grow to fit each one moved the paging arrows on every
  * switch — you end up aiming at wherever they were, not where they are.
  */
-.pages { padding: 12px 2px 0; height: 300px; overflow-y: auto; overflow-x: hidden; }
-.pages::-webkit-scrollbar { width: 3px; }
-.pages::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 2px; }
+/*
+ * 217px, not 300px. The panel is meant to end right under the media controls;
+ * 300 left a band of empty space that made the island feel bottom-heavy.
+ * Scrolling still happens — it is just not drawn: a 3px thumb inside a 420px
+ * panel reads as a stray bar, and every page already fits or fades its edges.
+ */
+.pages { padding: 12px 2px 0; height: 217px; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.pages::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 /* Paging arrows on the panel's own left and right edges: the whole surface is
    a swipe target, the arrows are the visible affordance. */
@@ -732,7 +737,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .todo-clear { border: 0; background: transparent; color: var(--dim); font-size: 10.5px; cursor: pointer; }
 
 /* shelf */
-.shelf { display: flex; flex-direction: column; gap: 8px; }
+.shelf { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
 .shelf-hint {
   padding: 10px; border: 1px dashed var(--surface-3); border-radius: 9px;
   font-size: 11px; color: var(--faint); text-align: center;
@@ -865,6 +870,16 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   margin-top: 10px;
   border-top: 1px solid var(--line);
   padding-top: 10px;
+  /*
+   * The clipboard history is the growing half of this page: it takes whatever
+   * room the drag hint and the file list leave over and scrolls inside itself.
+   * A fixed height here is what pushed the last rows outside the panel once the
+   * panel got shorter.
+   */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .clip-head {
@@ -880,7 +895,12 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.clip-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .clip-item {
   display: flex;
@@ -917,7 +937,27 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 
 .clip-pin.on { color: var(--warn); }
 
-.shelf-list { display: flex; flex-direction: column; gap: 1px; max-height: 216px; overflow-y: auto; }
+/*
+ * Fills whatever height the panel has instead of a fixed 216px: the clipboard
+ * list is the only growing part of this page, so it takes the remaining space
+ * and scrolls inside itself while the drag hint stays put above it.
+ */
+.shelf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /*
+   * Grows with its contents, not with the panel: an empty file list must not
+   * eat the space the clipboard history needs, and a long one already scrolls.
+   * flex: 1 made the two halves split evenly whether or not it had files.
+   */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.shelf-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .shelf-item { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 7px; }
 .shelf-item:hover { background: rgba(255, 255, 255, 0.04); }
 .shelf-open {
