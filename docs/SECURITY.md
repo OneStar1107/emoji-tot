@@ -12,13 +12,11 @@ pnpm audit --registry=https://registry.npmjs.org
 
 | | 升级前 | 升级后 |
 | --- | --- | --- |
-| 漏洞总数 | 70 | **1** |
+| 漏洞总数 | 70 | **0** |
 | critical | 3 | **0** |
 | high | 25 | **0** |
-| moderate | 33 | 1 |
+| moderate | 33 | **0** |
 | low | 9 | 0 |
-
-唯一剩下的 moderate 是 minimatch（GHSA-g3hv-75wg-m249），路径为 apps/desktop → electron-builder → app-builder-lib → minimatch。它只在**打包时**参与文件匹配，不进安装包、不在运行时加载，因此不属于「高危运行时依赖告警」。
 
 ### 版本变化
 
@@ -96,7 +94,6 @@ style-src 保留 unsafe-inline 是因为 Vite 在开发模式下注入内联样�
 
 ## 9. 仍未做 / 需要注意
 
-- **Electron 33 → 45 跨 12 个大版本，本次只验证了构建与单测，没有在真窗口里点过一遍。** 升级前后窗口行为（贴边、穿透、灵动岛展开、托盘）需要人工冒烟。建议按 README 的「验证」表逐条过。
-- 桌面端三个 html 还没有 CSP（本次只按要求给 Gallery 加了）。补的话要先确认页面没有内联 script。
+- **Electron 33 → 45 跨 12 个大版本。** 本次除构建与单测外，`window-smoke.mjs` 已实际启动开发版和解包版，验证沙箱、preload、窗口尺寸与置物架布局（6/6）。托盘、全局快捷键和特殊多显示器拓扑仍建议按 README 的「验证」表人工过一遍。
+- 桌面端三个 HTML 已有 CSP；`style-src` 仍保留 `unsafe-inline`，因为页面有动态样式。
 - 主进程绕过系统代理直连是刻意行为（见 PRIVACY.md），如果将来要支持企业代理，这里需要重新设计。
-- 剩下的 minimatch moderate 只能等 electron-builder 上游更新；它不在运行时链路上。

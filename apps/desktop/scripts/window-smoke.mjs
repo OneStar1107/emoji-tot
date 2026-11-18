@@ -5,22 +5,67 @@
  * answers Runtime.evaluate, which is what made the first attempt hang.
  */
 import { spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-const ELECTRON = 'node_modules/electron/dist/electron.exe';
+const require = createRequire(import.meta.url);
+const PACKAGED_EXE = process.env.EMOJITOT_APP_EXE ? resolve(process.env.EMOJITOT_APP_EXE) : '';
+const ELECTRON = PACKAGED_EXE || require('electron');
+const DESKTOP_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = 9555;
 const cleanEnv = { ...process.env };
 delete cleanEnv.ELECTRON_RUN_AS_NODE;
 delete cleanEnv.ELECTRON_NO_ATTACH_CONSOLE;
 
-const app = spawn(ELECTRON, ['.', '--remote-debugging-port=' + PORT], { cwd: process.cwd(), stdio: 'ignore', env: cleanEnv });
-
 const out = [];
 const ok = (n, p, d = '') => { out.push(p); console.log((p ? '  PASS  ' : '  FAIL  ') + n + (d ? '  — ' + d : '')); };
+
+if (!existsSync(ELECTRON)) {
+  console.error('Electron binary is missing. Run `pnpm rebuild electron` before the desktop smoke test.');
+  process.exit(1);
+}
+const SMOKE_USER_DATA = mkdtempSync(join(tmpdir(), 'emojitot-window-smoke-'));
+
+// Chromium switches must precede the application path. Electron forwards
+// everything after the path to the app, so the old order never opened a
+// remote-debugging endpoint.
+const app = spawn(ELECTRON, [
+  '--remote-debugging-port=' + PORT,
+  '--user-data-dir=' + SMOKE_USER_DATA,
+  ...(PACKAGED_EXE ? [] : [DESKTOP_ROOT]),
+], {
+  cwd: PACKAGED_EXE ? dirname(PACKAGED_EXE) : DESKTOP_ROOT,
+  stdio: ['ignore', 'pipe', 'pipe'],
+  env: cleanEnv,
+});
+let appOutput = '';
+let appExit = null;
+for (const stream of [app.stdout, app.stderr]) {
+  stream.on('data', (chunk) => {
+    appOutput = (appOutput + chunk.toString()).slice(-8000);
+  });
+}
+app.on('error', (error) => {
+  console.error('[window-smoke] Electron failed to start:', error);
+});
+app.on('exit', (code, signal) => {
+  appExit = { code, signal };
+});
 
 async function waitFor(url, tries = 60) {
   for (let i = 0; i < tries; i += 1) {
     try { const r = await fetch(url); if (r.ok) return await r.json(); } catch {}
+    if (appExit) {
+      throw new Error(
+        'Electron exited before exposing the endpoint (' +
+        'code=' + appExit.code + ', signal=' + appExit.signal + ')' +
+        (appOutput ? '\n' + appOutput : ''),
+      );
+    }
     await sleep(300);
   }
   return null;
@@ -82,7 +127,7 @@ try {
     return r.result.value;
   };
 
-  const sandbox = await evaluate("JSON.stringify({ process: typeof process, require: typeof require, api: typeof window.api, outer: window.outerWidth + 'x' + window.outerHeight })");
+  const sandbox = await evaluate("JSON.stringify({ process: typeof process, require: typeof require, api: typeof window.islandAPI, outer: window.outerWidth + 'x' + window.outerHeight })");
   const parsed = JSON.parse(sandbox);
   ok('renderer has no Node globals (sandbox on)', parsed.process === 'undefined' && parsed.require === 'undefined', sandbox);
   ok('preload bridge present', parsed.api === 'object');
@@ -91,8 +136,19 @@ try {
   // Open the shelf page and measure the clipboard block.
   const metrics = await evaluate(`
     (async () => {
-      const nav = document.querySelector('[data-page="shelf"]') || [...document.querySelectorAll('button')].find((b) => (b.textContent || '').includes('置物'));
-      if (nav) nav.click();
+      document.getElementById('pill')?.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+      }));
+      await new Promise((r) => setTimeout(r, 350));
+      const title = document.getElementById('page-name');
+      for (let i = 0; i < 12 && title?.textContent !== '置物架'; i += 1) {
+        document.querySelector('[data-page-nav="1"]')?.dispatchEvent(new PointerEvent('pointerdown', {
+          bubbles: true,
+          button: 0,
+        }));
+        await new Promise((r) => setTimeout(r, 80));
+      }
       await new Promise((r) => setTimeout(r, 500));
       const box = (sel) => { const el = document.querySelector(sel); return el ? Math.round(el.getBoundingClientRect().height) : -1; };
       return JSON.stringify({ pages: box('.pages'), hint: box('.shelf-hint'), files: box('.shelf-list'), clip: box('.clip'), list: box('.clip-list'), head: box('.clip-head') });
@@ -104,8 +160,15 @@ try {
   browser.close();
 } catch (error) {
   ok('attach run', false, String(error && error.message));
+  if (appOutput) console.error('\n[window-smoke] Electron output:\n' + appOutput);
 } finally {
   try { app.kill(); } catch {}
+  try {
+    rmSync(SMOKE_USER_DATA, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  } catch {
+    // Electron may still be releasing its profile on Windows; the OS temp
+    // directory can clean this up later without affecting the test result.
+  }
 }
 
 const failed = out.filter((p) => !p).length;

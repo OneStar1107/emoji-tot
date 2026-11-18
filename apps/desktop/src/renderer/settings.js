@@ -474,7 +474,7 @@ function pageAbout() {
   return head('关于', 'EmojiTot') +
     group('版本', card([
       platformRow,
-      row('当前版本', '双形态、十一个功能页、设置十四个分区', '<span class="badge">v' + escapeHtml(version) + '</span>'),
+      row('当前版本', '双形态、十个功能页、设置十四个分区', '<span class="badge">v' + escapeHtml(version) + '</span>'),
       row('数据目录', 'prefs.json、state.json 与缓存', '<button type="button" class="btn" data-act="button" data-key="open-data">打开</button>'),
       row('状态文件', '当前表情与状态，可给别的工具读', '<button type="button" class="btn" data-act="button" data-key="open-state">打开</button>'),
       row('项目主页', 'MIT 许可，代码与美术全部自研', '<button type="button" class="btn" data-act="button" data-key="open-repo">GitHub</button>'),

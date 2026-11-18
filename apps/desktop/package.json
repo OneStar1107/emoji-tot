@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.3.32",
   "description": "EmojiTot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
+  "author": "OneStar1107",
   "main": "src/main.js",
   "type": "commonjs",
   "scripts": {
@@ -12,6 +13,7 @@
     "dev": "electron . --dev",
     "prepack": "node scripts/copy-vendor.mjs",
     "pack": "electron-builder --dir",
+    "predist": "node scripts/copy-vendor.mjs",
     "dist": "electron-builder",
     "test": "node --test"
   },
@@ -32,6 +34,17 @@
     ],
     "directories": {
       "output": "../../release"
+    },
+    "electronDownload": {
+      "checksums": {
+        "electron-v45.3.4-win32-x64.zip": "b177908b5c48dad990612d7861fc8f03f8c06be0ca3351383a83cc11dd8e9144"
+      }
+    },
+    "nsis": {
+      "artifactName": "EmojiTot.Setup.${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "EmojiTot.${version}.${ext}"
     },
     "win": {
       "target": [

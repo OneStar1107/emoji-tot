@@ -12,7 +12,7 @@ tot 的第二种形态：贴在屏幕顶部中间的一条胶囊。收起时只�
 | 展开面板 | 420 | 按页面 300–380 | 顶栏（脸/标题/电量/时间/齿轮）+ 页面区 + 分页点 |
 | 展开 + 通知 | 420 | 按内容最多 460 | 临时插页，3.5s 后回到原页 |
 
-窗口 = 内容尺寸 + 留白（左右 14px、上下 10px，给阴影和悬停放大），主进程按渲染层上报的 box 逐帧 setBounds。
+窗口 = 内容尺寸 + 留白（左右 32px、上下 36px，给阴影和悬停放大），主进程按渲染层上报的 box 逐帧 setBounds。
 
 ## 2. 位置
 
@@ -48,17 +48,16 @@ tot 的第二种形态：贴在屏幕顶部中间的一条胶囊。收起时只�
 | `health` | 健康 | 已实现 | 喝水 / 久坐计时 + 通知 |
 | `shelf` | 置物架 | 已实现 | 复制式收纳，路径或字节都能收 |
 | `calendar` | 日程 | 已实现 | 本地 JSON + ICS 解析 |
-| `battery` | 电量 | 已实现 | PowerShell `Win32_Battery` |
+| `devices` | 设备 | 已实现 | PowerShell PnP，电量与连接状态 |
 
-状态组件（常驻 pill，不占页）：电量、时间、温度、余额、音量、日程下一项。顺序可拖。
+状态组件（常驻 pill，不占页）：电量、时间、温度、余额。顺序可拖，可单独开关。
 
 ## 5. 通信
 
 ```
 renderer(island) --island:box {w,h}--> main  → setBounds 居中
 renderer --island:hover bool--------> main  → setIgnoreMouseEvents 兜底
-main --island:page {key,data}-------> renderer
-main --island:expand bool-----------> renderer
+main --island:* data---------------> renderer
 ```
 
 尺寸同步用 `ResizeObserver` + `requestAnimationFrame` 节流，每帧最多上报一次；key 相同则不发。

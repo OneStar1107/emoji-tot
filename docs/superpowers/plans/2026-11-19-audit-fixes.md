@@ -327,27 +327,27 @@ git commit -m "fix: harden IPC sizing and local writes"
 - Consumes: existing root scripts and test harnesses.
 - Produces: one verification command for gallery/browser/audit/smoke; accurate docs and artifact links.
 
-- [ ] **Step 1: Write failing validation checks**
+- [x] **Step 1: Write failing validation checks**
 
 Extend browser/CI checks for artifact names, stale counts, and missing `og.png`; make window-smoke fail with a clear diagnostic.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm docs:check && pnpm settings:check && pnpm --filter @emojitot/gallery build`
 
 Expected: checks fail on stale prose/links or smoke harness.
 
-- [ ] **Step 3: Implement delivery fixes**
+- [x] **Step 3: Implement delivery fixes**
 
 Add `check`/`ci` scripts, build Gallery in CI, wire smoke gracefully, update docs, and add a real `og.png` or remove the declaration.
 
-- [ ] **Step 4: Run final verification**
+- [x] **Step 4: Run final verification**
 
 Run: `pnpm test && pnpm typecheck && pnpm build && pnpm docs:check && pnpm settings:check && pnpm preview && pnpm --filter @emojitot/gallery build && node apps/gallery/scripts/browser-check.mjs && pnpm audit --registry=https://registry.npmjs.org && pnpm scan`
 
 Expected: all pass, with the documented screenshot WARN count only.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add package.json apps/desktop/package.json .github/workflows/ci.yml apps/desktop/scripts/window-smoke.mjs README.md README.en.md docs apps/gallery

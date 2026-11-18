@@ -32,15 +32,14 @@
   "skin": "frost",
   "blur": true,
   "displayId": null,
-  "anchor": "top",
   "islandWidth": 420,
   "avoidTopBar": true,
   "timeFormat": "24h",
-  "statusItems": ["battery", "clock", "weather", "quota", "volume"],
+  "statusItems": ["battery", "clock", "weather"],
   "pages": { "music": true, "weather": true, "quota": true, "mail": true },
   "pageOrder": ["music", "weather", "quota", "mail"],
   "weather": { "city": "香港", "unit": "c" },
-  "mail": [],
+  "mailProvider": "163",
   "quota": { "provider": "deepseek", "intervalMin": 15 }
 }
 ```

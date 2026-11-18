@@ -17,13 +17,17 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "preview": "pnpm build && node apps/gallery/scripts/preview.mjs",
-    "dist": "pnpm --filter @emojitot/desktop dist",
+    "dist": "pnpm build && pnpm --filter @emojitot/desktop dist",
+    "check:gallery": "pnpm --filter @emojitot/gallery build && node apps/gallery/scripts/browser-check.mjs",
+    "smoke:desktop": "pnpm --filter @emojitot/desktop copy:vendor && node apps/desktop/scripts/window-smoke.mjs",
+    "audit:ci": "pnpm audit --registry=https://registry.npmjs.org --audit-level=moderate",
     "scan": "node scripts/scan-sensitive.mjs",
     "facts": "pnpm build && node scripts/facts.mjs",
     "docs:sync": "pnpm build && node scripts/sync-docs.mjs",
-    "docs:check": "pnpm build && node scripts/sync-docs.mjs --check",
+    "docs:check": "pnpm build && node scripts/sync-docs.mjs --check && node scripts/docs-consistency.mjs",
     "settings:audit": "node scripts/settings-audit.mjs",
-    "settings:check": "node scripts/settings-audit.mjs --check"
+    "settings:check": "node scripts/settings-audit.mjs --check",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm docs:check && pnpm settings:check && pnpm preview && pnpm check:gallery && pnpm smoke:desktop && pnpm audit:ci && pnpm scan"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0"

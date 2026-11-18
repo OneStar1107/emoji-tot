@@ -22,8 +22,8 @@
 <!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot Setup 0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot-Setup-0.3.32.exe) | Installer — starts from the Start menu |
-| [EmojiTot Portable 0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot-Portable-0.3.32.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.Setup.0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.Setup.0.3.32.exe) | Installer — starts from the Start menu |
+| [EmojiTot.0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.0.3.32.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases)
@@ -39,7 +39,7 @@ The desktop app has two forms, switchable from the tray or the settings window w
 | **Island** (default) | top centre of the screen | a pill showing the face, battery, time and temperature; click and it expands into a 420px card |
 | **Ball** | anywhere, docks to an edge | the original ball that hops, sulks and gets dragged around |
 
-Both can be on at once. The form is one field in `prefs.json`; both windows are created up front and the switch only toggles visibility, so nothing reloads and the island keeps the page it was on.
+Both can be on at once. The form is one field in `prefs.json`; the ball is created at startup, while the island is created on first display. Switching only changes visibility, so the island keeps the page it was on.
 
 The island sizes itself from its content: the page measures its own box with `ResizeObserver` and the main process calls `setBounds`, centred. The settings window has <!--facts:settingsPages-->14<!--/facts--> pages — general, appearance, size and position, hiding and interaction, cast and expressions, page manager, music and lyrics, focus and water, todos and shelf, notifications / mail / calendar, AI quota, weather, plugins, about — and every control writes straight to prefs with no save button.
 
@@ -122,6 +122,8 @@ pnpm preview     # renders all <!--facts:protocolIds-->51<!--/facts--> protocol 
 pnpm dev         # site at http://localhost:5173
 pnpm desktop     # the desktop pet
 pnpm scan        # sensitive-information scan, run before publishing
+pnpm smoke:desktop  # launch a real Electron window and check the sandbox and layout
+pnpm check          # full delivery verification on Windows
 ```
 
 Package the app:
@@ -144,10 +146,12 @@ Not "it should run" — it was run:
 
 | Check | Evidence |
 | --- | --- |
-| Protocol table | 23 tests covering id validity, state mapping, event flags and segment bounds |
+| Protocol table | 33 protocol tests, 18 engine tests and 119 desktop tests covering ids, state mapping, event flags and segment bounds |
 | <!--facts:protocolIds-->51<!--/facts--> protocol ids render | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> ids → <!--facts:faceStates-->44<!--/facts--> faces, 51/51 and 44/44 pass, 0 failures, in Node with no browser |
 | Desktop window behaviour | `node apps/desktop/scripts/ui-check.mjs <port>` — drives the real cursor, 7/7 (dock, open, tuck, click-through) |
+| Desktop window smoke | `pnpm smoke:desktop` — launches the development or packaged app with a temporary profile, 6/6 (sandbox, preload, window size, shelf layout) |
 | Desktop protocol | write `34` → `alerting`, `33` → `celebrate`, malformed JSON → keeps the current face |
+| Windows artifacts | `EmojiTot.Setup.0.3.32.exe` (about 116 MiB) and `EmojiTot.0.3.32.exe` (about 106 MiB); the unpacked build passes the same 6/6 smoke |
 
 ## Deliberate trade-offs
 

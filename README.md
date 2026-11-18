@@ -22,15 +22,15 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot Setup 0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.Setup.0.3.32.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot Portable 0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.0.3.32.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.Setup.0.3.32.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.0.3.32.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
 Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases)
 
 > 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护。如果它指向的版本还没打标签，链接会 404 —— 那种情况下从上面「全部版本」里取当前已发布的那一版。
 
-> **<!--facts:version-->0.3.32<!--/facts-->**：双形态（灵动岛 + 桌面球）、十一个功能页、设置中心 <!--facts:settingsPages-->14<!--/facts--> 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
+> **<!--facts:version-->0.3.32<!--/facts-->**：双形态（灵动岛 + 桌面球）、十个功能页、设置中心 <!--facts:settingsPages-->14<!--/facts--> 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
 
 ## 这是什么
 
@@ -91,7 +91,7 @@ feed('thinking');              // 也可以直接给状态名
 | **灵动岛**（默认） | 屏幕顶部居中 | 一条胶囊：脸、电量、时间、温度；点一下展开成功能面板 |
 | **桌面球** | 任意位置，可贴边 | 原来那个会跳、会生气、会被拖来拖去的球 |
 
-设置里可以勾「同时显示」，岛贴顶、球贴边，互不抢位置。形态只是 `prefs.json` 里的一个字段，两个窗口都提前创建，切换只改可见性 —— 所以切过去不会重载页面、也不会丢掉岛当前停在哪一页。
+设置里可以勾「同时显示」，岛贴顶、球贴边，互不抢位置。形态只是 `prefs.json` 里的一个字段；球窗口在启动时创建，岛窗口在首次显示时创建，切换只改可见性 —— 所以切过去不会重载页面、也不会丢掉岛当前停在哪一页。
 
 ## 桌面宠物
 
@@ -172,6 +172,8 @@ pnpm preview                # 把 51 个协议 id 渲染成 out/preview.html（�
 pnpm dev                    # 站点 http://localhost:5173
 pnpm desktop                # 桌面端（默认灵动岛）
 pnpm scan                   # 发布前敏感信息扫描
+pnpm smoke:desktop          # 启动真实 Electron 窗口做烟测
+pnpm check                  # Windows 本机的完整交付验收
 ```
 
 上面每一条都从仓库根目录执行，不需要先 `cd` 进任何子目录。
@@ -221,13 +223,13 @@ docs/                架构、协议、岛规格、设置规格、调研结论
 
 | 检查 | 证据 |
 | --- | --- |
-| 协议表 | 23 个测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
+| 协议表 | 33 个协议测试、18 个引擎测试、119 个桌面测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
 | <!--facts:protocolIds-->51<!--/facts--> 个协议 id 渲染 | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> 个 id → <!--facts:faceStates-->44<!--/facts--> 个脸部状态，51/51 与 44/44 全通过，0 failures（Node 里跑，无浏览器） |
-| 桌面端窗口行为 | `node apps/desktop/scripts/ui-check.mjs <端口>` — 用原生光标驱动真实拖拽，7/7（贴边、展开、收起、穿透） |
+| 桌面端窗口行为 | `pnpm smoke:desktop` — 独立用户目录启动开发版或打包版，6/6（沙箱、preload、窗口尺寸、置物架布局）；原生拖拽检查可用 `ui-check.mjs` |
 | 桌面端协议驱动 | 写 `34` → `alerting`，写 `33` → `celebrate`，写坏 JSON → 保持当前表情 |
 | 灵动岛窗口 | 截图 + CDP 实测：收起 84×34、展开 420×272；窗口在 1707 宽的工作区里 x=628（居中）、y=0（贴顶） |
 | 灵动岛数据 | 收起态显示 `97% 21:10 19°`；天气缓存写入 `cache-weather.json`（香港 19°，7 天） |
-| 设置中心 | 13 个导航项、常规页 9 行、页面管理 14 个可拖拽项；开关改动即写 `prefs.json` |
+| 设置中心 | 14 个导航项、常规页 9 行、页面管理 14 个可拖拽项；开关改动即写 `prefs.json` |
 | 音乐 | SMTC 实读系统播放（B 站视频：封面 40KB base64、32:35/36:26 进度、暂停键生效） |
 | 专注 / 待办 / 健康 / 置物架 | 25:00 倒计时跨重启保持；待办添加「买牛奶」；喝水/久坐双计时；拖入 `note.txt` 显示 2 B |
 | 额度 | 添加测试账号 → 列表出现「当前账号」→ 删除后回空态；假 key 查询失败不崩 |
@@ -244,7 +246,7 @@ docs/                架构、协议、岛规格、设置规格、调研结论
 | 待办重复 | 加「每周复盘」→ 显示每周与下次日期；勾完成后变为「下次 12/2」 |
 | 设备 | 实测 6 台：键盘 100%、手柄 94%、Xbox 手柄 89%、手机 100%，无电量的显示「—」 |
 | 日历订阅 | 本地 ICS 服务 2 条事件 → 订阅后返回两条，岛上月历出现 2 个事件点，删除后归零 |
-| 打包 | `EmojiTot Setup 0.3.0.exe` 82 MB、便携版 82 MB；打包版启动后窗口出现（pid 33152） |
+| 打包 | `release/EmojiTot.Setup.0.3.32.exe` 约 116 MiB、`release/EmojiTot.0.3.32.exe` 约 106 MiB；解包版启动并通过 6/6 窗口 smoke |
 
 ## 几处有意的取舍
 

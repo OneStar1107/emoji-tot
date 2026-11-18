@@ -9,14 +9,34 @@
  */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+function findChrome() {
+  const candidates = [
+    process.env.CHROME_BIN,
+    'C:/Program Files/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ].filter(Boolean);
+  return candidates.find((candidate) => existsSync(candidate)) ?? '';
+}
+
+const CHROME = findChrome();
+if (!CHROME) {
+  console.log('SKIP browser acceptance: Chrome/Chromium not found; set CHROME_BIN to run it.');
+  process.exit(process.env.CHROME_REQUIRED === '1' ? 1 : 0);
+}
 const PORT = 9333;
 const SITE = 'http://127.0.0.1:4173/emoji-tot/';
+const CHROME_PROFILE = mkdtempSync(join(tmpdir(), 'emoji-tot-chrome-'));
 
 const results = [];
 const ok = (name, pass, detail = '') => {
@@ -124,11 +144,14 @@ const chrome = start(CHROME, [
   '--disable-gpu',
   '--no-first-run',
   '--no-default-browser-check',
-  '--user-data-dir=' + (process.env.TEMP || '/tmp') + '/emoji-tot-chrome',
+  '--user-data-dir=' + CHROME_PROFILE,
   '--remote-debugging-port=' + PORT,
   '--window-size=1280,900',
   'about:blank',
 ]);
+chrome.on('error', (error) => {
+  console.error('[browser-check] Chrome failed to start:', error);
+});
 
 let cdp = null;
 try {
@@ -294,6 +317,12 @@ try {
   cdp?.close();
   chrome.kill();
   preview.close();
+  try {
+    rmSync(CHROME_PROFILE, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  } catch {
+    // Chrome may still be releasing its profile on Windows; the OS temp
+    // directory can clean this up later without affecting the test result.
+  }
 }
 
 const failed = results.filter((item) => !item.pass);
