@@ -15,6 +15,7 @@ docs/shots/
 docs/shots/
 .release-notes.md
 .dsh-meow/
+.superpowers/
 
 # Browser acceptance leaves a Chrome profile behind.
 .chrome-check/
