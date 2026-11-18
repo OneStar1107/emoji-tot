@@ -245,6 +245,7 @@ describe('schema: status item toggles', () => {
 
 describe('settings UI actually reads and writes the schema', () => {
   const settings = src('renderer/settings.js');
+  const settingsCss = src('renderer/settings.css');
   const island = src('renderer/island.js');
 
   it('imports the shared schema instead of keeping a copy', () => {
@@ -268,6 +269,26 @@ describe('settings UI actually reads and writes the schema', () => {
     assert.ok(settings.includes("'displayMode'"), 'settings must write displayMode');
     assert.ok(!settings.includes("'formBoth'"), 'settings must not expose the legacy formBoth switch');
     assert.ok(!settings.includes("rowActionToggle('显示灵动岛'"), 'visibility is owned by displayMode');
+  });
+
+  it('offers an accessible search across page content', () => {
+    assert.ok(settings.includes('aria-label="搜索设置"'), 'search input needs an accessible name');
+    assert.ok(settings.includes('pageSearchText'), 'search must index rendered setting labels');
+    assert.ok(settings.includes('searchTextCache'), 'the page search index must be memoized');
+  });
+
+  it('offers keyboard-operable order controls beside drag and drop', () => {
+    assert.ok(settings.includes('data-order-move'), 'order rows need move buttons');
+    assert.ok(settings.includes("event.key === 'ArrowUp'"), 'orders need an Up key path');
+    assert.ok(settings.includes("event.key === 'ArrowDown'"), 'orders need a Down key path');
+  });
+
+  it('keeps small secondary text at a readable dark-theme opacity', () => {
+    assert.match(
+      settingsCss,
+      /--faint:\s*rgba\(241,\s*241,\s*244,\s*0\.5\)/,
+      'dark faint text must be at least 50% ink opacity',
+    );
   });
 
   it('draws every status item that the manifest offers', () => {

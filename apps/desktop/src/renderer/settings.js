@@ -238,12 +238,19 @@ function pageBehavior() {
 }
 
 function orderList(listId, items, enabledOf, toggleAction = 'toggle-nested') {
-  return '<div class="order" data-order-list="' + listId + '">' + items.map((item) =>
-    '<div class="order-item" draggable="true" data-order="' + item.key + '">' +
+  return '<div class="order" role="list" data-order-list="' + listId + '">' + items.map((item, index) =>
+    '<div class="order-item" role="listitem" tabindex="0" draggable="true" data-order="' + item.key +
+      '" aria-label="' + escapeHtml(item.label) + '">' +
       '<span class="order-grip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>' +
       '<span class="order-name">' + escapeHtml(item.label) +
         '' +
         (item.sub ? '<em>' + escapeHtml(item.sub) + '</em>' : '') +
+      '</span>' +
+      '<span class="order-move">' +
+        '<button type="button" data-order-move="-1" aria-label="上移 ' + escapeHtml(item.label) + '"' +
+          (index === 0 ? ' disabled' : '') + '><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5"/></svg></button>' +
+        '<button type="button" data-order-move="1" aria-label="下移 ' + escapeHtml(item.label) + '"' +
+          (index === items.length - 1 ? ' disabled' : '') + '><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>' +
       '</span>' +
       (enabledOf ? '<button type="button" class="switch" role="switch" aria-checked="' + Boolean(enabledOf(item.key)) +
         '" data-act="' + toggleAction + '" data-key="' +
@@ -543,18 +550,40 @@ const RENDERERS = {
 
 /* ------------------------------------------------------------------- paint */
 
+let railQuery = '';
+const searchTextCache = new Map();
+
+function pageSearchText(key) {
+  if (searchTextCache.has(key)) return searchTextCache.get(key);
+  const renderer = RENDERERS[key] ?? RENDERERS.general;
+  const host = document.createElement('div');
+  host.innerHTML = renderer();
+  const text = (host.textContent ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  searchTextCache.set(key, text);
+  return text;
+}
+
 function paintRail() {
+  const term = railQuery.trim().toLowerCase();
   let html = '<div class="rail-search">' +
     '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>' +
-    '<input id="rail-filter" placeholder="搜索" spellcheck="false" /></div>';
+    '<input id="rail-filter" type="search" aria-label="搜索设置" placeholder="搜索设置" ' +
+      'value="' + escapeHtml(railQuery) + '" spellcheck="false" /></div>';
+  let shown = 0;
   for (const group of NAV) {
-    for (const item of group.items) {
+    const items = group.items.filter((item) => {
+      if (!term) return true;
+      return item.label.toLowerCase().includes(term) || pageSearchText(item.key).includes(term);
+    });
+    for (const item of items) {
+      shown += 1;
       html += '<button type="button" class="rail-item" data-nav="' + item.key + '" aria-current="' +
         (page === item.key) + '">' + '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[item.icon] + '</svg>' +
         '<span>' + escapeHtml(item.label) + '</span></button>';
     }
-    html += '<div class="rail-sep"></div>';
+    if (items.length) html += '<div class="rail-sep"></div>';
   }
+  if (!shown) html += '<div class="rail-empty">没有匹配的设置</div>';
   rail.innerHTML = html;
 }
 
@@ -600,11 +629,13 @@ async function load() {
   quotaState = (await api.quota?.()) ?? quotaState;
   mailState = (await api.mail?.()) ?? mailState;
   calendarState = (await api.calendar?.()) ?? calendarState;
+  searchTextCache.clear();
   paint();
 }
 
 async function patch(update) {
   prefs = merge(await api.patch(update));
+  searchTextCache.clear();
   paint();
   // Rail focus is lost on repaint; keep the current page selected without
   // stealing focus back from a text input the user is still typing in.
@@ -627,9 +658,39 @@ function valueOf(path) {
   return path.split('.').reduce((acc, key) => (acc == null ? acc : acc[key]), prefs);
 }
 
+function orderKeys(list) {
+  return [...list.querySelectorAll('.order-item')].map((item) => item.dataset.order);
+}
+
+async function saveOrder(list) {
+  const keys = orderKeys(list);
+  if (list.dataset.orderList === 'pages') await patch({ pageOrder: keys });
+  else await patch({ statusItems: keys.filter((key) => prefs.statusItems.includes(key)) });
+}
+
+async function moveOrder(item, delta) {
+  const list = item.closest('[data-order-list]');
+  if (!list) return;
+  const items = [...list.querySelectorAll('.order-item')];
+  const index = items.indexOf(item);
+  const next = index + delta;
+  if (index < 0 || next < 0 || next >= items.length) return;
+  const orderKey = item.dataset.order;
+  if (delta < 0) list.insertBefore(item, items[next]);
+  else list.insertBefore(items[next], item);
+  await saveOrder(list);
+  content.querySelector('[data-order="' + orderKey + '"] [data-order-move="' + delta + '"]')?.focus();
+}
+
 /* --------------------------------------------------------------- controls */
 
 content.addEventListener('click', async (event) => {
+  const move = event.target.closest('[data-order-move]');
+  if (move) {
+    const item = move.closest('.order-item');
+    if (item) await moveOrder(item, Number(move.dataset.orderMove));
+    return;
+  }
   const target = event.target.closest('[data-act]');
   if (!target) return;
   const act = target.dataset.act;
@@ -831,6 +892,14 @@ content.addEventListener('input', (event) => {
 /* -------------------------------------------------------------- drag order */
 
 let dragging = null;
+content.addEventListener('keydown', async (event) => {
+  const item = event.target.closest('.order-item');
+  if (!item) return;
+  const delta = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+  if (!delta) return;
+  event.preventDefault();
+  await moveOrder(item, delta);
+});
 content.addEventListener('dragstart', (event) => {
   const item = event.target.closest('.order-item');
   if (!item) return;
@@ -853,9 +922,7 @@ content.addEventListener('dragend', async () => {
   dragging.dataset.dragging = 'false';
   dragging = null;
   if (!list) return;
-  const keys = [...list.querySelectorAll('.order-item')].map((el) => el.dataset.order);
-  if (list.dataset.orderList === 'pages') await patch({ pageOrder: keys });
-  else await patch({ statusItems: keys.filter((key) => prefs.statusItems.includes(key)) });
+  await saveOrder(list);
 });
 
 /* ------------------------------------------------------------------ shell */
@@ -869,11 +936,11 @@ rail.addEventListener('click', (event) => {
 
 rail.addEventListener('input', (event) => {
   if (event.target.id !== 'rail-filter') return;
-  const term = event.target.value.trim().toLowerCase();
-  for (const item of rail.querySelectorAll('[data-nav]')) {
-    const label = item.querySelector('span')?.textContent?.toLowerCase() ?? '';
-    item.hidden = Boolean(term) && !label.includes(term);
-  }
+  railQuery = event.target.value;
+  paintRail();
+  const input = rail.querySelector('#rail-filter');
+  input?.focus();
+  input?.setSelectionRange(input.value.length, input.value.length);
 });
 
 document.getElementById('btn-min').addEventListener('click', () => api.minimize());
