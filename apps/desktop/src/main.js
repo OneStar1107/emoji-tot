@@ -1006,13 +1006,24 @@ function startServices() {
     return mail.snapshot();
   });
 
-  ipcMain.handle('calendar:get', () => ({ events: calendar.list(), upcoming: calendar.upcoming() }));
+  ipcMain.handle('calendar:get', () => ({
+    events: calendar.list(),
+    upcoming: calendar.upcoming(),
+    subscriptions: calendar.subscriptionList(),
+  }));
   ipcMain.handle('calendar:do', async (_event, payload) => {
     const { action, data } = payload ?? {};
     if (action === 'add') calendar.add(data);
     else if (action === 'remove') calendar.remove(data?.id);
     else if (action === 'import') calendar.importIcs(data?.ics);
-    return { events: calendar.list(), upcoming: calendar.upcoming() };
+    else if (action === 'subscribe') await calendar.addSubscription(data?.name, data?.url);
+    else if (action === 'unsubscribe') calendar.removeSubscription(data?.id);
+    else if (action === 'refresh-subscriptions') await calendar.refreshSubscriptions(true);
+    return {
+      events: calendar.list(),
+      upcoming: calendar.upcoming(),
+      subscriptions: calendar.subscriptionList(),
+    };
   });
 
   ipcMain.handle('quota:get', () => quota.snapshot());

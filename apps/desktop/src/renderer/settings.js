@@ -385,6 +385,19 @@ function pageComm() {
         )
       : '';
 
+  const subscriptions = calendarState.subscriptions ?? [];
+  const subscriptionRows = subscriptions.length
+    ? subscriptions
+        .map((sub) =>
+          row(
+            sub.name,
+            sub.error ? '拉取失败：' + sub.error : '已同步 ' + (sub.lastSync ? stamp(sub.lastSync) : '尚未'),
+            '<button type="button" class="btn" data-act="button" data-key="cal-unsubscribe" data-id="' + escapeHtml(sub.id) + '">删除</button>',
+          ),
+        )
+        .join('')
+    : '<div class="row"><span class="row-label"><b>还没有订阅</b><span>添加一个 ICS 链接，日程会自动合并进岛上</span></span></div>';
+
   const events = (calendarState.events ?? []).slice(0, 6);
   const eventRows = events.length
     ? events
@@ -420,6 +433,12 @@ function pageComm() {
       row('', '拉取最近 10 封，凭证用系统加密保存', '<button type="button" class="btn primary" data-act="button" data-key="mail-add">添加并同步</button>'),
     ])) +
     group('日程', '<div class="card">' + eventRows + '</div>') +
+    group('日历订阅', '<div class="card">' + subscriptionRows + '</div>') +
+    group('添加订阅', card([
+      row('名称', '显示在岛上的来源名', '<input class="ctl" data-cal-input="subName" placeholder="飞书 / iCloud" spellcheck="false" />'),
+      row('ICS 链接', '飞书、钉钉、企业微信、Outlook、iCloud 都能导出订阅地址', '<input class="ctl" data-cal-input="subUrl" placeholder="https://…/calendar.ics" spellcheck="false" />'),
+      row('', '只读同步，每 30 分钟拉取一次', '<button type="button" class="btn primary" data-act="button" data-key="cal-subscribe">添加订阅</button>'),
+    ])) +
     group('添加日程', card([
       row('标题', '', '<input class="ctl" data-cal-input="title" placeholder="周会" spellcheck="false" />'),
       row('时间', '', '<input class="ctl" type="datetime-local" data-cal-input="start" />'),
@@ -691,6 +710,18 @@ content.addEventListener('click', async (event) => {
     }
     if (key === 'open-data') { await api.openData?.(); return; }
     if (key === 'open-state') { await api.openState?.(); return; }
+    if (key === 'cal-subscribe') {
+      const name = content.querySelector('[data-cal-input="subName"]')?.value?.trim() ?? '';
+      const url = content.querySelector('[data-cal-input="subUrl"]')?.value?.trim() ?? '';
+      calendarState = await api.calendarDo('subscribe', { name, url });
+      paint();
+      return;
+    }
+    if (key === 'cal-unsubscribe') {
+      calendarState = await api.calendarDo('unsubscribe', { id: target.dataset.id });
+      paint();
+      return;
+    }
     if (key === 'open-repo') { await api.openRepo?.(); return; }
     if (key === 'add-mail') { page = 'comm'; return; }
     if (key === 'add-quota') { page = 'quota'; return; }

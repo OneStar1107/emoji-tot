@@ -7,20 +7,26 @@
  * local, and all-day dates.
  */
 const crypto = require('node:crypto');
+const { execFile } = require('node:child_process');
 const { cachePath, readJson, writeJson, readPrefs } = require('../paths');
 
 let events = [];
+let subscriptions = [];
 let timer = null;
 let reminded = new Set();
 const listeners = new Set();
 
+const FETCH_SCRIPT = require('node:path').join(__dirname, 'calendar-fetch.ps1');
+const REFRESH_MS = 30 * 60 * 1000;
+
 function load() {
   const saved = readJson(cachePath('calendar'), null);
   events = Array.isArray(saved?.events) ? saved.events : [];
+  subscriptions = Array.isArray(saved?.subscriptions) ? saved.subscriptions : [];
 }
 
 function save() {
-  writeJson(cachePath('calendar'), { events });
+  writeJson(cachePath('calendar'), { events, subscriptions });
 }
 
 function emit() {
@@ -125,6 +131,105 @@ function importIcs(text) {
 }
 
 /** The next few events, for the island's short list. */
+/**
+ * One subscription URL, fetched through the child process.
+ *
+ * The URL is passed as an argv entry to PowerShell from execFile, which does
+ * not go through a shell, so a URL with & or spaces is one argument, not two.
+ */
+function fetchSubscription(url) {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', FETCH_SCRIPT, '-Url', String(url)],
+      { windowsHide: true, timeout: 40000, maxBuffer: 8 * 1024 * 1024 },
+      (error, stdout) => {
+        const text = String(stdout ?? '').trim();
+        if (error || !text || text.startsWith('ERROR')) return resolve(null);
+        resolve(text);
+      },
+    );
+  });
+}
+
+/**
+ * Replace one source's events with what the feed says now.
+ *
+ * Removing by source first is what makes a refresh idempotent: a moved meeting
+ * must not appear twice, and a deleted one must disappear.
+ */
+function applySubscription(sub, text) {
+  const parsed = parseIcs(text);
+  const stamp = Date.now();
+  events = events.filter((event) => event.source !== sub.id);
+  for (const event of parsed) {
+    events.push({
+      id: crypto.randomBytes(4).toString('hex'),
+      title: event.title,
+      start: event.start,
+      end: event.end,
+      allDay: Boolean(event.allDay),
+      source: sub.id,
+      importedAt: stamp,
+    });
+  }
+}
+
+async function refreshSubscriptions(force) {
+  const now = Date.now();
+  let changed = false;
+  for (const sub of subscriptions) {
+    if (!force && sub.lastSync && now - sub.lastSync < REFRESH_MS) continue;
+    const text = await fetchSubscription(sub.url);
+    if (!text) {
+      sub.error = '拉取失败';
+      sub.lastSync = now;
+      changed = true;
+      continue;
+    }
+    if (!/BEGIN:VCALENDAR/i.test(text)) {
+      sub.error = '不是日历文件';
+      sub.lastSync = now;
+      changed = true;
+      continue;
+    }
+    applySubscription(sub, text);
+    sub.error = '';
+    sub.lastSync = now;
+    changed = true;
+  }
+  if (changed) {
+    save();
+    emit();
+  }
+  return changed;
+}
+
+async function addSubscription(name, url) {
+  const label = String(name ?? '').trim().slice(0, 60) || '日历订阅';
+  const link = String(url ?? '').trim();
+  if (!/^https?:\/\//i.test(link)) return { ok: false, error: '需要一个 http(s) 链接' };
+  if (subscriptions.some((sub) => sub.url === link)) return { ok: false, error: '这个链接已经添加过' };
+  const sub = { id: crypto.randomBytes(4).toString('hex'), name: label, url: link, lastSync: 0, error: '' };
+  subscriptions.push(sub);
+  save();
+  // Await the first pull so the caller gets the events it just subscribed to,
+  // not an empty list followed by a push a second later.
+  await refreshSubscriptions(true);
+  return { ok: true, id: sub.id };
+}
+
+function removeSubscription(id) {
+  subscriptions = subscriptions.filter((sub) => sub.id !== id);
+  events = events.filter((event) => event.source !== id);
+  save();
+  emit();
+}
+
+function subscriptionList() {
+  return subscriptions.map(({ id, name, url, lastSync, error }) => ({ id, name, url, lastSync, error }));
+}
+
 function upcoming(days = 7) {
   const now = Date.now();
   const until = now + days * 24 * 60 * 60 * 1000;
@@ -151,6 +256,10 @@ function tick() {
 }
 
 function startService() {
+  refreshSubscriptions(false).catch(() => {});
+  setInterval(() => {
+    refreshSubscriptions(false).catch(() => {});
+  }, REFRESH_MS).unref?.();
   load();
   emit();
   clearInterval(timer);
@@ -167,4 +276,18 @@ function onChange(fn) {
   return () => listeners.delete(fn);
 }
 
-module.exports = { startService, stopService, onChange, list, upcoming, add, remove, parseIcs, importIcs };
+module.exports = {
+  startService,
+  stopService,
+  onChange,
+  list,
+  upcoming,
+  add,
+  remove,
+  parseIcs,
+  importIcs,
+  refreshSubscriptions,
+  addSubscription,
+  removeSubscription,
+  subscriptionList,
+};
