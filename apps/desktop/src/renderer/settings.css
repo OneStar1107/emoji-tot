@@ -18,6 +18,27 @@
   --good: #3ddc84;
 }
 
+/*
+ * Light mode is a variable swap, not a second stylesheet: every surface and
+ * line already reads from these tokens, so one block covers the whole window.
+ */
+html[data-theme="light"] {
+  --bg: #f2f2f4;
+  --rail: #eaeaea;
+  --card: #ffffff;
+  --card-hover: #f6f6f8;
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.16);
+  --ink: #1a1a1e;
+  --dim: rgba(26, 26, 30, 0.62);
+  --faint: rgba(26, 26, 30, 0.4);
+  --accent: #6c58e8;
+  --good: #1f9d55;
+}
+
+html[data-theme="light"] select.ctl,
+html[data-theme="light"] input.ctl { background-color: #fff; color: var(--ink); }
+
 * { box-sizing: border-box; }
 
 html, body {

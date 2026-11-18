@@ -496,6 +496,17 @@ function paintRail() {
   rail.innerHTML = html;
 }
 
+/** Theme and scale are applied before the first paint, from prefs. */
+function applyChrome() {
+  const html = document.documentElement;
+  const theme = prefs.theme ?? 'dark';
+  const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+  const light = theme === 'light' || (theme === 'system' && prefersLight);
+  html.dataset.theme = light ? 'light' : 'dark';
+  const scale = Math.min(1.4, Math.max(0.8, (Number(prefs.uiScale) || 100) / 100));
+  html.style.zoom = String(scale);
+}
+
 let paintedPage = '';
 
 function paintContent() {
@@ -512,6 +523,7 @@ function paintContent() {
 }
 
 function paint() {
+  applyChrome();
   paintRail();
   paintContent();
 }
@@ -730,6 +742,13 @@ rail.addEventListener('input', (event) => {
 document.getElementById('btn-min').addEventListener('click', () => api.minimize());
 document.getElementById('btn-max').addEventListener('click', () => api.maximize());
 document.getElementById('btn-close').addEventListener('click', () => api.close());
+
+api.onChanged((next) => {
+  const merged = merge(next);
+  const changed = JSON.stringify(merged) !== JSON.stringify(prefs);
+  prefs = merged;
+  if (changed) paint();
+});
 
 api.onGoto((target) => {
   if (typeof target === 'string' && RENDERERS[target]) {

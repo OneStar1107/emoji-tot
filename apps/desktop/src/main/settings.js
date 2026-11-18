@@ -74,6 +74,9 @@ function registerIpc() {
         // Unsupported on some Linux desktops; prefs still records the intent.
       }
     }
+    // The window that made the change also gets the merged object, so a
+    // control can be changed by the tray or by another window and still repaint.
+    if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next);
     broadcastPrefs(next);
     return next;
   });
