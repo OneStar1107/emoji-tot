@@ -635,6 +635,63 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   transform: scale(1.02);
 }
 .shelf-hint code { font-size: 10.5px; color: var(--dim); }
+/* Clipboard history lives under the shelf: both are "things I just had". */
+.clip {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.clip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--faint);
+  margin-bottom: 6px;
+}
+
+.clip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.clip-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.clip-text {
+  flex: 1;
+  text-align: left;
+  background: var(--surface-1);
+  border: 0;
+  color: var(--ink);
+  padding: 6px 8px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clip-text:hover { background: var(--surface-2); }
+
+.clip-pin {
+  background: transparent;
+  border: 0;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.clip-pin.on { color: var(--warn); }
+
 .shelf-list { display: flex; flex-direction: column; gap: 1px; max-height: 216px; overflow-y: auto; }
 .shelf-item { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 7px; }
 .shelf-item:hover { background: rgba(255, 255, 255, 0.04); }

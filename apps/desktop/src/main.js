@@ -30,6 +30,7 @@ const focus = require('./main/services/focus');
 const health = require('./main/services/health');
 const todo = require('./main/services/todo');
 const shelf = require('./main/services/shelf');
+const clipboardHistory = require('./main/services/clipboard');
 const quota = require('./main/services/quota');
 const mail = require('./main/services/mail');
 const calendar = require('./main/services/calendar');
@@ -981,6 +982,8 @@ function startServices() {
   health.onChange((value) => island.send('island:health', value));
   todo.onChange((value) => island.send('island:todos', value));
   shelf.onChange((value) => island.send('island:shelf', value));
+  clipboardHistory.onChange((value) => island.send('island:clipboard', value));
+  clipboardHistory.start();
   quota.onChange((value) => island.send('island:quota', value));
   mail.onChange((value) => island.send('island:mail', value));
   // Same shape as the bootstrap payload: the page reads .events, and a bare
@@ -1020,6 +1023,7 @@ function startServices() {
     health: health.snapshot(),
     todos: todo.list(),
     shelf: shelf.list(),
+    clipboard: clipboardHistory.list(),
   }));
 
   ipcMain.handle('local:do', async (_event, payload) => {
@@ -1046,12 +1050,18 @@ function startServices() {
       else if (action === 'open') await shelf.open(data?.name);
       else if (action === 'reveal') shelf.reveal(data?.name);
       else if (action === 'remove') shelf.remove(data?.name);
+    } else if (service === 'clipboard') {
+      if (action === 'copy') clipboardHistory.copy(data?.id);
+      else if (action === 'togglePin') clipboardHistory.togglePin(data?.id);
+      else if (action === 'remove') clipboardHistory.remove(data?.id);
+      else if (action === 'clear') clipboardHistory.clear();
     }
     return {
       focus: focus.snapshot(),
       health: health.snapshot(),
       todos: todo.list(),
       shelf: shelf.list(),
+      clipboard: clipboardHistory.list(),
     };
   });
 
@@ -1066,6 +1076,7 @@ function startServices() {
     health: health.snapshot(),
     todos: todo.list(),
     shelf: shelf.list(),
+    clipboard: clipboardHistory.list(),
     quota: quota.snapshot(),
     mail: mail.snapshot(),
     calendar: { events: calendar.list(), upcoming: calendar.upcoming() },

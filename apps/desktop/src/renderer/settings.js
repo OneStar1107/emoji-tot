@@ -352,6 +352,10 @@ function pageTodo() {
       rowToggle('启用置物架', '把文件拖到岛上暂存', 'shelf.enabled'),
       rowInput('收纳目录', '留空使用默认目录', 'shelf.dir', prefs.shelf?.dir ?? '', '默认：资料库/EmojiTot/shelf'),
     ])) +
+    group('文字剪贴板', card([
+      rowToggle('记录剪贴板', '保留最近复制的文字，点一下就能再复制', 'shelf.clipboard'),
+      row('保存位置', 'clipboard.json，只在本机', '<span class="badge">本机</span>'),
+    ])) +
     '<p class="note">阶段 2 实现：本地 JSON 存储，不联云。</p>';
 }
 

@@ -75,6 +75,7 @@ let focusState = { phase: 'idle', running: false, remaining: 0, total: 0, cycles
 let healthState = { enabled: false, waterMin: 45, standMin: 60, sinceWater: 0, sinceStand: 0, waterDue: false, standDue: false, waterCount: 0, standCount: 0 };
 let todos = [];
 let shelfFiles = [];
+let clipboardItems = [];
 let quotaState = { accounts: [], current: null, last: null };
 let mailState = { accounts: [], messages: [], syncing: false, error: '', lastSync: 0 };
 let calendarState = { events: [], upcoming: [] };
@@ -608,10 +609,25 @@ function shelfPage() {
           </div>`)
         .join('')
     : '<p class="todo-empty">置物架是空的。把文件拖到这块面板上就能放进来。</p>';
+  const clips = clipboardItems.slice(0, 6).map((item) => `<div class="clip-item">
+      <button type="button" class="clip-text" data-local="clipboard:copy" data-id="${escapeHtml(item.id)}" title="点击复制">${escapeHtml(clipLabel(item.text))}</button>
+      <button type="button" class="clip-pin${item.pinned ? ' on' : ''}" data-local="clipboard:togglePin" data-id="${escapeHtml(item.id)}" aria-label="固定">★</button>
+    </div>`).join('');
+  const clipBlock = `<div class="clip">
+    <div class="clip-head"><span>剪贴板</span>${clipboardItems.length ? '<button type="button" class="ghost" data-local="clipboard:clear">清空</button>' : ''}</div>
+    <div class="clip-list">${clips || '<p class="todo-empty">复制文字后会出现在这里。</p>'}</div>
+  </div>`;
   return `<div class="shelf" data-shelf-drop>
     <div class="shelf-hint">把文件拖到这里 · 复制到 <code>shelf</code> 文件夹</div>
     <div class="shelf-list">${rows}</div>
+    ${clipBlock}
   </div>`;
+}
+
+/** One line of the clipboard list: a copy is text, not a document. */
+function clipLabel(text) {
+  const flat = String(text).replace(/\s+/g, ' ').trim();
+  return flat.length > 42 ? flat.slice(0, 42) + '…' : flat;
 }
 
 const RENDERERS = {
@@ -668,6 +684,7 @@ function applyLocal(snapshot) {
   if (snapshot.health) healthState = snapshot.health;
   if (Array.isArray(snapshot.todos)) todos = snapshot.todos;
   if (Array.isArray(snapshot.shelf)) shelfFiles = snapshot.shelf;
+  if (Array.isArray(snapshot.clipboard)) clipboardItems = snapshot.clipboard;
 }
 
 /** +1 = next page, -1 = previous; the panel slides in from the side it came from. */
@@ -977,6 +994,12 @@ api.onTodos((value) => {
 api.onShelf((value) => {
   if (!Array.isArray(value)) return;
   shelfFiles = value;
+  if (open && enabledPages()[pageIndex]?.key === 'shelf') renderPage();
+});
+
+api.onClipboard((value) => {
+  if (!Array.isArray(value)) return;
+  clipboardItems = value;
   if (open && enabledPages()[pageIndex]?.key === 'shelf') renderPage();
 });
 
