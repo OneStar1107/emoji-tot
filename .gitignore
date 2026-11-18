@@ -11,3 +11,6 @@ coverage/
 out/
 dist-cjs/
 release/
+docs/shots/
+docs/shots/
+.release-notes.md

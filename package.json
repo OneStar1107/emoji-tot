@@ -10,5 +10,8 @@
       "electron",
       "esbuild"
     ]
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
   }
 }
