@@ -208,18 +208,86 @@ sizeObserver.observe(frameEl);
  * what they had already opened; this tells them something they did not know.
  * With nothing playing it falls back to battery alone.
  */
-function renderSub() {
-  const parts = [];
-  if (media && media.active) {
-    const live = !media.duration;
-    if (live) parts.push('直播');
-    else if (isBrowserMedia()) parts.push('媒体');
-    else parts.push('播放中');
+/*
+ * Left status line: the machine first, then each peripheral that reports a
+ * level, rotating every two seconds. Keyboards, headphones and phones all
+ * answer on the same Bluetooth battery property, so one list covers them all
+ * without naming any particular kind of device.
+ */
+const BATTERY_ROTATE_MS = 2000;
+let batteryIndex = 0;
+let batteryTimer = null;
+
+function batteryEntries() {
+  const entries = [];
+  if (battery && Number.isFinite(Number(battery.level))) entries.push({ name: '电脑', level: Number(battery.level) });
+  for (const device of devicesState?.devices ?? []) {
+    if (device.battery === null || device.battery === undefined) continue;
+    entries.push({ name: device.name, level: Number(device.battery) });
   }
-  if (battery) parts.push('电量 ' + battery.level + '%');
-  const text = parts.join(' · ');
+  return entries;
+}
+
+function renderSub() {
+  const entries = batteryEntries();
+  if (!entries.length) {
+    if (subEl.textContent !== '') subEl.textContent = '';
+    subEl.dataset.muted = 'true';
+    return;
+  }
+  if (batteryIndex >= entries.length) batteryIndex = 0;
+  const entry = entries[batteryIndex];
+  const text = entry.name + ' · 电量 ' + entry.level + '%';
   if (subEl.textContent !== text) subEl.textContent = text;
-  subEl.dataset.muted = String(!parts.length);
+  subEl.dataset.muted = 'false';
+  ensureBatteryRotation();
+}
+
+/*
+ * One timer for the life of the page, never torn down and rebuilt.
+ *
+ * The first version cleared it whenever the device list was momentarily empty
+ * (which happens while Bluetooth is enumerated) and started a fresh one when
+ * the list came back, so every restart pushed the next tick further out: six
+ * seconds of watching produced a single change. A permanent 2s tick that does
+ * nothing when there is only one entry keeps the cadence exact.
+ */
+function ensureBatteryRotation() {
+  if (batteryTimer) return;
+  batteryTimer = setInterval(() => {
+    const entries = batteryEntries();
+    if (entries.length <= 1) {
+      if (batteryIndex !== 0) {
+        batteryIndex = 0;
+        renderSub();
+      }
+      return;
+    }
+    batteryIndex = (batteryIndex + 1) % entries.length;
+    renderSub();
+  }, BATTERY_ROTATE_MS);
+}
+
+/* Now-playing in the header: the full title, scrolling only when it overflows. */
+function renderTopMedia() {
+  const box = document.getElementById('top-media');
+  const text = document.getElementById('top-media-text');
+  if (!box || !text) return;
+  const title = media && media.active ? String(media.title || '') : '';
+  if (!title) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  if (text.textContent !== title) text.textContent = title;
+  /*
+   * Decide on every call, not only when the text changed: the first measurement
+   * runs in the same frame that set the text, before layout, so scrollWidth was
+   * still 0 and "does it overflow" answered no forever. Toggling to the same
+   * value does not restart the animation, so repeating this is free.
+   */
+  const overflow = text.scrollWidth > box.clientWidth + 2;
+  if (box.classList.contains('scrolling') !== overflow) box.classList.toggle('scrolling', overflow);
 }
 
 function renderPillStatus() {
@@ -925,6 +993,7 @@ function renderPage(animate = false) {
   const page = list[pageIndex];
   titleEl.textContent = page.key === 'music' && isBrowserMedia() ? '媒体' : page.title;
   renderSub();
+  renderTopMedia();
   pagesEl.innerHTML = (RENDERERS[page.key] ?? ((p) => fallbackPage(p)))(page);
   dotsEl.innerHTML = list
     .map((p, index) => `<button type="button" data-page="${index}" aria-current="${index === pageIndex}" aria-label="${p.title}"></button>`)
@@ -1286,6 +1355,7 @@ api.onMedia((value) => {
   media = value;
   renderPillStatus();
   renderSub();
+  renderTopMedia();
   if (open && enabledPages()[pageIndex]?.key === 'music') {
     if (trackChanged || playingChanged) {
       lastLyricIndex = -2;
@@ -1365,6 +1435,8 @@ api.onState((message) => {
 api.onDevices((value) => {
   if (!value || !Array.isArray(value.devices)) return;
   devicesState = value;
+  /* Peripheral levels feed the rotating status line, not just the devices page. */
+  renderSub();
   if (open && enabledPages()[pageIndex]?.key === 'devices') renderPage();
 });
 
