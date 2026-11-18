@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { normalizeGeneratedText } from './generated-text.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
@@ -156,7 +157,7 @@ const next = lines.join('\n');
 let current = '';
 try { current = readFileSync(OUT, 'utf8'); } catch { current = ''; }
 
-if (current === next) {
+if (normalizeGeneratedText(current) === normalizeGeneratedText(next)) {
   console.log('✓ docs/SETTINGS-AUDIT.md is up to date (' + paths.length + ' preference paths)');
   process.exit(0);
 }
