@@ -26,6 +26,7 @@ import {
   knownPaths,
   orderedPageKeys,
   orderedStatusKeys,
+  setStatusItemEnabled,
   withDefaults,
 } from '../src/shared/schema.js';
 
@@ -162,6 +163,27 @@ describe('schema: pages drive services', () => {
     const prefs = withDefaults({ pages: { music: false }, statusItems: ['battery'] });
     assert.ok(!enabledPageKeys(prefs).includes('music'));
     assert.deepEqual(enabledStatusKeys(prefs), ['battery']);
+  });
+});
+
+describe('schema: status item toggles', () => {
+  it('enables and disables one status item without disturbing the rest', () => {
+    const initial = withDefaults({ statusItems: ['battery', 'clock', 'weather'] });
+    const withQuota = setStatusItemEnabled(initial, 'quota', true);
+    assert.deepEqual(withQuota, ['battery', 'clock', 'weather', 'quota']);
+
+    const withoutClock = setStatusItemEnabled(
+      withDefaults({ statusItems: withQuota }),
+      'clock',
+      false,
+    );
+    assert.deepEqual(withoutClock, ['battery', 'weather', 'quota']);
+  });
+
+  it('ignores unknown status keys and duplicate enables', () => {
+    const prefs = withDefaults({ statusItems: ['battery', 'clock'] });
+    assert.deepEqual(setStatusItemEnabled(prefs, 'battery', true), ['battery', 'clock']);
+    assert.deepEqual(setStatusItemEnabled(prefs, 'volume', true), ['battery', 'clock']);
   });
 });
 

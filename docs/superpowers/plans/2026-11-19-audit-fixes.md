@@ -81,27 +81,27 @@ git commit -m "fix: persist mail providers and surface form errors"
 - Consumes: `enabledStatusKeys`, `orderedStatusKeys`, `STATUS_MANIFEST`.
 - Produces: `toggleStatusItem(key, enabled): string[]`, preserving order and excluding disabled keys.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add a pure test for a status-order helper that starts with `['battery','clock','weather']`, enables `quota`, then disables `clock`, and expects `['battery','weather','quota']`.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: FAIL because the helper/UI switch does not exist.
 
-- [ ] **Step 3: Implement status toggles**
+- [x] **Step 3: Implement status toggles**
 
 Export the helper from schema, pass an enabled predicate to the status `orderList`, and make drag-end write only currently enabled keys.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/shared/schema.js apps/desktop/src/renderer/settings.js apps/desktop/test/schema.test.mjs

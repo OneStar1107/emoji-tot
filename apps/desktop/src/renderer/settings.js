@@ -12,7 +12,8 @@ import {
   withDefaults,
   orderedPageKeys,
   orderedStatusKeys,
-  enabledStatusKeys,  SETTINGS_NAV,
+  SETTINGS_NAV,
+  setStatusItemEnabled,
 } from '../shared/schema.js';
 
 /** The rail, from the one manifest. */
@@ -235,7 +236,7 @@ function pageBehavior() {
     '';
 }
 
-function orderList(listId, items, enabledOf) {
+function orderList(listId, items, enabledOf, toggleAction = 'toggle-nested') {
   return '<div class="order" data-order-list="' + listId + '">' + items.map((item) =>
     '<div class="order-item" draggable="true" data-order="' + item.key + '">' +
       '<span class="order-grip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>' +
@@ -244,7 +245,9 @@ function orderList(listId, items, enabledOf) {
         (item.sub ? '<em>' + escapeHtml(item.sub) + '</em>' : '') +
       '</span>' +
       (enabledOf ? '<button type="button" class="switch" role="switch" aria-checked="' + Boolean(enabledOf(item.key)) +
-        '" data-act="toggle-nested" data-key="pages.' + item.key + '" aria-label="' + escapeHtml(item.label) + '"></button>' : '') +
+        '" data-act="' + toggleAction + '" data-key="' +
+        (toggleAction === 'toggle-status' ? item.key : 'pages.' + item.key) +
+        '" aria-label="' + escapeHtml(item.label) + '"></button>' : '') +
     '</div>').join('') + '</div>';
 }
 
@@ -252,19 +255,14 @@ function pagePages() {
   const pageItems = orderedPageKeys(prefs)
     .map((key) => PAGES_TABLE.find((p) => p.key === key))
     .filter(Boolean);
-  const statusOrder = orderedStatusKeys(prefs);
-  const statusItems = statusOrder
-    .slice(0, enabledStatusKeys(prefs).length)
-    .map((key) => STATUS_TABLE.find((s) => s.key === key))
-    .filter(Boolean);
-  const missing = statusOrder
-    .slice(enabledStatusKeys(prefs).length)
-    .map((key) => STATUS_TABLE.find((s) => s.key === key))
+  const statusItems = orderedStatusKeys(prefs)
+    .map((key) => STATUS_TABLE.find((item) => item.key === key))
     .filter(Boolean);
 
   const defaultOptions = pageItems.map((item) => [item.key, item.label]);
   return head('页面管理', '决定岛上有哪些页，以及它们出现的顺序') +
-    group('状态组件 · 常驻胶囊', '<div class="card">' + orderList('status', statusItems.concat(missing), null) + '</div>') +
+    group('状态组件 · 常驻胶囊', '<div class="card">' +
+      orderList('status', statusItems, (key) => prefs.statusItems.includes(key), 'toggle-status') + '</div>') +
     group('功能页面 · 展开后左右翻', '<div class="card">' + orderList('pages', pageItems, (key) => prefs.pages[key] !== false) + '</div>') +
     group('打开时', card([
       rowSelect('默认页', '每次打开面板先停在这一页', 'defaultPage', defaultOptions, prefs.defaultPage),
@@ -667,6 +665,11 @@ content.addEventListener('click', async (event) => {
     await patch(setPath(key, !valueOf(key)));
     return;
   }
+  if (act === 'toggle-status') {
+    const enabled = target.getAttribute('aria-checked') === 'true';
+    await patch({ statusItems: setStatusItemEnabled(prefs, key, !enabled) });
+    return;
+  }
   if (act === 'seg') {
     const value = target.dataset.value;
     const numeric = ['uiScale', 'radius', 'fontSize', 'pillHeight', 'islandWidth', 'hoverOpenDelay', 'hoverCloseDelay'].includes(key);
@@ -851,7 +854,7 @@ content.addEventListener('dragend', async () => {
   if (!list) return;
   const keys = [...list.querySelectorAll('.order-item')].map((el) => el.dataset.order);
   if (list.dataset.orderList === 'pages') await patch({ pageOrder: keys });
-  else await patch({ statusItems: keys });
+  else await patch({ statusItems: keys.filter((key) => prefs.statusItems.includes(key)) });
 });
 
 /* ------------------------------------------------------------------ shell */

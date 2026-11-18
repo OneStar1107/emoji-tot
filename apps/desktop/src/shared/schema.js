@@ -285,6 +285,17 @@ export function orderedStatusKeys(prefs) {
   return on.concat(off);
 }
 
+/** Enable or disable one status item, returning the next ordered list. */
+export function setStatusItemEnabled(prefs, key, enabled) {
+  const p = withDefaults(prefs);
+  if (!STATUS_MANIFEST.some((item) => item.key === key)) return p.statusItems.slice();
+  const next = p.statusItems.filter((item) => STATUS_MANIFEST.some((entry) => entry.key === item));
+  const index = next.indexOf(key);
+  if (enabled && index < 0) next.push(key);
+  else if (!enabled && index >= 0) next.splice(index, 1);
+  return next;
+}
+
 /** Every page, switched-on ones first in the user's order. */
 export function orderedPageKeys(prefs) {
   const p = withDefaults(prefs);
