@@ -44,27 +44,27 @@
 - Consumes: existing `writePrefs`, `mail.add`, `quota.add`, `calendar.addSubscription`.
 - Produces: `mailProvider: '163'|'qq'|'gmail'|'outlook'|'custom'` prefs key; service action results `{ok:boolean,error?:string}`; settings state `formError`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add schema tests asserting `mailProvider` is a known path and survives `filterPatch({mailProvider:'gmail'})`. Add service tests for `mail.add` provider selection and rejected input metadata.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: FAIL because `mailProvider` is rejected and the UI/provider fix is absent.
 
-- [ ] **Step 3: Implement provider persistence and visible action errors**
+- [x] **Step 3: Implement provider persistence and visible action errors**
 
 Add `mailProvider` to `DEFAULTS` and `CONSUMERS`. Make mail/quota/calendar IPC handlers return `actionResult`. In settings, read the select value directly, keep form values after failure, and render `formError`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @emojitot/desktop test`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop/src/shared/schema.js apps/desktop/src/main.js apps/desktop/src/renderer/settings.js apps/desktop/src/main/services/mail.js apps/desktop/src/main/services/quota.js apps/desktop/src/main/services/calendar.js apps/desktop/test/schema.test.mjs apps/desktop/test/services.test.mjs

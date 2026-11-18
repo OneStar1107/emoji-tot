@@ -126,6 +126,14 @@ describe('schema: patches', () => {
     assert.deepEqual(filterPatch(null).accepted, {});
     assert.deepEqual(filterPatch('nope').accepted, {});
   });
+
+  it('persists the mail provider selected in settings', () => {
+    assert.equal(withDefaults({}).mailProvider, '163');
+    assert.deepEqual(filterPatch({ mailProvider: 'gmail' }), {
+      accepted: { mailProvider: 'gmail' },
+      rejected: [],
+    });
+  });
 });
 
 describe('schema: pages drive services', () => {

@@ -132,6 +132,23 @@ const emptyCard = (title, text, action, label) =>
   (action ? '<button type="button" class="btn primary" data-act="button" data-key="' + action + '">' + escapeHtml(label) + '</button>' : '') +
   '</div></div>';
 
+const formError = (scope) =>
+  '<p class="form-error" data-form-error="' + scope + '" hidden></p>';
+
+function showFormError(scope, message) {
+  const el = content.querySelector('[data-form-error="' + scope + '"]');
+  if (!el) return;
+  el.textContent = String(message || '操作失败');
+  el.hidden = false;
+}
+
+function clearFormError(scope) {
+  const el = content.querySelector('[data-form-error="' + scope + '"]');
+  if (!el) return;
+  el.textContent = '';
+  el.hidden = true;
+}
+
 /* ------------------------------------------------------------------ pages */
 
 function pageGeneral() {
@@ -367,20 +384,20 @@ function pageComm() {
       row('授权码', '邮箱设置里生成的 IMAP 授权码', '<input class="ctl" type="password" data-mail-input="secret" placeholder="授权码" spellcheck="false" />'),
       row('IMAP 主机', '自定义服务商才需要填', '<input class="ctl" data-mail-input="host" placeholder="imap.example.com" spellcheck="false" />'),
       row('', '拉取最近 10 封，凭证用系统加密保存', '<button type="button" class="btn primary" data-act="button" data-key="mail-add">添加并同步</button>'),
-    ])) +
+    ]) + formError('mail-add')) +
     group('日程', '<div class="card">' + eventRows + '</div>') +
     group('日历订阅', '<div class="card">' + subscriptionRows + '</div>') +
     group('添加订阅', card([
       row('名称', '显示在岛上的来源名', '<input class="ctl" data-cal-input="subName" placeholder="飞书 / iCloud" spellcheck="false" />'),
       row('ICS 链接', '飞书、钉钉、企业微信、Outlook、iCloud 都能导出订阅地址', '<input class="ctl" data-cal-input="subUrl" placeholder="https://…/calendar.ics" spellcheck="false" />'),
       row('', '只读同步，每 30 分钟拉取一次', '<button type="button" class="btn primary" data-act="button" data-key="cal-subscribe">添加订阅</button>'),
-    ])) +
+    ]) + formError('calendar-subscribe')) +
     group('添加日程', card([
       row('标题', '', '<input class="ctl" data-cal-input="title" placeholder="周会" spellcheck="false" />'),
       row('时间', '', '<input class="ctl" type="datetime-local" data-cal-input="start" />'),
       row('地点', '可留空', '<input class="ctl" data-cal-input="location" placeholder="会议室 / 线上" spellcheck="false" />'),
       row('', '邮件邀请里的 .ics 会自动导入', '<button type="button" class="btn primary" data-act="button" data-key="cal-add">添加日程</button>'),
-    ])) +
+    ]) + formError('calendar-add')) +
     '<p class="note">邮箱每 5 分钟同步一次；验证码会从邮件正文里识别出来，在岛上直接显示。</p>';
 }
 
@@ -417,7 +434,7 @@ function pageQuota() {
       row('名称', '显示在岛上的名字，留空用服务商名字', '<input class="ctl" data-quota-input="name" placeholder="可选" spellcheck="false" />'),
       row('API Key', '在对应平台的 API Keys 页面生成，只保存在本机', '<input class="ctl" type="password" data-quota-input="key" placeholder="sk-..." spellcheck="false" />'),
       row('', '密钥用系统凭据加密，不写进 prefs.json', '<button type="button" class="btn primary" data-act="button" data-key="quota-add">添加并查询</button>'),
-    ])) +
+    ]) + formError('quota-add')) +
     group('刷新', card([
       rowRange('刷新间隔', '两次余额查询之间', 'quota.intervalMin', 5, 120, 5, ' 分钟'),
       rowToggle('低余额提醒', '低于阈值时在岛上提示', 'quota.alert'),
@@ -677,7 +694,13 @@ content.addEventListener('click', async (event) => {
     if (key === 'cal-subscribe') {
       const name = content.querySelector('[data-cal-input="subName"]')?.value?.trim() ?? '';
       const url = content.querySelector('[data-cal-input="subUrl"]')?.value?.trim() ?? '';
-      calendarState = await api.calendarDo('subscribe', { name, url });
+      clearFormError('calendar-subscribe');
+      const next = await api.calendarDo('subscribe', { name, url });
+      if (!next.actionResult?.ok) {
+        showFormError('calendar-subscribe', next.actionResult?.error);
+        return;
+      }
+      calendarState = next;
       paint();
       return;
     }
@@ -697,7 +720,13 @@ content.addEventListener('click', async (event) => {
         content.querySelector('[data-quota-input="key"]')?.focus();
         return;
       }
-      quotaState = await api.quotaDo('add', { name, key: secret, provider });
+      clearFormError('quota-add');
+      const next = await api.quotaDo('add', { name, key: secret, provider });
+      if (!next.actionResult?.ok) {
+        showFormError('quota-add', next.actionResult?.error);
+        return;
+      }
+      quotaState = next;
       paint();
       return;
     }
@@ -717,6 +746,9 @@ content.addEventListener('click', async (event) => {
       return;
     }
     if (key === 'mail-add') {
+      const provider = content.querySelector('[data-key="mailProvider"]')?.value
+        ?? prefs.mailProvider
+        ?? '163';
       const address = content.querySelector('[data-mail-input="address"]')?.value?.trim() ?? '';
       const secret = content.querySelector('[data-mail-input="secret"]')?.value?.trim() ?? '';
       const host = content.querySelector('[data-mail-input="host"]')?.value?.trim() ?? '';
@@ -724,8 +756,12 @@ content.addEventListener('click', async (event) => {
         content.querySelector('[data-mail-input="address"]')?.focus();
         return;
       }
-      await patch({ mailProvider: prefs.mailProvider });
-      await api.mailDo('add', { provider: prefs.mailProvider, address, user: address, secret, host });
+      clearFormError('mail-add');
+      const added = await api.mailDo('add', { provider, address, user: address, secret, host });
+      if (!added.actionResult?.ok) {
+        showFormError('mail-add', added.actionResult?.error);
+        return;
+      }
       mailState = await api.mailDo('refresh');
       paint();
       return;
@@ -745,11 +781,17 @@ content.addEventListener('click', async (event) => {
       const startValue = content.querySelector('[data-cal-input="start"]')?.value ?? '';
       const location = content.querySelector('[data-cal-input="location"]')?.value?.trim() ?? '';
       if (!title || !startValue) return;
-      calendarState = await api.calendarDo('add', {
+      clearFormError('calendar-add');
+      const next = await api.calendarDo('add', {
         title,
         start: new Date(startValue).getTime(),
         location,
       });
+      if (!next.actionResult?.ok) {
+        showFormError('calendar-add', next.actionResult?.error);
+        return;
+      }
+      calendarState = next;
       paint();
       return;
     }

@@ -22,6 +22,7 @@ const { createArbiter, parseAgentMessage, stateForEmotion, EMOTIONS } = require(
 const { userDir, statePath, prefsPath, readJson, writeJson, readPrefs, writePrefs, configureSettingsSchema } = require('./main/paths');
 const island = require('./main/island');
 const settings = require('./main/settings');
+const { mailAction, quotaAction, calendarAction } = require('./main/data-actions');
 const battery = require('./main/services/battery');
 const weather = require('./main/services/weather');
 const media = require('./main/services/media');
@@ -1318,11 +1319,7 @@ function startServices() {
 
   guard.guardedHandle('mail:get', ['settings', 'island'], () => mail.snapshot());
   guard.guardedHandle('mail:do', ['settings', 'island'], async (payload) => {
-    const { action, data } = payload;
-    if (action === 'add') mail.add(data);
-    else if (action === 'remove') mail.remove(data?.id);
-    else if (action === 'refresh') await mail.refresh(true);
-    return mail.snapshot();
+    return mailAction(mail, payload);
   }, { check: checkMail, maxBytes: 16 * 1024 });
 
   guard.guardedHandle('calendar:get', ['settings', 'island'], () => ({
@@ -1331,28 +1328,12 @@ function startServices() {
     subscriptions: calendar.subscriptionList(),
   }));
   guard.guardedHandle('calendar:do', ['settings'], async (payload) => {
-    const { action, data } = payload;
-    if (action === 'add') calendar.add(data);
-    else if (action === 'remove') calendar.remove(data?.id);
-    else if (action === 'import') calendar.importIcs(data?.ics, 'manual-import');
-    else if (action === 'subscribe') await calendar.addSubscription(data?.name, data?.url);
-    else if (action === 'unsubscribe') calendar.removeSubscription(data?.id);
-    else if (action === 'refresh-subscriptions') await calendar.refreshSubscriptions(true);
-    return {
-      events: calendar.list(),
-      upcoming: calendar.upcoming(),
-      subscriptions: calendar.subscriptionList(),
-    };
+    return calendarAction(calendar, payload);
   }, { check: checkCalendar, maxBytes: 64 * 1024 });
 
   guard.guardedHandle('quota:get', ['settings'], () => quota.snapshot());
   guard.guardedHandle('quota:do', ['settings', 'island'], async (payload) => {
-    const { action, data } = payload;
-    if (action === 'add') quota.add(data?.name, data?.key, data?.provider);
-    else if (action === 'remove') quota.remove(data?.id);
-    else if (action === 'select') quota.select(data?.id);
-    else if (action === 'refresh') await quota.refresh();
-    return quota.snapshot();
+    return quotaAction(quota, payload);
   }, { check: checkQuota, maxBytes: 16 * 1024 });
 
   guard.guardedHandle('local:get', ['island'], () => ({

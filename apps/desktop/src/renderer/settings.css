@@ -398,3 +398,14 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.form-error {
+  margin: 8px 0 0;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--bad) 32%, transparent);
+  border-radius: 8px;
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+  font-size: 11.5px;
+  line-height: 1.5;
+}

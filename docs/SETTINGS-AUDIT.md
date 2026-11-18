@@ -101,6 +101,7 @@
 | `quota.intervalMin` | `15` | AI 额度 | 主进程 | `services/quota.js reschedule` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `quota.alert` | `true` | AI 额度 | 主进程 | `services/quota.js low-balance check` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `quota.threshold` | `5` | AI 额度 | 主进程 | `services/quota.js low-balance check` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
+| `mailProvider` | `163` | 通知、邮箱与日程 | 渲染进程 | `settings.js mail add form` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `notify.system` | `true` | 通知、邮箱与日程 | 主进程 | `services/notify.js` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `notify.body` | `true` | 通知、邮箱与日程 | 主进程 | `services/notify.js` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `messenger.wechat` | `true` | 通知、邮箱与日程 | 主进程 | `services/messenger.js` | 即时 |  | has a SERVICE_PLAN entry · lists every path |

@@ -183,6 +183,7 @@ export const DEFAULTS = {
   shelf: { enabled: true, dir: '', clipboard: false },
   calendar: { leadMin: 10, fromMail: true },
   quota: { provider: 'deepseek', intervalMin: 15, alert: true, threshold: 5 },
+  mailProvider: '163',
   notify: { system: true, body: true },
   messenger: { wechat: true, qq: true, wecom: true, feishu: true, dingtalk: true },
 };
@@ -377,6 +378,7 @@ export function pageOfPath(path) {
     quota: 'quota',
     notify: 'comm',
     messenger: 'comm',
+    mailProvider: 'comm',
     mail: 'comm',
   };
   return map[head] ?? 'general';
@@ -468,6 +470,7 @@ export const CONSUMERS = {
   'quota.intervalMin': { scope: 'main', at: 'services/quota.js reschedule', live: true },
   'quota.alert': { scope: 'main', at: 'services/quota.js low-balance check', live: true },
   'quota.threshold': { scope: 'main', at: 'services/quota.js low-balance check', live: true },
+  mailProvider: { scope: 'renderer', at: 'settings.js mail add form', live: true },
 
   'notify.system': { scope: 'main', at: 'services/notify.js', live: true },
   'notify.body': { scope: 'main', at: 'services/notify.js', live: true },
