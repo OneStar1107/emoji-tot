@@ -246,9 +246,8 @@ function renderSub() {
    * own segment so a truncated device name never hides the number, and the
    * whole line scrolls when a long device name makes it wider than the slot.
    */
-  const page = enabledPages()[pageIndex];
-  const prefix = page ? page.title + ' · ' : '';
-  const text = prefix + entry.level + '% · ' + entry.name;
+  /* The page name now lives under the ball, so this line is purely battery. */
+  const text = entry.level + '% · ' + entry.name;
   const textEl = subEl.firstElementChild;
   if (textEl && textEl.textContent !== text) textEl.textContent = text;
   subEl.dataset.muted = 'false';
@@ -1008,6 +1007,8 @@ function renderPage(animate = false) {
    * how much battery is left. The page name moved under the ball so the top
    * line can carry the now-playing title at full width.
    */
+  const nameEl = document.getElementById('page-name');
+  if (nameEl) nameEl.textContent = page.title;
   renderTopMedia();
   renderSub();
   pagesEl.innerHTML = (RENDERERS[page.key] ?? ((p) => fallbackPage(p)))(page);

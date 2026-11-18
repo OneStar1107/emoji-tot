@@ -180,7 +180,14 @@ body {
 .pill:active { transform: scale(0.99); }
 
 .pill-face,
+/*
+ * The ball owns the first column, and the page name sits directly under it.
+ * The name used to share the second line with the battery, which put it half a
+ * column away from the avatar it belongs to; stacking them reads as one block.
+ */
+.top-face-col { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 44px; flex: none; }
 .top-face { display: grid; place-items: center; }
+.top-page-name { font-style: normal; font-size: 9px; line-height: 1.1; color: var(--dim); white-space: nowrap; max-width: 44px; overflow: hidden; text-overflow: ellipsis; }
 .pill-face emojitot-ball { width: 24px; height: 24px; }
 .top-face emojitot-ball { width: 30px; height: 30px; }
 
