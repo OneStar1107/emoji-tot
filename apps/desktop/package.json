@@ -43,5 +43,8 @@
       "category": "public.app-category.entertainment"
     }
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "imapflow": "^2.12.1"
+  }
 }

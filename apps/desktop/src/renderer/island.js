@@ -39,6 +39,7 @@ const ICON = {
   tray: '<path d="M3 13h4l2 3h6l2-3h4"/><path d="M5 5h14l2 8v6H3v-6z"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/>',
   play: '<path d="M8 5.5v13a1 1 0 0 0 1.5.86l10-6.5a1 1 0 0 0 0-1.72l-10-6.5A1 1 0 0 0 8 5.5z"/>',
+  pause: '<rect x="7" y="5" width="3.4" height="14" rx="1.2"/><rect x="13.6" y="5" width="3.4" height="14" rx="1.2"/>',
   prev: '<path d="M6 5v14M18 5.5v13a1 1 0 0 1-1.5.86l-8-6.5a1 1 0 0 1 0-1.72l8-6.5A1 1 0 0 1 18 5.5z"/>',
   next: '<path d="M18 5v14M6 5.5v13a1 1 0 0 0 1.5.86l8-6.5a1 1 0 0 0 0-1.72l-8-6.5A1 1 0 0 0 6 5.5z"/>',
 };
@@ -67,15 +68,40 @@ function batterySvg(level, charging) {
 let prefs = {};
 let battery = null;
 let weather = null;
+let media = { active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '' };
+let lyrics = null;
+let focusState = { phase: 'idle', running: false, remaining: 0, total: 0, cycles: 0 };
+let healthState = { enabled: false, waterMin: 45, standMin: 60, sinceWater: 0, sinceStand: 0, waterDue: false, standDue: false, waterCount: 0, standCount: 0 };
+let todos = [];
+let shelfFiles = [];
+let quotaState = { accounts: [], current: null, last: null };
+let mailState = { accounts: [], messages: [], syncing: false, error: '', lastSync: 0 };
+let calendarState = { events: [], upcoming: [] };
+const today = new Date();
+let calendarView = { year: today.getFullYear(), month: today.getMonth(), selected: today.getDate() };
 let open = false;
 let pageIndex = 0;
 
+/**
+ * Which pages the panel shows, in order.
+ *
+ * `prefs.pages` is authoritative for any page it mentions; a page it does not
+ * mention falls back to the built-in default set. Without that fallback, the
+ * first toggle in settings produced a pages object containing one key, and
+ * every page it did not mention disappeared.
+ */
 const enabledPages = () => {
-  const list = prefs.pageOrder?.length ? prefs.pageOrder : DEFAULT_PAGES;
-  const on = prefs.pages ?? {};
-  return list
+  const on = prefs.pages && typeof prefs.pages === 'object' ? prefs.pages : null;
+  const order = Array.isArray(prefs.pageOrder) && prefs.pageOrder.length
+    ? prefs.pageOrder
+    : PAGES.map((p) => p.key);
+  const isOn = (key) => {
+    if (on && key in on) return on[key] !== false;
+    return DEFAULT_PAGES.includes(key);
+  };
+  return order
     .map((key) => PAGES.find((p) => p.key === key))
-    .filter((p) => p && on[p.key] !== false);
+    .filter((page) => page && isOn(page.key));
 };
 
 const hhmm = () => {
@@ -84,6 +110,29 @@ const hhmm = () => {
   const m = String(now.getMinutes()).padStart(2, '0');
   return `${h}:${m}`;
 };
+
+const escapeHtml = (value) =>
+  String(value ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+const clock = (seconds) => {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+};
+
+/** The lyric line that should be highlighted at a given playback position. */
+function lyricAt(seconds) {
+  if (!lyrics || !lyrics.synced || !lyrics.lines?.length) return -1;
+  const offset = Number(prefs.music?.offset ?? 0.35);
+  const t = seconds + offset;
+  let index = -1;
+  for (let i = 0; i < lyrics.lines.length; i += 1) {
+    if (lyrics.lines[i].t <= t) index = i;
+    else break;
+  }
+  return index;
+}
 
 /* ------------------------------------------------------------- measurement */
 
@@ -101,18 +150,32 @@ new ResizeObserver(measure).observe(islandEl);
 /* ------------------------------------------------------------- pill status */
 
 function renderPillStatus() {
-  const items = prefs.statusItems ?? ['battery', 'clock', 'weather'];
-  const parts = [];
-  for (const key of items) {
-    if (key === 'battery' && battery) {
-      parts.push(`<span class="stat" title="电量 ${battery.level}%">${batterySvg(battery.level, battery.charging)}<b>${battery.level}%</b></span>`);
-    } else if (key === 'clock') {
-      parts.push(`<span class="stat" data-clock>${hhmm()}</span>`);
-    } else if (key === 'weather' && weather) {
-      parts.push(`<span class="stat dim">${weather.current.temp}°</span>`);
+  const playing = Boolean(media.active && media.playing);
+  document.body.dataset.playing = String(playing);
+  /*
+   * While a song plays the pill shows the current lyric instead of battery,
+   * clock and temperature: three numbers plus a lyric sentence does not fit in
+   * a pill, and the lyric is the only one of them that changes every few
+   * seconds. Pausing brings the status row back.
+   */
+  const lyricMode = playing && prefs.music?.islandLyrics !== false;
+  if (lyricMode) {
+    const line = currentLyricLine() || media.title || '';
+    pillStatus.innerHTML = `<span class="stat lyric-pill">${escapeHtml(clip(line, 24))}</span>`;
+  } else {
+    const items = prefs.statusItems ?? ['battery', 'clock', 'weather'];
+    const parts = [];
+    for (const key of items) {
+      if (key === 'battery' && battery) {
+        parts.push(`<span class="stat" title="电量 ${battery.level}%">${batterySvg(battery.level, battery.charging)}<b>${battery.level}%</b></span>`);
+      } else if (key === 'clock') {
+        parts.push(`<span class="stat" data-clock>${hhmm()}</span>`);
+      } else if (key === 'weather' && weather) {
+        parts.push(`<span class="stat dim">${weather.current.temp}°</span>`);
+      }
     }
+    pillStatus.innerHTML = parts.join('');
   }
-  pillStatus.innerHTML = parts.join('');
   topClock.textContent = hhmm();
   if (battery) {
     topBattery.innerHTML = batterySvg(battery.level, battery.charging);
@@ -134,14 +197,76 @@ const empty = (icon, title, text, actionLabel, action) => `
     ${actionLabel ? `<button type="button" class="ghost" data-action="${action}">${actionLabel}</button>` : ''}
   </div>`;
 
+/** The line that should read as "now" in the collapsed pill. */
+function currentLyricLine() {
+  const index = lyricAt(media.position);
+  if (index < 0 || !lyrics?.lines?.[index]) return '';
+  return lyrics.lines[index].text;
+}
+
+const clip = (text, max) => (String(text).length > max ? String(text).slice(0, max - 1) + '…' : String(text));
+
+function lyricSliceHtml(index) {
+  if (!lyrics?.synced || !lyrics.lines.length) return '<span class="lyric-empty">这首歌没有同步歌词</span>';
+  const start = Math.max(0, index - 1);
+  return lyrics.lines
+    .slice(start, start + 3)
+    .map((line, offset) => `<p class="lyric-line${start + offset === index ? ' on' : ''}">${escapeHtml(line.text)}</p>`)
+    .join('');
+}
+
 function musicPage() {
-  return empty(
-    ICON.music,
-    '系统里没有正在播放的媒体',
-    '打开任意播放器后，这里会显示封面、歌名和进度。',
-    '查看设置',
-    'settings:music',
-  );
+  if (!media.active) {
+    return empty(
+      ICON.music,
+      '系统里没有正在播放的媒体',
+      '打开任意播放器后，这里会显示封面、歌名和进度。',
+      '查看设置',
+      'settings:music',
+    );
+  }
+  const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
+  const art = media.art
+    ? `<img class="cover-img" src="${media.art}" alt="" />`
+    : `<div class="cover">${svg(ICON.music)}</div>`;
+  return `<div class="music">
+    <div class="music-row">
+      ${art}
+      <div class="music-meta">
+        <b>${escapeHtml(media.title || '未命名')}</b>
+        <span>${escapeHtml(media.artist || media.album || media.source || '')}</span>
+      </div>
+      <span class="music-state">${media.playing ? '播放中' : '已暂停'}</span>
+    </div>
+    <div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>
+    <div class="music-bar"><i data-progress style="width:${pct.toFixed(1)}%"></i></div>
+    <div class="music-times"><span data-pos>${clock(media.position)}</span><span data-dur>${clock(media.duration)}</span></div>
+    <div class="music-controls">
+      <button type="button" data-media="prev" aria-label="上一首">${svg(ICON.prev)}</button>
+      <button type="button" class="main" data-media="toggle" aria-label="${media.playing ? '暂停' : '播放'}">${svg(media.playing ? ICON.pause : ICON.play)}</button>
+      <button type="button" data-media="next" aria-label="下一首">${svg(ICON.next)}</button>
+    </div>
+  </div>`;
+}
+
+/** Cheap per-second update: progress, time and the lyric window only. */
+let lastLyricIndex = -2;
+
+function updateMusicLive() {
+  const page = enabledPages()[pageIndex];
+  if (!page || page.key !== 'music') return;
+  const bar = pagesEl.querySelector('[data-progress]');
+  if (!bar) return;
+  const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
+  bar.style.width = pct.toFixed(1) + '%';
+  const position = pagesEl.querySelector('[data-pos]');
+  if (position) position.textContent = clock(media.position);
+  const index = lyricAt(media.position);
+  if (index !== lastLyricIndex) {
+    lastLyricIndex = index;
+    const box = pagesEl.querySelector('[data-lyric-box]');
+    if (box) box.innerHTML = lyricSliceHtml(index);
+  }
 }
 
 function weatherPage() {
@@ -176,24 +301,155 @@ function weatherPage() {
   </div>`;
 }
 
+const timeOf = (ms) => {
+  const date = new Date(Number(ms) || Date.now());
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
 function quotaPage() {
-  return empty(
-    ICON.coin,
-    '还没有连接账号',
-    '在设置里填入 DeepSeek API Key，这里会显示余额和账号。',
-    '去添加账号',
-    'settings:quota',
-  );
+  const state = quotaState ?? { accounts: [], current: null, last: null };
+  if (!state.accounts.length) {
+    return empty(
+      ICON.coin,
+      '还没有连接账号',
+      '在设置里填入 DeepSeek API Key，这里会显示余额和账号。',
+      '去添加账号',
+      'settings:quota',
+    );
+  }
+  const current = state.accounts.find((account) => account.current);
+  const last = state.last;
+  const actions = `<div class="quota-actions">
+    <button type="button" class="ghost" data-local="quota:refresh">刷新</button>
+    ${state.accounts.length > 1 ? '<button type="button" class="ghost" data-local="quota:next">切换账号</button>' : ''}
+  </div>`;
+  if (!last || last.error) {
+    return `<div class="quota">
+      <div class="quota-head"><span class="quota-note">${escapeHtml(current?.name ?? '')}</span></div>
+      <div class="quota-rows">
+        <div class="quota-row"><span>状态</span><b>${escapeHtml(last?.error ?? '正在查询…')}</b></div>
+      </div>
+      ${actions}
+    </div>`;
+  }
+  return `<div class="quota">
+    <div class="quota-head">
+      <span class="quota-amount"><small>¥</small>${escapeHtml(last.total)}</span>
+      <span class="quota-note">${escapeHtml(current?.name ?? '')}${last.available ? '' : ' · 不可用'}</span>
+    </div>
+    <div class="quota-rows">
+      <div class="quota-row"><span>充值余额</span><b>¥${escapeHtml(last.topped)}</b></div>
+      <div class="quota-row"><span>赠送余额</span><b>¥${escapeHtml(last.granted)}</b></div>
+      <div class="quota-row"><span>更新于</span><b>${timeOf(last.at)}</b></div>
+    </div>
+    ${actions}
+  </div>`;
 }
 
 function mailPage() {
-  return empty(
-    ICON.mail,
-    '还没有添加邮箱',
-    '支持 163、QQ、Gmail。授权码只保存在本机。',
-    '添加邮箱',
-    'settings:mail',
-  );
+  const state = mailState ?? { accounts: [], messages: [] };
+  if (!state.accounts.length) {
+    return empty(
+      ICON.mail,
+      '还没有添加邮箱',
+      '支持 163、QQ、Gmail。授权码只保存在本机。',
+      '添加邮箱',
+      'settings:mail',
+    );
+  }
+  if (!state.messages.length) {
+    const hint = state.syncing ? '正在同步…' : state.error ? state.error : '还没有拉取到邮件';
+    return `<div class="mail">
+      <div class="mail-head"><b>${state.accounts.length} 个邮箱</b><span class="spacer"></span><span>${escapeHtml(hint)}</span></div>
+      <p class="todo-empty">${state.error ? '检查一下授权码或网络，然后在设置里点同步。' : '新邮件到达后会出现在这里。'}</p>
+    </div>`;
+  }
+  const rows = state.messages
+    .slice(0, 7)
+    .map((message) => `<div class="mail-item" title="${escapeHtml(message.fromAddress || '')}">
+        <span class="mail-dot" style="opacity:${message.seen ? 0.28 : 1}"></span>
+        <b>${escapeHtml(message.subject)}</b>
+        ${message.code ? `<em class="mail-code">${escapeHtml(message.code)}</em>` : ''}
+        ${message.hasInvite ? '<em class="mail-invite">邀请</em>' : ''}
+        <em>${timeOf(message.date)}</em>
+      </div>`)
+    .join('');
+  return `<div class="mail">
+    <div class="mail-head">
+      <b>${state.accounts.length} 个邮箱</b>
+      <span class="spacer"></span>
+      <span>${state.syncing ? '同步中…' : state.error ? '部分失败' : timeOf(state.lastSync) + ' 更新'}</span>
+    </div>
+    ${rows}
+    ${state.error ? `<p class="mail-error">${escapeHtml(state.error)}</p>` : ''}
+  </div>`;
+}
+
+/* --------------------------------------------------------------- calendar */
+
+const WEEK_ZH = ['日', '一', '二', '三', '四', '五', '六'];
+const dayKey = (date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+
+function calendarPage() {
+  const events = calendarState.events ?? [];
+  const byDay = new Map();
+  for (const event of events) {
+    const key = dayKey(new Date(event.start));
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(event);
+  }
+  const first = new Date(calendarView.year, calendarView.month, 1);
+  const startWeekday = first.getDay();
+  const daysInMonth = new Date(calendarView.year, calendarView.month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startWeekday; i += 1) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day += 1) cells.push(day);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const now = new Date();
+  const isThisMonth = now.getFullYear() === calendarView.year && now.getMonth() === calendarView.month;
+  const selectedDate = new Date(calendarView.year, calendarView.month, calendarView.selected);
+  const selectedEvents = byDay.get(dayKey(selectedDate)) ?? [];
+
+  const grid = cells
+    .map((day) => {
+      if (day === null) return '<span class="cal-cell empty"></span>';
+      const key = `${calendarView.year}-${calendarView.month + 1}-${day}`;
+      const list = byDay.get(key) ?? [];
+      const classes = ['cal-cell'];
+      if (isThisMonth && day === now.getDate()) classes.push('today');
+      if (day === calendarView.selected) classes.push('picked');
+      if (list.length) classes.push('has');
+      return `<button type="button" class="${classes.join(' ')}" data-cal-day="${day}">
+        <span>${day}</span>${list.length ? '<i class="cal-dot"></i>' : ''}
+      </button>`;
+    })
+    .join('');
+
+  const rows = selectedEvents.length
+    ? selectedEvents
+        .map((event) => {
+          const start = new Date(event.start);
+          const time = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
+          return `<div class="cal-event">
+            <span class="cal-time">${time}</span>
+            <b>${escapeHtml(event.title)}</b>
+            ${event.location ? `<em>${escapeHtml(event.location)}</em>` : ''}
+          </div>`;
+        })
+        .join('')
+    : '<p class="cal-empty">这一天没有安排。</p>';
+
+  return `<div class="calendar">
+    <div class="cal-head">
+      <button type="button" class="icon-btn" data-cal-nav="-1" aria-label="上个月"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
+      <b>${calendarView.year} 年 ${calendarView.month + 1} 月</b>
+      <button type="button" class="icon-btn" data-cal-nav="1" aria-label="下个月"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+    </div>
+    <div class="cal-week">${WEEK_ZH.map((day) => `<span>${day}</span>`).join('')}</div>
+    <div class="cal-grid">${grid}</div>
+    <div class="cal-events">${rows}</div>
+  </div>`;
 }
 
 function fallbackPage(page) {
@@ -204,7 +460,131 @@ function fallbackPage(page) {
   );
 }
 
-const RENDERERS = { music: musicPage, weather: weatherPage, quota: quotaPage, mail: mailPage };
+/* ------------------------------------------------------------ local pages */
+
+function focusPage() {
+  const state = focusState;
+  const label = state.phase === 'idle' ? '准备开始' : state.phase === 'work' ? '专注中' : '休息中';
+  const pct = state.total ? Math.min(100, ((state.total - state.remaining) / state.total) * 100) : 0;
+  const running = state.running;
+  const canAct = state.phase !== 'idle';
+  const primary = !canAct
+    ? '<button type="button" class="btn primary" data-local="focus:start">开始专注</button>'
+    : running
+      ? '<button type="button" class="btn primary" data-local="focus:pause">暂停</button>'
+      : '<button type="button" class="btn primary" data-local="focus:resume">继续</button>';
+  return `<div class="focus">
+    <div class="focus-ring" style="--pct:${pct.toFixed(1)}">
+      <span class="focus-time">${clock(state.remaining)}</span>
+      <span class="focus-phase">${label}</span>
+    </div>
+    <div class="focus-row">
+      ${primary}
+      <button type="button" class="btn" data-local="focus:skip">${state.phase === 'work' ? '跳过本轮' : state.phase === 'rest' ? '跳过休息' : '跳过'}</button>
+      ${canAct ? '<button type="button" class="btn" data-local="focus:stop">结束</button>' : ''}
+    </div>
+    <p class="focus-note">已完成 ${state.cycles} 轮专注</p>
+  </div>`;
+}
+
+function healthPage() {
+  const state = healthState;
+  if (!state.enabled) {
+    return empty(ICON.drop, '健康提醒还没有打开', '打开后会按你设的间隔提醒喝水与起身。', '去打开', 'settings:focus');
+  }
+  const waterPct = Math.min(100, (state.sinceWater / state.waterMin) * 100);
+  const standPct = Math.min(100, (state.sinceStand / state.standMin) * 100);
+  return `<div class="health">
+    <div class="health-block">
+      <div class="health-head"><b>喝水</b><span>距上次 ${state.sinceWater} 分钟 · 每 ${state.waterMin} 分钟</span></div>
+      <div class="health-bar"><i style="width:${waterPct.toFixed(0)}%" data-due="${state.waterDue}"></i></div>
+      <button type="button" class="btn" data-local="health:drink">我喝过了</button>
+    </div>
+    <div class="health-block">
+      <div class="health-head"><b>久坐</b><span>距上次 ${state.sinceStand} 分钟 · 每 ${state.standMin} 分钟</span></div>
+      <div class="health-bar"><i style="width:${standPct.toFixed(0)}%" data-due="${state.standDue}"></i></div>
+      <button type="button" class="btn" data-local="health:stand">我起来了</button>
+    </div>
+  </div>`;
+}
+
+function dueLabel(due) {
+  if (!due) return '';
+  const date = new Date(due);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  if (sameDay) return time;
+  return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
+}
+
+function todoPage() {
+  const openItems = todos.filter((item) => !item.done);
+  const doneItems = todos.filter((item) => item.done);
+  const itemHtml = (item) => `<div class="todo-item${item.done ? ' done' : ''}" data-id="${item.id}">
+      <button type="button" class="todo-check" data-local="todo:toggle" data-id="${item.id}" aria-label="完成">${item.done ? '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>' : ''}</button>
+      <span class="todo-text">${escapeHtml(item.text)}</span>
+      ${item.due ? `<em class="todo-due${item.due < Date.now() && !item.done ? ' late' : ''}">${dueLabel(item.due)}</em>` : ''}
+      <button type="button" class="todo-del" data-local="todo:remove" data-id="${item.id}" aria-label="删除">×</button>
+    </div>`;
+  return `<div class="todo">
+    <div class="todo-add">
+      <input type="text" placeholder="加一条待办，回车保存" data-todo-input maxlength="200" />
+      <label class="todo-due-pick" title="设到期时间">
+        <input type="datetime-local" data-todo-due />
+        <span>到期</span>
+      </label>
+    </div>
+    <div class="todo-list">
+      ${openItems.length ? openItems.map(itemHtml).join('') : '<p class="todo-empty">还没有待办，上面写一条试试。</p>'}
+      ${doneItems.length ? `<div class="todo-done-head">已完成 ${doneItems.length}<button type="button" class="todo-clear" data-local="todo:clearDone">清空</button></div>` : ''}
+      ${doneItems.map(itemHtml).join('')}
+    </div>
+  </div>`;
+}
+
+const sizeLabel = (bytes) => {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+};
+
+function shelfPage() {
+  const rows = shelfFiles.length
+    ? shelfFiles
+        .map((file) => `<div class="shelf-item" data-id="${escapeHtml(file.name)}">
+            <button type="button" class="shelf-open" data-local="shelf:open" data-name="${escapeHtml(file.name)}" title="打开">${escapeHtml(file.name)}</button>
+            <span class="shelf-size">${sizeLabel(file.size)}</span>
+            <button type="button" class="shelf-del" data-local="shelf:remove" data-name="${escapeHtml(file.name)}" aria-label="删除">×</button>
+          </div>`)
+        .join('')
+    : '<p class="todo-empty">置物架是空的。把文件拖到这块面板上就能放进来。</p>';
+  return `<div class="shelf" data-shelf-drop>
+    <div class="shelf-hint">把文件拖到这里 · 复制到 <code>shelf</code> 文件夹</div>
+    <div class="shelf-list">${rows}</div>
+  </div>`;
+}
+
+const RENDERERS = {
+  music: musicPage,
+  weather: weatherPage,
+  quota: quotaPage,
+  mail: mailPage,
+  focus: focusPage,
+  todo: todoPage,
+  health: healthPage,
+  shelf: shelfPage,
+  calendar: calendarPage,
+};
+
+/** Replace local state from any snapshot (bootstrap, push or action reply). */
+function applyLocal(snapshot) {
+  if (!snapshot) return;
+  if (snapshot.focus) focusState = snapshot.focus;
+  if (snapshot.health) healthState = snapshot.health;
+  if (Array.isArray(snapshot.todos)) todos = snapshot.todos;
+  if (Array.isArray(snapshot.shelf)) shelfFiles = snapshot.shelf;
+}
 
 function renderPage() {
   const list = enabledPages();
@@ -243,6 +623,62 @@ pillEl.addEventListener('click', () => setOpen(true));
 btnSettings.addEventListener('click', () => api.openSettings());
 
 panelEl.addEventListener('click', (event) => {
+  const mediaButton = event.target.closest('[data-media]');
+  if (mediaButton) {
+    api.control(mediaButton.dataset.media);
+    event.stopPropagation();
+    return;
+  }
+  const calDay = event.target.closest('[data-cal-day]');
+  if (calDay) {
+    calendarView.selected = Number(calDay.dataset.calDay);
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
+  const calNav = event.target.closest('[data-cal-nav]');
+  if (calNav) {
+    calendarView.month += Number(calNav.dataset.calNav);
+    if (calendarView.month < 0) {
+      calendarView.month = 11;
+      calendarView.year -= 1;
+    } else if (calendarView.month > 11) {
+      calendarView.month = 0;
+      calendarView.year += 1;
+    }
+    calendarView.selected = 1;
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
+  const localButton = event.target.closest('[data-local]');
+  if (localButton) {
+    const [service, action] = localButton.dataset.local.split(':');
+    if (service === 'quota') {
+      const run =
+        action === 'next'
+          ? (() => {
+              const list = quotaState.accounts ?? [];
+              const index = list.findIndex((account) => account.current);
+              const next = list[(index + 1) % Math.max(1, list.length)];
+              return next ? api.quotaDo('select', { id: next.id }) : Promise.resolve(quotaState);
+            })()
+          : api.quotaDo(action);
+      run.then((snapshot) => { quotaState = snapshot; if (open) renderPage(); }).catch(() => {});
+      event.stopPropagation();
+      return;
+    }
+    const data = { id: localButton.dataset.id, name: localButton.dataset.name };
+    api
+      .localDo(service, action, data)
+      .then((snapshot) => {
+        applyLocal(snapshot);
+        if (open) renderPage();
+      })
+      .catch(() => {});
+    event.stopPropagation();
+    return;
+  }
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action) {
     const [kind, page] = action.split(':');
@@ -261,6 +697,56 @@ panelEl.addEventListener('click', (event) => {
      * island. Stop here; clicks inside the island never mean "dismiss".
      */
     event.stopPropagation();
+  }
+});
+
+panelEl.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  const input = event.target.closest('[data-todo-input]');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const dueInput = panelEl.querySelector('[data-todo-due]');
+  const due = dueInput?.value ? new Date(dueInput.value).getTime() : null;
+  api
+    .localDo('todo', 'add', { text, due })
+    .then((snapshot) => {
+      applyLocal(snapshot);
+      if (open) renderPage();
+    })
+    .catch(() => {});
+});
+
+panelEl.addEventListener('dragover', (event) => {
+  if (event.target.closest('[data-shelf-drop]')) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }
+});
+
+panelEl.addEventListener('drop', async (event) => {
+  const zone = event.target.closest('[data-shelf-drop]');
+  if (!zone) return;
+  event.preventDefault();
+  const files = [...(event.dataTransfer?.files ?? [])];
+  if (!files.length) return;
+  const direct = [];
+  const blobs = [];
+  for (const file of files) {
+    const resolved = api.filePath(file);
+    if (resolved) direct.push(resolved);
+    else if (file.size <= 20 * 1024 * 1024) blobs.push(file);
+  }
+  try {
+    let snapshot = direct.length ? await api.localDo('shelf', 'add', { paths: direct }) : null;
+    for (const file of blobs) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      snapshot = await api.shelfAddBuffer(file.name, bytes);
+    }
+    if (snapshot) applyLocal(snapshot);
+    if (open) renderPage();
+  } catch {
+    // A refused drop leaves the list as it was.
   }
 });
 
@@ -310,9 +796,77 @@ api.onWeather((value) => {
   if (open && enabledPages()[pageIndex]?.key === 'weather') renderPage();
 });
 
+api.onMedia((value) => {
+  if (!value) return;
+  const trackChanged = value.title !== media.title || value.active !== media.active;
+  const playingChanged = value.playing !== media.playing;
+  media = value;
+  renderPillStatus();
+  if (open && enabledPages()[pageIndex]?.key === 'music') {
+    if (trackChanged || playingChanged) {
+      lastLyricIndex = -2;
+      renderPage();
+    } else {
+      updateMusicLive();
+    }
+  }
+});
+
+api.onLyrics((value) => {
+  lyrics = value;
+  lastLyricIndex = -2;
+  renderPillStatus();
+  if (open && enabledPages()[pageIndex]?.key === 'music') renderPage();
+});
+
+api.onFocus((value) => {
+  if (!value) return;
+  focusState = value;
+  if (open && enabledPages()[pageIndex]?.key === 'focus') renderPage();
+});
+
+api.onHealth((value) => {
+  if (!value) return;
+  healthState = value;
+  if (open && enabledPages()[pageIndex]?.key === 'health') renderPage();
+});
+
+api.onTodos((value) => {
+  if (!Array.isArray(value)) return;
+  todos = value;
+  if (open && enabledPages()[pageIndex]?.key === 'todo') renderPage();
+});
+
+api.onShelf((value) => {
+  if (!Array.isArray(value)) return;
+  shelfFiles = value;
+  if (open && enabledPages()[pageIndex]?.key === 'shelf') renderPage();
+});
+
+api.onQuota((value) => {
+  if (!value) return;
+  quotaState = value;
+  if (open && enabledPages()[pageIndex]?.key === 'quota') renderPage();
+  renderPillStatus();
+});
+
+api.onMail((value) => {
+  if (!value) return;
+  mailState = value;
+  if (open && enabledPages()[pageIndex]?.key === 'mail') renderPage();
+});
+
+api.onCalendar((value) => {
+  if (!value) return;
+  calendarState = value;
+  if (open && enabledPages()[pageIndex]?.key === 'calendar') renderPage();
+});
+
 api.onPrefs((next) => {
   prefs = next ?? prefs;
   renderPillStatus();
+  // A page was switched on or reordered in settings: the dots and the current
+  // page have to follow, otherwise the island keeps showing the old set.
   if (open) renderPage();
 });
 
@@ -320,7 +874,13 @@ const boot = await api.bootstrap();
 prefs = boot?.prefs ?? {};
 battery = boot?.battery ?? null;
 weather = boot?.weather ?? null;
-document.body.dataset.playing = 'false';
+media = boot?.media ?? media;
+lyrics = boot?.lyrics ?? null;
+applyLocal(boot);
+quotaState = boot?.quota ?? quotaState;
+mailState = boot?.mail ?? mailState;
+calendarState = boot?.calendar ?? calendarState;
+document.body.dataset.playing = String(Boolean(media.active && media.playing));
 
 renderPillStatus();
 setOpen(false);

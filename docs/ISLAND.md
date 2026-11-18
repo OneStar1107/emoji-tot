@@ -39,16 +39,16 @@ tot 的第二种形态：贴在屏幕顶部中间的一条胶囊。收起时只�
 
 | key | 名称 | 阶段 | 数据源 |
 | --- | --- | --- | --- |
-| `music` | 音乐 | 1（空态）/ 2（SMTC） | PowerShell + WinRT SMTC |
-| `weather` | 天气 | 1 | Open-Meteo |
-| `quota` | AI 额度 | 1（空态）/ 2 | DeepSeek `/user/balance` |
-| `mail` | 邮箱 | 1（空态）/ 3 | IMAP（imapflow） |
-| `focus` | 专注 | 2 | 本地计时 |
-| `todo` | 待办 | 2 | 本地 JSON |
-| `health` | 健康 | 2 | 本地计时 + 通知 |
-| `shelf` | 置物架 | 2 | 本地文件拖放 |
-| `calendar` | 日程 | 3 | 本地 JSON + ICS 解析 |
-| `battery` | 电量 | 1 | PowerShell `Win32_Battery` |
+| `music` | 音乐 | 已实现 | PowerShell + WinRT SMTC；歌词 LRCLIB |
+| `weather` | 天气 | 已实现 | Open-Meteo（PowerShell 子进程） |
+| `quota` | AI 额度 | 已实现 | DeepSeek `/user/balance`，密钥 safeStorage |
+| `mail` | 邮箱 | 已实现 | IMAP（imapflow），验证码 + .ics 提取 |
+| `focus` | 专注 | 已实现 | 结束时间戳 + 通知 |
+| `todo` | 待办 | 已实现 | 本地 JSON，到期提醒一次 |
+| `health` | 健康 | 已实现 | 喝水 / 久坐计时 + 通知 |
+| `shelf` | 置物架 | 已实现 | 复制式收纳，路径或字节都能收 |
+| `calendar` | 日程 | 已实现 | 本地 JSON + ICS 解析 |
+| `battery` | 电量 | 已实现 | PowerShell `Win32_Battery` |
 
 状态组件（常驻 pill，不占页）：电量、时间、温度、余额、音量、日程下一项。顺序可拖。
 

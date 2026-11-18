@@ -11,10 +11,10 @@ export const PAGES = [
   { key: 'weather', title: '天气', sub: '当地与七日', icon: 'sun', stage: 1 },
   { key: 'quota', title: 'AI 额度', sub: '余额与账号', icon: 'coin', stage: 1 },
   { key: 'mail', title: '邮箱', sub: '摘要与验证码', icon: 'mail', stage: 1 },
-  { key: 'focus', title: '专注', sub: '番茄钟与休息', icon: 'timer', stage: 2 },
-  { key: 'todo', title: '待办', sub: '清单与到期', icon: 'check', stage: 2 },
-  { key: 'health', title: '健康', sub: '喝水与久坐', icon: 'drop', stage: 2 },
-  { key: 'shelf', title: '置物架', sub: '临时收纳', icon: 'tray', stage: 2 },
+  { key: 'focus', title: '专注', sub: '番茄钟与休息', icon: 'timer', stage: 1 },
+  { key: 'todo', title: '待办', sub: '清单与到期', icon: 'check', stage: 1 },
+  { key: 'health', title: '健康', sub: '喝水与久坐', icon: 'drop', stage: 1 },
+  { key: 'shelf', title: '置物架', sub: '临时收纳', icon: 'tray', stage: 1 },
   { key: 'calendar', title: '日程', sub: '月历与邀请', icon: 'calendar', stage: 3 },
 ];
 
@@ -26,5 +26,5 @@ export const STATUS_ITEMS = [
   { key: 'volume', label: '音量' },
 ];
 
-/** Pages that are switched on by default in stage one. */
-export const DEFAULT_PAGES = ['music', 'weather', 'quota', 'mail'];
+/** Pages switched on by default: the six that need no setup. */
+export const DEFAULT_PAGES = ['music', 'weather', 'focus', 'todo', 'quota', 'mail'];

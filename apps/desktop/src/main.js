@@ -24,6 +24,15 @@ const island = require('./main/island');
 const settings = require('./main/settings');
 const battery = require('./main/services/battery');
 const weather = require('./main/services/weather');
+const media = require('./main/services/media');
+const lyrics = require('./main/services/lyrics');
+const focus = require('./main/services/focus');
+const health = require('./main/services/health');
+const todo = require('./main/services/todo');
+const shelf = require('./main/services/shelf');
+const quota = require('./main/services/quota');
+const mail = require('./main/services/mail');
+const calendar = require('./main/services/calendar');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -819,6 +828,8 @@ ipcMain.on('pet:action', () => {
 let batteryTimer = null;
 let weatherTimer = null;
 let lastBattery = null;
+let lastLyricTrack = '';
+let lastLyrics = null;
 
 /**
  * Battery is polled every 30s instead of watched: Windows has no push event
@@ -852,13 +863,137 @@ function startServices() {
   clearInterval(weatherTimer);
   weatherTimer = setInterval(refreshWeather, 15 * 60 * 1000);
 
+  /*
+   * Media: the bridge streams a line per second. The island only needs a frame
+   * when something changed, and lyrics only when the track changed — a song
+   * that is merely playing does not re-query LRCLIB every second.
+   */
+  media.onChange((state) => {
+    island.send('island:media', state);
+    const key = state.active ? state.title + '|' + state.artist : '';
+    if (key === lastLyricTrack) return;
+    lastLyricTrack = key;
+    if (!state.active) {
+      lastLyrics = null;
+      island.send('island:lyrics', null);
+      return;
+    }
+    lyrics.get(state).then((value) => {
+      lastLyrics = value;
+      island.send('island:lyrics', value);
+    });
+  });
+  media.start();
+
+  /*
+   * Local services: focus, health, todos, shelf. Each one owns its own file,
+   * and each pushes its snapshot on change — the island never polls.
+   */
+  focus.startService();
+  health.startService();
+  todo.startService();
+  quota.startService();
+  calendar.startService();
+  mail.startService();
+  focus.onChange((value) => island.send('island:focus', value));
+  health.onChange((value) => island.send('island:health', value));
+  todo.onChange((value) => island.send('island:todos', value));
+  shelf.onChange((value) => island.send('island:shelf', value));
+  quota.onChange((value) => island.send('island:quota', value));
+  mail.onChange((value) => island.send('island:mail', value));
+  // Same shape as the bootstrap payload: the page reads .events, and a bare
+  // array here made every pushed update render as "nothing scheduled".
+  calendar.onChange(() => island.send('island:calendar', { events: calendar.list(), upcoming: calendar.upcoming() }));
+
+  ipcMain.handle('mail:get', () => mail.snapshot());
+  ipcMain.handle('mail:do', async (_event, payload) => {
+    const { action, data } = payload ?? {};
+    if (action === 'add') mail.add(data);
+    else if (action === 'remove') mail.remove(data?.id);
+    else if (action === 'refresh') await mail.refresh(true);
+    return mail.snapshot();
+  });
+
+  ipcMain.handle('calendar:get', () => ({ events: calendar.list(), upcoming: calendar.upcoming() }));
+  ipcMain.handle('calendar:do', async (_event, payload) => {
+    const { action, data } = payload ?? {};
+    if (action === 'add') calendar.add(data);
+    else if (action === 'remove') calendar.remove(data?.id);
+    else if (action === 'import') calendar.importIcs(data?.ics);
+    return { events: calendar.list(), upcoming: calendar.upcoming() };
+  });
+
+  ipcMain.handle('quota:get', () => quota.snapshot());
+  ipcMain.handle('quota:do', async (_event, payload) => {
+    const { action, data } = payload ?? {};
+    if (action === 'add') quota.add(data?.name, data?.key);
+    else if (action === 'remove') quota.remove(data?.id);
+    else if (action === 'select') quota.select(data?.id);
+    else if (action === 'refresh') await quota.refresh();
+    return quota.snapshot();
+  });
+
+  ipcMain.handle('local:get', () => ({
+    focus: focus.snapshot(),
+    health: health.snapshot(),
+    todos: todo.list(),
+    shelf: shelf.list(),
+  }));
+
+  ipcMain.handle('local:do', async (_event, payload) => {
+    const { service, action, data } = payload ?? {};
+    if (service === 'focus') {
+      if (action === 'start') focus.start();
+      else if (action === 'pause') focus.pause();
+      else if (action === 'resume') focus.resume();
+      else if (action === 'stop') focus.stop();
+      else if (action === 'skip') focus.skip();
+      else if (action === 'restart') focus.restart();
+    } else if (service === 'health') {
+      if (action === 'drink') health.drink();
+      else if (action === 'stand') health.stand();
+    } else if (service === 'todo') {
+      if (action === 'add') todo.add(data?.text, data?.due);
+      else if (action === 'toggle') todo.toggle(data?.id);
+      else if (action === 'remove') todo.remove(data?.id);
+      else if (action === 'update') todo.update(data?.id, data ?? {});
+      else if (action === 'clearDone') todo.clearDone();
+    } else if (service === 'shelf') {
+      if (action === 'add') shelf.add(data?.paths);
+      else if (action === 'addBuffer') shelf.addBuffer(data?.name, data?.bytes);
+      else if (action === 'open') await shelf.open(data?.name);
+      else if (action === 'reveal') shelf.reveal(data?.name);
+      else if (action === 'remove') shelf.remove(data?.name);
+    }
+    return {
+      focus: focus.snapshot(),
+      health: health.snapshot(),
+      todos: todo.list(),
+      shelf: shelf.list(),
+    };
+  });
+
   // The island asks once after it loads: pushing into a window that is still
   // parsing its page would drop the first frame.
   ipcMain.handle('island:bootstrap', () => ({
     battery: lastBattery,
     weather: weather.cached(),
+    media: media.current(),
+    lyrics: lastLyrics,
+    focus: focus.snapshot(),
+    health: health.snapshot(),
+    todos: todo.list(),
+    shelf: shelf.list(),
+    quota: quota.snapshot(),
+    mail: mail.snapshot(),
+    calendar: { events: calendar.list(), upcoming: calendar.upcoming() },
     prefs: readPrefs(),
   }));
+
+  ipcMain.handle('media:control', (_event, payload) => {
+    if (payload && typeof payload === 'object') media.command(payload.kind, Number(payload.arg) || 0);
+    return media.current();
+  });
 }
 
 /* ------------------------------------------------------------------ boot */
@@ -957,6 +1092,13 @@ if (!gotTheLock) {
     clearInterval(pointerTimer);
     clearInterval(batteryTimer);
     clearInterval(weatherTimer);
+    media.stop();
+    focus.stopService();
+    health.stopService();
+    todo.stopService();
+    quota.stopService();
+    mail.stopService();
+    calendar.stopService();
     stopAgentWatch();
     fs.unwatchFile(statePath());
   });

@@ -24,6 +24,12 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   refreshWeather: () => ipcRenderer.invoke('settings:refresh-weather'),
   openData: () => ipcRenderer.invoke('settings:open-data'),
   openRepo: () => ipcRenderer.invoke('settings:open-repo'),
+  quota: () => ipcRenderer.invoke('quota:get'),
+  quotaDo: (action, data) => ipcRenderer.invoke('quota:do', { action, data }),
+  mail: () => ipcRenderer.invoke('mail:get'),
+  mailDo: (action, data) => ipcRenderer.invoke('mail:do', { action, data }),
+  calendar: () => ipcRenderer.invoke('calendar:get'),
+  calendarDo: (action, data) => ipcRenderer.invoke('calendar:do', { action, data }),
   onGoto: (listener) => on('settings:goto', listener),
   onChanged: (listener) => on('settings:changed', listener),
 });

@@ -52,10 +52,10 @@ const PAGES_TABLE = [
   { key: 'weather', label: '天气', stage: 1, sub: '当地天气与七日预报' },
   { key: 'quota', label: 'AI 额度', stage: 1, sub: '余额与账号切换' },
   { key: 'mail', label: '邮箱', stage: 1, sub: '摘要与验证码' },
-  { key: 'focus', label: '专注', stage: 2, sub: '番茄钟与休息计时' },
-  { key: 'todo', label: '待办', stage: 2, sub: '清单与到期提醒' },
-  { key: 'health', label: '健康', stage: 2, sub: '喝水与久坐提醒' },
-  { key: 'shelf', label: '置物架', stage: 2, sub: '临时收纳文件位置' },
+  { key: 'focus', label: '专注', stage: 1, sub: '番茄钟与休息计时' },
+  { key: 'todo', label: '待办', stage: 1, sub: '清单与到期提醒' },
+  { key: 'health', label: '健康', stage: 1, sub: '喝水与久坐提醒' },
+  { key: 'shelf', label: '置物架', stage: 1, sub: '临时收纳文件位置' },
   { key: 'calendar', label: '日程', stage: 3, sub: '月历、邮件邀请与工作日程' },
 ];
 
@@ -99,6 +99,9 @@ let prefs = { ...DEFAULTS };
 let page = 'general';
 let displays = [];
 let version = '0.0.0';
+let quotaState = { accounts: [], current: null, last: null };
+let mailState = { accounts: [], messages: [], error: '', lastSync: 0, syncing: false };
+let calendarState = { events: [], upcoming: [] };
 
 const rail = document.getElementById('rail');
 const content = document.getElementById('content');
@@ -307,34 +310,105 @@ function pageTodo() {
 }
 
 function pageComm() {
-  const accounts = Array.isArray(prefs.mail) ? prefs.mail : [];
-  const accountRows = accounts.length
-    ? card(accounts.map((account) => row(account.address, account.provider + (account.enabled === false ? ' · 已停用' : ' · 已连接'),
-      '<button type="button" class="btn" data-act="button" data-key="remove-mail" data-value="' + escapeHtml(account.address) + '">删除</button>')))
-    : emptyCard('还没有添加邮箱', '支持 163、QQ、Gmail 与自定义 IMAP。授权码用系统凭据加密后存在本机。', 'add-mail', '添加邮箱');
+  const mailAccounts = mailState.accounts ?? [];
+  const accountRows = mailAccounts.length
+    ? mailAccounts
+        .map((account) =>
+          row(
+            account.address,
+            `${account.provider} · ${account.enabled === false ? '已停用' : '已连接'}`,
+            `<button type="button" class="btn" data-act="button" data-key="mail-remove" data-id="${account.id}">删除</button>`,
+          ),
+        )
+        .join('')
+    : '<div class="row"><span class="row-label"><b>还没有添加邮箱</b><span>支持 163、QQ、Gmail 与自定义 IMAP</span></span></div>';
+
+  const mailStatus =
+    mailState.lastSync || mailState.error
+      ? row(
+          '同步状态',
+          mailState.error ? escapeHtml(mailState.error) : `${mailState.messages.length} 封邮件 · 最近更新 ${stamp(mailState.lastSync)}`,
+          '<button type="button" class="btn" data-act="button" data-key="mail-refresh">立即同步</button>',
+        )
+      : '';
+
+  const events = (calendarState.events ?? []).slice(0, 6);
+  const eventRows = events.length
+    ? events
+        .map((event) => {
+          const date = new Date(event.start);
+          const label = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+          return row(event.title, label + (event.location ? ' · ' + event.location : ''),
+            `<button type="button" class="btn" data-act="button" data-key="cal-remove" data-id="${event.id}">删除</button>`);
+        })
+        .join('')
+    : '<div class="row"><span class="row-label"><b>还没有日程</b><span>手动添加，或从邮件邀请里自动导入</span></span></div>';
+
   return head('通知、邮箱与日程', '什么要提醒你，提醒到什么程度') +
     group('通知', card([
       rowToggle('系统通知', '任务完成、提醒到点时发通知', 'notify.system'),
       rowToggle('通知显示正文', '关闭后只显示来源', 'notify.body'),
     ])) +
-    group('邮箱', accountRows) +
-    group('日程', card([
-      rowRange('提前提醒', '会议开始前多久提示', 'calendar.leadMin', 0, 60, 5, ' 分钟'),
-      rowToggle('识别邮件邀请', '从邮件里提取 .ics 并加入日程', 'calendar.fromMail'),
+    group('邮箱', '<div class="card">' + accountRows + mailStatus + '</div>') +
+    group('添加邮箱', card([
+      rowSelect('服务商', '163 / QQ 需要授权码，不是登录密码', 'mailProvider', [
+        ['163', '163 邮箱'], ['qq', 'QQ 邮箱'], ['gmail', 'Gmail'], ['outlook', 'Outlook'], ['custom', '自定义 IMAP'],
+      ], prefs.mailProvider ?? '163'),
+      row('邮箱地址', '', '<input class="ctl" data-mail-input="address" placeholder="you@163.com" spellcheck="false" />'),
+      row('授权码', '邮箱设置里生成的 IMAP 授权码', '<input class="ctl" type="password" data-mail-input="secret" placeholder="授权码" spellcheck="false" />'),
+      row('IMAP 主机', '自定义服务商才需要填', '<input class="ctl" data-mail-input="host" placeholder="imap.example.com" spellcheck="false" />'),
+      row('', '拉取最近 10 封，凭证用系统加密保存', '<button type="button" class="btn primary" data-act="button" data-key="mail-add">添加并同步</button>'),
     ])) +
-    '<p class="note">阶段 3 实现 IMAP 拉取与验证码识别；现在可以先看空态的样子。</p>';
+    group('日程', '<div class="card">' + eventRows + '</div>') +
+    group('添加日程', card([
+      row('标题', '', '<input class="ctl" data-cal-input="title" placeholder="周会" spellcheck="false" />'),
+      row('时间', '', '<input class="ctl" type="datetime-local" data-cal-input="start" />'),
+      row('地点', '可留空', '<input class="ctl" data-cal-input="location" placeholder="会议室 / 线上" spellcheck="false" />'),
+      row('', '邮件邀请里的 .ics 会自动导入', '<button type="button" class="btn primary" data-act="button" data-key="cal-add">添加日程</button>'),
+    ])) +
+    '<p class="note">邮箱每 5 分钟同步一次；验证码会从邮件正文里识别出来，在岛上直接显示。</p>';
 }
 
+const stamp = (ms) => {
+  const date = new Date(Number(ms) || Date.now());
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
 function pageQuota() {
+  const state = quotaState ?? { accounts: [], last: null };
+  const accounts = state.accounts
+    .map((account) =>
+      row(
+        account.name,
+        account.current ? '当前账号' : account.provider,
+        `<span class="row-control">
+          <button type="button" class="btn" data-act="button" data-key="quota-select" data-id="${account.id}" ${account.current ? 'disabled' : ''}>${account.current ? '使用中' : '切换'}</button>
+          <button type="button" class="btn" data-act="button" data-key="quota-remove" data-id="${account.id}">删除</button>
+        </span>`,
+      ),
+    )
+    .join('');
+  const last = state.last;
+  const balance = last && !last.error && last.total !== undefined
+    ? row('当前余额', `更新于 ${stamp(last.at)} · ${last.available ? '可用' : '不可用'}`, `<b>¥${escapeHtml(last.total)}</b>`)
+    : row('当前余额', last?.error ? escapeHtml(last.error) : '还没有查询', `<button type="button" class="btn" data-act="button" data-key="quota-refresh">查询</button>`);
+
   return head('AI 额度', 'Agent 余额与账号切换') +
-    (Array.isArray(prefs.quotaAccounts) && prefs.quotaAccounts.length
-      ? card(prefs.quotaAccounts.map((account) => row(account.name, account.provider, '<span class="badge">已连接</span>')))
-      : emptyCard('还没有连接账号', '填入 DeepSeek API Key 后，岛上显示余额；密钥用 safeStorage 加密保存。', 'add-quota', '添加账号')) +
+    group('账号', '<div class="card">' + (accounts || emptyCardRow()) + balance + '</div>') +
+    group('添加账号', card([
+      row('名称', '显示在岛上的名字，留空就是 DeepSeek', '<input class="ctl" data-quota-input="name" placeholder="可选" spellcheck="false" />'),
+      row('API Key', 'DeepSeek 平台 → API Keys，只保存在本机', '<input class="ctl" type="password" data-quota-input="key" placeholder="sk-..." spellcheck="false" />'),
+      row('', '密钥用系统凭据加密，不写进 prefs.json', '<button type="button" class="btn primary" data-act="button" data-key="quota-add">添加并查询</button>'),
+    ])) +
     group('刷新', card([
       rowRange('刷新间隔', '两次余额查询之间', 'quota.intervalMin', 5, 120, 5, ' 分钟'),
       rowToggle('低余额提醒', '低于阈值时在岛上提示', 'quota.alert'),
     ])) +
-    '<p class="note">阶段 2 接 DeepSeek /user/balance；账号切换做成下拉，不允许多账号同时刷新。</p>';
+    '<p class="note">余额来自 DeepSeek <code>/user/balance</code>；子进程携带密钥，命令参数里看不到它。</p>';
+}
+
+function emptyCardRow() {
+  return '<div class="row"><span class="row-label"><b>还没有连接账号</b><span>在下面填入 API Key 就能看到余额</span></span></div>';
 }
 
 function pageWeather() {
@@ -421,6 +495,9 @@ async function load() {
   prefs = merge(await api.get());
   version = (await api.version?.()) ?? version;
   displays = (await api.displays?.()) ?? [];
+  quotaState = (await api.quota?.()) ?? quotaState;
+  mailState = (await api.mail?.()) ?? mailState;
+  calendarState = (await api.calendar?.()) ?? calendarState;
   paint();
 }
 
@@ -483,6 +560,74 @@ content.addEventListener('click', async (event) => {
     if (key === 'open-repo') { await api.openRepo?.(); return; }
     if (key === 'add-mail') { page = 'comm'; return; }
     if (key === 'add-quota') { page = 'quota'; return; }
+    if (key === 'quota-add') {
+      const name = content.querySelector('[data-quota-input="name"]')?.value?.trim() ?? '';
+      const secret = content.querySelector('[data-quota-input="key"]')?.value?.trim() ?? '';
+      if (!secret) {
+        content.querySelector('[data-quota-input="key"]')?.focus();
+        return;
+      }
+      quotaState = await api.quotaDo('add', { name, key: secret });
+      paint();
+      return;
+    }
+    if (key === 'quota-refresh') {
+      quotaState = await api.quotaDo('refresh');
+      paint();
+      return;
+    }
+    if (key === 'quota-remove') {
+      quotaState = await api.quotaDo('remove', { id: target.dataset.id });
+      paint();
+      return;
+    }
+    if (key === 'quota-select') {
+      quotaState = await api.quotaDo('select', { id: target.dataset.id });
+      paint();
+      return;
+    }
+    if (key === 'mail-add') {
+      const address = content.querySelector('[data-mail-input="address"]')?.value?.trim() ?? '';
+      const secret = content.querySelector('[data-mail-input="secret"]')?.value?.trim() ?? '';
+      const host = content.querySelector('[data-mail-input="host"]')?.value?.trim() ?? '';
+      if (!address || !secret) {
+        content.querySelector('[data-mail-input="address"]')?.focus();
+        return;
+      }
+      await patch({ mailProvider: prefs.mailProvider });
+      await api.mailDo('add', { provider: prefs.mailProvider, address, user: address, secret, host });
+      mailState = await api.mailDo('refresh');
+      paint();
+      return;
+    }
+    if (key === 'mail-remove') {
+      mailState = await api.mailDo('remove', { id: target.dataset.id });
+      paint();
+      return;
+    }
+    if (key === 'mail-refresh') {
+      mailState = await api.mailDo('refresh');
+      paint();
+      return;
+    }
+    if (key === 'cal-add') {
+      const title = content.querySelector('[data-cal-input="title"]')?.value?.trim() ?? '';
+      const startValue = content.querySelector('[data-cal-input="start"]')?.value ?? '';
+      const location = content.querySelector('[data-cal-input="location"]')?.value?.trim() ?? '';
+      if (!title || !startValue) return;
+      calendarState = await api.calendarDo('add', {
+        title,
+        start: new Date(startValue).getTime(),
+        location,
+      });
+      paint();
+      return;
+    }
+    if (key === 'cal-remove') {
+      calendarState = await api.calendarDo('remove', { id: target.dataset.id });
+      paint();
+      return;
+    }
     return;
   }
 });

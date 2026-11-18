@@ -24,7 +24,21 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 
 **点击穿透靠轮询**：`setIgnoreMouseEvents(true, { forward: true })` 在 Windows 上不保证转发 mousemove，所以主进程每 60ms 读一次光标，落在岛矩形内才收回输入。球窗口用的是同一套。
 
-**服务层**（`src/main/services/`）：电量走 PowerShell CIM，天气走 PowerShell 子进程请求 Open-Meteo。天气不用主进程的 `fetch`，是因为 Electron 主进程共享 Chromium 网络栈，系统代理没开时每个请求都会超时 —— 本机实测如此，子进程能通。
+**服务层**（`src/main/services/`）：每个服务只拥有自己的一份数据文件，变化时向岛推送快照，岛从不轮询。
+
+| 服务 | 数据 | 外部依赖 |
+| --- | --- | --- |
+| battery | 无 | PowerShell CIM |
+| weather | `cache-weather.json` | Open-Meteo，PowerShell 子进程 |
+| media | 无 | PowerShell + WinRT SMTC 长驻子进程 |
+| lyrics | `cache-lyrics-*.json` | LRCLIB，PowerShell 子进程 |
+| quota | `secrets.bin` | DeepSeek，密钥经 safeStorage、走环境变量传子进程 |
+| mail | `mail.json` | imapflow（MIT） |
+| calendar | `cache-calendar.json` | 无 |
+| focus / health / todo | 各自 `cache-*.json` | 无（通知用 Electron Notification） |
+| shelf | `shelf/` 目录 | 无 |
+
+网络为什么都走子进程：Electron 主进程的 `fetch`/`https` 共享 Chromium 网络栈，系统代理没开时每个请求都会超时 —— 本机实测如此，PowerShell 与 imapflow（Node 原生 socket）能通。
 
 ## 一条数据流
 
