@@ -59,7 +59,13 @@ function place() {
   const width = Math.round(box.w + PAD_X * 2);
   const height = Math.round(box.h + PAD_Y * 2);
   const x = Math.round(area.x + (area.width - width) / 2);
-  const y = Math.round(area.y + (prefs.avoidTopBar === false ? 0 : 0));
+  /*
+   * The work area already excludes the taskbar, so "avoid the top bar" is the
+   * default for free. Turning it off means the island may sit over a top-0
+   * docked taskbar, which is what that switch promises.
+   */
+  const display = displayFor(prefs);
+  const y = Math.round(prefs.avoidTopBar === false ? display.bounds.y : area.y);
   const bounds = win.getBounds();
   if (bounds.x === x && bounds.y === y && bounds.width === width && bounds.height === height) return;
   win.setBounds({ x, y, width, height });

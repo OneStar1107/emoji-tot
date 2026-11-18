@@ -8,6 +8,13 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
+public class Quns {
+  [DllImport("shell32.dll")] public static extern int SHQueryUserNotificationState(out int state);
+}
+"@
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
 public class FgWin {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
@@ -23,10 +30,18 @@ while ($true) {
   [FgWin]::GetWindowRect($handle, [ref]$rect) | Out-Null
   $width = $rect.Right - $rect.Left
   $height = $rect.Bottom - $rect.Top
-  if ($width -ge $screen.Width -and $height -ge $screen.Height) {
-    Write-Output '1'
-  } else {
-    Write-Output '0'
+  $full = $false
+  if ($width -ge $screen.Width -and $height -ge $screen.Height) { $full = $true }
+
+  # A foreground rect can cover the screen without the shell considering it
+  # full screen (borderless maximised windows do). QUNS knows the difference:
+  # 2 = busy/full-screen app, 3 = D3D full screen, 4 = presentation mode.
+  if (-not $full) {
+    $state = 0
+    $hr = [Quns]::SHQueryUserNotificationState([ref]$state)
+    if ($hr -eq 0 -and ($state -eq 2 -or $state -eq 3 -or $state -eq 4)) { $full = $true }
   }
+
+  if ($full) { Write-Output '1' } else { Write-Output '0' }
   Start-Sleep -Milliseconds 2000
 }

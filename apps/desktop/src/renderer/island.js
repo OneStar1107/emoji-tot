@@ -634,6 +634,13 @@ const RENDERERS = {
  * Adding a knob is then two lines here plus one row in settings — not a new
  * state path.
  */
+function resolveTheme() {
+  const theme = prefs.theme ?? 'dark';
+  if (theme === 'light') return 'light';
+  if (theme === 'dark') return 'dark';
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
 function applyPrefs() {
   const root = document.documentElement;
   root.style.setProperty('--radius', `${Number(prefs.radius) || 22}px`);
@@ -651,6 +658,7 @@ function applyPrefs() {
   document.body.dataset.skin = prefs.skin ?? 'frost';
   document.body.dataset.blur = prefs.blur === false ? 'off' : 'on';
   document.body.dataset.motion = prefs.motion === false ? 'off' : 'on';
+  document.body.dataset.theme = resolveTheme();
   timeFormat24 = prefs.timeFormat !== '12h';
 }
 
@@ -1014,6 +1022,10 @@ document.body.dataset.playing = String(Boolean(media.active && media.playing));
 
 applyPrefs();
 renderPillStatus();
+// "Follow the system" only matters while the OS theme actually changes.
+window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+  if ((prefs.theme ?? 'dark') === 'system') applyPrefs();
+});
 // Land on the user's default page, not always the first one.
 const bootPages = enabledPages();
 const preferred = bootPages.findIndex((page) => page.key === prefs.defaultPage);
