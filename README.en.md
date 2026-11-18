@@ -2,7 +2,7 @@
 
 # EmojiTot
 
-**A character engine for the desktop and the web — 15 characters from 15 bodies × hand-written outlines × 12 colours, 44 expressions driven by one two-digit number. Visible in a page, livable on a desktop.**
+**A character engine for the desktop and the web — 15 characters from 15 bodies × hand-written outlines × 12 colours, 44 expressions driven by one two-digit number. Visible in a page, and now both a ball on the desktop and a pill at the top of the screen.**
 
 [Console](https://onestar1107.github.io/emoji-tot/#/console) · [Faces](https://onestar1107.github.io/emoji-tot/#/gallery) · [Scene](https://onestar1107.github.io/emoji-tot/#/scene) · [Docs](https://onestar1107.github.io/emoji-tot/#/docs) · [中文](README.md)
 
@@ -25,6 +25,19 @@
 | [EmojiTot Portable 0.2.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.2.1/EmojiTot-Portable-0.2.1.exe) | Portable — double-click, writes nothing to the registry |
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases)
+
+## Two forms
+
+The desktop app has two forms, switchable from the tray or the settings window without a restart:
+
+| Form | Where | What it is |
+| --- | --- | --- |
+| **Island** (default) | top centre of the screen | a pill showing the face, battery, time and temperature; click and it expands into a 420px card |
+| **Ball** | anywhere, docks to an edge | the original ball that hops, sulks and gets dragged around |
+
+Both can be on at once. The form is one field in `prefs.json`; both windows are created up front and the switch only toggles visibility, so nothing reloads and the island keeps the page it was on.
+
+The island sizes itself from its content: the page measures its own box with `ResizeObserver` and the main process calls `setBounds`, centred. The settings window has 13 pages — general, appearance, size and position, hiding and interaction, page manager, music and lyrics, focus and water, todos and shelf, notifications / mail / calendar, AI quota, weather, plugins, about — and every control writes straight to prefs with no save button.
 
 ## What this is
 

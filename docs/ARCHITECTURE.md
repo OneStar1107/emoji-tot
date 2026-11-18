@@ -3,12 +3,28 @@
 四个包，一条从「两个数字」到「一个 SVG」的路。
 
 ```
-apps/desktop      Electron 桌宠：贴边、穿透、状态气泡
+apps/desktop      Electron 桌面端：球窗口、灵动岛、设置中心、托盘
 apps/gallery      四页站点：控制台 / 表情馆 / 场景 / 文档
         ↓ 都依赖
 packages/core     组合式角色引擎：身体、特征、表情、渲染（纯函数，输出 SVG）
 packages/protocol 两位数协议：解析、仲裁、事件桥
 ```
+
+## 桌面端三个窗口
+
+| 窗口 | 页面 | 主进程 | 职责 |
+| --- | --- | --- | --- |
+| 球 | `src/renderer/index.html` | `src/main.js` | 贴边、穿透、拖拽、Agent 联动 |
+| 灵动岛 | `src/renderer/island.html` | `src/main/island.js` | 顶部居中的胶囊，点开成功能面板 |
+| 设置中心 | `src/renderer/settings.html` | `src/main/settings.js` | 13 页，改动即写 `prefs.json` |
+
+三个窗口都提前创建，形态切换只改可见性：重建窗口会重载页面，岛会丢掉当前页，球会丢掉位置。两个 preload（`preload-island.js`、`preload-settings.js`）各自只暴露自己的几个调用。
+
+**岛的尺寸只有一个来源**：页面用 `ResizeObserver` 量自己，把 `{w,h}` 发给主进程，主进程 `setBounds` 并居中。主进程里没有任何一处硬编码展开宽高 —— 页面长高，窗口就长高。
+
+**点击穿透靠轮询**：`setIgnoreMouseEvents(true, { forward: true })` 在 Windows 上不保证转发 mousemove，所以主进程每 60ms 读一次光标，落在岛矩形内才收回输入。球窗口用的是同一套。
+
+**服务层**（`src/main/services/`）：电量走 PowerShell CIM，天气走 PowerShell 子进程请求 Open-Meteo。天气不用主进程的 `fetch`，是因为 Electron 主进程共享 Chromium 网络栈，系统代理没开时每个请求都会超时 —— 本机实测如此，子进程能通。
 
 ## 一条数据流
 

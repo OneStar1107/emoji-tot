@@ -12,12 +12,18 @@
  * 3. **Agent linkage.** It can watch a coding agent's status file and react —
  *    the same file-watching contract the protocol already uses.
  */
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 // Vendored, not resolved: a workspace link does not survive packaging.
 const { parseAgentMessage } = require('./vendor/protocol/index.js');
+// Shared, because the island and the settings window write the same file.
+const { userDir, statePath, prefsPath, readJson, writeJson, readPrefs, writePrefs } = require('./main/paths');
+const island = require('./main/island');
+const settings = require('./main/settings');
+const battery = require('./main/services/battery');
+const weather = require('./main/services/weather');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -144,32 +150,16 @@ function setCast(id) {
   refreshMenus();
 }
 
-const userDir = () => app.getPath('userData');
-const statePath = () => path.join(userDir(), 'state.json');
-const prefsPath = () => path.join(userDir(), 'prefs.json');
+/** Which form is on screen: the island, the ball, or both. */
+let form = 'island';
+let both = false;
 
-function readJson(file, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(file, value) {
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(value, null, 2));
-  } catch {
-    // A read-only profile is not worth crashing the pet over.
-  }
-}
+const showBall = () => form === 'ball' || both;
+const showIsland = () => form === 'island' || both;
 
 function savePrefs() {
   const position = win && !win.isDestroyed() ? win.getPosition() : undefined;
-  const prefs = readJson(prefsPath(), {});
-  writeJson(prefsPath(), {
-    ...prefs,
+  writePrefs({
     sizeKey,
     pinned,
     clickThrough,
@@ -228,7 +218,8 @@ function createWindow() {
   win.setAlwaysOnTop(pinned, 'floating');
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.once('ready-to-show', () => {
-    win.showInactive();
+    // The ball may be the off-form: create the window, keep it hidden.
+    if (showBall()) win.showInactive();
     // Start transparent to clicks: the window is mostly empty space.
     setClickThrough(clickThrough);
   });
@@ -622,11 +613,53 @@ function stopAgentWatch() {
   agentWatch = {};
 }
 
+/* ------------------------------------------------------------- forms */
+
+/**
+ * Switch the visible form, or both.
+ *
+ * The two windows are both created and only shown or hidden: a window that is
+ * created on every switch would reload its page and lose the island's open
+ * page, and creating both is cheaper than a stale state machine.
+ */
+function applyForm() {
+  if (showIsland()) island.show();
+  else island.hide();
+  if (!win || win.isDestroyed()) return;
+  if (showBall()) win.showInactive();
+  else win.hide();
+  refreshMenus();
+}
+
+function setForm(next) {
+  form = next === 'ball' ? 'ball' : 'island';
+  writePrefs({ form });
+  applyForm();
+}
+
+function setBoth(on) {
+  both = Boolean(on);
+  writePrefs({ formBoth: both });
+  applyForm();
+}
+
 /* ---------------------------------------------------------------- menus */
 
 function buildMenu() {
-  const prefs = readJson(prefsPath(), {});
+  const prefs = readPrefs();
   return Menu.buildFromTemplate([
+    {
+      label: '形态',
+      submenu: [
+        { label: '灵动岛', type: 'radio', checked: form === 'island', click: () => setForm('island') },
+        { label: '桌面球', type: 'radio', checked: form === 'ball', click: () => setForm('ball') },
+        { type: 'separator' },
+        { label: '两种同时显示', type: 'checkbox', checked: both, click: (item) => setBoth(item.checked) },
+      ],
+    },
+    { label: '打开设置…', click: () => settings.create() },
+    { label: island.isVisible() ? '隐藏灵动岛' : '显示灵动岛', click: () => { if (island.isVisible()) island.hide(); else island.show(); refreshMenus(); } },
+    { type: 'separator' },
     { label: win && win.isVisible() ? '隐藏球球' : '显示球球', click: toggleVisible },
     { type: 'separator' },
     {
@@ -728,12 +761,34 @@ function createTray() {
 
 /* -------------------------------------------------------------- IPC glue */
 
-/*
- * Always answer, in dev and in a packaged build. The renderer asks once on
- * load to restore the bubble side; a missing handler is a console error on
- * every launch for a question that costs nothing to answer.
+
+/**
+ * Read-only state, for tests only.
+ *
+ * Edge docking and click-through are invisible in the DOM: they are window
+ * behaviour. Without a way to ask the main process what it actually did,
+ * "verified" would mean "looks plausible". One handler, always registered —
+ * it used to be declared twice (once unconditionally, once under --dev), and
+ * the second registration crashed the whole app on `electron . --dev`.
  */
-ipcMain.handle('debug:state', () => ({ docked: dockSide, dockOpen, cast: castId, size: sizeKey, bounds: win && !win.isDestroyed() ? win.getBounds() : null, area: workArea() }));
+ipcMain.handle('debug:state', () => {
+  if (!win || win.isDestroyed()) return null;
+  return {
+    clickThrough,
+    pinned,
+    docked: dockSide ? (dockOpen ? `${dockSide}-open` : dockSide) : null,
+    dockOpen,
+    cast: castId,
+    size: SIZES[sizeKey],
+    sizeKey,
+    form,
+    both,
+    bounds: win.getBounds(),
+    visible: win.isVisible(),
+    workArea: workArea(),
+    islandVisible: island.isVisible(),
+  };
+});
 ipcMain.handle('debug:dock', (_event, side) => {
   if (side) dock(side);
   else undock();
@@ -757,26 +812,53 @@ ipcMain.on('pet:action', () => {
 /** The renderer saw the pointer on the ball, or leave it. */
 
 
+
+
+/* -------------------------------------------------------------- services */
+
+let batteryTimer = null;
+let weatherTimer = null;
+let lastBattery = null;
+
 /**
- * Read-only state, for tests only.
- *
- * Edge docking and click-through are invisible in the DOM: they are window
- * behaviour. Without a way to ask the main process what it actually did,
- * "verified" would mean "looks plausible". Registered only under --dev so a
- * shipped build has no query surface.
+ * Battery is polled every 30s instead of watched: Windows has no push event
+ * for charge level, and a 30s lag is invisible on a component that moves one
+ * pixel per percent.
  */
-if (process.argv.includes('--dev')) {
-  ipcMain.handle('debug:state', () => {
-    if (!win || win.isDestroyed()) return null;
-    return {
-      clickThrough,
-      docked: dockSide ? (dockOpen ? `${dockSide}-open` : dockSide) : null,
-      bounds: win.getBounds(),
-      visible: win.isVisible(),
-      workArea: workArea(),
-      size: SIZES[sizeKey],
-    };
+function pushBattery() {
+  battery.read((value) => {
+    lastBattery = value;
+    island.send('island:battery', value);
   });
+}
+
+async function refreshWeather() {
+  const prefs = readPrefs();
+  const city = (prefs.weather && prefs.weather.city) || '香港';
+  try {
+    const data = await weather.load(city);
+    island.send('island:weather', data);
+  } catch (error) {
+    // Offline: the island keeps the last reading rather than an empty card.
+    console.error('[weather] failed', city, error?.message ?? String(error));
+  }
+}
+
+function startServices() {
+  pushBattery();
+  clearInterval(batteryTimer);
+  batteryTimer = setInterval(pushBattery, 30000);
+  refreshWeather();
+  clearInterval(weatherTimer);
+  weatherTimer = setInterval(refreshWeather, 15 * 60 * 1000);
+
+  // The island asks once after it loads: pushing into a window that is still
+  // parsing its page would drop the first frame.
+  ipcMain.handle('island:bootstrap', () => ({
+    battery: lastBattery,
+    weather: weather.cached(),
+    prefs: readPrefs(),
+  }));
 }
 
 /* ------------------------------------------------------------------ boot */
@@ -814,15 +896,52 @@ if (!gotTheLock) {
 
   app.whenReady().then(async () => {
     if (process.platform === 'darwin') app.dock?.hide();
+    /*
+     * Direct network, no system proxy.
+     *
+     * Electron's main process shares Chromium's network stack, so a system
+     * proxy that is set but not running makes every request time out — plain
+     * Node reached the weather host instantly while the app could not. This
+     * app talks to three known HTTPS hosts and no intranet, so bypassing the
+     * proxy is both faster and independent of whatever VPN software is running.
+     */
+    try {
+      await session.defaultSession.setProxy({ mode: 'direct' });
+      console.log('[net] direct');
+    } catch (error) {
+      console.error('[net] proxy bypass failed', error?.message ?? error);
+    }
     await loadCore();
-    const stored = readJson(prefsPath(), {});
+    const stored = readPrefs();
     castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'tot';
+    form = stored.form === 'ball' ? 'ball' : 'island';
+    both = Boolean(stored.formBoth);
     createWindow();
     if (win) win.webContents.on('did-finish-load', () => win.webContents.send('cast:changed', castId));
+    settings.registerIpc();
+    island.registerIpc();
+    // The island page cannot hold data that was pushed before it listened.
+    island.onLoaded(() => {
+      pushBattery();
+      refreshWeather();
+      island.send('settings:changed', readPrefs());
+    });
     createTray();
     ensureStateFile();
     startPointerWatch();
-    startAgentWatch(readJson(prefsPath(), {}));
+    startAgentWatch(stored);
+    startServices();
+    applyForm();
+    // Any window may change prefs; the tray and the visible form follow.
+    settings.setWeatherRefresher(refreshWeather);
+    settings.onPrefs(() => {
+      const next = readPrefs();
+      form = next.form === 'ball' ? 'ball' : 'island';
+      both = Boolean(next.formBoth);
+      applyForm();
+      island.send('settings:changed', next);
+      refreshWeather();
+    });
   });
 
   app.on('window-all-closed', () => {
@@ -830,9 +949,14 @@ if (!gotTheLock) {
   });
 
   app.on('before-quit', () => {
+    // The island and the settings window refuse close events; this is the one
+    // flag that lets them go when the app is really quitting.
+    globalThis.__emojitotQuitting = true;
     endDrag();
     stopHoverWatch();
     clearInterval(pointerTimer);
+    clearInterval(batteryTimer);
+    clearInterval(weatherTimer);
     stopAgentWatch();
     fs.unwatchFile(statePath());
   });

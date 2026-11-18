@@ -2,7 +2,7 @@
 
 # EmojiTot
 
-**面向桌面与 Web 的角色引擎 —— 15 个手绘轮廓的角色、44 个带分组与中文名的表情、模切白边画风；网页里看得见，桌面上养得起。**
+**面向桌面与 Web 的角色引擎 —— 15 个手绘轮廓的角色、44 个带分组与中文名的表情、模切白边画风；网页里看得见，桌面上养得起 —— 现在既是桌面上的球，也是屏幕顶部的一条岛。**
 
 [控制台](https://onestar1107.github.io/emoji-tot/#/console) · [表情馆](https://onestar1107.github.io/emoji-tot/#/gallery) · [场景](https://onestar1107.github.io/emoji-tot/#/scene) · [文档](https://onestar1107.github.io/emoji-tot/#/docs) · [English](README.en.md)
 
@@ -77,6 +77,17 @@ feed('thinking');              // 也可以直接给状态名
 
 ![场景](docs/screenshots/scene.png)
 
+## 两种形态
+
+桌面端有两种形态，托盘菜单与设置里随时切换，不需要重启：
+
+| 形态 | 位置 | 用途 |
+| --- | --- | --- |
+| **灵动岛**（默认） | 屏幕顶部居中 | 一条胶囊：脸、电量、时间、温度；点一下展开成功能面板 |
+| **桌面球** | 任意位置，可贴边 | 原来那个会跳、会生气、会被拖来拖去的球 |
+
+设置里可以勾「同时显示」，岛贴顶、球贴边，互不抢位置。形态只是 `prefs.json` 里的一个字段，两个窗口都提前创建，切换只改可见性 —— 所以切过去不会重载页面、也不会丢掉岛当前停在哪一页。
+
 ## 桌面宠物
 
 ![表情馆](docs/screenshots/faces.png)
@@ -93,13 +104,37 @@ feed('thinking');              // 也可以直接给状态名
 echo '{"emotionId":"34","tips":"构建失败了"}' > "$APPDATA/EmojiTot/state.json"
 ```
 
+## 灵动岛
+
+一条贴在屏幕顶部中间的胶囊，不是 macOS 刘海，也不是一条横贯屏幕的岛：
+
+- **收起**：tot 的脸 + 电量 + 时间 + 温度。状态组件在设置 → 页面管理里拖拽排序、开关。
+- **展开**：点一下胶囊，宽 420 的面板从中间向两边展开；顶栏是脸、页名、电量、时间与齿轮，底部圆点是分页。滚轮、方向键、点圆点都能换页。
+- **页面**：音乐、天气、AI 额度、邮箱。天气是真的（Open-Meteo，含七日）；其余三页是空态 + 一个动作按钮，点了直接跳进设置对应页 —— 空盒子会让人以为功能坏了，空态不会。
+- **贴着内容长**：页面自己用 `ResizeObserver` 量尺寸，主进程据此 `setBounds` 并保持水平居中。窗口与内容永远同尺寸，不存在「岛比窗口大」或「窗口比岛大」两种经典错位。
+- **点击穿透**：默认让鼠标落到桌面，光标进入岛矩形才收回输入（主进程每 60ms 查一次光标，和球窗口同一套做法）。
+
+规格与阶段计划见 [docs/ISLAND.md](docs/ISLAND.md)。
+
+## 设置中心
+
+独立窗口，左侧导航、右侧分组卡片，13 页：常规、外观、尺寸与位置、隐藏与交互、页面管理、音乐与歌词、专注与饮水、待办与置物、通知·邮箱与日程、AI 额度、天气、插件、关于。
+
+- **没有保存按钮**：每个开关、下拉、滑块的改动立刻写进 `prefs.json`，其它窗口随即跟上。
+- **页面管理**：状态组件与功能页两块拖拽列表，拖动即排序，开关即启停。
+- **关于页**：版本、数据目录、项目主页，以及素材许可（角色引擎与协议都是本项目自研，MIT）。
+
+字段与阶段见 [docs/SETTINGS.md](docs/SETTINGS.md)。
+
 ## 快速开始
 
 ```bash
-pnpm install     # 装完会自动构建协议包（postinstall）
-pnpm dev         # 站点 http://localhost:5173
-pnpm desktop     # 桌面宠物
-pnpm test        # 23 个协议测试
+pnpm approve-builds --all   # pnpm 12 默认不跑依赖的安装脚本，Electron 需要
+pnpm install
+pnpm build                  # 构建 core 与 protocol
+pnpm dev                    # 站点 http://localhost:5173
+pnpm desktop                # 桌面端（默认灵动岛）
+pnpm test                   # 协议与引擎测试
 ```
 
 出安装包：
@@ -112,8 +147,14 @@ pnpm --filter @emojitot/desktop dist   # release/ 下出 Windows 安装包
 
 ```
 packages/protocol    零运行时依赖：51 个 id、解析、多会话仲裁、事件桥（ESM + CJS）
-apps/gallery         站点五视图：控制台 / 表情馆 / 场景 / 主题 / 文档
-apps/desktop         Electron 桌宠：贴边、穿透、Agent 联动、托盘
+packages/core        角色引擎：15 条轮廓、44 个表情、渲染成 SVG
+apps/gallery         站点：控制台 / 表情馆 / 场景 / 文档
+apps/desktop         Electron 桌面端
+  src/main.js        球窗口、托盘、Agent 联动、启动装配
+  src/main/          岛窗口、设置窗口、偏好、服务（电量 / 天气）
+  src/renderer/      三个页面：球、岛、设置
+  src/preload*.js    三个页面各自的门
+docs/                架构、协议、岛规格、设置规格、调研结论
 ```
 
 ## 验证
@@ -126,6 +167,9 @@ apps/desktop         Electron 桌宠：贴边、穿透、Agent 联动、托盘
 | 51 个状态渲染 | `node apps/gallery/scripts/preview.mjs` — 51/51，0 failures（Node 里跑，无浏览器） |
 | 桌面端窗口行为 | `node apps/desktop/scripts/ui-check.mjs <端口>` — 用原生光标驱动真实拖拽，7/7（贴边、展开、收起、穿透） |
 | 桌面端协议驱动 | 写 `34` → `alerting`，写 `33` → `celebrate`，写坏 JSON → 保持当前表情 |
+| 灵动岛窗口 | 截图 + CDP 实测：收起 84×34、展开 420×272；窗口在 1707 宽的工作区里 x=628（居中）、y=0（贴顶） |
+| 灵动岛数据 | 收起态显示 `97% 21:10 19°`；天气缓存写入 `cache-weather.json`（香港 19°，7 天） |
+| 设置中心 | 13 个导航项、常规页 9 行、页面管理 14 个可拖拽项；开关改动即写 `prefs.json` |
 
 ## 几处有意的取舍
 
@@ -133,11 +177,17 @@ apps/desktop         Electron 桌宠：贴边、穿透、Agent 联动、托盘
 - **静态图的配色靠改字符串**：静态渲染把 ink 写成 `prefers-color-scheme` 媒体查询，页面钉死配色时只能重写这段查询；用 CSS invert 会把腮红和感叹号一起反掉。
 - **穿透靠轮询光标**：`setIgnoreMouseEvents(forward)` 在本机没有转发 mousemove，页面永远不知道指针在球上，球既点不动也拖不动。改成主进程每 60ms 查一次光标位置，两个平台一致。
 
+## 变更记录
+
+- **0.3.0-dev（进行中）** —— 双形态：灵动岛 + 桌面球；设置中心 13 页；电量 / 时间 / 天气接入；页面管理可拖拽；修掉 `debug:state` 重复注册导致 `electron . --dev` 直接崩溃的老问题。
+- **0.2.1** —— 首个发布版：角色引擎、两位数协议、站点四页、桌宠。
+
 ## 许可
 
 **MIT。** 代码、形状、表情全部由本仓库自行实现：可以商用、可以闭源、可以再分发，保留版权声明即可。
 
 引擎、协议、页面、角色全部由本仓库自己实现：没有引用任何第三方角色引擎的代码或美术。
+灵动岛的窗口与媒体桥方案参考了 Islet、Istel、dsh-island、toki 的公开实现（均为 MIT），代码按本项目风格重写；调研结论与许可证核对见 [docs/RESEARCH.md](docs/RESEARCH.md)。
 
 ---
 

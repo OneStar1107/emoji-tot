@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="color-scheme" content="dark" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' data:" />
+<title>EmojiTot Island</title>
+<link rel="stylesheet" href="./island.css" />
+</head>
+<body>
+  <div id="island" data-open="false">
+    <!-- Collapsed: one pill. The face is the character; the rest is status. -->
+    <button class="pill" id="pill" type="button" aria-expanded="false" aria-label="展开 EmojiTot">
+      <span class="pill-face"><emojitot-ball cast="tot" size="24" state="idle"></emojitot-ball></span>
+      <span class="pill-status" id="pill-status"></span>
+      <span class="pill-live" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+    </button>
+
+    <!-- Expanded: header, one page, dots. -->
+    <section class="panel" id="panel" hidden aria-label="EmojiTot 面板">
+      <header class="topbar">
+        <span class="top-face"><emojitot-ball cast="tot" size="30" state="idle"></emojitot-ball></span>
+        <span class="top-titles">
+          <strong id="page-title">音乐</strong>
+          <em id="page-sub">系统正在播放</em>
+        </span>
+        <span class="top-right">
+          <span id="top-battery" class="top-battery" hidden></span>
+          <span id="top-clock" class="top-clock">--:--</span>
+          <button type="button" class="icon-btn" id="btn-settings" title="设置" aria-label="设置">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.05V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.14.4.44.73.85.94.27.13.57.2.87.2H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+          </button>
+        </span>
+      </header>
+      <div class="pages" id="pages"></div>
+      <nav class="dots" id="dots" aria-label="切换页面"></nav>
+    </section>
+  </div>
+
+  <script type="module" src="./vendor/core/element.js"></script>
+  <script type="module" src="./island.js"></script>
+</body>
+</html>
