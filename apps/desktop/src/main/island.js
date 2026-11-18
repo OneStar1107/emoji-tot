@@ -42,6 +42,13 @@ let win = null;
 let box = { w: 200, h: 36 };
 let clickThrough = true;
 let cursorTimer = null;
+/**
+ * The window rectangle, kept here instead of read from the window each poll.
+ *
+ * `win.getBounds()` is a cross-process call; the rectangle only changes when
+ * place() moves the window, so the pointer watch can read this instead.
+ */
+let windowRect = { x: 0, y: 0, width: 0, height: 0 };
 let ready = false;
 /** Fired once per load: services push their first frame here, not before. */
 const loadedHooks = new Set();
@@ -78,6 +85,7 @@ function place() {
    */
   const display = displayFor(prefs);
   const y = Math.round(prefs.avoidTopBar === false ? display.bounds.y : area.y);
+  windowRect = { x, y, width, height };
   const bounds = win.getBounds();
   if (bounds.x === x && bounds.y === y && bounds.width === width && bounds.height === height) return;
   win.setBounds({ x, y, width, height });
@@ -118,34 +126,56 @@ function setClickThrough(on) {
 }
 
 /**
+ * How far the pointer is from the window, in pixels (0 when inside it).
+ *
+ * The gap is measured to the rectangle, not to its centre, so a pointer just
+ * above the island counts as near even though the centre is far away.
+ */
+function cursorGap(cursor, rect) {
+  const dx = Math.max(rect.x - cursor.x, 0, cursor.x - (rect.x + rect.width));
+  const dy = Math.max(rect.y - cursor.y, 0, cursor.y - (rect.y + rect.height));
+  return Math.round(Math.hypot(dx, dy));
+}
+
+/**
  * Poll the cursor while the window ignores the mouse.
  *
- * 60ms is four position reads a frame at 60Hz; cheap enough to be invisible in
- * a task manager, and it behaves the same on both platforms.
+ * A fixed 25ms timer was two cross-process reads forty times a second even with
+ * the pointer parked on the other monitor, which is most of the app's idle CPU.
+ * The interval now follows the pointer: fast only where a miss would be felt —
+ * on the window, or close enough that someone is about to use it — and slow
+ * everywhere else. A pointer that has stopped still gets read within 120ms, and
+ * one that sweeps past was not going to click anything anyway.
  */
+const WATCH_NEAR_PX = 180;
+const WATCH_FAST_MS = 25;
+const WATCH_SLOW_MS = 120;
+
 function startCursorWatch() {
-  clearInterval(cursorTimer);
+  clearTimeout(cursorTimer);
   let wasInside = false;
-  cursorTimer = setInterval(() => {
-    if (!win || win.isDestroyed() || !win.isVisible()) return;
-    const bounds = win.getBounds();
+  const tick = () => {
+    if (!win || win.isDestroyed() || !win.isVisible()) {
+      cursorTimer = setTimeout(tick, WATCH_SLOW_MS);
+      return;
+    }
+    const rect = windowRect;
     const cursor = screen.getCursorScreenPoint();
     /*
      * The whole window is the target, not the pill inside it. A 28px band of
      * "transparent" padding that swallows clicks reads as "it ignores me" —
      * and the window is only ever as big as the island needs anyway.
      */
-    const inside =
-      cursor.x >= bounds.x &&
-      cursor.x <= bounds.x + bounds.width &&
-      cursor.y >= bounds.y &&
-      cursor.y <= bounds.y + bounds.height;
+    const gap = cursorGap(cursor, rect);
+    const inside = gap === 0;
     setClickThrough(!inside);
     if (inside !== wasInside) {
       wasInside = inside;
       win.webContents.send('island:hover', inside);
     }
-  }, 25);
+    cursorTimer = setTimeout(tick, inside || gap <= WATCH_NEAR_PX ? WATCH_FAST_MS : WATCH_SLOW_MS);
+  };
+  cursorTimer = setTimeout(tick, WATCH_FAST_MS);
 }
 
 function create() {

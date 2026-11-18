@@ -113,7 +113,13 @@ function start() {
   } catch {
     last = '';
   }
-  timer = setInterval(poll, 900);
+  /*
+   * 1.5s rather than 0.9s. Every poll is a synchronous cross-process read of the
+   * whole clipboard, so a large copied block makes that read expensive — and a
+   * copied block is exactly when it runs. Nobody notices a 1.5s delay before a
+   * snippet shows up; everybody notices the app hitching while they copy.
+   */
+  timer = setInterval(poll, 1500);
 }
 
 function stop() {
