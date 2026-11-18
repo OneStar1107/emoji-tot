@@ -1,7 +1,7 @@
 {
   "name": "@emojitot/desktop",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "EmojiTot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
   "main": "src/main.js",
   "type": "commonjs",
@@ -16,7 +16,8 @@
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "sharp": "^0.35.5"
   },
   "build": {
     "appId": "studio.emojitot.desktop",

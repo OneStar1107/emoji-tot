@@ -18,11 +18,41 @@
   --warn: #ffb340;
   --bad: #ff6b6b;
   --radius: 22px;
+  /* One spring for anything that changes size, one ease for anything that
+     changes opacity. Mixing curves is what makes an interface feel stitched. */
+  --spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --fast: 150ms;
+  --base: 240ms;
+  --slow: 300ms;
 }
 
 * { box-sizing: border-box; }
 
 [hidden] { display: none !important; }
+
+/*
+ * The OS "reduce motion" setting wins by default, but not over an explicit
+ * choice: this machine reports reduce (no GPU compositing), and the island read
+ * as a series of jump cuts until the preference could override it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  body:not([data-motion="on"]) *,
+  body:not([data-motion="on"]) *::before,
+  body:not([data-motion="on"]) *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+body[data-motion="off"] *,
+body[data-motion="off"] *::before,
+body[data-motion="off"] *::after {
+  transition-duration: 1ms !important;
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+}
 
 html,
 body {
@@ -37,12 +67,38 @@ body {
   cursor: default;
 }
 
-#island {
+/*
+ * The island is a fixed-size window into a naturally-sized frame.
+ *
+ * The frame decides how big the content is; the island animates towards it and
+ * the main process follows the island every frame. Animating the window itself
+ * from the main process would need a second copy of every layout number, and
+ * the two would drift apart on the first layout change.
+ */
+body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
+}
+
+#island {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  transition:
+    width var(--slow) var(--spring),
+    height var(--slow) var(--spring);
+  will-change: width, height;
+}
+
+#frame {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
   width: max-content;
-  margin: 0 auto;
+  display: flex;
+  justify-content: center;
 }
 
 /* ------------------------------------------------------------- collapsed */
@@ -180,6 +236,50 @@ body[data-playing="false"] .pill-live { display: none; }
 }
 .dots button[aria-current="true"] { width: 14px; border-radius: 3px; background: rgba(255, 255, 255, 0.82); }
 
+/* ------------------------------------------------------------- transitions */
+
+@keyframes page-in-left {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes page-in-right {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: none; }
+}
+.page-in-left { animation: page-in-left 220ms var(--ease); }
+.page-in-right { animation: page-in-right 220ms var(--ease); }
+
+@keyframes pill-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+.pill { animation: pill-in 220ms var(--spring); }
+
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Every press answers: the same 4% squash and the same curve, everywhere. */
+.btn,
+button.ghost,
+.music-controls button,
+.icon-btn,
+.cal-cell,
+.todo-check,
+.todo-del,
+.shelf-del {
+  transition: transform 130ms var(--ease), background 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease), opacity 150ms var(--ease);
+}
+.btn:active,
+button.ghost:active,
+.music-controls button:active,
+.icon-btn:active,
+.cal-cell:active,
+.todo-check:active {
+  transform: scale(0.95);
+}
+
 /* ----------------------------------------------------------------- pages */
 
 .empty {
@@ -223,7 +323,11 @@ button.ghost:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(2
   text-overflow: ellipsis;
   transition: color 180ms ease;
 }
-.lyric-line.on { color: var(--ink); font-weight: 550; }
+.lyric-line {
+  transition: color 240ms var(--ease), transform 240ms var(--ease), opacity 240ms var(--ease);
+  opacity: 0.75;
+}
+.lyric-line.on { color: var(--ink); opacity: 1; font-weight: 550; transform: translateX(2px); }
 .lyric-empty { font-size: 11.5px; color: var(--faint); padding: 8px 4px; }
 .lyric-pill {
   max-width: 216px;
@@ -248,7 +352,15 @@ button.ghost:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(2
 .music-meta b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .music-meta span { font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .music-bar { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
-.music-bar i { display: block; height: 100%; width: 0; border-radius: 2px; background: var(--ink); }
+.music-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--ink);
+  /* One second of linear travel per tick: the bar glides instead of stepping. */
+  transition: width 950ms linear;
+}
 .music-times { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
 .music-controls { display: flex; justify-content: center; align-items: center; gap: 26px; padding: 4px 0 2px; }
 .music-controls button { border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 4px; display: grid; place-items: center; opacity: 0.9; }
@@ -259,7 +371,11 @@ button.ghost:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(2
 /* weather */
 .weather { display: flex; flex-direction: column; gap: 10px; }
 .weather-now { display: flex; align-items: center; gap: 12px; padding: 0 2px; }
-.weather-temp { font-size: 38px; font-weight: 300; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.weather-temp { font-size: 38px; font-weight: 300; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; animation: temp-in 420ms var(--spring); }
+@keyframes temp-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
 .weather-temp sup { font-size: 17px; vertical-align: super; color: var(--dim); }
 .weather-desc { display: flex; flex-direction: column; gap: 2px; }
 .weather-desc b { font-size: 12.5px; font-weight: 550; }
@@ -333,10 +449,10 @@ button.ghost:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(2
 .cal-cell.empty { cursor: default; }
 .cal-cell:hover:not(.empty) { background: rgba(255, 255, 255, 0.06); }
 .cal-cell.today { color: var(--accent); font-weight: 600; }
-.cal-cell.picked { background: rgba(255, 255, 255, 0.1); }
+.cal-cell.picked { background: rgba(255, 255, 255, 0.1); transform: scale(1.06); }
 .cal-dot { position: absolute; bottom: 4px; width: 3px; height: 3px; border-radius: 50%; background: var(--accent); }
 .cal-events { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; border-top: 1px solid var(--line); max-height: 108px; overflow-y: auto; }
-.cal-event { display: flex; align-items: baseline; gap: 8px; padding: 4px 2px; }
+.cal-event { display: flex; align-items: baseline; gap: 8px; padding: 4px 2px; animation: row-in 200ms var(--ease); }
 .cal-time { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; flex: none; }
 .cal-event b { font-size: 11.5px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-event em { font-style: normal; font-size: 10px; color: var(--faint); margin-left: auto; flex: none; }
@@ -388,14 +504,28 @@ button.ghost:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(2
 }
 .todo-due-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .todo-list { display: flex; flex-direction: column; gap: 1px; max-height: 236px; overflow-y: auto; }
-.todo-item { display: flex; align-items: center; gap: 8px; padding: 6px 5px; border-radius: 7px; }
+.todo-item { display: flex; align-items: center; gap: 8px; padding: 6px 5px; border-radius: 7px; animation: row-in 180ms var(--ease); }
 .todo-item:hover { background: rgba(255, 255, 255, 0.04); }
 .todo-check {
   width: 16px; height: 16px; border-radius: 5px; padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.28); background: transparent;
   display: grid; place-items: center; cursor: pointer; flex: none;
 }
-.todo-check svg { width: 10px; height: 10px; fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.todo-check svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 24;
+  animation: check-draw 260ms var(--spring);
+}
+@keyframes check-draw {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
 .todo-item.done .todo-check { background: rgba(143, 123, 255, 0.18); border-color: transparent; }
 .todo-text { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-item.done .todo-text { text-decoration: line-through; color: var(--faint); }
@@ -412,6 +542,13 @@ button.ghost:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(2
 .shelf-hint {
   padding: 10px; border: 1px dashed rgba(255, 255, 255, 0.16); border-radius: 9px;
   font-size: 11px; color: var(--faint); text-align: center;
+  transition: border-color 160ms var(--ease), background 160ms var(--ease), color 160ms var(--ease), transform 160ms var(--spring);
+}
+.shelf.dragover .shelf-hint {
+  border-color: var(--accent);
+  background: rgba(143, 123, 255, 0.1);
+  color: var(--ink);
+  transform: scale(1.02);
 }
 .shelf-hint code { font-size: 10.5px; color: var(--dim); }
 .shelf-list { display: flex; flex-direction: column; gap: 1px; max-height: 216px; overflow-y: auto; }
@@ -429,7 +566,7 @@ button.ghost:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(2
 /* quota */
 .quota { display: flex; flex-direction: column; gap: 10px; }
 .quota-head { display: flex; align-items: baseline; gap: 8px; padding: 6px 4px 2px; }
-.quota-amount { font-size: 30px; font-weight: 300; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.quota-amount { font-size: 30px; font-weight: 300; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; animation: temp-in 380ms var(--spring); }
 .quota-amount small { font-size: 13px; color: var(--dim); margin-right: 2px; }
 .quota-note { font-size: 11px; color: var(--dim); }
 .quota-rows { display: flex; flex-direction: column; gap: 1px; }
@@ -443,7 +580,7 @@ button.ghost:hover { background: rgba(255, 255, 255, 0.11); border-color: rgba(2
 .mail-head { display: flex; align-items: center; gap: 10px; padding: 2px 3px 8px; font-size: 11px; color: var(--dim); }
 .mail-head b { color: var(--ink); font-weight: 550; font-size: 11.5px; }
 .mail-head .spacer { flex: 1; }
-.mail-item { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-radius: 8px; }
+.mail-item { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-radius: 8px; animation: row-in 200ms var(--ease); }
 .mail-item:hover { background: rgba(255, 255, 255, 0.05); }
 .mail-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; }
 .mail-item b { font-size: 11.5px; font-weight: 520; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }

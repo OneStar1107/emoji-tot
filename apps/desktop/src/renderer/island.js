@@ -10,6 +10,7 @@ import { PAGES, STATUS_ITEMS, DEFAULT_PAGES } from './shared/pages.js';
 const api = window.islandAPI;
 
 const islandEl = document.getElementById('island');
+const frameEl = document.getElementById('frame');
 const pillEl = document.getElementById('pill');
 const pillStatus = document.getElementById('pill-status');
 const panelEl = document.getElementById('panel');
@@ -146,6 +147,28 @@ function measure() {
   });
 }
 new ResizeObserver(measure).observe(islandEl);
+
+/*
+ * The frame is measured, the island is animated towards it.
+ *
+ * first paint must not animate from zero, so the very first measurement writes
+ * the size with transitions off, then hands the transition back.
+ */
+let sized = false;
+const sizeObserver = new ResizeObserver(() => {
+  const rect = frameEl.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  if (!sized) islandEl.style.transition = 'none';
+  islandEl.style.width = `${Math.ceil(rect.width)}px`;
+  islandEl.style.height = `${Math.ceil(rect.height)}px`;
+  if (!sized) {
+    sized = true;
+    requestAnimationFrame(() => {
+      islandEl.style.transition = '';
+    });
+  }
+});
+sizeObserver.observe(frameEl);
 
 /* ------------------------------------------------------------- pill status */
 
@@ -460,6 +483,16 @@ function fallbackPage(page) {
   );
 }
 
+/** Per-second focus update without rebuilding the ring's DOM. */
+function updateFocusLive() {
+  const ring = pagesEl.querySelector('.focus-ring');
+  if (!ring) return;
+  const pct = focusState.total ? Math.min(100, ((focusState.total - focusState.remaining) / focusState.total) * 100) : 0;
+  ring.style.setProperty('--pct', pct.toFixed(2));
+  const time = ring.querySelector('.focus-time');
+  if (time) time.textContent = clock(focusState.remaining);
+}
+
 /* ------------------------------------------------------------ local pages */
 
 function focusPage() {
@@ -578,6 +611,12 @@ const RENDERERS = {
 };
 
 /** Replace local state from any snapshot (bootstrap, push or action reply). */
+function applyMotionPreference() {
+  // Default on: this machine reports prefers-reduced-motion, so "follow the
+  // system" meant no motion at all. Settings can still turn it off.
+  document.body.dataset.motion = prefs.motion === false ? 'off' : 'on';
+}
+
 function applyLocal(snapshot) {
   if (!snapshot) return;
   if (snapshot.focus) focusState = snapshot.focus;
@@ -586,7 +625,10 @@ function applyLocal(snapshot) {
   if (Array.isArray(snapshot.shelf)) shelfFiles = snapshot.shelf;
 }
 
-function renderPage() {
+/** +1 = next page, -1 = previous; the panel slides in from the side it came from. */
+let pageDir = 1;
+
+function renderPage(animate = false) {
   const list = enabledPages();
   if (!list.length) {
     titleEl.textContent = '还没有页面';
@@ -604,6 +646,13 @@ function renderPage() {
   dotsEl.innerHTML = list
     .map((p, index) => `<button type="button" data-page="${index}" aria-current="${index === pageIndex}" aria-label="${p.title}"></button>`)
     .join('');
+  if (animate) {
+    pagesEl.classList.remove('page-in-left', 'page-in-right');
+    // Force a style flush so re-adding the class restarts the animation even
+    // when two consecutive switches use the same direction.
+    void pagesEl.offsetWidth;
+    pagesEl.classList.add(pageDir > 0 ? 'page-in-left' : 'page-in-right');
+  }
   measure();
 }
 
@@ -687,8 +736,10 @@ panelEl.addEventListener('click', (event) => {
   }
   const dot = event.target.closest('[data-page]');
   if (dot) {
-    pageIndex = Number(dot.dataset.page);
-    renderPage();
+    const next = Number(dot.dataset.page);
+    pageDir = next >= pageIndex ? 1 : -1;
+    pageIndex = next;
+    renderPage(true);
     /*
      * renderPage() replaces the dot that was clicked, so this event's target
      * is detached by the time it bubbles to document. Any outside-click
@@ -717,10 +768,22 @@ panelEl.addEventListener('keydown', (event) => {
     .catch(() => {});
 });
 
+panelEl.addEventListener('dragenter', (event) => {
+  const zone = event.target.closest('[data-shelf-drop]');
+  if (zone) zone.classList.add('dragover');
+});
+
+panelEl.addEventListener('dragleave', (event) => {
+  const zone = event.target.closest('[data-shelf-drop]');
+  if (zone && !zone.contains(event.relatedTarget)) zone.classList.remove('dragover');
+});
+
 panelEl.addEventListener('dragover', (event) => {
-  if (event.target.closest('[data-shelf-drop]')) {
+  const zone = event.target.closest('[data-shelf-drop]');
+  if (zone) {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'copy';
+    zone.classList.add('dragover');
   }
 });
 
@@ -728,6 +791,7 @@ panelEl.addEventListener('drop', async (event) => {
   const zone = event.target.closest('[data-shelf-drop]');
   if (!zone) return;
   event.preventDefault();
+  zone.classList.remove('dragover');
   const files = [...(event.dataTransfer?.files ?? [])];
   if (!files.length) return;
   const direct = [];
@@ -753,14 +817,16 @@ panelEl.addEventListener('drop', async (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && open) setOpen(false);
   if (!open) return;
-  if (event.key === 'ArrowRight') { pageIndex += 1; renderPage(); }
-  if (event.key === 'ArrowLeft') { pageIndex -= 1; renderPage(); }
+  if (event.key === 'ArrowRight') { pageDir = 1; pageIndex += 1; renderPage(true); }
+  if (event.key === 'ArrowLeft') { pageDir = -1; pageIndex -= 1; renderPage(true); }
 });
 
 panelEl.addEventListener('wheel', (event) => {
   if (Math.abs(event.deltaY) < 8) return;
-  pageIndex += event.deltaY > 0 ? 1 : -1;
-  renderPage();
+  const delta = event.deltaY > 0 ? 1 : -1;
+  pageDir = delta;
+  pageIndex += delta;
+  renderPage(true);
 }, { passive: true });
 
 /*
@@ -821,8 +887,11 @@ api.onLyrics((value) => {
 
 api.onFocus((value) => {
   if (!value) return;
+  const structural = value.phase !== focusState.phase || value.running !== focusState.running;
   focusState = value;
-  if (open && enabledPages()[pageIndex]?.key === 'focus') renderPage();
+  if (!open || enabledPages()[pageIndex]?.key !== 'focus') return;
+  if (structural) renderPage();
+  else updateFocusLive();
 });
 
 api.onHealth((value) => {
@@ -864,6 +933,7 @@ api.onCalendar((value) => {
 
 api.onPrefs((next) => {
   prefs = next ?? prefs;
+  applyMotionPreference();
   renderPillStatus();
   // A page was switched on or reordered in settings: the dots and the current
   // page have to follow, otherwise the island keeps showing the old set.
@@ -882,6 +952,7 @@ mailState = boot?.mail ?? mailState;
 calendarState = boot?.calendar ?? calendarState;
 document.body.dataset.playing = String(Boolean(media.active && media.playing));
 
+applyMotionPreference();
 renderPillStatus();
 setOpen(false);
 setInterval(renderPillStatus, 20000);

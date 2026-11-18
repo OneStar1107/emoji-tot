@@ -48,6 +48,20 @@ export function createConsole(): HTMLElement {
         </div>
         <div class="who" id="who"></div>
       </div>
+      <div class="island-demo">
+        <button type="button" class="island-pill" id="island-pill" aria-expanded="false">
+          <span class="island-face" data-island-face></span>
+          <span>09:41</span><span data-island-temp>19°</span>
+        </button>
+        <div class="island-panel" id="island-panel" hidden>
+          <div class="island-top"><b data-island-title>音乐</b><span>09:41</span></div>
+          <div class="island-body">
+            <figure data-island-art></figure>
+            <div><b data-island-song>系统正在播放</b><span>桌面端就是这个形态，点胶囊收起</span></div>
+          </div>
+        </div>
+        <p class="island-note">桌面端形态：屏幕顶部居中，收起是一条胶囊，点一下展开。</p>
+      </div>
     </section>
 
     <aside class="studio-side">
@@ -75,6 +89,12 @@ export function createConsole(): HTMLElement {
     genomeEl.textContent = genome();
     const member = look.cast ? castMember(look.cast) : undefined;
     who.textContent = member ? `${member.name.zh} · ${member.name.en} · ${member.desc}` : '自定义组合';
+    const face = el.querySelector<HTMLElement>('[data-island-face]');
+    if (face) face.innerHTML = hero(22);
+    const art = el.querySelector<HTMLElement>('[data-island-art]');
+    if (art) art.innerHTML = hero(54);
+    const title = el.querySelector<HTMLElement>('[data-island-title]');
+    if (title) title.textContent = member ? member.name.zh : '自定义';
     for (const b of el.querySelectorAll<HTMLElement>('[data-finish]')) b.setAttribute('aria-pressed', String(b.dataset.finish === look.finish));
   }
 
@@ -82,6 +102,13 @@ export function createConsole(): HTMLElement {
     const finishBtn = (event.target as HTMLElement).closest<HTMLElement>('[data-finish]');
     if (finishBtn) {
       setLook({ finish: finishBtn.dataset.finish as 'sticker' | 'flat' });
+      return;
+    }
+    const pill = (event.target as HTMLElement).closest<HTMLElement>('#island-pill');
+    if (pill) {
+      const panel = el.querySelector<HTMLElement>('#island-panel')!;
+      panel.hidden = !panel.hidden;
+      pill.setAttribute('aria-expanded', String(!panel.hidden));
       return;
     }
     const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act], #copy, #copy-json');

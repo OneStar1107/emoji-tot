@@ -114,6 +114,9 @@ function makeClient(account) {
     port: Number(account.port) || 993,
     secure: account.secure !== false,
     auth: { user: account.user, pass: decrypt(account.secret) },
+    // 163 and QQ reject a client that never identifies itself with IMAP ID
+    // ("Unsafe Login"); imapflow sends this automatically once it is set.
+    id: { name: 'EmojiTot', version: '0.3.0', vendor: 'EmojiTot' },
     logger: false,
     emitLogs: false,
   });

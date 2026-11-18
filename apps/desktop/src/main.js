@@ -758,10 +758,11 @@ function refreshMenus() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
-  const icon = fs.existsSync(iconPath)
-    ? nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
-    : nativeImage.createEmpty();
+  // Pre-rendered at the tray's own size: scaling 512 down to 16 in the OS
+  // produced stepped edges, which is exactly what the icon rework removed.
+  const trayName = process.platform === 'win32' ? 'tray-32.png' : 'tray-16.png';
+  const iconPath = path.join(__dirname, '..', 'assets', trayName);
+  const icon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
   tray = new Tray(icon);
   tray.setToolTip('EmojiTot');
   tray.setContextMenu(buildMenu());

@@ -68,6 +68,7 @@ const STATUS_TABLE = [
 ];
 
 const DEFAULTS = {
+  motion: true,
   form: 'island',
   formBoth: false,
   launchAtLogin: false,
@@ -478,10 +479,19 @@ function paintRail() {
   rail.innerHTML = html;
 }
 
+let paintedPage = '';
+
 function paintContent() {
   const renderer = RENDERERS[page] ?? RENDERERS.general;
+  const changedPage = paintedPage !== page;
+  paintedPage = page;
   content.innerHTML = renderer();
   content.scrollTop = 0;
+  if (changedPage) {
+    content.classList.remove('page-swap');
+    void content.offsetWidth;
+    content.classList.add('page-swap');
+  }
 }
 
 function paint() {

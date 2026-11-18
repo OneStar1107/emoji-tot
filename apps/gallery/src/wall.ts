@@ -26,7 +26,7 @@ function castSvg(id: string, state: string, size = THUMB): string {
 
 function castCard(id: string): string {
   const member = castMember(id)!;
-  return `<button type="button" class="tile" data-cast="${id}" title="${member.desc}">
+  return `<button type="button" class="tile" data-cast="${id}" data-motion="${member.motion}" title="${member.desc} · 悬停看动作">
     ${castSvg(id, member.face, THUMB)}
     <span class="tile-name">${member.name.zh}</span>
     <span class="tile-sub">${MOTION_ZH[member.motion] ?? member.motion}</span>
@@ -34,7 +34,7 @@ function castCard(id: string): string {
 }
 
 function stateCard(id: string, state: string, name: string): string {
-  return `<button type="button" class="tile" data-state="${state}" data-id="${id}">
+  return `<button type="button" class="tile" data-state="${state}" data-id="${id}" data-motion="pop" title="悬停看动作">
     ${currentSvg(state, THUMB)}
     <span class="tile-name">${name}</span>
     <span class="tile-sub">#${id}</span>
