@@ -1044,7 +1044,7 @@ function startServices() {
       if (action === 'drink') health.drink();
       else if (action === 'stand') health.stand();
     } else if (service === 'todo') {
-      if (action === 'add') todo.add(data?.text, data?.due);
+      if (action === 'add') todo.add(data?.text, data?.due, data?.repeat);
       else if (action === 'toggle') todo.toggle(data?.id);
       else if (action === 'remove') todo.remove(data?.id);
       else if (action === 'update') todo.update(data?.id, data ?? {});
@@ -1172,6 +1172,7 @@ if (!gotTheLock) {
     // Any window may change prefs; the tray and the visible form follow.
     settings.setWeatherRefresher(refreshWeather);
     settings.setActionHook(handleSettingsAction);
+    island.startOledShift();
     settings.onPrefs(() => {
       const next = readPrefs();
       form = next.form === 'ball' ? 'ball' : 'island';

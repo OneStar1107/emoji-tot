@@ -597,7 +597,8 @@ function todoPage() {
   const itemHtml = (item) => `<div class="todo-item${item.done ? ' done' : ''}" data-id="${item.id}">
       <button type="button" class="todo-check" data-local="todo:toggle" data-id="${item.id}" aria-label="完成">${item.done ? '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>' : ''}</button>
       <span class="todo-text">${escapeHtml(item.text)}</span>
-      ${item.due ? `<em class="todo-due${item.due < Date.now() && !item.done ? ' late' : ''}">${dueLabel(item.due)}</em>` : ''}
+      ${item.repeat ? `<em class="todo-repeat">${item.repeat === 'daily' ? '每天' : '每周'}</em>` : ''}
+      ${item.due ? `<em class="todo-due${item.due < Date.now() && !item.done ? ' late' : ''}">${item.done && item.nextDue ? '下次 ' + dueLabel(item.nextDue) : dueLabel(item.due)}</em>` : ''}
       <button type="button" class="todo-del" data-local="todo:remove" data-id="${item.id}" aria-label="删除">×</button>
     </div>`;
   return `<div class="todo">
@@ -606,6 +607,13 @@ function todoPage() {
       <label class="todo-due-pick" title="设到期时间">
         <input type="datetime-local" data-todo-due />
         <span>到期</span>
+      </label>
+      <label class="todo-repeat-pick" title="重复">
+        <select data-todo-repeat>
+          <option value="none">不重复</option>
+          <option value="daily">每天</option>
+          <option value="weekly">每周</option>
+        </select>
       </label>
     </div>
     <div class="todo-list">
@@ -869,8 +877,9 @@ panelEl.addEventListener('keydown', (event) => {
   if (!text) return;
   const dueInput = panelEl.querySelector('[data-todo-due]');
   const due = dueInput?.value ? new Date(dueInput.value).getTime() : null;
+  const repeat = panelEl.querySelector('[data-todo-repeat]')?.value ?? 'none';
   api
-    .localDo('todo', 'add', { text, due })
+    .localDo('todo', 'add', { text, due, repeat })
     .then((snapshot) => {
       applyLocal(snapshot);
       if (open) renderPage();

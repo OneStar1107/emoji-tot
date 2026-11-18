@@ -635,6 +635,28 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   transform: scale(1.02);
 }
 .shelf-hint code { font-size: 10.5px; color: var(--dim); }
+/* Repeating tasks: one word where the due date already lives. */
+.todo-repeat {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--accent);
+  background: var(--surface-1);
+  border-radius: 5px;
+  padding: 1px 5px;
+  flex: none;
+}
+
+.todo-repeat-pick select {
+  background: var(--surface-1);
+  border: 0;
+  color: var(--dim);
+  border-radius: 7px;
+  padding: 3px 4px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 /* Message apps: the switchboard above the mailbox. */
 .msg {
   margin-bottom: 10px;

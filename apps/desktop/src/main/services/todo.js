@@ -43,7 +43,29 @@ function list() {
     .map((item) => ({ ...item }));
 }
 
-function add(text, due) {
+/** Repeat kinds a task can carry. "none" is the default and is not stored. */
+const REPEATS = new Set(['daily', 'weekly']);
+
+/**
+ * The next time this repeat should come around, expressed in the future.
+ *
+ * A repeating task is completed late often enough that adding one period once
+ * is not enough — finish Monday's chore on Thursday and the next one is already
+ * tomorrow, not yesterday. This walks forward until it lands in the future.
+ */
+function nextDue(base, repeat) {
+  const step = repeat === 'daily' ? 86400000 : 7 * 86400000;
+  let next = base + step;
+  const now = Date.now();
+  let guard = 0;
+  while (next <= now && guard < 400) {
+    next += step;
+    guard += 1;
+  }
+  return next;
+}
+
+function add(text, due, repeat) {
   const body = String(text ?? '').trim();
   if (!body) return null;
   const item = {
@@ -54,6 +76,14 @@ function add(text, due) {
     createdAt: Date.now(),
     reminded: false,
   };
+  if (REPEATS.has(repeat)) {
+    item.repeat = repeat;
+    /*
+     * A repeat without a due date has nothing to count from, so it would never
+     * come back. Give it the first occurrence: one period from now.
+     */
+    if (!item.due) item.due = Date.now() + (repeat === 'daily' ? 86400000 : 7 * 86400000);
+  }
   items.push(item);
   save();
   emit();
@@ -64,7 +94,16 @@ function toggle(id) {
   const item = items.find((entry) => entry.id === id);
   if (!item) return;
   item.done = !item.done;
-  if (item.done) item.reminded = true;
+  if (item.done) {
+    item.reminded = true;
+    // A repeating task is not finished, it is scheduled again: keep it in the
+    // done column until the next occurrence comes due, then revive it.
+    if (item.repeat && item.due) {
+      item.nextDue = nextDue(item.due, item.repeat);
+    }
+  } else {
+    item.nextDue = null;
+  }
   save();
   emit();
 }
@@ -83,6 +122,11 @@ function update(id, patch) {
     item.due = Number.isFinite(Number(patch.due)) && Number(patch.due) > 0 ? Number(patch.due) : null;
     item.reminded = false;
   }
+  if ('repeat' in patch) {
+    if (REPEATS.has(patch.repeat)) item.repeat = patch.repeat;
+    else delete item.repeat;
+    item.nextDue = null;
+  }
   save();
   emit();
 }
@@ -100,6 +144,15 @@ function checkDue() {
   const now = Date.now();
   let changed = false;
   for (const item of items) {
+    if (item.done && item.nextDue && item.nextDue <= now) {
+      // The next occurrence arrived: put it back in the list as a live task.
+      item.done = false;
+      item.due = item.nextDue;
+      item.nextDue = null;
+      item.reminded = false;
+      changed = true;
+      continue;
+    }
     if (item.done || item.reminded || !item.due || item.due > now) continue;
     item.reminded = true;
     changed = true;

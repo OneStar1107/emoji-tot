@@ -231,6 +231,7 @@ function pageGeneral() {
       rowToggle('背景模糊', '开启后岛背景半透明并模糊', 'blur'),
       rowRange('界面缩放', '岛与球按此比例绘制', 'uiScale', 80, 140, 5, '%'),
       rowToggle('避开顶栏', '顶部有系统栏时，岛放在它下方', 'avoidTopBar'),
+      rowToggle('OLED 防烧屏', '收起静止时缓慢左右移动几个像素，减少静态痕迹', 'oledShift'),
       rowSeg('时间制式', '', 'timeFormat', [['24h', '24 小时'], ['12h', '12 小时']]),
     ]));
 }

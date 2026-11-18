@@ -25,6 +25,18 @@ const { readPrefs } = require('./paths');
 const PAD_X = 28;
 const PAD_Y = 18;
 
+/**
+ * Anti-burn-in drift, off unless asked for.
+ *
+ * A static bright pill on an OLED screen ghosts its shape into the panel over
+ * months. Moving the window a few pixels on a slow cycle spreads that wear;
+ * three pixels is below what anyone notices and enough to avoid a hard edge.
+ */
+const OLED_SHIFT = 3;
+const OLED_STEP_MS = 90000;
+let oledDrift = 0;
+let oledTimer = null;
+
 let win = null;
 /** Content size as the page measured it. */
 let box = { w: 200, h: 36 };
@@ -58,7 +70,7 @@ function place() {
   const area = anchorRect(prefs);
   const width = Math.round(box.w + PAD_X * 2);
   const height = Math.round(box.h + PAD_Y * 2);
-  const x = Math.round(area.x + (area.width - width) / 2);
+  const x = Math.round(area.x + (area.width - width) / 2 + oledDrift);
   /*
    * The work area already excludes the taskbar, so "avoid the top bar" is the
    * default for free. Turning it off means the island may sit over a top-0
@@ -69,6 +81,33 @@ function place() {
   const bounds = win.getBounds();
   if (bounds.x === x && bounds.y === y && bounds.width === width && bounds.height === height) return;
   win.setBounds({ x, y, width, height });
+}
+
+/**
+ * Walk the drift slowly left and right. Off means zero — and a switch flipped
+ * off must not leave the island parked three pixels away from centre.
+ */
+function startOledShift() {
+  clearInterval(oledTimer);
+  oledTimer = setInterval(() => {
+    const prefs = readPrefs();
+    if (prefs.oledShift !== true) {
+      if (oledDrift !== 0) {
+        oledDrift = 0;
+        place();
+      }
+      return;
+    }
+    oledDrift += 1;
+    if (oledDrift > OLED_SHIFT) oledDrift = -OLED_SHIFT;
+    place();
+  }, OLED_STEP_MS);
+}
+
+function stopOledShift() {
+  clearInterval(oledTimer);
+  oledTimer = null;
+  oledDrift = 0;
 }
 
 function setClickThrough(on) {
@@ -231,4 +270,17 @@ function onLoaded(fn) {
   return () => loadedHooks.delete(fn);
 }
 
-module.exports = { create, show, hide, isVisible, send, setBox, registerIpc, place, loadFile, onLoaded };
+module.exports = {
+  create,
+  show,
+  hide,
+  isVisible,
+  send,
+  setBox,
+  registerIpc,
+  place,
+  loadFile,
+  onLoaded,
+  startOledShift,
+  stopOledShift,
+};
