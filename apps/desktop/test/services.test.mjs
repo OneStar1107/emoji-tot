@@ -57,6 +57,7 @@ const lyrics = require('../src/main/services/lyrics.js');
 const calendar = require('../src/main/services/calendar.js');
 const mail = require('../src/main/services/mail.js');
 const paths = require('../src/main/paths.js');
+const platform = require('../src/main/platform.js');
 
 const cal = (body) => ['BEGIN:VCALENDAR', 'VERSION:2.0', body, 'END:VCALENDAR'].join('\r\n');
 const vevent = (lines) => ['BEGIN:VEVENT', ...lines, 'END:VEVENT'].join('\r\n');
@@ -151,7 +152,14 @@ describe('lyrics: a failed lookup is remembered for minutes, not days', () => {
     writeFileSync(cacheFile, JSON.stringify(saved));
     const before = stats.execFile;
     await lyrics.get(track);
-    assert.ok(stats.execFile > before, 'an expired negative entry must not suppress the retry');
+    // The rewritten cache file is the platform-independent proof: a short-
+    // circuited lookup would leave `at` at the expired timestamp it was given.
+    const retried = JSON.parse(readFileSync(cacheFile, 'utf8'));
+    assert.ok(retried.at > saved.at, 'an expired negative entry must not suppress the retry');
+    // Only Windows actually spawns a shell, so the counter is only meaningful there.
+    if (platform.supported) {
+      assert.ok(stats.execFile > before, 'the retry must reach the lookup');
+    }
   });
 });
 

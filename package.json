@@ -27,7 +27,7 @@
     "docs:check": "pnpm build && node scripts/sync-docs.mjs --check && node scripts/docs-consistency.mjs",
     "settings:audit": "node scripts/settings-audit.mjs",
     "settings:check": "node scripts/settings-audit.mjs --check",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm docs:check && pnpm settings:check && pnpm preview && pnpm check:gallery && pnpm smoke:desktop && pnpm audit:ci && pnpm scan"
+    "check": "pnpm typecheck && pnpm build && pnpm test && pnpm docs:check && pnpm settings:check && pnpm preview && pnpm check:gallery && pnpm smoke:desktop && pnpm audit:ci && pnpm scan"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0"
