@@ -1149,7 +1149,7 @@ function setOpen(next) {
 function reportHit() {
   const rect = frameEl.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
-  api.reportHit({ w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
+  api.reportHit({ w: Math.ceil(rect.width), h: Math.ceil(rect.height), collapsed: avoidCollapsed });
 }
 
 /**

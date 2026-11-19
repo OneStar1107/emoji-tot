@@ -189,10 +189,12 @@ function setClickThrough(on) {
  * pointer crossed empty space next to the pill.
  */
 let hitRect = null;
+let hitCollapsed = false;
 
 function setHit(next) {
   if (!next || !Number.isFinite(next.w) || !Number.isFinite(next.h)) return;
   hitRect = { w: Math.round(next.w), h: Math.round(next.h) };
+  hitCollapsed = next.collapsed === true;
 }
 
 function contentRect() {
@@ -253,7 +255,14 @@ function startCursorWatch() {
      */
     const gap = cursorGap(cursor, contentRect());
     const inside = gap === 0;
-    setClickThrough(passThroughFor(clickThroughEnabled, inside));
+    /*
+     * The collapsed strip is a "stay out of the way" state: the window's
+     * transparent padding must hand the pointer back to whatever is underneath
+     * (browser tabs, an editor) even when the user turned clicking-through off
+     * for the normal pill. Occupying that dead space made the browser's own
+     * controls unclickable.
+     */
+    setClickThrough(passThroughFor(clickThroughEnabled, inside) || (hitCollapsed && !inside));
     if (inside !== wasInside) {
       wasInside = inside;
       safeSend(win, 'island:hover', inside);
@@ -411,7 +420,7 @@ function registerIpc() {
       // The page reports the size of what it draws; the window stays padded.
       if (!guard.isPlainObject(hit)) return undefined;
       if (!guard.isNumber(hit.w, 1, 10000) || !guard.isNumber(hit.h, 1, 10000)) return undefined;
-      return { w: Math.round(hit.w), h: Math.round(hit.h) };
+      return { w: Math.round(hit.w), h: Math.round(hit.h), collapsed: hit.collapsed === true };
     },
   });
   guard.guardedHandle('island:visible', ['island'], () => isVisible());
@@ -448,8 +457,9 @@ function refreshPrefs() {
   const prefs = readPrefs();
   clickThroughEnabled = prefs.clickThrough !== false;
   place();
-  const gap = cursorGap(screen.getCursorScreenPoint(), windowRect);
-  setClickThrough(passThroughFor(clickThroughEnabled, gap === 0));
+  const gap = cursorGap(screen.getCursorScreenPoint(), contentRect());
+  const inside = gap === 0;
+  setClickThrough(passThroughFor(clickThroughEnabled, inside) || (hitCollapsed && !inside));
 }
 
 module.exports = {
