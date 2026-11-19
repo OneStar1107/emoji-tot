@@ -77,7 +77,7 @@ either window --face:report <state>-> main  → 另一扇窗（face:apply / isla
 
 浏览器盖住岛时，岛不该挡在半屏直播或文档标题上。开启 `avoidEnabled` 后，岛收成一条 5px 的横条，鼠标可穿过，浏览器让开或失焦后自动还原。
 
-判定在主进程外：`services/avoidance.ps1` 常驻轮询前台窗口（100ms 一行 `1/0`），只认两类目标——启用 `avoidBrowsers` 时的内置浏览器名单，和 `avoidApps` 里按 exe 完整路径匹配的自定义应用；插件浮窗会沿 owner 链回落到宿主窗口。规则与 `Renly1994/xiaotang-daozai` 的 `system.rs` 一致。
+判定在主进程外：`services/avoidance.ps1` 常驻轮询前台窗口（100ms 一行 `1/0`），只认两类目标——启用 `avoidBrowsers` 时的内置浏览器名单，和 `avoidApps` 里按 exe 完整路径匹配的自定义应用；插件浮窗会沿 owner 链回落到宿主窗口。判定条件是：前台窗口的可见矩形是否覆盖岛的中间带，最小化的窗口不算。
 
 悬停判定按**画出来的那一条**算，不按窗口算：窗口带着 32/36px 透明留白，拿窗口当命中区时指针只是路过空白也会展开。渲染层用 `reportHit()` 把 `#frame` 的实时尺寸（pill 222×34 / 面板 / 横条 93×5）发给主进程，主进程的 `contentRect()` 才是命中矩形。
 

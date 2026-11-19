@@ -1178,6 +1178,15 @@ function reportBoxNow() {
 function openFromPointer(event) {
   if (open) return;
   if (event && event.button !== 0) return;
+  /*
+   * Only the drawn pill / panel / strip opens the island.
+   *
+   * With click-through off the window swallows clicks over its whole padded
+   * rectangle, and a document-level pointerdown used to open the panel from
+   * anywhere in that padding (the plain skin made this obvious: a click well
+   * above the thin line still expanded it).
+   */
+  if (!pointerOverContent(event)) return;
   setOpen(true);
 }
 document.addEventListener('pointerdown', openFromPointer, true);
