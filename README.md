@@ -22,15 +22,15 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.0.3.39.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.39/EmojiTot.Setup.0.3.39.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.0.3.39.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.39/EmojiTot.0.3.39.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.0.3.40.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.40/EmojiTot.Setup.0.3.40.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.0.3.40.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.40/EmojiTot.0.3.40.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
 Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases)
 
 > 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护。如果它指向的版本还没打标签，链接会 404 —— 那种情况下从上面「全部版本」里取当前已发布的那一版。
 
-> **<!--facts:version-->0.3.39<!--/facts-->**：双形态（灵动岛 + 桌面球）、十个功能页、设置中心 <!--facts:settingsPages-->14<!--/facts--> 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
+> **<!--facts:version-->0.3.40<!--/facts-->**：双形态（灵动岛 + 桌面球）、十个功能页、设置中心 <!--facts:settingsPages-->14<!--/facts--> 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
 
 ## 这是什么
 

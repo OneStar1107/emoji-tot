@@ -1443,7 +1443,16 @@ function scheduleHoverClose() {
  * merely crossed the empty space next to the strip.
  */
 function pointerOverContent(event) {
-  if (!event || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return false;
+  if (!event) return false;
+  /*
+   * A pointerdown dispatched on the pill itself (the desktop smoke test does
+   * this, and a page script may too) carries no real coordinates, but its
+   * target is inside the drawn frame — that is the content by definition.
+   * Real clicks in the transparent padding land on body/#island, not here.
+   */
+  const target = event.target instanceof Node ? event.target : null;
+  if (target && frameEl.contains(target)) return true;
+  if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return false;
   const rect = frameEl.getBoundingClientRect();
   if (!rect.width || !rect.height) return false;
   return (
