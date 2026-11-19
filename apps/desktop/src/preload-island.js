@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('islandAPI', {
   onMessenger: (listener) => on('island:messenger', listener),
   onDevices: (listener) => on('island:devices', listener),
   onState: (listener) => on('island:state', listener),
+  onFace: (listener) => on('island:face', listener),
+  reportFace: (state) => ipcRenderer.send('face:report', state),
   onCast: (listener) => on('island:cast', listener),
   onQuota: (listener) => on('island:quota', listener),
   quotaDo: (action, data) => ipcRenderer.invoke('quota:do', { action, data }),

@@ -120,6 +120,13 @@ api.onState((message) => {
   if (face) say(face);
 });
 
+/* What the other window reported — the island has no moods of its own. */
+api.onFace((state) => {
+  if (!state) return;
+  actionToken += 1;
+  ball.state = state;
+});
+
 // The main process picks the action, so a poke and the menu agree on what is
 // possible.
 api.onAction((action) => {
@@ -134,6 +141,7 @@ api.onAction((action) => {
   window.setTimeout(() => {
     if (token !== actionToken) return;
     ball.state = 'idle';
+    api.reportFace('idle');
   }, 1700);
 });
 
@@ -206,6 +214,11 @@ function scheduleMood() {
       const mood = nextMood();
       const token = ++actionToken;
       ball.state = mood;
+      /*
+       * Say it out loud: the island cannot invent a mood of its own, so an
+       * unannounced borrow here is exactly the drift the user saw.
+       */
+      api.reportFace(mood);
       const face = faceFor(mood);
       if (face) say(face);
       // A little motion with the expression, or it reads as a freeze-frame.
@@ -218,6 +231,7 @@ function scheduleMood() {
         // Snap straight back to whatever the host asked for: the borrowed mood
         // is a guest, the task state is the resident.
         ball.state = taskState;
+        api.reportFace(taskState);
         ball.play?.(motion);
       }, hold);
     }
@@ -234,6 +248,7 @@ api.onCast((id) => {
   member = next;
   ball.cast = id;
   ball.state = 'idle';
+  api.reportFace('idle');
 });
 
 api.onSize((px) => {

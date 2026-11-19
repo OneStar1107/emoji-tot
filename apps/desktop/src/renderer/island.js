@@ -24,8 +24,6 @@ const titleEl = document.getElementById('page-title');
 const subEl = document.getElementById('page-sub');
 const topClock = document.getElementById('top-clock');
 const topBattery = document.getElementById('top-battery');
-const topMedia = document.getElementById('top-media');
-const topMediaText = document.getElementById('top-media-text');
 const btnSettings = document.getElementById('btn-settings');
 
 await customElements.whenDefined('emojitot-ball');
@@ -292,20 +290,21 @@ function ensureBatteryRotation() {
   }, BATTERY_ROTATE_MS);
 }
 
-/* The page stays primary; now-playing is a secondary header slot. */
-function renderTopMedia() {
-  const page = enabledPages()[pageIndex];
-  const state = islandHeaderState(page?.title ?? '', media);
-  if (titleEl.textContent !== state.title) titleEl.textContent = state.title;
-  titleEl.dataset.over = String(
-    state.title.length > 0 && titleEl.scrollWidth > titleEl.clientWidth + 2,
-  );
-  topMedia.hidden = !state.media;
-  if (topMediaText.textContent !== state.media) topMediaText.textContent = state.media;
-  topMedia.dataset.over = String(
-    state.media.length > 0 && topMedia.scrollWidth > topMedia.clientWidth + 2,
-  );
-  topMedia.classList.toggle('scrolling', topMedia.dataset.over === 'true');
+/* The playing title owns the header line; the page name lives under the ball. */
+function renderHeader() {
+  const state = islandHeaderState(media);
+  const textEl = titleEl.firstElementChild;
+  if (textEl && textEl.textContent !== state.title) textEl.textContent = state.title;
+  /*
+   * Measure after writing: the first write happens before layout, so a one-off
+   * check would answer "fits" forever. The distance is handed to CSS through a
+   * custom property — the slot width is not known to the stylesheet.
+   */
+  const over = state.title.length > 0 && titleEl.scrollWidth > titleEl.clientWidth + 2;
+  titleEl.dataset.over = String(over);
+  if (over && textEl) {
+    titleEl.style.setProperty('--title-shift', textEl.scrollWidth - titleEl.clientWidth + 6 + 'px');
+  }
 }
 
 function renderPillStatus() {
@@ -553,7 +552,7 @@ function weatherPage() {
       <div class="weather-cell"><em>体感</em><b>${show(now.feels)}°</b></div>
       <div class="weather-cell"><em>湿度</em><b>${Number(now.humidity) || 0}%</b></div>
       <div class="weather-cell"><em>风速</em><b>${Number(now.wind) || 0} km/h</b></div>
-      <div class="weather-cell"><em>日出</em><b>${escapeHtml((now.sunrise || '').slice(11, 16) || '--')} / ${escapeHtml((now.sunset || '').slice(11, 16) || '--')}</b></div>
+      <div class="weather-cell"><em>日出日落</em><b>${escapeHtml((now.sunrise || '').slice(11, 16) || '--')} / ${escapeHtml((now.sunset || '').slice(11, 16) || '--')}</b></div>
     </div>
     <div class="weather-days">${dayCells}</div>
   </div>`;
@@ -1016,12 +1015,16 @@ function renderPage(animate = false) {
   const list = enabledPages();
   if (!list.length) {
     document.body.dataset.pages = '0';
-    titleEl.textContent = '还没有页面';
+    /* Write the inner span, never the host: textContent on #page-title would
+       delete the span the marquee needs, and every later render would find
+       nothing to write into. */
+    const titleText = titleEl.firstElementChild;
+    if (titleText) titleText.textContent = '还没有页面';
+    titleEl.dataset.over = 'false';
     const subText = subEl.firstElementChild;
     if (subText) subText.textContent = '去设置里打开';
     subEl.dataset.muted = 'false';
     subEl.dataset.over = 'false';
-    topMedia.hidden = true;
     pagesEl.innerHTML = empty(ICON.check, '页面都是关的', '在设置 → 页面管理里打开至少一个。', '打开设置', 'settings:pages');
     dotsEl.innerHTML = '';
     dotsEl.hidden = true;
@@ -1036,10 +1039,9 @@ function renderPage(animate = false) {
   // One page means the paging arrows would be dead controls.
   document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
-  /* Page identity owns the header; media is a secondary status. */
   const nameEl = document.getElementById('page-name');
   if (nameEl) nameEl.textContent = page.title;
-  renderTopMedia();
+  renderHeader();
   renderSub();
   pagesEl.innerHTML = (RENDERERS[page.key] ?? ((p) => fallbackPage(p)))(page);
   dotsEl.innerHTML = list
@@ -1421,7 +1423,7 @@ api.onMedia((value) => {
   media = value;
   renderPillStatus();
   renderSub();
-  renderTopMedia();
+  renderHeader();
   if (open && enabledPages()[pageIndex]?.key === 'music') {
     if (trackChanged || playingChanged) {
       lastLyricIndex = -2;
@@ -1492,6 +1494,18 @@ api.onCast((cast) => {
 
 api.onState((message) => {
   const state = message && message.state;
+  if (!state) return;
+  for (const face of document.querySelectorAll('emojitot-ball')) {
+    face.setAttribute('state', String(state));
+  }
+});
+
+/*
+ * The ball owns the idle moods; the island wears whatever it is wearing. Both
+ * windows report their face to the main process, which relays it to the other,
+ * so the two characters can never drift apart within one cycle.
+ */
+api.onFace((state) => {
   if (!state) return;
   for (const face of document.querySelectorAll('emojitot-ball')) {
     face.setAttribute('state', String(state));

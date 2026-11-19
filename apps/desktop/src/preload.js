@@ -15,6 +15,19 @@ contextBridge.exposeInMainWorld('petAPI', {
   /** A click that was not a drag: the pet does something by itself. */
   poke: () => ipcRenderer.send('pet:action'),
 
+  /*
+   * The face the ball is showing right now, so the island can wear it too.
+   * Idle moods are invented here, one window or the other has to say them out
+   * loud for the two characters to stay the same.
+   */
+  reportFace: (state) => ipcRenderer.send('face:report', state),
+  /** What the other window is wearing. */
+  onFace: (listener) => {
+    const handler = (_event, state) => listener(state);
+    ipcRenderer.on('face:apply', handler);
+    return () => ipcRenderer.removeListener('face:apply', handler);
+  },
+
   /** Every message the host wants the character to play. */
   onState: (listener) => {
     const handler = (_event, payload) => listener(payload);

@@ -8,21 +8,15 @@ import {
   pagingVisibility,
 } from '../src/renderer/island-header.mjs';
 
-describe('island header hierarchy', () => {
-  it('keeps the page title primary while media is active', () => {
-    const state = islandHeaderState('天气', {
-      active: true,
-      playing: true,
-      title: '正在播放的歌',
-    });
-    assert.equal(state.title, '天气');
-    assert.equal(state.media, '正在播放的歌');
+describe('island header title', () => {
+  it('shows the playing title instead of repeating the page name', () => {
+    const state = islandHeaderState({ active: true, playing: true, title: '正在播放的歌' });
+    assert.equal(state.title, '正在播放的歌');
   });
 
-  it('clears the secondary media slot when nothing is active', () => {
-    const state = islandHeaderState('天气', { active: false, title: '旧歌' });
-    assert.equal(state.title, '天气');
-    assert.equal(state.media, '');
+  it('leaves the line empty when nothing is playing', () => {
+    const state = islandHeaderState({ active: false, title: '旧歌' });
+    assert.equal(state.title, '');
   });
 });
 

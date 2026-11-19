@@ -22,8 +22,8 @@
 <!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot.Setup.0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.Setup.0.3.32.exe) | Installer — starts from the Start menu |
-| [EmojiTot.0.3.32.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.32/EmojiTot.0.3.32.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.Setup.0.3.33.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.33/EmojiTot.Setup.0.3.33.exe) | Installer — starts from the Start menu |
+| [EmojiTot.0.3.33.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.33/EmojiTot.0.3.33.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases)
@@ -153,7 +153,7 @@ Not "it should run" — it was run:
 | Desktop window behaviour | `node apps/desktop/scripts/ui-check.mjs <port>` — drives the real cursor, 7/7 (dock, open, tuck, click-through) |
 | Desktop window smoke | `pnpm smoke:desktop` — launches the development or packaged app with a temporary profile, 7/7 (sandbox, preload, window size, shelf layout, paging targets) |
 | Desktop protocol | write `34` → `alerting`, `33` → `celebrate`, malformed JSON → keeps the current face |
-| Windows artifacts | `EmojiTot.Setup.0.3.32.exe` (about 116 MiB) and `EmojiTot.0.3.32.exe` (about 106 MiB); the unpacked build passes the same window smoke |
+| Windows artifacts | `EmojiTot.Setup.0.3.33.exe` (about 116 MiB) and `EmojiTot.0.3.33.exe` (about 106 MiB); the unpacked build passes the same window smoke |
 
 ## Deliberate trade-offs
 

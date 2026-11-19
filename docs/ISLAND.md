@@ -9,10 +9,14 @@ tot 的第二种形态：贴在屏幕顶部中间的一条胶囊。收起时只�
 | 状态 | 宽 | 高 | 内容 |
 | --- | --- | --- | --- |
 | 收起 pill | 168–220（按组件算） | 36 | tot 小脸 28px + 组件区（时间/电量/温度/余额）+ 播放指示 |
-| 展开面板 | 420 | 按页面 300–380 | 顶栏（脸/标题/电量/时间/齿轮）+ 页面区 + 分页点 |
+| 展开面板 | 420 | 按页面 300–380 | 顶栏（脸/播放标题/电量/时间/齿轮）+ 页面区 + 分页点 |
 | 展开 + 通知 | 420 | 按内容最多 460 | 临时插页，3.5s 后回到原页 |
 
 窗口 = 内容尺寸 + 留白（左右 32px、上下 36px，给阴影和悬停放大），主进程按渲染层上报的 box 逐帧 setBounds。
+
+### 顶栏那一行放什么
+
+只放正在播放的标题。页名常驻在头像下面（9px），不再以大字号和媒体标题并排重复；右侧原来那个 96px 的媒体窄槽也取消了，标题直接用整列宽度，超长时内层 span 跑马灯。没有播放时标题行留空，`min-height` 锁住高度，翻页不会跳。
 
 ## 2. 位置
 
@@ -58,6 +62,7 @@ tot 的第二种形态：贴在屏幕顶部中间的一条胶囊。收起时只�
 renderer(island) --island:box {w,h}--> main  → setBounds 居中
 renderer --island:hover bool--------> main  → setIgnoreMouseEvents 兜底
 main --island:* data---------------> renderer
+either window --face:report <state>-> main  → 另一扇窗（face:apply / island:face）：两边表情永远同一张
 ```
 
 尺寸同步用 `ResizeObserver` + `requestAnimationFrame` 节流，每帧最多上报一次；key 相同则不发。

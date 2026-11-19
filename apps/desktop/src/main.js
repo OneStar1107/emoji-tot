@@ -1114,6 +1114,26 @@ guard.guardedSend('pet:action', ['ball'], () => {
   const action = actions[Math.floor(Math.random() * actions.length)];
   if (win) safeSend(win, 'state:action', action);
 }, { maxBytes: 64 });
+
+/*
+ * One face, two windows.
+ *
+ * The ball runs its own idle moods — a pet that only rests is a screensaver —
+ * and the island wears the same character. Without this relay the island sat
+ * on the task state while the ball borrowed an expression every few seconds,
+ * so the two faces drifted apart within one cycle. Both windows report what
+ * they are showing; both receive what the other one reported.
+ */
+function relayFace(state) {
+  const next = typeof state === 'string' ? state.slice(0, 32) : '';
+  if (!next) return;
+  island.send('island:face', next);
+  safeSend(win, 'face:apply', next);
+}
+guard.guardedSend('face:report', ['ball', 'island'], relayFace, {
+  check: (value) => (typeof value === 'string' && value.length > 0 ? value : undefined),
+  maxBytes: 256,
+});
 /** The renderer saw the pointer on the ball, or leave it. */
 
 
