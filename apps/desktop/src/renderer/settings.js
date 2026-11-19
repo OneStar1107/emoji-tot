@@ -231,6 +231,29 @@ function pageLayout() {
 
 const AVOID_ICON_CACHE = new Map();
 
+/*
+ * The glyph shown when an exe's own icon cannot be read. A first letter is not
+ * the app's icon — the user asked for the default application icon instead, so
+ * the grid never falls back to an "e"-in-a-box again.
+ */
+const DEFAULT_APP_ICON =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
+      '<rect x="3" y="5" width="26" height="22" rx="5" fill="#2b2b34"/>' +
+      '<path d="M3 10a5 5 0 0 1 5-5h16a5 5 0 0 1 5 5v1H3z" fill="#3c3c48"/>' +
+      '<circle cx="7.4" cy="8.4" r="1.3" fill="#7b7b8a"/>' +
+      '<circle cx="11.6" cy="8.4" r="1.3" fill="#7b7b8a"/>' +
+      '<rect x="7" y="15" width="18" height="2.4" rx="1.2" fill="#5b5b6a"/>' +
+      '<rect x="7" y="20" width="11" height="2.4" rx="1.2" fill="#4a4a58"/>' +
+    '</svg>',
+  );
+
+function avoidIconHtml(path) {
+  const icon = AVOID_ICON_CACHE.get(path);
+  return '<img src="' + (icon || DEFAULT_APP_ICON) + '" alt="" draggable="false" />';
+}
+
 function avoidApps() {
   return Array.isArray(prefs.avoidApps)
     ? prefs.avoidApps.filter((app) => app && typeof app.path === 'string')
@@ -245,11 +268,8 @@ function avoidAppsRow() {
   const apps = avoidApps();
   if (!apps.length) return '<div class="avoid-empty">添加需要自动避让的其他应用</div>';
   const cells = apps.map((app) => {
-    const icon = AVOID_ICON_CACHE.get(app.path);
     const label = app.name || app.path;
-    const face = icon
-      ? '<img src="' + icon + '" alt="" draggable="false" />'
-      : '<span>' + escapeHtml(String(label).slice(0, 1)) + '</span>';
+    const face = avoidIconHtml(app.path);
     return '<div class="avoid-app" title="' + escapeHtml(label + '\n所有窗口\n' + app.path) + '">' + face +
       '<button type="button" class="avoid-x" data-act="avoid-remove" data-path="' + escapeHtml(app.path) +
         '" aria-label="移除 ' + escapeHtml(label) + '">×</button></div>';
@@ -257,17 +277,30 @@ function avoidAppsRow() {
   return '<div class="avoid-grid">' + cells.join('') + '</div>';
 }
 
-function ensureAvoidIcons(paths) {
-  const missing = [...new Set(paths)].filter((p) => p && !AVOID_ICON_CACHE.has(p));
+let avoidIconsAt = 0;
+
+/**
+ * Read the icons the cache is missing.
+ *
+ * `force` re-reads paths that are already cached. A failed read used to be
+ * remembered as "no icon" for the life of the settings window, so the grid kept
+ * a letter until the window was reopened; the saved apps are now re-read on
+ * every visit instead.
+ */
+function ensureAvoidIcons(paths, opts) {
+  const force = !!(opts && opts.force);
+  const wanted = [...new Set(paths)].filter(Boolean);
+  const missing = force ? wanted : wanted.filter((p) => !AVOID_ICON_CACHE.has(p));
   if (!missing.length) return;
   api.avoidIcons(missing.slice(0, 120)).then((map) => {
-    let added = 0;
+    let changed = 0;
     for (const [key, value] of Object.entries(map || {})) {
-      if (!AVOID_ICON_CACHE.has(key)) added += 1;
+      if (!value) continue;
+      if (AVOID_ICON_CACHE.get(key) !== value) changed += 1;
       AVOID_ICON_CACHE.set(key, value);
     }
-    if (added && content.querySelector('.avoid-grid')) paint();
-    if (added && avoidDialog) paintAvoidDialog();
+    if (changed && content.querySelector('.avoid-grid')) paint();
+    if (changed && avoidDialog) paintAvoidDialog();
   }).catch(() => {});
 }
 
@@ -303,10 +336,7 @@ function avoidListHtml(rows) {
   return rows.map((app) => {
     const reason = avoidCandidateReason(app);
     const picked = sameExe(avoidSelected || '', app.path);
-    const icon = AVOID_ICON_CACHE.get(app.path);
-    const face = icon
-      ? '<img src="' + icon + '" alt="" draggable="false" />'
-      : '<span>' + escapeHtml(String(app.name).slice(0, 1)) + '</span>';
+    const face = avoidIconHtml(app.path);
     return '<button type="button" class="avoid-item' + (picked ? ' is-picked' : '') + (reason ? ' is-taken' : '') +
       '" data-act="avoid-pick" data-path="' + escapeHtml(app.path) + '"' + (reason ? ' disabled' : '') + '>' +
       '<span class="avoid-icon">' + face + '</span>' +
@@ -357,8 +387,7 @@ function paintAvoidDialog() {
     ? rows.map((app) => {
         const reason = avoidCandidateReason(app);
         const picked = sameExe(avoidSelected || '', app.path);
-        const icon = AVOID_ICON_CACHE.get(app.path);
-        const face = icon ? '<img src="' + icon + '" alt="" draggable="false" />' : '<span>' + escapeHtml(String(app.name).slice(0, 1)) + '</span>';
+        const face = avoidIconHtml(app.path);
         return '<button type="button" class="avoid-item' + (picked ? ' is-picked' : '') + (reason ? ' is-taken' : '') +
           '" data-act="avoid-pick" data-path="' + escapeHtml(app.path) + '"' + (reason ? ' disabled' : '') + '>' +
           '<span class="avoid-icon">' + face + '</span>' +
@@ -426,6 +455,13 @@ async function addAvoidApp(app) {
 }
 
 function pageBehavior() {
+  /*
+   * Re-read the saved apps' icons each time the page is painted. The read is
+   * cheap (one PowerShell pass for a handful of exes) and throttled so a burst
+   * of preference repaints does not spawn one per keystroke.
+   */
+  ensureAvoidIcons(avoidApps().map((app) => app.path), { force: Date.now() - avoidIconsAt > 3000 });
+  avoidIconsAt = Date.now();
   return head('隐藏与交互', '什么情况下出现，什么情况下让开') +
     group('显示', card([
       rowToggle('全屏时隐藏', '看视频、演示时不挡住画面', 'hideFullscreen'),

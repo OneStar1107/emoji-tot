@@ -1096,6 +1096,26 @@ function setOpen(next) {
   panelEl.hidden = !open;
   pillEl.setAttribute('aria-expanded', String(open));
   if (open) renderPage();
+  /* Opening leaves the strip state (and unfreezes the box reports); closing it
+     while a listed app still covers the island puts the strip back. */
+  /*
+   * Closing while a listed app still covers the island: read the *normal pill*
+   * layout once (the strip keeps the pill out of flow measurements), report
+   * that box, and only then collapse.
+   *
+   * Measuring the pill element instead is unreliable — it is display:none
+   * while the panel is open — and a stale read left the window at the panel's
+   * size with just a 5px bar drawn inside it.
+   */
+  if (!open && avoiding) {
+    document.body.dataset.avoid = '0';
+    const pillBox = frameEl.getBoundingClientRect();
+    if (pillBox.width && pillBox.height) {
+      lastPillWidth = Math.round(pillBox.width);
+      api.reportBox({ w: Math.ceil(pillBox.width), h: Math.ceil(pillBox.height) });
+    }
+  }
+  syncAvoidVisual();
   /*
    * Size the wrapper here instead of trusting the frame's ResizeObserver to
    * fire on time. Opening swaps a hidden pill for a visible panel; the observer
@@ -1104,6 +1124,13 @@ function setOpen(next) {
    * the frame right after the swap forces the layout and gives the real box.
    */
   syncSize();
+  /*
+   * Collapsing back into the strip must not leave the window at the panel's
+   * size: the strip is frozen out of the measurement path, so the pill's own
+   * box is reported here, once. Without it the window keeps the panel size
+   * while only a 5px bar is drawn, and every later hover over that invisible
+   * rectangle opens the panel.
+   */
   reportBoxNow();
   measure();
 }
@@ -1402,18 +1429,63 @@ document.documentElement.addEventListener('mouseleave', scheduleHoverClose);
 const AVOID_RATIO = 0.42;
 let avoiding = false;
 
+/**
+ * The strip is a state of the *content*, not of the window.
+ *
+ * Collapsed means "a listed app is covering the island and the island is not
+ * being used". Opening it (hover or click) wins over avoidance: otherwise the
+ * panel is painted inside a 5px clipped frame and hovering the strip looks
+ * like the island ignored the pointer completely.
+ */
+/*
+ * The pill's own width, kept current by a ResizeObserver.
+ *
+ * Reading it exactly when the strip is applied is unreliable: the very first
+ * avoid can fire before the status line has rendered (a 176px pill), and the
+ * close path may still see the panel's box. Tracking it means the strip is
+ * always 42% of the pill the user actually has.
+ */
+/*
+ * Width of the pill to make the strip 42% of.
+ *
+ * Deliberately *not* observed live: reopening the pill lays it out at its empty
+ * size (200x31) before the status line fills in (222x34), and an observer that
+ * accepted the first size set the strip to 84px and never corrected it. It is
+ * read once, from the frame, at the two moments the normal pill is on screen —
+ * entering the strip and closing back into it.
+ */
+let lastPillWidth = 0;
+
+function applyAvoidWidth() {
+  if (!lastPillWidth) return;
+  document.documentElement.style.setProperty('--avoid-w', Math.max(48, Math.round(lastPillWidth * AVOID_RATIO)) + 'px');
+}
+
+
+
+function syncAvoidVisual() {
+  const collapsed = avoiding && !open;
+  avoidCollapsed = collapsed;
+  document.body.dataset.avoid = collapsed ? '1' : '0';
+  if (collapsed) applyAvoidWidth();
+  return collapsed;
+}
+
 function applyAvoid(on) {
   const next = on === true;
   if (next === avoiding) return;
   avoiding = next;
-  avoidCollapsed = next;
   const rect = frameEl.getBoundingClientRect();
-  if (next) {
-    document.documentElement.style.setProperty('--avoid-w', Math.max(48, Math.round(rect.width * AVOID_RATIO)) + 'px');
-  }
+  /*
+   * Entering the strip always happens from the normal layout (or from the open
+   * panel), so the frame's width right here *is* the pill's width. Reading it
+   * beats trusting the observer: a transient 200px first paint used to stick
+   * and made the strip 42% of the wrong number.
+   */
+  if (next && rect.width && !open) lastPillWidth = Math.round(rect.width);
+  syncAvoidVisual();
   frameEl.style.width = Math.round(rect.width) + 'px';
   frameEl.style.height = Math.round(rect.height) + 'px';
-  document.body.dataset.avoid = next ? '1' : '0';
   requestAnimationFrame(() => {
     frameEl.style.width = '';
     frameEl.style.height = '';
@@ -1423,6 +1495,7 @@ function applyAvoid(on) {
 }
 
 api.onAvoid(applyAvoid);
+
 
 api.onHover((inside) => {
   /*

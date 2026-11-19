@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$Config = '',
   [switch]$ListApps,
   [switch]$Probe,
@@ -320,8 +320,12 @@ function Get-RunningApps {
 
 function Get-IconDataUrl($p) {
   Add-Type -AssemblyName System.Drawing
-  $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p)
-  if (-not $icon) { return '' }
+  # Some installers ship a stub exe with no icon resource. Falling back to the
+  # shell's generic application icon beats sending nothing: the settings grid
+  # then shows the default app glyph instead of a first letter.
+  $icon = $null
+  try { $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($p) } catch { $icon = $null }
+  if (-not $icon) { $icon = [System.Drawing.SystemIcons]::Application }
   try {
     $bmp = $icon.ToBitmap()
     try {

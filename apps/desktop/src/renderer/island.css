@@ -1151,6 +1151,11 @@ body[data-reduce-motion='on'] *::after {
  */
 #avoid-strip {
   display: none;
+  /* Out of flow so the hidden pill can stay laid out (and measurable) next to
+     it instead of pushing the strip out of the 93px frame. */
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
   border-radius: 999px;
@@ -1158,11 +1163,14 @@ body[data-reduce-motion='on'] *::after {
   opacity: 0.5;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-#frame {
-  transition:
-    width 160ms var(--ease),
-    height 160ms var(--ease);
-}
+/*
+ * No width/height transition on #frame.
+ *
+ * The wrapper (#island) already animates, and a frame transition made every
+ * synchronous read return the *intermediate* size — the close path reported the
+ * panel's box back to the main process, so the window stayed at panel size
+ * while only a 5px bar was drawn.
+ */
 body[data-avoid="1"] #frame {
   width: var(--avoid-w, 176px);
   height: 5px;
@@ -1172,7 +1180,11 @@ body[data-avoid="1"] #frame {
  * Hide the pill and the panel, not #island: the strip lives inside #frame,
  * inside #island, so hiding the container hid the strip too and the island
  * went fully transparent instead of collapsing to a strip.
+ *
+ * visibility, not display: the pill keeps its layout box, so the strip can stay
+ * 42% of the real pill width and the close path can report the pill's size
+ * (display:none measures 0, which left the window at the panel's size).
  */
 body[data-avoid="1"] #pill,
-body[data-avoid="1"] #panel { display: none; }
+body[data-avoid="1"] #panel { visibility: hidden; }
 body[data-avoid="1"] #avoid-strip { display: block; }
