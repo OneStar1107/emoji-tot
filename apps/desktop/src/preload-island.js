@@ -15,6 +15,8 @@ const on = (channel, listener) => {
 contextBridge.exposeInMainWorld('islandAPI', {
   /** Content size, measured by the page. The window follows it. */
   reportBox: (box) => ipcRenderer.send('island:box', box),
+  /** Size of what is drawn right now (pill, panel or strip) — the hover target. */
+  reportHit: (hit) => ipcRenderer.send('island:hit', hit),
   bootstrap: () => ipcRenderer.invoke('island:bootstrap'),
   openSettings: (page) => ipcRenderer.invoke('settings:open', page),
   quit: () => ipcRenderer.invoke('app:quit').catch(() => {}),

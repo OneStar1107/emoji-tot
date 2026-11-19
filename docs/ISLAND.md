@@ -79,6 +79,8 @@ either window --face:report <state>-> main  → 另一扇窗（face:apply / isla
 
 判定在主进程外：`services/avoidance.ps1` 常驻轮询前台窗口（100ms 一行 `1/0`），只认两类目标——启用 `avoidBrowsers` 时的内置浏览器名单，和 `avoidApps` 里按 exe 完整路径匹配的自定义应用；插件浮窗会沿 owner 链回落到宿主窗口。规则与 `Renly1994/xiaotang-daozai` 的 `system.rs` 一致。
 
+悬停判定按**画出来的那一条**算，不按窗口算：窗口带着 32/36px 透明留白，拿窗口当命中区时指针只是路过空白也会展开。渲染层用 `reportHit()` 把 `#frame` 的实时尺寸（pill 222×34 / 面板 / 横条 93×5）发给主进程，主进程的 `contentRect()` 才是命中矩形。
+
 悬停或点击那条横条就是正常展开：避让是内容状态，不是窗口状态——`syncAvoidVisual()` 只在 `avoiding && !open` 时收成条，岛一打开（面板 300px）就按面板尺寸上报，鼠标离开、岛收起后再回到横条。收缩期间不放开上报的话，面板会被 5px 的 `overflow:hidden` 裁掉，看起来就是"鼠标放上去没反应"。
 
 收缩的是内容，不是窗口：`#frame` 拿到 `--avoid-w`（自身宽度的 42%）与 5px 高度，窗口尺寸保持不变。这条很重要——收缩态一旦上报 box，窗口就会跟着缩，判定用的 pill 矩形随之移动，状态会在两帧之间来回翻。所以收缩期间 `measure()` / `reportBoxNow()` 直接跳过。

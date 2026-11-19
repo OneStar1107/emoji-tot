@@ -169,6 +169,8 @@ function measure() {
    */
   queueMicrotask(() => {
     measuring = false;
+    /* Every layout change also moves the hover target. */
+    reportHit();
     if (avoidCollapsed) return;
     /*
      * The frame is the content's natural box — it is out of flow with
@@ -1132,7 +1134,22 @@ function setOpen(next) {
    * rectangle opens the panel.
    */
   reportBoxNow();
+  reportHit();
   measure();
+}
+
+/**
+ * Tell the main process what the pointer has to be inside to count as hovering.
+ *
+ * The frame is exactly what is drawn — 222x34 for the pill, the panel's box when
+ * open, 93x5 for the auto-avoid strip — while the window keeps its transparent
+ * padding. Sending this is what makes the island stop opening when the pointer
+ * merely crosses the empty space around it.
+ */
+function reportHit() {
+  const rect = frameEl.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  api.reportHit({ w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
 }
 
 /**
@@ -1408,8 +1425,32 @@ function scheduleHoverClose() {
   }, Math.max(120, Math.min(2000, delay)));
 }
 
-document.documentElement.addEventListener('mouseenter', scheduleHoverOpen);
-document.addEventListener('mousemove', scheduleHoverOpen);
+/*
+ * The page only counts a pointer that is over the drawn content.
+ *
+ * The window is padded, and while the island is collapsed to the auto-avoid
+ * strip that padding is most of the window. Forwarded mouse events arrive for
+ * the whole window, so without this the island still opened when the pointer
+ * merely crossed the empty space next to the strip.
+ */
+function pointerOverContent(event) {
+  if (!event || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return false;
+  const rect = frameEl.getBoundingClientRect();
+  if (!rect.width || !rect.height) return false;
+  return (
+    event.clientX >= rect.left &&
+    event.clientX <= rect.right &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.bottom
+  );
+}
+
+document.documentElement.addEventListener('mouseenter', (event) => {
+  if (pointerOverContent(event)) scheduleHoverOpen();
+});
+document.addEventListener('mousemove', (event) => {
+  if (pointerOverContent(event)) scheduleHoverOpen();
+});
 document.documentElement.addEventListener('mouseleave', scheduleHoverClose);
 /*
  * Leaving is also reported by the main process. Once the pointer is outside,
@@ -1468,6 +1509,8 @@ function syncAvoidVisual() {
   avoidCollapsed = collapsed;
   document.body.dataset.avoid = collapsed ? '1' : '0';
   if (collapsed) applyAvoidWidth();
+  /* The strip is 5px tall; the window around it is not a hover target. */
+  reportHit();
   return collapsed;
 }
 
@@ -1693,4 +1736,5 @@ const preferred = bootPages.findIndex((page) => page.key === prefs.defaultPage);
 pageIndex = preferred >= 0 ? preferred : 0;
 setOpen(false);
 setInterval(renderPillStatus, 20000);
+reportHit();
 measure();

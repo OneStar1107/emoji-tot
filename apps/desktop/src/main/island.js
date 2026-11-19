@@ -180,6 +180,33 @@ function setClickThrough(on) {
  * The gap is measured to the rectangle, not to its centre, so a pointer just
  * above the island counts as near even though the centre is far away.
  */
+/*
+ * The rectangle the pointer has to be inside for the island to count as hovered.
+ *
+ * The page reports the size of what it actually draws (pill, panel or the 5px
+ * auto-avoid strip); the window keeps its padding, so testing the window made
+ * the whole 287x106 area a hover target and the island opened whenever the
+ * pointer crossed empty space next to the pill.
+ */
+let hitRect = null;
+
+function setHit(next) {
+  if (!next || !Number.isFinite(next.w) || !Number.isFinite(next.h)) return;
+  hitRect = { w: Math.round(next.w), h: Math.round(next.h) };
+}
+
+function contentRect() {
+  const width = hitRect ? Math.min(hitRect.w, windowRect.width || hitRect.w) : windowRect.width;
+  const height = hitRect ? Math.min(hitRect.h, windowRect.height || hitRect.h) : windowRect.height;
+  if (!width || !height) return windowRect;
+  return {
+    x: Math.round(windowRect.x + (windowRect.width - width) / 2),
+    y: windowRect.y,
+    width,
+    height,
+  };
+}
+
 function cursorGap(cursor, rect) {
   const dx = Math.max(rect.x - cursor.x, 0, cursor.x - (rect.x + rect.width));
   const dy = Math.max(rect.y - cursor.y, 0, cursor.y - (rect.y + rect.height));
@@ -219,11 +246,12 @@ function startCursorWatch() {
     const rect = windowRect;
     const cursor = screen.getCursorScreenPoint();
     /*
-     * The whole window is the target, not the pill inside it. A 28px band of
-     * "transparent" padding that swallows clicks reads as "it ignores me" —
-     * and the window is only ever as big as the island needs anyway.
+     * Hover is decided on the drawn content, not the window: the window carries
+     * 32/36px of transparent padding and, while the island is collapsed to the
+     * auto-avoid strip, the content is only 5px tall. Testing the window meant
+     * anything inside that empty box (or brushing past it) opened the island.
      */
-    const gap = cursorGap(cursor, rect);
+    const gap = cursorGap(cursor, contentRect());
     const inside = gap === 0;
     setClickThrough(passThroughFor(clickThroughEnabled, inside));
     if (inside !== wasInside) {
@@ -377,6 +405,15 @@ function registerIpc() {
       return { w: Math.round(box.w), h: Math.round(box.h) };
     },
   });
+  guard.guardedSend('island:hit', ['island'], (hit) => setHit(hit), {
+    maxBytes: 256,
+    check: (hit) => {
+      // The page reports the size of what it draws; the window stays padded.
+      if (!guard.isPlainObject(hit)) return undefined;
+      if (!guard.isNumber(hit.w, 1, 10000) || !guard.isNumber(hit.h, 1, 10000)) return undefined;
+      return { w: Math.round(hit.w), h: Math.round(hit.h) };
+    },
+  });
   guard.guardedHandle('island:visible', ['island'], () => isVisible());
   guard.guardedHandle('island:show', ['island'], () => {
     show();
@@ -431,5 +468,7 @@ module.exports = {
   startOledShift,
   stopOledShift,
   setBoundsHook,
+  setHit,
+  contentRect,
   pillRect,
 };
