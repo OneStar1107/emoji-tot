@@ -106,5 +106,12 @@ jobs:
       - name: Build libraries
         run: pnpm build
 
+      # `allowBuilds` in pnpm-workspace.yaml lets electron's install script run,
+      # but a replayed install can still leave node_modules/electron/dist empty
+      # on a cold runner, which the smoke test reports as "Electron binary is
+      # missing". Rebuilding the one package forces the download.
+      - name: Electron binary
+        run: pnpm rebuild electron
+
       - name: Desktop window smoke
         run: pnpm smoke:desktop

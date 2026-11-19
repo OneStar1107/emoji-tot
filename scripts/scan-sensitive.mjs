@@ -57,6 +57,23 @@ const textRules = [
   { id: 'onedrive', test: (line) => /OneDrive/i.test(line), allow: null },
 ];
 
+/**
+ * Is this the local user name in a place that actually leaks it?
+ *
+ * A bare word match is only convincing when the name could not be an ordinary
+ * word: GitHub's runner account is called "runner", so matching the bare word
+ * flagged "Node test runner" in two plan documents. Path and account context
+ * (\name, /name, @name, ~name) is always a hit, and a name that is not plain
+ * lowercase letters (it carries a digit or a capital) is distinctive enough
+ * that a bare mention is itself identifying.
+ */
+function leaksUser(line, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp('[\\\\/@~]' + escaped + '(?![A-Za-z0-9_-])').test(line)) return true;
+  if (/[^a-z]/.test(name)) return new RegExp('\\b' + escaped + '\\b').test(line);
+  return false;
+}
+
 function scanText(files) {
   const findings = [];
   for (const file of files) {
@@ -78,7 +95,7 @@ function scanText(files) {
         findings.push({ file, line: i + 1, rule: rule.id, text: line.trim().slice(0, 160) });
       }
       for (const name of users) {
-        if (line.includes(name) && new RegExp('\\b' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(line)) {
+        if (line.includes(name) && leaksUser(line, name)) {
           findings.push({ file, line: i + 1, rule: 'local-user', text: line.trim().slice(0, 160) });
         }
       }
