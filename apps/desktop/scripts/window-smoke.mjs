@@ -24,7 +24,7 @@ const out = [];
 const ok = (n, p, d = '') => { out.push(p); console.log((p ? '  PASS  ' : '  FAIL  ') + n + (d ? '  — ' + d : '')); };
 
 if (!existsSync(ELECTRON)) {
-  console.error('Electron binary is missing. Run `pnpm rebuild electron` before the desktop smoke test.');
+  console.error('Electron binary is missing. Run `pnpm --filter @emojitot/desktop exec install-electron` before the desktop smoke test.');
   process.exit(1);
 }
 const SMOKE_USER_DATA = mkdtempSync(join(tmpdir(), 'emojitot-window-smoke-'));
