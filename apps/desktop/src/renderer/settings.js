@@ -227,6 +227,204 @@ function pageLayout() {
     ]));
 }
 
+/* ------------------------------------------------------------- auto-avoid */
+
+const AVOID_ICON_CACHE = new Map();
+
+function avoidApps() {
+  return Array.isArray(prefs.avoidApps)
+    ? prefs.avoidApps.filter((app) => app && typeof app.path === 'string')
+    : [];
+}
+
+function sameExe(a, b) {
+  return String(a).replace(/\//g, '\\').toLowerCase() === String(b).replace(/\//g, '\\').toLowerCase();
+}
+
+function avoidAppsRow() {
+  const apps = avoidApps();
+  if (!apps.length) return '<div class="avoid-empty">添加需要自动避让的其他应用</div>';
+  const cells = apps.map((app) => {
+    const icon = AVOID_ICON_CACHE.get(app.path);
+    const label = app.name || app.path;
+    const face = icon
+      ? '<img src="' + icon + '" alt="" draggable="false" />'
+      : '<span>' + escapeHtml(String(label).slice(0, 1)) + '</span>';
+    return '<div class="avoid-app" title="' + escapeHtml(label + '\n所有窗口\n' + app.path) + '">' + face +
+      '<button type="button" class="avoid-x" data-act="avoid-remove" data-path="' + escapeHtml(app.path) +
+        '" aria-label="移除 ' + escapeHtml(label) + '">×</button></div>';
+  });
+  return '<div class="avoid-grid">' + cells.join('') + '</div>';
+}
+
+function ensureAvoidIcons(paths) {
+  const missing = [...new Set(paths)].filter((p) => p && !AVOID_ICON_CACHE.has(p));
+  if (!missing.length) return;
+  api.avoidIcons(missing.slice(0, 120)).then((map) => {
+    let added = 0;
+    for (const [key, value] of Object.entries(map || {})) {
+      if (!AVOID_ICON_CACHE.has(key)) added += 1;
+      AVOID_ICON_CACHE.set(key, value);
+    }
+    if (added && content.querySelector('.avoid-grid')) paint();
+    if (added && avoidDialog) paintAvoidDialog();
+  }).catch(() => {});
+}
+
+let avoidDialog = null;
+let avoidList = [];
+let avoidQuery = '';
+let avoidSelected = '';
+let avoidLoading = false;
+let avoidConfirmAll = false;
+
+function closeAvoidDialog() {
+  avoidDialog?.remove();
+  avoidDialog = null;
+  avoidConfirmAll = false;
+}
+
+function avoidCandidateReason(app) {
+  if (prefs.avoidBrowsers !== false && app.browser === true) return '浏览器规则已覆盖';
+  if (avoidApps().some((item) => sameExe(item.path, app.path))) return '已添加';
+  return '';
+}
+
+function avoidMatches() {
+  const query = avoidQuery.trim().toLowerCase();
+  return avoidList.filter((app) =>
+    !query || String(app.name).toLowerCase().includes(query) || String(app.title).toLowerCase().includes(query));
+}
+
+function avoidListHtml(rows) {
+  if (!rows.length) {
+    return '<p class="avoid-none">' + (avoidLoading ? '正在读取应用…' : '未找到匹配的应用，请先打开应用后刷新。') + '</p>';
+  }
+  return rows.map((app) => {
+    const reason = avoidCandidateReason(app);
+    const picked = sameExe(avoidSelected || '', app.path);
+    const icon = AVOID_ICON_CACHE.get(app.path);
+    const face = icon
+      ? '<img src="' + icon + '" alt="" draggable="false" />'
+      : '<span>' + escapeHtml(String(app.name).slice(0, 1)) + '</span>';
+    return '<button type="button" class="avoid-item' + (picked ? ' is-picked' : '') + (reason ? ' is-taken' : '') +
+      '" data-act="avoid-pick" data-path="' + escapeHtml(app.path) + '"' + (reason ? ' disabled' : '') + '>' +
+      '<span class="avoid-icon">' + face + '</span>' +
+      '<span class="avoid-text"><b>' + escapeHtml(app.name) + '</b><em>' + escapeHtml(app.title || app.path) + '</em></span>' +
+      (reason ? '<span class="avoid-reason">' + escapeHtml(reason) + '</span>' : '') +
+      '</button>';
+  }).join('');
+}
+
+function avoidConfirmHtml(addable) {
+  if (!avoidConfirmAll) return '';
+  return '<div class="avoid-confirm"><p>将把当前列表中 ' + addable.length + ' 个应用全部加入自动避让，确定吗？</p>' +
+    '<div class="avoid-confirm-actions"><button type="button" class="btn primary" data-act="avoid-confirm-all">确定添加</button>' +
+    '<button type="button" class="btn" data-act="avoid-cancel-all">再想想</button></div></div>';
+}
+
+/** Re-render the list and footer without touching the search box. */
+function updateAvoidDialog() {
+  const rows = avoidMatches();
+  const addable = rows.filter((app) => !avoidCandidateReason(app));
+  const list = avoidDialog.querySelector('.avoid-list');
+  if (list) list.innerHTML = avoidListHtml(rows);
+  const all = avoidDialog.querySelector('[data-act="avoid-add-all"]');
+  const one = avoidDialog.querySelector('[data-act="avoid-add-one"]');
+  if (all) all.disabled = !addable.length || avoidConfirmAll;
+  if (one) one.disabled = !avoidSelected;
+  const oldConfirm = avoidDialog.querySelector('.avoid-confirm');
+  if (oldConfirm) oldConfirm.remove();
+  const modal = avoidDialog.querySelector('.avoid-modal');
+  if (modal) modal.insertAdjacentHTML('beforeend', avoidConfirmHtml(addable));
+  avoidDialog.querySelectorAll('.avoid-item').forEach((node) => {
+    const path = node.dataset.path || '';
+    const picked = sameExe(avoidSelected || '', path);
+    node.classList.toggle('is-picked', picked);
+  });
+  ensureAvoidIcons(avoidList.map((app) => app.path));
+}
+
+function paintAvoidDialog() {
+  if (!avoidDialog) return;
+  if (avoidDialog.querySelector('.avoid-list')) {
+    updateAvoidDialog();
+    return;
+  }
+  const rows = avoidMatches();
+  const addable = rows.filter((app) => !avoidCandidateReason(app));
+  const list = rows.length
+    ? rows.map((app) => {
+        const reason = avoidCandidateReason(app);
+        const picked = sameExe(avoidSelected || '', app.path);
+        const icon = AVOID_ICON_CACHE.get(app.path);
+        const face = icon ? '<img src="' + icon + '" alt="" draggable="false" />' : '<span>' + escapeHtml(String(app.name).slice(0, 1)) + '</span>';
+        return '<button type="button" class="avoid-item' + (picked ? ' is-picked' : '') + (reason ? ' is-taken' : '') +
+          '" data-act="avoid-pick" data-path="' + escapeHtml(app.path) + '"' + (reason ? ' disabled' : '') + '>' +
+          '<span class="avoid-icon">' + face + '</span>' +
+          '<span class="avoid-text"><b>' + escapeHtml(app.name) + '</b><em>' + escapeHtml(app.title || app.path) + '</em></span>' +
+          (reason ? '<span class="avoid-reason">' + escapeHtml(reason) + '</span>' : '') +
+          '</button>';
+      }).join('')
+    : '<p class="avoid-none">' + (avoidLoading ? '正在读取应用…' : '未找到匹配的应用，请先打开应用后刷新。') + '</p>';
+  const confirm = avoidConfirmAll
+    ? '<div class="avoid-confirm"><p>将把当前列表中 ' + addable.length + ' 个应用全部加入自动避让，确定吗？</p>' +
+      '<div class="avoid-confirm-actions"><button type="button" class="btn primary" data-act="avoid-confirm-all">确定添加</button>' +
+      '<button type="button" class="btn" data-act="avoid-cancel-all">再想想</button></div></div>'
+    : '';
+  avoidDialog.innerHTML =
+    '<div class="avoid-modal" role="dialog" aria-modal="true" aria-label="添加应用">' +
+      '<header class="avoid-head"><h2>添加应用</h2>' +
+        '<button type="button" class="avoid-close" data-act="avoid-close" aria-label="关闭">×</button></header>' +
+      '<p class="avoid-sub">选择正在运行的应用，添加后自动记住。</p>' +
+      '<input class="ctl avoid-search" id="avoid-search" type="search" placeholder="搜索应用或窗口标题" value="' + escapeHtml(avoidQuery) + '" />' +
+      '<div class="avoid-list">' + list + '</div>' +
+      '<div class="avoid-foot"><span class="avoid-hint">没有找到？先打开应用，再</span>' +
+        '<button type="button" class="btn" data-act="avoid-refresh">刷新列表</button>' +
+      '</div>' +
+      '<div class="avoid-actions">' +
+        '<button type="button" class="btn" data-act="avoid-close">取消</button>' +
+        '<button type="button" class="btn" data-act="avoid-add-all"' + (addable.length && !avoidConfirmAll ? '' : ' disabled') + '>全部添加</button>' +
+        '<button type="button" class="btn primary" data-act="avoid-add-one"' + (avoidSelected ? '' : ' disabled') + '>添加</button>' +
+      '</div>' + confirm +
+    '</div>';
+  const box = avoidDialog.querySelector('#avoid-search');
+  if (box && document.activeElement !== box) {
+    box.focus();
+    box.setSelectionRange(avoidQuery.length, avoidQuery.length);
+  }
+  ensureAvoidIcons(avoidList.map((app) => app.path));
+}
+
+function openAvoidDialog() {
+  if (avoidDialog) return;
+  avoidQuery = '';
+  avoidSelected = '';
+  avoidConfirmAll = false;
+  avoidLoading = true;
+  avoidDialog = document.createElement('div');
+  avoidDialog.className = 'avoid-backdrop';
+  document.body.appendChild(avoidDialog);
+  paintAvoidDialog();
+  api.avoidApps().then((apps) => {
+    avoidList = Array.isArray(apps) ? apps : [];
+    avoidLoading = false;
+    paintAvoidDialog();
+  }).catch(() => {
+    avoidList = [];
+    avoidLoading = false;
+    paintAvoidDialog();
+  });
+}
+
+async function addAvoidApp(app) {
+  const list = avoidApps().slice();
+  if (list.some((item) => sameExe(item.path, app.path))) return;
+  list.push({ path: app.path, name: app.name || app.path });
+  await patch({ avoidApps: list });
+  ensureAvoidIcons([app.path]);
+}
+
 function pageBehavior() {
   return head('隐藏与交互', '什么情况下出现，什么情况下让开') +
     group('显示', card([
@@ -235,6 +433,14 @@ function pageBehavior() {
       rowRange('悬停展开延迟', '鼠标进入后多久展开，0 为关闭悬停', 'hoverOpenDelay', 0, 500, 20, 'ms'),
       rowToggle('移开自动收起', '鼠标离开岛后收成胶囊', 'hoverAutoHide'),
       rowRange('收起延迟', '离开后多久收起，越接近 0 越干脆', 'hoverCloseDelay', 60, 1200, 60, 'ms'),
+    ])) +
+    group('自动避让', card([
+      rowToggle('自动避让', '下列应用遮住岛时，岛会收成细线', 'avoidEnabled'),
+      rowToggle('常用浏览器', '前台浏览器窗口遮住岛时避让', 'avoidBrowsers'),
+      '<div class="row"><span class="row-label"><b>自定义应用</b></span><span class="row-control">' +
+        '<button type="button" class="btn" data-act="avoid-add">＋ 添加应用</button></span></div>',
+      avoidAppsRow(),
+      '<p class="hint">切到插件浮窗时，宿主窗口仍遮住岛就会继续避让。</p>',
     ])) +
     group('交互', card([
       rowToggle('滚轮换页', '在面板上横向滚动切换页面', 'wheelPaging'),
@@ -693,6 +899,90 @@ async function moveOrder(item, delta) {
 
 /* --------------------------------------------------------------- controls */
 
+/* The picker is not inside the content tree: it is a modal appended to body, so
+   its search box and Escape key are bound here rather than on content. */
+document.addEventListener('input', (event) => {
+  if (event.target && event.target.id === 'avoid-search') {
+    avoidQuery = event.target.value;
+    paintAvoidDialog();
+  }
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && avoidDialog) closeAvoidDialog();
+});
+
+/*
+ * The picker is appended to <body>, so its buttons never bubble through the
+ * content listener. One listener here owns every action inside the dialog.
+ */
+document.addEventListener('click', async (event) => {
+  if (!avoidDialog) return;
+  if (event.target === avoidDialog) {
+    closeAvoidDialog();
+    return;
+  }
+  const target = event.target.closest('[data-act]');
+  if (!target) return;
+  const act = target.dataset.act;
+  if (!act.startsWith('avoid-')) return;
+  if (act === 'avoid-close') {
+    closeAvoidDialog();
+    return;
+  }
+  if (act === 'avoid-refresh') {
+    avoidLoading = true;
+    avoidSelected = '';
+    paintAvoidDialog();
+    api.avoidApps().then((apps) => {
+      avoidList = Array.isArray(apps) ? apps : [];
+      avoidLoading = false;
+      paintAvoidDialog();
+    }).catch(() => {
+      avoidLoading = false;
+      paintAvoidDialog();
+    });
+    return;
+  }
+  if (act === 'avoid-pick') {
+    avoidSelected = target.dataset.path || '';
+    avoidConfirmAll = false;
+    paintAvoidDialog();
+    return;
+  }
+  if (act === 'avoid-add-one') {
+    const picked = avoidList.find((app) => sameExe(app.path, avoidSelected || ''));
+    if (picked) {
+      await addAvoidApp(picked);
+      closeAvoidDialog();
+    }
+    return;
+  }
+  if (act === 'avoid-add-all') {
+    avoidConfirmAll = true;
+    paintAvoidDialog();
+    return;
+  }
+  if (act === 'avoid-cancel-all') {
+    avoidConfirmAll = false;
+    paintAvoidDialog();
+    return;
+  }
+  if (act === 'avoid-confirm-all') {
+    const wanted = avoidMatches().filter((app) => !avoidCandidateReason(app));
+    const list = avoidApps().slice();
+    for (const app of wanted) {
+      if (!list.some((item) => sameExe(item.path, app.path))) list.push({ path: app.path, name: app.name || app.path });
+    }
+    avoidConfirmAll = false;
+    await patch({ avoidApps: list });
+    ensureAvoidIcons(wanted.map((app) => app.path));
+    closeAvoidDialog();
+    return;
+  }
+
+});
+
 content.addEventListener('click', async (event) => {
   const move = event.target.closest('[data-order-move]');
   if (move) {
@@ -708,6 +998,15 @@ content.addEventListener('click', async (event) => {
   if (act === 'preset') {
     const next = presetPatch(key, prefs);
     if (next) await patch(next);
+    return;
+  }
+  if (act === 'avoid-add') {
+    openAvoidDialog();
+    return;
+  }
+  if (act === 'avoid-remove') {
+    const path = target.dataset.path;
+    await patch({ avoidApps: avoidApps().filter((item) => !sameExe(item.path, path)) });
     return;
   }
   if (act === 'toggle') {

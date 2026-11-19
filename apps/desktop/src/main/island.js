@@ -92,9 +92,52 @@ function place() {
   const display = displayFor(prefs);
   const y = Math.round(prefs.avoidTopBar === false ? display.bounds.y : area.y);
   windowRect = { x, y, width, height };
+  notifyBounds();
   const bounds = win.getBounds();
   if (bounds.x === x && bounds.y === y && bounds.width === width && bounds.height === height) return;
   win.setBounds({ x, y, width, height });
+}
+
+/**
+ * The avoid script needs the pill's rectangle, not the padded window's.
+ *
+ * The window carries 32px of transparent margin per side and 36px above and
+ * below; a window that only covers the margin is not covering the island, and
+ * collapsing on that would be wrong.
+ */
+let boundsHook = null;
+
+function setBoundsHook(fn) {
+  boundsHook = typeof fn === 'function' ? fn : null;
+}
+
+function pillRect() {
+  /*
+   * Measured, not derived from the padding constants.
+   *
+   * The page centres the frame horizontally and pins it to the top, so the
+   * padding is not symmetric in practice: the window carries the 32px side
+   * margin but the 36px is all *below* the content. Subtracting PAD_Y from the
+   * top put the avoid rectangle 36px lower than the pill, and a browser that
+   * only covered that empty band collapsed the island for no reason.
+   */
+  const w = Math.max(1, Math.round(box.w));
+  const h = Math.max(1, Math.round(box.h));
+  return {
+    x: Math.round(windowRect.x + (windowRect.width - w) / 2),
+    y: Math.round(windowRect.y),
+    w,
+    h,
+  };
+}
+
+function notifyBounds() {
+  if (!boundsHook) return;
+  try {
+    boundsHook(pillRect());
+  } catch {
+    // A broken hook must not stop placement.
+  }
 }
 
 /**
@@ -387,4 +430,6 @@ module.exports = {
   onLoaded,
   startOledShift,
   stopOledShift,
+  setBoundsHook,
+  pillRect,
 };

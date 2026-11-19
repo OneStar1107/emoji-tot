@@ -147,6 +147,14 @@ function lyricAt(seconds) {
 /* ------------------------------------------------------------- measurement */
 
 let measuring = false;
+/*
+ * While the island is collapsed it is not the size it looks: the frame is only
+ * the strip. Reporting that box would shrink the window, which would move the
+ * pill rectangle the avoid script tests against, which would flip the state
+ * straight back. So the collapsed box is never reported — the window keeps the
+ * size it had before the browser arrived.
+ */
+let avoidCollapsed = false;
 function measure() {
   if (measuring) return;
   measuring = true;
@@ -161,6 +169,7 @@ function measure() {
    */
   queueMicrotask(() => {
     measuring = false;
+    if (avoidCollapsed) return;
     /*
      * The frame is the content's natural box — it is out of flow with
      * width: max-content, so it reports the real size of whichever surface is
@@ -1109,6 +1118,7 @@ function setOpen(next) {
  * then the one actually on screen.
  */
 function reportBoxNow() {
+  if (avoidCollapsed) return;
   const rect = frameEl.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
   api.reportBox({ w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
@@ -1381,6 +1391,39 @@ document.documentElement.addEventListener('mouseleave', scheduleHoverClose);
  * The main process knows the cursor position regardless, and its "inside became
  * false" is the dependable close signal.
  */
+/*
+ * Auto-avoid: the pill collapses to a thin strip while a listed app covers it.
+ *
+ * The window follows the measured box, so collapsing the layout is the whole
+ * implementation — but a bare width jump is unreadable, so the current size is
+ * frozen first and the CSS transition animates from it to the strip size.
+ * 42% of the pill's own width keeps the proportion on a wide or narrow island.
+ */
+const AVOID_RATIO = 0.42;
+let avoiding = false;
+
+function applyAvoid(on) {
+  const next = on === true;
+  if (next === avoiding) return;
+  avoiding = next;
+  avoidCollapsed = next;
+  const rect = frameEl.getBoundingClientRect();
+  if (next) {
+    document.documentElement.style.setProperty('--avoid-w', Math.max(48, Math.round(rect.width * AVOID_RATIO)) + 'px');
+  }
+  frameEl.style.width = Math.round(rect.width) + 'px';
+  frameEl.style.height = Math.round(rect.height) + 'px';
+  document.body.dataset.avoid = next ? '1' : '0';
+  requestAnimationFrame(() => {
+    frameEl.style.width = '';
+    frameEl.style.height = '';
+    /* Re-report on the way out; every call is a no-op while collapsed. */
+    measure();
+  });
+}
+
+api.onAvoid(applyAvoid);
+
 api.onHover((inside) => {
   /*
    * Entry opens; exit closes.

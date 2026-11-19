@@ -191,6 +191,10 @@ export const DEFAULTS = {
   /* behaviour */
   timeFormat: '24h',
   hideFullscreen: true,
+  /** Auto-avoid: collapse to a strip while a listed app covers the island. */
+  avoidEnabled: false,
+  avoidBrowsers: true,
+  avoidApps: [],
   trayIcon: true,
   hotkey: true,
   wheelPaging: true,
@@ -262,6 +266,7 @@ export function withDefaults(raw) {
   }
   if (!Array.isArray(source.statusItems)) next.statusItems = [...DEFAULTS.statusItems];
   if (!Array.isArray(source.pageOrder)) next.pageOrder = [...DEFAULTS.pageOrder];
+  if (!Array.isArray(source.avoidApps)) next.avoidApps = [...DEFAULTS.avoidApps];
   return next;
 }
 
@@ -470,6 +475,9 @@ export function pageOfPath(path) {
     oledShift: 'appearance',
     timeFormat: 'appearance',
     hideFullscreen: 'behavior',
+    avoidEnabled: 'behavior',
+    avoidBrowsers: 'behavior',
+    avoidApps: 'behavior',
     trayIcon: 'behavior',
     hotkey: 'behavior',
     wheelPaging: 'behavior',
@@ -540,6 +548,9 @@ export const CONSUMERS = {
 
   timeFormat: { scope: 'renderer', at: 'island.js applyPrefs() → timeFormat24', live: true },
   hideFullscreen: { scope: 'main', at: 'main.js applyMainPrefs() fullscreen.start/stop', live: true },
+  avoidEnabled: { scope: 'main', at: 'main.js applyAvoidanceWatch() avoidance.start/stop', live: true },
+  avoidBrowsers: { scope: 'main', at: 'main/services/avoidance.js update() → avoidance.ps1 浏览器名单', live: true },
+  avoidApps: { scope: 'main', at: 'main/services/avoidance.js update() → avoidance.ps1 owner 链匹配', live: true, note: '按 exe 完整路径匹配' },
   trayIcon: { scope: 'main', at: 'main.js createTray()', live: true },
   hotkey: { scope: 'main', at: 'main.js applyMainPrefs() globalShortcut', live: true },
   wheelPaging: { scope: 'renderer', at: 'island.js wheel handler', live: true },

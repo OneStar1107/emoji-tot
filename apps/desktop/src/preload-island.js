@@ -54,5 +54,6 @@ contextBridge.exposeInMainWorld('islandAPI', {
   /** Fallback for a drag that yields bytes but no path (virtual files). */
   shelfAddBuffer: (name, bytes) => ipcRenderer.invoke('local:do', { service: 'shelf', action: 'addBuffer', data: { name, bytes } }),
   onHover: (listener) => on('island:hover', listener),
+  onAvoid: (listener) => on('island:avoid', listener),
   onPrefs: (listener) => on('settings:changed', listener),
 });

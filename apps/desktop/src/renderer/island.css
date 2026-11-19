@@ -1139,3 +1139,40 @@ body[data-reduce-motion='on'] *::after {
   color: var(--bad);
   background: color-mix(in srgb, var(--bad) 12%, transparent);
 }
+
+/* ------------------------------------------------------------- auto-avoid */
+
+/*
+ * While a listed app covers the island the pill becomes a thin strip: 5px tall
+ * and 42% of its width, centred on the top edge. The width is written by
+ * applyAvoid() as --avoid-w from the pill's own measured width, so the strip
+ * keeps its proportion instead of being a fixed size that shrinks with the
+ * window.
+ */
+#avoid-strip {
+  display: none;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ink);
+  opacity: 0.5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+#frame {
+  transition:
+    width 160ms var(--ease),
+    height 160ms var(--ease);
+}
+body[data-avoid="1"] #frame {
+  width: var(--avoid-w, 176px);
+  height: 5px;
+  overflow: hidden;
+}
+/*
+ * Hide the pill and the panel, not #island: the strip lives inside #frame,
+ * inside #island, so hiding the container hid the strip too and the island
+ * went fully transparent instead of collapsing to a strip.
+ */
+body[data-avoid="1"] #pill,
+body[data-avoid="1"] #panel { display: none; }
+body[data-avoid="1"] #avoid-strip { display: block; }

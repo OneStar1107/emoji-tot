@@ -65,6 +65,9 @@
 | `oledShift` | `false` | 外观 | 主进程 | `main/island.js startOledShift()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `timeFormat` | `24h` | 外观 | 渲染进程 | `island.js applyPrefs() → timeFormat24` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `hideFullscreen` | `true` | 隐藏与交互 | 主进程 | `main.js applyMainPrefs() fullscreen.start/stop` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
+| `avoidEnabled` | `false` | 隐藏与交互 | 主进程 | `main.js applyAvoidanceWatch() avoidance.start/stop` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
+| `avoidBrowsers` | `true` | 隐藏与交互 | 主进程 | `main/services/avoidance.js update() → avoidance.ps1 浏览器名单` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
+| `avoidApps` | `[]` | 隐藏与交互 | 主进程 | `main/services/avoidance.js update() → avoidance.ps1 owner 链匹配` | 即时 | 按 exe 完整路径匹配 | has a SERVICE_PLAN entry · lists every path |
 | `trayIcon` | `true` | 隐藏与交互 | 主进程 | `main.js createTray()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `hotkey` | `true` | 隐藏与交互 | 主进程 | `main.js applyMainPrefs() globalShortcut` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `wheelPaging` | `true` | 隐藏与交互 | 渲染进程 | `island.js wheel handler` | 即时 |  | lists every path · writes dotted keys through setPath |

@@ -72,3 +72,13 @@ either window --face:report <state>-> main  → 另一扇窗（face:apply / isla
 - 设置项 `displayMode: 'island' | 'ball' | 'both'`，默认 `island`。它同时决定当前显示和下次启动；同屏时岛贴顶、球贴边，互不抢焦点。
 - 旧版 `form` / `formBoth` 在读取时迁移到 `displayMode`，新值存在时优先使用新值。
 - 托盘菜单永远提供另一个形态的一键切换。
+
+## 7. 自动避让
+
+浏览器盖住岛时，岛不该挡在半屏直播或文档标题上。开启 `avoidEnabled` 后，岛收成一条 5px 的横条，鼠标可穿过，浏览器让开或失焦后自动还原。
+
+判定在主进程外：`services/avoidance.ps1` 常驻轮询前台窗口（100ms 一行 `1/0`），只认两类目标——启用 `avoidBrowsers` 时的内置浏览器名单，和 `avoidApps` 里按 exe 完整路径匹配的自定义应用；插件浮窗会沿 owner 链回落到宿主窗口。规则与 `Renly1994/xiaotang-daozai` 的 `system.rs` 一致。
+
+收缩的是内容，不是窗口：`#frame` 拿到 `--avoid-w`（自身宽度的 42%）与 5px 高度，窗口尺寸保持不变。这条很重要——收缩态一旦上报 box，窗口就会跟着缩，判定用的 pill 矩形随之移动，状态会在两帧之间来回翻。所以收缩期间 `measure()` / `reportBoxNow()` 直接跳过。
+
+避让矩形取实测的 pill，不是用 `PAD_X` / `PAD_Y` 反推：页面把 `#frame` 水平居中、贴顶，窗口那 36px 实际全在下方，按 `PAD_Y` 减会把判定框往下挪 36px。

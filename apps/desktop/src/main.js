@@ -38,6 +38,7 @@ const quota = require('./main/services/quota');
 const mail = require('./main/services/mail');
 const calendar = require('./main/services/calendar');
 const fullscreen = require('./main/services/fullscreen');
+const avoidance = require('./main/services/avoidance');
 const guard = require('./main/ipc-guard');
 const { safeSend } = guard;
 const platform = require('./main/platform');
@@ -907,6 +908,39 @@ function applyHotkey() {
   }
 }
 
+/**
+ * Start or stop the auto-avoid watcher.
+ *
+ * The rules live in a resident PowerShell child; this only decides whether it
+ * runs and pushes the three inputs it cannot read itself: the switch, the
+ * browser switch and the custom app list.
+ */
+let avoiding = false;
+function pushAvoid() {
+  island.send('island:avoid', avoiding);
+}
+function applyAvoidanceWatch() {
+  const prefs = readPrefs();
+  if (prefs.avoidEnabled !== true || !platform.supports('fullscreen')) {
+    avoidance.stop();
+    if (avoiding) {
+      avoiding = false;
+      pushAvoid();
+    }
+    return;
+  }
+  avoidance.setIslandRect(island.pillRect());
+  avoidance.update({
+    enabled: true,
+    browsers: prefs.avoidBrowsers !== false,
+    apps: Array.isArray(prefs.avoidApps) ? prefs.avoidApps : [],
+  });
+  avoidance.start((on) => {
+    avoiding = on;
+    pushAvoid();
+  });
+}
+
 function applyFullscreenWatch() {
   const prefs = readPrefs();
   if (prefs.hideFullscreen === false) {
@@ -987,6 +1021,7 @@ function applyMainPrefs() {
   applyTrayPreference();
   applyHotkey();
   applyFullscreenWatch();
+  applyAvoidanceWatch();
   applyWindowFlags();
   applyDisplayPreference();
   island.refreshPrefs?.();
@@ -1535,6 +1570,7 @@ if (!gotTheLock) {
       if (runningServices.has('battery')) pushBattery();
       if (runningServices.has('weather')) refreshWeather();
       island.send('settings:changed', readPrefs());
+      pushAvoid();
     });
     createTray();
     screen.on('display-removed', handleDisplayChange);
@@ -1550,6 +1586,10 @@ if (!gotTheLock) {
     settings.setWeatherRefresher(refreshWeather);
     settings.setActionHook(handleSettingsAction);
     island.startOledShift();
+    island.setBoundsHook((rect) => avoidance.setIslandRect(rect));
+    // The window was placed before this hook existed, so hand over the current
+    // rectangle now: without it the script has no island and never collapses.
+    avoidance.setIslandRect(island.pillRect());
     let previousPrefs = readPrefs();
     settings.onPrefs(() => {
       const next = readPrefs();

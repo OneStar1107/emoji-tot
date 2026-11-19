@@ -10,6 +10,7 @@ const { BrowserWindow, ipcMain, screen, shell, app } = require('electron');
 const path = require('node:path');
 const { readPrefs, writePrefs, userDir, statePath } = require('./paths');
 const guard = require('./ipc-guard');
+const avoidance = require('./services/avoidance');
 
 let win = null;
 const listeners = new Set();
@@ -138,6 +139,11 @@ function registerIpc() {
 
   guard.guardedHandle('settings:version', ['settings'], () => app.getVersion());
 
+  guard.guardedHandle('settings:avoid-apps', ['settings'], () => avoidance.listApps());
+  guard.guardedHandle('settings:avoid-icons', ['settings'], (paths) => avoidance.icons(paths), {
+    maxBytes: 8192,
+    check: (paths) => (Array.isArray(paths) ? paths.filter((p) => typeof p === 'string' && p.length < 400).slice(0, 120) : []),
+  });
   guard.guardedHandle('settings:displays', ['settings'], () => {
     const primaryId = screen.getPrimaryDisplay().id;
     return screen.getAllDisplays().map((display) => ({

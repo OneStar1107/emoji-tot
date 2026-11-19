@@ -35,6 +35,10 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   /** "Forget the clipboard history" — the one action that deletes user data. */
   clipboardClear: () => ipcRenderer.invoke('local:do', { service: 'clipboard', action: 'clear' }),
   calendarDo: (action, data) => ipcRenderer.invoke('calendar:do', { action, data }),
+  /** Running apps with a visible window, for the auto-avoid picker. */
+  avoidApps: () => ipcRenderer.invoke('settings:avoid-apps'),
+  /** PNG data URLs keyed by executable path. */
+  avoidIcons: (paths) => ipcRenderer.invoke('settings:avoid-icons', paths),
   onGoto: (listener) => on('settings:goto', listener),
   onChanged: (listener) => on('settings:changed', listener),
 });
