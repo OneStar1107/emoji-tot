@@ -1081,11 +1081,17 @@ function renderPage(animate = false) {
  * flips pages sits above it, so a wheel over the clipboard both scrolled the
  * list and turned the page. Stopping propagation at the list is the narrowest
  * fix: everywhere else the wheel still pages as before.
+ *
+ * The todo list joins them now that it scrolls itself instead of growing the
+ * page: a wheel over a long list should scroll the list, not flip away from it.
  */
 document.addEventListener(
   'wheel',
   (event) => {
-    const list = event.target instanceof Element ? event.target.closest('.clip-list, .shelf-list') : null;
+    const list =
+      event.target instanceof Element
+        ? event.target.closest('.clip-list, .shelf-list, .todo-list')
+        : null;
     if (list && list.scrollHeight > list.clientHeight + 1) event.stopPropagation();
   },
   { capture: true },

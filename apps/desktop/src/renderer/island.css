@@ -607,6 +607,14 @@ button.ghost:active,
   padding: 22px 10px 24px;
   text-align: center;
 }
+/*
+ * An empty page is the whole page, not a block at the top of it.
+ *
+ * Quota, mail and health render nothing but this, so it used to sit against the
+ * header and leave 47px of dead card below it — the one state where a page looks
+ * like it failed to load. It takes the box and centres itself instead.
+ */
+.pages > .empty { height: 100%; justify-content: center; }
 .empty svg { width: 26px; height: 26px; fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .empty b { font-size: 12.5px; font-weight: 550; color: var(--ink); }
 .empty span { font-size: 11.5px; color: var(--dim); line-height: 1.5; max-width: 250px; }
@@ -629,7 +637,10 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .music { display: flex; flex-direction: column; gap: 10px; }
 .cover-img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex: none; background: #222228; }
 .music-state { font-size: 10.5px; color: var(--faint); flex: none; }
-.lyric-box { display: flex; flex-direction: column; gap: 1px; min-height: 54px; padding: 0 4px; }
+/* Three lines fill the 54px window exactly; the one-line "no lyrics" state and
+     the tail of a scrolling song do not, and left-aligned they left 23px of air
+     under the text, which read as the block being pushed up. */
+.lyric-box { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 54px; padding: 0 4px; }
 .lyric-line {
   margin: 0;
   font-size: 12px;
@@ -877,7 +888,9 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .health-block .btn { align-self: flex-start; height: 24px; font-size: 11px; }
 
 /* todo */
-.todo { display: flex; flex-direction: column; gap: 8px; }
+/* Fills the page so the list — not the page container — is what scrolls, and
+   so an empty list has somewhere to sit instead of collapsing to 73px. */
+.todo { display: flex; flex-direction: column; gap: 8px; height: 100%; }
 .todo-add { display: flex; gap: 6px; align-items: center; }
 .todo-add input[type="text"] {
   flex: 1; min-width: 0; height: 30px; padding: 0 10px;
@@ -892,7 +905,8 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   font-size: 11px; color: var(--dim); cursor: pointer; overflow: hidden; white-space: nowrap;
 }
 .todo-due-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.todo-list { display: flex; flex-direction: column; gap: 1px; max-height: 236px; overflow-y: auto; }
+.todo-list { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 1px; overflow-y: auto; scrollbar-width: none; }
+.todo-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .todo-item { display: flex; align-items: center; gap: 8px; padding: 6px 5px; border-radius: 7px; animation: row-in 180ms var(--ease); }
 .todo-item:hover { background: rgba(255, 255, 255, 0.04); }
 .todo-check {
@@ -922,7 +936,8 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .todo-due.late { color: var(--warn); }
 .todo-del { border: 0; background: transparent; color: var(--faint); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 3px; flex: none; }
 .todo-del:hover { color: var(--bad); }
-.todo-empty { margin: 0; padding: 10px 4px; font-size: 11.5px; color: var(--faint); }
+/* auto margins centre it in whatever height the list has. */
+.todo-empty { margin: auto 0; padding: 10px 4px; font-size: 11.5px; color: var(--faint); text-align: center; }
 .todo-done-head { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding: 0 4px; font-size: 10.5px; color: var(--faint); }
 .todo-clear { border: 0; background: transparent; color: var(--dim); font-size: 10.5px; cursor: pointer; }
 
