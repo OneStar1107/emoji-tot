@@ -116,7 +116,29 @@ describe('ipc: action payloads', () => {
   });
 });
 
+/*
+ * Payload-less channels are the ones a drag depends on.
+ *
+ * drag:end, pet:menu and pet:action send no argument, so their payload is
+ * undefined. The guard used to fold "no check" and "the check said no" into
+ * one answer and refuse all three — the visible symptom was a ball that would
+ * not let go after a drag, because its release never reached the main process.
+ * Source-level because the gate needs electron's ipcMain to run.
+ */
+describe('ipc guard: a channel without a check still delivers', () => {
+  it('passes the payload through before asking about its shape', () => {
+    const guard = src('main/ipc-guard.js');
+    assert.match(guard, /if \(!check\) \{/, 'no-check channels take the early exit');
+    assert.match(guard, /handler\(payload, event\)/, 'the handler sees the raw payload');
+  });
+});
+
 describe('hardening: every window is sandboxed', () => {
+  it('keeps a drag from ever passing clicks through', () => {
+    const source = src('main.js');
+    assert.match(source, /passThroughWhileDragging\(Boolean\(dragTimer\)/, 'the drag state reaches the pass-through decision');
+  });
+
   it('sets sandbox: true in all three createWindow calls', () => {
     for (const rel of ['main.js', 'main/island.js', 'main/settings.js']) {
       const source = src(rel);

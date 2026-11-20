@@ -92,6 +92,19 @@ function release() {
 
 pet.addEventListener('pointerup', release);
 pet.addEventListener('pointercancel', release);
+/*
+ * The same release, one level up.
+ *
+ * A drag moves the window out from under the pointer every 16ms. If the page
+ * misses the pointerup for any reason — the capture dropped, the window was
+ * click-through for one tick, the OS took the button elsewhere — the pet stayed
+ * in drag state forever: it kept following the cursor and stopped doing
+ * anything else, because "not dragging" is what lets it size itself and change
+ * moods again. Listening on the window costs nothing and closes the last gap.
+ */
+window.addEventListener('pointerup', release);
+window.addEventListener('pointercancel', release);
+window.addEventListener('blur', release);
 
 pet.addEventListener('contextmenu', (event) => {
   event.preventDefault();

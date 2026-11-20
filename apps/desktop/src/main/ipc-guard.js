@@ -113,7 +113,20 @@ function guardedSend(channel, roles, handler, options = {}) {
       refuse(channel, 'size', role);
       return;
     }
-    const value = check ? check(payload) : payload;
+    /*
+     * "No check" and "the check said no" are different answers.
+     *
+     * Folding them into one made every payload-less channel dead: drag:end,
+     * pet:menu and pet:action all send no argument, so the guard read their
+     * undefined payload as a shape violation and dropped them. drag:end was the
+     * visible one — the ball followed the cursor forever because the main
+     * process never heard the release.
+     */
+    if (!check) {
+      handler(payload, event);
+      return;
+    }
+    const value = check(payload);
     if (value === undefined) {
       refuse(channel, 'shape', role);
       return;

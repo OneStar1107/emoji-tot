@@ -42,7 +42,7 @@ const avoidance = require('./main/services/avoidance');
 const guard = require('./main/ipc-guard');
 const { safeSend } = guard;
 const platform = require('./main/platform');
-const { passThroughFor, sameDisplayId } = require('./main/window-state');
+const { passThroughWhileDragging, sameDisplayId } = require('./main/window-state');
 const { nextAgentMtime } = require('./main/agent-file');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
@@ -334,6 +334,17 @@ function startPointerWatch() {
   clearInterval(pointerTimer);
   pointerTimer = setInterval(() => {
     if (!win || win.isDestroyed() || !win.isVisible() || dockOpen === undefined) return;
+    /*
+     * A drag owns the mouse until it ends.
+     *
+     * The follow loop moves the window towards the cursor every 16ms, so the
+     * grab point lags a few pixels behind it — and this poll, reading the ball's
+     * centre from the window's position, briefly decides the cursor is off the
+     * ball and hands clicks back to the desktop. That takes the pointerup away
+     * from the page, which then never reports drag:end, and the ball stays glued
+     * to the cursor with no way to let go. While dragTimer is live the window is
+     * opaque to the mouse, full stop.
+     */
     const cursor = screen.getCursorScreenPoint();
     const [wx, wy] = win.getPosition();
     const dim = SIZES[sizeKey];
@@ -341,7 +352,7 @@ function startPointerWatch() {
     const cx = wx + outerSize(dim) / 2;
     const cy = wy + outerSize(dim) / 2;
     const onBall = Math.hypot(cursor.x - cx, cursor.y - cy) <= dim / 2;
-    const next = passThroughFor(clickThroughEnabled, onBall);
+    const next = passThroughWhileDragging(Boolean(dragTimer), clickThroughEnabled, onBall);
     if (next === clickThrough) return;
     setClickThrough(next);
   }, 60);
