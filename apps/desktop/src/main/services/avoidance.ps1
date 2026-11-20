@@ -533,7 +533,19 @@ if (-not $Config -and $env:APPDATA) { $Config = Join-Path $env:APPDATA 'EmojiTot
 if (-not $Config) { exit 0 }
 $loaded = $null
 $last = -2
+# The app that started us may be killed hard (taskkill /F during an install,
+# a crash); Windows then leaves this loop running forever with a console of its
+# own and nothing on screen says where it came from. Watch the parent and leave
+# with it. Computed once: ParentProcessId is fixed for our lifetime.
+$script:ParentPid = 0
+try { $script:ParentPid = [int](Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId } catch { }
+function Test-ParentGone() {
+  if (-not $script:ParentPid) { return $false }
+  return -not (Get-Process -Id $script:ParentPid -ErrorAction SilentlyContinue)
+}
+
 while ($true) {
+  if (Test-ParentGone) { break }
   try {
     $fresh = Read-AvoidConfig $Config
     if ($fresh) {

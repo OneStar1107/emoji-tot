@@ -65,11 +65,16 @@ describe('island mailbox page fits its 205px budget', () => {
   });
 
   it('lets the mailbox column scroll instead of clipping the button', () => {
-    assert.match(islandCss, /\.mail-empty\s*\{[^}]*overflow-y:\s*auto/, 'a squeezed empty state must scroll');
+    assert.match(
+      islandCss,
+      /\.mail-page-empty\s*\{[^}]*overflow-y:\s*auto/,
+      'the mailbox page without accounts must scroll instead of clipping the button',
+    );
+    assert.match(islandCss, /\.mail-page\s*\{[^}]*overflow:\s*hidden/, 'the page wrapper clips, so .pages never scrolls');
   });
 
   it('does not flip pages when the wheel is over that column', () => {
     const wheel = islandJs.slice(islandJs.indexOf("document.addEventListener(\n  'wheel'"), islandJs.indexOf("document.addEventListener(\n  'wheel'") + 420);
-    assert.ok(wheel.includes("closest('.clip-list, .shelf-list, .todo-list, .mail-empty')"), 'the wheel over the mailbox belongs to the mailbox: ' + wheel);
+    assert.match(wheel, /closest\('\.clip-list, \.shelf-list, \.todo-list, \.mail-page, \.mail'\)/, 'the wheel over the mailbox belongs to the mailbox: ' + wheel);
   });
 });

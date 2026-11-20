@@ -125,6 +125,35 @@ function runPowerShell(args, options = {}) {
  * watcher that cannot start is logged once and left alone, because a retry
  * loop against a missing binary is worse than a feature that is simply off.
  */
+/*
+ * Every long-lived child is remembered, so nothing outlives the app.
+ *
+ * A watcher is a PowerShell process with a console of its own; when the app is
+ * killed hard (taskkill /F during an install, a crash) Windows leaves those
+ * children behind. They are invisible, keep polling, and — measured on this
+ * machine — piled up to 32 of them under one instance after a day of restarts.
+ * Killing the remembered set on quit is the cheap half of the fix; the other
+ * half is services calling stop() before start(), which they already do.
+ */
+const watchers = new Set();
+
+function trackWatcher(child) {
+  watchers.add(child);
+  child.once('exit', () => watchers.delete(child));
+  return child;
+}
+
+function killWatchers() {
+  for (const child of watchers) {
+    try {
+      child.kill();
+    } catch {
+      // already gone
+    }
+  }
+  watchers.clear();
+}
+
 function spawnPowerShell(args, options = {}) {
   const exe = command();
   if (!exe) return null;
@@ -139,7 +168,7 @@ function spawnPowerShell(args, options = {}) {
   child.on('error', (error) => {
     onError?.(error);
   });
-  return child;
+  return trackWatcher(child);
 }
 
 /**
@@ -166,6 +195,7 @@ function guardChild(child, ms, onTimeout) {
 }
 
 module.exports = {
+  killWatchers,
   id: PLATFORM,
   isWindows: PLATFORM === 'win32',
   windowsOnly: PLATFORM !== 'win32' ? false : true,

@@ -1637,6 +1637,14 @@ if (!gotTheLock) {
       // shutting down anyway
     }
     fullscreen.stop();
+    // Anything a service spawned but did not stop (a watcher whose kill raced the
+    // quit) must not survive us: an orphan PowerShell keeps polling with a console
+    // of its own and nothing on screen says where it came from.
+    try {
+      platform.killWatchers();
+    } catch {
+      // shutting down anyway
+    }
     for (const name of runningServices) {
       try {
         SERVICE_PLAN[name]?.stop();

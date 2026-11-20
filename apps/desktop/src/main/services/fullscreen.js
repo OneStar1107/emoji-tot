@@ -47,7 +47,12 @@ function start(handler) {
       }
     }
   });
+  /* Clearing proc only when this child is still current: start() replaces the
+   * watcher and the old child's exit fires a tick later, which used to null the
+   * new one and let the next restart spawn a duplicate. */
+  const self = proc;
   proc.on('exit', () => {
+    if (proc !== self) return;
     proc = null;
     if (!stopped) setTimeout(() => start(handler), 3000);
   });

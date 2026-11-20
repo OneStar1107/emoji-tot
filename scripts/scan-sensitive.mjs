@@ -126,6 +126,54 @@ function scanImages(files) {
   return large;
 }
 
+/*
+ * Screenshots at desktop resolution need a human to have looked at them.
+ *
+ * Text scanning cannot see a window title, a folder name or a line of chat
+ * inside a picture, and the images most likely to carry those are the ones the
+ * size of the whole screen. docs/screenshots/.reviewed lists the ones that were
+ * opened and cleared, each with a reason; a desktop-sized image that is not in
+ * that file fails the scan instead of blending into the WARN pile.
+ */
+const REVIEWED = 'docs/screenshots/.reviewed';
+const DESKTOP_WIDTH = 2400;
+const DESKTOP_HEIGHT = 1400;
+
+function readReviewed() {
+  if (!existsSync(REVIEWED)) return new Map();
+  const out = new Map();
+  for (const line of readFileSync(REVIEWED, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const [file, ...rest] = trimmed.split(' ');
+    out.set(file, rest.join(' ').trim() || 'reviewed');
+  }
+  return out;
+}
+
+function scanDesktopScreenshots(files) {
+  const reviewed = readReviewed();
+  const missing = [];
+  for (const file of files) {
+    if (!IMAGE_EXT.test(file)) continue;
+    if (!existsSync(file)) continue;
+    let width = 0;
+    let height = 0;
+    try {
+      const head = readFileSync(file).subarray(0, 24);
+      width = head.readUInt32BE(16);
+      height = head.readUInt32BE(20);
+    } catch {
+      continue;
+    }
+    // Both edges near desktop size: a tall composite sheet is a crop, an image this
+    // wide *and* this tall is a whole screen.
+    if (width < DESKTOP_WIDTH || height < DESKTOP_HEIGHT) continue;
+    if (!reviewed.has(file)) missing.push({ file, width, height });
+  }
+  return missing;
+}
+
 function scanAuthors() {
   const raw = execSync('git log --format=%ae', { encoding: 'utf8' }).split('\n').filter(Boolean);
   const bad = [...new Set(raw)].filter((email) => !/noreply\.github\.com$/.test(email));
@@ -138,16 +186,24 @@ const files = execSync('git ls-files', { encoding: 'utf8' })
 
 const findings = scanText(files);
 const large = scanImages(files);
+const unreviewed = scanDesktopScreenshots(files);
 const authors = scanAuthors();
 
 console.log('scanned ' + files.length + ' tracked files');
 console.log('');
 
-console.log('FAIL (must remove before publishing): ' + findings.length);
+console.log('FAIL (must remove before publishing): ' + (findings.length + unreviewed.length));
 for (const f of findings.slice(0, 40)) {
   console.log('  ' + f.file + ':' + f.line + ' [' + f.rule + '] ' + f.text);
 }
 if (findings.length > 40) console.log('  … ' + (findings.length - 40) + ' more');
+for (const img of unreviewed) {
+  console.log('  ' + img.file + ' ' + img.width + 'x' + img.height + ' [unreviewed screenshot]');
+}
+if (unreviewed.length) {
+  console.log('  → open each one, confirm it shows no desktop, window title, folder or path,');
+  console.log('    then add a line to ' + REVIEWED + ': "<path> <why it is safe>"');
+}
 
 console.log('');
 console.log('WARN (large images — open each and confirm no desktop, names or paths): ' + large.length);
@@ -160,7 +216,7 @@ console.log('WARN (commit authors with a real email): ' + authors.length);
 for (const email of authors) console.log('  ' + email);
 
 console.log('');
-if (findings.length > 0) {
+if (findings.length + unreviewed.length > 0) {
   console.log('RESULT: FAIL — do not push or release until the lines above are gone.');
   process.exit(1);
 }

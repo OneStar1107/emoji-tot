@@ -624,8 +624,9 @@ function quotaPage() {
 function messengerBlock(limit) {
   const apps = messengerState?.apps ?? [];
   if (!apps.length) return '';
-  /* The no-mailbox page caps the switchboard at three rows plus a count; a
-     configured mailbox keeps every row (the caller passes no limit). */
+  /* Every mailbox page caps the switchboard at three rows plus a count: with
+     five apps running, five rows plus the mail block stacked 43px past the
+     panel. The count line keeps the hidden apps visible as running. */
   const shown = limit ? apps.slice(0, limit) : apps;
   const rows = shown
     .map((app) => `<div class="msg-item">
@@ -650,7 +651,7 @@ function mailPage() {
   const state = mailState ?? { accounts: [], messages: [] };
   if (!state.accounts.length) {
     const board = messengerBlock(3);
-    return `<div class="mail-empty${board ? ' mail-empty-with-msg' : ''}">${board}${empty(
+    return `<div class="mail-page mail-page-empty${board ? ' mail-page-with-msg' : ''}">${board}${empty(
       ICON.mail,
       '还没有添加邮箱',
       '支持 163、QQ、Gmail。授权码只保存在本机。',
@@ -662,10 +663,10 @@ function mailPage() {
   }
   if (!state.messages.length) {
     const hint = state.syncing ? '正在同步…' : state.error ? state.error : '还没有拉取到邮件';
-    return messengerBlock() + `<div class="mail">
+    return `<div class="mail-page">${messengerBlock(3)}<div class="mail">
       <div class="mail-head"><b>${state.accounts.length} 个邮箱</b><span class="spacer"></span><span>${escapeHtml(hint)}</span></div>
       <p class="todo-empty">${state.error ? '检查一下授权码或网络，然后在设置里点同步。' : '新邮件到达后会出现在这里。'}</p>
-    </div>`;
+    </div></div>`;
   }
   const rows = state.messages
     .slice(0, 7)
@@ -677,7 +678,7 @@ function mailPage() {
         <em>${timeOf(message.date)}</em>
       </div>`)
     .join('');
-  return messengerBlock() + `<div class="mail">
+  return `<div class="mail-page">${messengerBlock(3)}<div class="mail">
     <div class="mail-head">
       <b>${state.accounts.length} 个邮箱</b>
       <span class="spacer"></span>
@@ -685,7 +686,7 @@ function mailPage() {
     </div>
     ${rows}
     ${state.error ? `<p class="mail-error">${escapeHtml(state.error)}</p>` : ''}
-  </div>`;
+  </div></div>`;
 }
 
 /* --------------------------------------------------------------- calendar */
@@ -1098,7 +1099,7 @@ document.addEventListener(
   (event) => {
     const list =
       event.target instanceof Element
-        ? event.target.closest('.clip-list, .shelf-list, .todo-list, .mail-empty')
+        ? event.target.closest('.clip-list, .shelf-list, .todo-list, .mail-page, .mail')
         : null;
     if (list && list.scrollHeight > list.clientHeight + 1) event.stopPropagation();
   },
@@ -1110,39 +1111,102 @@ document.addEventListener(
  *
  * The window is resized by transitioning #island's own width and height, and the
  * panel inside it is already its full size from the first frame. For the length
- * of that transition the panel was therefore painted wider and taller than the
- * window, and the OS clipped both of its sides: the "hard cut" you see for a
- * third of a second every time the island opens. Scaling the panel by exactly
- * the pill's ratio closes that gap frame by frame — the island and the panel
- * interpolate between the same two boxes with the same curve, so the painted
- * edge stays on the window edge the whole way, and what the eye sees is the
- * capsule opening instead of a card appearing over it.
+ * of that transition the panel would be painted wider and taller than the
+ * window, and the OS would clip both of its sides: the "hard cut" you see every
+ * time the island opens. Painting the panel at the island's *current* box closes
+ * that gap frame by frame, so what the eye sees is the capsule opening instead
+ * of a card appearing over it.
  *
- * The content fades in a third of the way through, once the surface has enough
- * area to hold it.
+ * A frame loop, not a keyframed animation, because the two axes no longer share
+ * a curve: the width is finished at 60% of the morph and the height only starts
+ * after that. One transform animation carries one timing function, and writing
+ * the schedule out a second time here would be exactly the drift this function
+ * exists to remove — so each frame asks the island where it is and scales the
+ * panel to match. It also makes the morph interruptible with nothing to cancel:
+ * a second open starts from the box on screen at that frame, and a close hides
+ * the panel in the same task, so neither waits for the morph before it.
+ *
+ * The content fades in once the surface has enough area to hold it.
  */
+let morphFrame = 0;
+
+/** Where the morph's two tracks end, in the units the CSS resolved to. */
+function morphClock() {
+  /*
+   * The transition longhands, not --morph*: custom properties keep their calc()
+   * token stream in getComputedStyle, while these are resolved times. Reading
+   * them back also keeps island.css the only place the schedule is written down.
+   */
+  const style = getComputedStyle(islandEl);
+  const names = style.transitionProperty.split(',').map((part) => part.trim());
+  const toMs = (part) => parseFloat(part) * (part.trim().endsWith('ms') ? 1 : 1000);
+  const durations = style.transitionDuration.split(',').map(toMs);
+  const delays = style.transitionDelay.split(',').map(toMs);
+  const end = (name) => {
+    const index = names.indexOf(name);
+    if (index < 0) return 0;
+    return (durations[index] || 0) + (delays[index] || 0);
+  };
+  return { width: end('width'), height: end('height') };
+}
+
+/** Drop the painted scale; the panel goes back to its laid-out box. */
+function stopMorph() {
+  if (morphFrame) cancelAnimationFrame(morphFrame);
+  morphFrame = 0;
+  panelEl.style.transform = '';
+  panelEl.style.opacity = '';
+  panelEl.style.borderRadius = '';
+}
+
 function morphPanel(fromBox) {
   if (!fromBox || !fromBox.width || !fromBox.height) return;
   /* The same switch the CSS motion rules obey: reduce-motion, and the user's
      own "off", both mean the panel simply is there. */
-  if (document.body.dataset.motion === 'off') return;
+  if (document.body.dataset.motion === 'off') return stopMorph();
+  /*
+   * Measure the panel with the previous scale removed: a rect read under a
+   * running transform is the painted box, and using it as the target would
+   * compound on every interrupted open.
+   */
+  stopMorph();
   const toBox = panelEl.getBoundingClientRect();
   if (!toBox.width || !toBox.height) return;
-  const sx = Math.min(1, fromBox.width / toBox.width);
-  const sy = Math.min(1, fromBox.height / toBox.height);
-  /* The radius the panel would have had without this animation; --radius is a
-     preference, so it cannot be written out as 22px here. */
-  const radius = getComputedStyle(panelEl).borderTopLeftRadius || '22px';
-  panelEl.animate(
-    [
-      { transform: `scale(${sx}, ${sy})`, opacity: 0, borderRadius: '999px' },
-      { opacity: 1, offset: 0.34 },
-      { transform: 'none', opacity: 1, borderRadius: radius },
-    ],
-    /* Must match #island's width/height transition in island.css or the two
-       edges drift apart mid-flight. */
-    { duration: 300, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' },
-  );
+  const clock = morphClock();
+  const total = Math.max(clock.width, clock.height, 1);
+  /*
+   * Start from the box on screen. On a first open that is the pill (or the
+   * avoid strip) the caller captured; on an open during a close it is the
+   * island's current box, and the caller's fromBox would snap it back.
+   */
+  const inFlight = islandEl.getAnimations().some((animation) => animation.playState !== 'idle');
+  const from = inFlight ? islandEl.getBoundingClientRect() : fromBox;
+  /* --radius is a preference, so the start radius is interpolated towards the
+     value it resolved to instead of being written out here. */
+  const radius = parseFloat(getComputedStyle(panelEl).borderTopLeftRadius);
+  const startedAt = performance.now();
+  /* expo-out, the same family as --morph. These two drive opacity and the
+     corner radius, not the box, so an approximation cannot drift the geometry. */
+  const settle = (progress) => (progress >= 1 ? 1 : 1 - Math.pow(2, -10 * progress));
+  const paint = (box, eased) => {
+    const sx = Math.min(1, box.width / toBox.width);
+    const sy = Math.min(1, box.height / toBox.height);
+    panelEl.style.transform = `scale(${sx}, ${sy})`;
+    panelEl.style.opacity = String(Math.min(1, eased * 1.1));
+    if (Number.isFinite(radius)) {
+      panelEl.style.borderRadius = `${Math.round(999 + (radius - 999) * eased)}px`;
+    }
+  };
+  paint(from, 0);
+  const step = (now) => {
+    const progress = Math.min(1, Math.max(0, (now - startedAt) / total));
+    const box = islandEl.getBoundingClientRect();
+    const done = progress >= 1 && box.width >= toBox.width - 0.5 && box.height >= toBox.height - 0.5;
+    if (done) return stopMorph();
+    paint(box, settle(progress));
+    morphFrame = requestAnimationFrame(step);
+  };
+  morphFrame = requestAnimationFrame(step);
 }
 
 function setOpen(next) {
@@ -1169,6 +1233,9 @@ function setOpen(next) {
    * card 3px taller than the window on its first frame.
    */
   if (opening) morphPanel(fromBox);
+  /* A close is not a morph: the panel is hidden in this same task, so the
+     painted scale has nothing left to steer and the loop must stop with it. */
+  else stopMorph();
   /* Opening leaves the strip state (and unfreezes the box reports); closing it
      while a listed app still covers the island puts the strip back. */
   /*
@@ -1184,7 +1251,6 @@ function setOpen(next) {
     document.body.dataset.avoid = '0';
     const pillBox = frameEl.getBoundingClientRect();
     if (pillBox.width && pillBox.height) {
-      lastPillWidth = Math.round(pillBox.width);
       api.reportBox({ w: Math.ceil(pillBox.width), h: Math.ceil(pillBox.height) });
     }
   }
@@ -1212,10 +1278,10 @@ function setOpen(next) {
 /**
  * Tell the main process what the pointer has to be inside to count as hovering.
  *
- * The frame is exactly what is drawn — 222x34 for the pill, the panel's box when
- * open, 93x5 for the auto-avoid strip — while the window keeps its transparent
- * padding. Sending this is what makes the island stop opening when the pointer
- * merely crosses the empty space around it.
+ * The frame is exactly what is drawn — 168x64 for the folded pill, the panel's
+ * box when open, 140x6 for the auto-avoid slit — while the window keeps its
+ * transparent padding. Sending this is what makes the island stop opening when
+ * the pointer merely crosses the empty space around it.
  */
 function reportHit() {
   const rect = frameEl.getBoundingClientRect();
@@ -1549,14 +1615,14 @@ document.documentElement.addEventListener('mouseleave', scheduleHoverClose);
  * false" is the dependable close signal.
  */
 /*
- * Auto-avoid: the pill collapses to a thin strip while a listed app covers it.
+ * Auto-avoid: the pill collapses to a 6px slit while a listed app covers it.
  *
  * The window follows the measured box, so collapsing the layout is the whole
  * implementation — but a bare width jump is unreadable, so the current size is
- * frozen first and the CSS transition animates from it to the strip size.
- * 42% of the pill's own width keeps the proportion on a wide or narrow island.
+ * frozen first and the CSS transition animates from it to the slit size.
+ * The slit is a third of the expanded panel: 140px at the 420px default, and
+ * always below the old 42% ceiling.
  */
-const AVOID_RATIO = 0.42;
 let avoiding = false;
 
 /**
@@ -1564,41 +1630,28 @@ let avoiding = false;
  *
  * Collapsed means "a listed app is covering the island and the island is not
  * being used". Opening it (hover or click) wins over avoidance: otherwise the
- * panel is painted inside a 5px clipped frame and hovering the strip looks
+ * panel is painted inside a 6px clipped frame and hovering the slit looks
  * like the island ignored the pointer completely.
  */
-/*
- * The pill's own width, kept current by a ResizeObserver.
+/**
+ * The slit's width comes from the expanded panel, not the folded pill.
  *
- * Reading it exactly when the strip is applied is unreliable: the very first
- * avoid can fire before the status line has rendered (a 176px pill), and the
- * close path may still see the panel's box. Tracking it means the strip is
- * always 42% of the pill the user actually has.
+ * C's slit is a third of the panel it can grow into (140px at the 420px
+ * default), and a third stays below the old 42% ceiling on every island width.
+ * Reading --island-w means a preference change is picked up on the next avoid
+ * without tracking a transient first paint.
  */
-/*
- * Width of the pill to make the strip 42% of.
- *
- * Deliberately *not* observed live: reopening the pill lays it out at its empty
- * size (200x31) before the status line fills in (222x34), and an observer that
- * accepted the first size set the strip to 84px and never corrected it. It is
- * read once, from the frame, at the two moments the normal pill is on screen —
- * entering the strip and closing back into it.
- */
-let lastPillWidth = 0;
-
 function applyAvoidWidth() {
-  if (!lastPillWidth) return;
-  document.documentElement.style.setProperty('--avoid-w', Math.max(48, Math.round(lastPillWidth * AVOID_RATIO)) + 'px');
+  const panelWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--island-w')) || 420;
+  document.documentElement.style.setProperty('--avoid-w', Math.max(48, Math.round(panelWidth / 3)) + 'px');
 }
-
-
 
 function syncAvoidVisual() {
   const collapsed = avoiding && !open;
   avoidCollapsed = collapsed;
   document.body.dataset.avoid = collapsed ? '1' : '0';
   if (collapsed) applyAvoidWidth();
-  /* The strip is 5px tall; the window around it is not a hover target. */
+  /* The slit is 6px tall; the window around it is not a hover target. */
   reportHit();
   return collapsed;
 }
@@ -1608,13 +1661,6 @@ function applyAvoid(on) {
   if (next === avoiding) return;
   avoiding = next;
   const rect = frameEl.getBoundingClientRect();
-  /*
-   * Entering the strip always happens from the normal layout (or from the open
-   * panel), so the frame's width right here *is* the pill's width. Reading it
-   * beats trusting the observer: a transient 200px first paint used to stick
-   * and made the strip 42% of the wrong number.
-   */
-  if (next && rect.width && !open) lastPillWidth = Math.round(rect.width);
   syncAvoidVisual();
   frameEl.style.width = Math.round(rect.width) + 'px';
   frameEl.style.height = Math.round(rect.height) + 'px';

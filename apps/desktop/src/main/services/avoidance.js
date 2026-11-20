@@ -116,7 +116,17 @@ function start(handler) {
       applyState(value === '1');
     }
   });
+  /*
+   * Clearing proc only when this child is still the current one.
+   *
+   * start() stops the previous watcher and assigns the new one immediately; the
+   * old child's exit then fires a tick later. Without the identity check it set
+   * proc = null, so the next restart spawned a second watcher while the new one
+   * was alive — measured 32 orphaned PowerShell processes under one app.
+   */
+  const self = proc;
   proc.on('exit', () => {
+    if (proc !== self) return;
     proc = null;
     if (!stopped) setTimeout(() => start(handler), 3000);
   });

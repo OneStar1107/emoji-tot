@@ -33,11 +33,37 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --fast: 150ms;
   --base: 240ms;
-  --slow: 300ms;
+  /*
+   * The shape change, on its own clock.
+   *
+   * 400ms is long enough to read as one surface unfolding rather than a card
+   * appearing, and short enough that a second intention arrives while it is
+   * still moving — which is the point: the morph is interruptible, so it does
+   * not have to be finished before the next click counts.
+   *
+   * The two tracks do not share a schedule. Width is done at 60%; height waits
+   * 15% (60ms) and uses the rest, so the capsule spreads first and the content
+   * grows into it. expo-out front-loads the travel and lands flat on 1 — an
+   * overshoot at this size is an edge that shivers, not a bounce.
+   */
+  --morph: cubic-bezier(0.22, 1, 0.36, 1);
+  --morph-total: 400ms;
+  --morph-w: calc(var(--morph-total) * 0.6);
+  --morph-h: calc(var(--morph-total) * 0.85);
+  --morph-h-delay: calc(var(--morph-total) * 0.15);
   /* Filled from prefs by applyPrefs(); these are the defaults a fresh profile
      gets before settings has ever been opened. */
   --island-w: 420px;
   --pill-h: 34px;
+  /*
+   * Collapsed pill, direction C ("only the face"): 168x64 in the current DIP
+   * system at the default 34px pill. The height rides on --pill-h so the
+   * "胶囊高度" preference keeps doing something; width and face ride on the UI
+   * scale, the same one the pill height already carries.
+   */
+  --fold-w: calc(168px * var(--ui-scale, 1));
+  --fold-h: calc(var(--pill-h) * 1.8824);
+  --fold-face: calc(var(--fold-h) * 0.6875);
   --ui-font: system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --ui-size: 13px;
   --ui-weight: 400;
@@ -123,6 +149,19 @@ body[data-motion="off"] *::after {
   animation-iteration-count: 1 !important;
 }
 
+/*
+ * No morph at all, not a 1ms one.
+ *
+ * The shared rule above scales every duration down to 1ms, which is close but
+ * still paints the old box for one frame before the new size lands — and the
+ * height track carries a 60ms delay that no duration override cancels. The
+ * island's box is the morph, so under reduce-motion it is set, not animated.
+ */
+body[data-motion="off"] #island,
+body:not([data-motion="on"]) #island {
+  transition: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -165,9 +204,14 @@ body {
   /* Not hidden: the panel's shadow is wider than the window padding, and
      clipping turned it into a hard-edged dark square around each corner. */
   overflow: visible;
+  /*
+   * Two tracks, one clock (see --morph*). The island's box is the model the
+   * panel is painted against, so this schedule *is* the shape change's
+   * schedule — island.js reads it back instead of keeping a second copy.
+   */
   transition:
-    width var(--slow) var(--spring),
-    height var(--slow) var(--spring);
+    width var(--morph-w) var(--morph),
+    height var(--morph-h) var(--morph) var(--morph-h-delay);
   will-change: width, height;
 }
 
@@ -186,9 +230,12 @@ body {
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: var(--pill-h);
-  padding: 0 12px 0 5px;
+  justify-content: center;
+  gap: 10px;
+  width: var(--fold-w);
+  height: var(--fold-h);
+  padding: 0;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--r-full);
   background: var(--card);
@@ -220,7 +267,7 @@ body {
 .top-face-col { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 44px; flex: none; }
 .top-face { display: grid; place-items: center; }
 .top-page-name { font-style: normal; font-size: 9px; line-height: 1.1; color: var(--dim); white-space: nowrap; max-width: 44px; overflow: hidden; text-overflow: ellipsis; }
-.pill-face emojitot-ball { width: 24px; height: 24px; }
+.pill-face emojitot-ball { width: var(--fold-face); height: var(--fold-face); }
 .top-face emojitot-ball { width: 30px; height: 30px; }
 
 .pill-status {
@@ -265,6 +312,30 @@ body {
 @keyframes live { 0%, 100% { transform: scaleY(0.55); } 50% { transform: scaleY(1); } }
 body[data-playing="false"] .pill-live { display: none; }
 
+/*
+ * C's collapsed state is the face and nothing else.
+ *
+ * Weather, battery, clock and the play indicator live in the expanded panel
+ * (its header still carries battery + clock, its pages carry the rest), so the
+ * folded pill gives that row back and keeps one very short expression next to
+ * the face. Hiding is scoped to the collapsed state: the status row and its
+ * renderer are untouched, they reappear whenever the island is open.
+ */
+#island[data-open="false"] .pill .pill-status,
+#island[data-open="false"] .pill .pill-live { display: none; }
+
+.pill::after {
+  content: "(｡･ω･｡)";
+  flex: none;
+  max-width: calc(100% - var(--fold-face) - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ui-size);
+  line-height: 1;
+  color: var(--dim);
+}
+
 /* Skins: one fill difference each, not three themes to maintain. */
 /* ---------------------------------------------------------------- skins */
 /*
@@ -301,18 +372,21 @@ body[data-skin="plain"] .pill {
   transition: width 200ms var(--spring), height 200ms var(--spring), opacity 160ms ease, background 160ms ease;
 }
 body[data-skin="plain"] .pill > * { opacity: 0; transition: opacity 120ms ease; }
-/* Hovering is how you find it again: the line grows back into the pill. */
+body[data-skin="plain"] .pill::after { opacity: 0; transition: opacity 120ms ease; }
+/* Hovering is how you find it again: the line grows back into the folded pill. */
 body[data-skin="plain"] .pill:hover,
 body[data-skin="plain"] .pill:focus-visible {
-  width: auto;
-  height: var(--pill-h);
-  padding: 0 13px 0 5px;
+  width: var(--fold-w);
+  height: var(--fold-h);
+  padding: 0;
   background: var(--card-solid);
   opacity: 1;
   border-color: var(--line);
 }
 body[data-skin="plain"] .pill:hover > *,
 body[data-skin="plain"] .pill:focus-visible > * { opacity: 1; }
+body[data-skin="plain"] .pill:hover::after,
+body[data-skin="plain"] .pill:focus-visible::after { opacity: 1; }
 
 body[data-blur="off"] .panel,
 body[data-blur="off"] .pill { background: var(--card-solid); backdrop-filter: none; }
@@ -616,31 +690,43 @@ button.ghost:active,
  */
 .pages > .empty { height: 100%; justify-content: center; }
 /*
- * The mailbox page can carry the messenger switchboard above its empty state.
- * Both used to be direct children of .pages, so the empty state still took a
- * full 100% height below the switchboard: 301.7px in a 205px box, and the
- * "添加邮箱" button was clipped outside the panel. The wrapper lets the empty
- * state fill what the switchboard leaves, so the pure empty state still
- * centres and the mixed state fits.
+ * The mailbox page's 205px is shared by two blocks, so one wrapper owns it.
+ *
+ * The messenger switchboard is capped at three rows (the count line carries
+ * the rest as running) and the mail list takes whatever is left and scrolls
+ * inside itself. Both blocks used to be direct children of .pages with no
+ * height of their own: with five apps running and a mailbox configured they
+ * stacked to 260px in a 217px box, and the last mail rows were clipped.
+ * The wrapper clips, so nothing can push the page's scrollHeight past 217.
  */
-.mail-empty { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow-y: auto; scrollbar-width: none; }
-.mail-empty::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.mail-page { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
+/* The no-mailbox page keeps its own scroller: it is the only scroller there,
+   and a short panel must still reach the 添加邮箱 button. */
+.mail-page-empty { overflow-y: auto; scrollbar-width: none; }
+.mail-page-empty::-webkit-scrollbar { width: 0; height: 0; display: none; }
 /* The switchboard keeps its rows and the prompt its content: shrinking either
    squashed the 28px "添加邮箱" button to 18.7px when five apps were running. */
-.mail-empty > .msg { flex: none; }
-.mail-empty > .empty { flex: 1 0 auto; min-height: 0; height: auto; justify-content: center; }
+.mail-page > .msg { flex: none; }
+/*
+ * The list is the growing half: it fills what the switchboard leaves and
+ * scrolls there, so a long mailbox never needs a second scroll layer.
+ */
+.mail-page > .mail { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.mail-page > .mail::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.mail-page > .empty { flex: 1 0 auto; min-height: 0; height: auto; justify-content: center; }
 /*
  * Two messenger rows leave the mailbox prompt about 108px, less than the
  * 157.6px empty state needs. Drop the icon and tighten the padding so the
  * title, the provider line and the button stay whole instead of pushing the
  * button out of the panel.
  */
-.mail-empty-with-msg > .empty { padding: 8px 10px; gap: 5px; }
-.mail-empty-with-msg > .empty > svg { display: none; }
+.mail-page-with-msg > .empty { padding: 8px 10px; gap: 5px; }
+.mail-page-with-msg > .empty > svg { display: none; }
 /* Three switchboard rows plus the prompt were 13px taller than the page. The
-   rows keep their content and the 28px button; only the row padding tightens. */
-.mail-empty .msg-item { padding: 3px 2px; }
-.mail-empty .msg-head { margin-bottom: 2px; }
+   rows keep their content and the 28px button; only the row padding tightens.
+   The mailbox page gets the same tightening for its capped three rows. */
+.mail-page .msg-item { padding: 3px 2px; }
+.mail-page .msg-head { margin-bottom: 2px; }
 .empty svg { width: 26px; height: 26px; fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .empty b { font-size: 12.5px; font-weight: 550; color: var(--ink); }
 .empty span { font-size: 11.5px; color: var(--dim); line-height: 1.5; max-width: 250px; }
@@ -1109,6 +1195,10 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   padding: 3px 8px;
   font: inherit;
   font-size: 11px;
+  /* A monospace stack (设置 → 字体 → 等宽) shrinks the line box this button
+     inherits down to 18.7px; the row is the page's only action, so hold a
+     tappable height instead of following the font. */
+  min-height: 20px;
   cursor: pointer;
 }
 
@@ -1268,25 +1358,47 @@ body[data-reduce-motion='on'] *::after {
 /* ------------------------------------------------------------- auto-avoid */
 
 /*
- * While a listed app covers the island the pill becomes a thin strip: 5px tall
- * and 42% of its width, centred on the top edge. The width is written by
- * applyAvoid() as --avoid-w from the pill's own measured width, so the strip
- * keeps its proportion instead of being a fixed size that shrinks with the
- * window.
+ * While a listed app covers the island the pill becomes a narrow slit: 6px tall
+ * and a third of the expanded panel (140px at the 420px default), never the old
+ * 42% ceiling. The width is written by applyAvoidWidth() from --island-w, so a
+ * wider or narrower island keeps the proportion instead of drifting.
+ *
+ * It is a slice of the face, not a plain bar: the accent gradient carries the
+ * island's colour and the two white dots are the tot's eyes, so the slit reads
+ * as the face peeking over whatever window is covering it.
  */
 #avoid-strip {
   display: none;
   /* Out of flow so the hidden pill can stay laid out (and measurable) next to
-     it instead of pushing the strip out of the 93px frame. */
+     it instead of pushing the slit out of the 140px frame. */
   position: absolute;
   left: 0;
   top: 0;
   width: 100%;
   height: 100%;
   border-radius: 999px;
-  background: var(--ink);
-  opacity: 0.5;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0.8;
+  /*
+   * Three layers, bottom to top: the accent the island already uses, the black
+   * band of the tot's face, and its two eyes. Only a 6px strip of that face is
+   * visible, which is exactly the "half a face, peeking" the spec asks for.
+   */
+  background:
+    radial-gradient(circle at 44% 58%, rgba(255, 255, 255, 0.95) 0 1.25px, transparent 1.6px),
+    radial-gradient(circle at 56% 58%, rgba(255, 255, 255, 0.95) 0 1.25px, transparent 1.6px),
+    linear-gradient(90deg, transparent 0 30%, #1f1f1f 36% 64%, transparent 70% 100%),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--accent) 35%, transparent),
+      var(--accent) 28%,
+      color-mix(in srgb, var(--accent) 62%, #fff) 50%,
+      var(--accent) 72%,
+      color-mix(in srgb, var(--accent) 35%, transparent)
+    );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 /*
  * No width/height transition on #frame.
@@ -1294,21 +1406,21 @@ body[data-reduce-motion='on'] *::after {
  * The wrapper (#island) already animates, and a frame transition made every
  * synchronous read return the *intermediate* size — the close path reported the
  * panel's box back to the main process, so the window stayed at panel size
- * while only a 5px bar was drawn.
+ * while only a 6px slit was drawn.
  */
 body[data-avoid="1"] #frame {
-  width: var(--avoid-w, 176px);
-  height: 5px;
+  width: var(--avoid-w, 140px);
+  height: 6px;
   overflow: hidden;
 }
 /*
  * Hide the pill and the panel, not #island: the strip lives inside #frame,
  * inside #island, so hiding the container hid the strip too and the island
- * went fully transparent instead of collapsing to a strip.
+ * went fully transparent instead of collapsing to a slit.
  *
- * visibility, not display: the pill keeps its layout box, so the strip can stay
- * 42% of the real pill width and the close path can report the pill's size
- * (display:none measures 0, which left the window at the panel's size).
+ * visibility, not display: the pill keeps its layout box, so the close path can
+ * report the pill's size (display:none measures 0, which left the window at the
+ * panel's size).
  */
 body[data-avoid="1"] #pill,
 body[data-avoid="1"] #panel { visibility: hidden; }
