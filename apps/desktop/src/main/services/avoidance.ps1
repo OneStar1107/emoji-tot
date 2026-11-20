@@ -2,6 +2,7 @@ param(
   [string]$Config = '',
   [switch]$ListApps,
   [switch]$Probe,
+  [string]$Classify = '',
   [int]$AppPid = 0,
   [string]$Icons = '',
   [string]$IconPath = ''
@@ -21,6 +22,7 @@ if ((-not $AppPid -or $AppPid -eq 0) -and $env:EMOJITOT_APP_PID) { $AppPid = [in
 #   -Island <hwnd> -Config <json>   poll (resident)
 #   -ListApps                       print the running apps as JSON and exit
 #   -IconPath <exe>                 print a PNG data URL for the exe and exit
+#   -Classify <hwnd|fg>             print why a window is (not) a browser and exit
 #
 # The rules are a port of xiaotang-daozai's system.rs (browser_overlaps_island
 # and avoidance_for_window): a window counts as covering the island when it
@@ -47,7 +49,10 @@ public class AvoidWin {
   [DllImport("user32.dll")] public static extern int GetWindowTextLengthW(IntPtr hWnd);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr hWnd, StringBuilder sb, int max);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc proc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr lParam);
   public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hWnd, StringBuilder sb, int max);
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
   [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hWnd, int attr, out int value, int size);
   [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
   [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
@@ -123,11 +128,104 @@ function Get-AppName($p) {
   return [System.IO.Path]::GetFileNameWithoutExtension($p)
 }
 
-function Test-Browser($p) {
+# Chromium browser runtimes ship chrome.dll next to the executable. Browsers
+# built from Chromium keep it beside the versioned exe; ego lite launches from
+# Application\ego.exe and keeps the runtime one level down
+# (Application\0.6.3.17\chrome.dll), so one extra directory level is enough.
+# Electron apps bundle their runtime into their own executable: no chrome.dll.
+function Test-ChromiumRuntime($p) {
   if (-not $p) { return $false }
-  $leaf = [System.IO.Path]::GetFileName($p)
-  foreach ($b in $script:Browsers) { if ($leaf -ieq $b) { return $true } }
+  $dir = [System.IO.Path]::GetDirectoryName($p)
+  if (-not $dir -or -not [System.IO.Directory]::Exists($dir)) { return $false }
+  if ([System.IO.File]::Exists((Join-Path $dir 'chrome.dll'))) { return $true }
+  try {
+    foreach ($sub in [System.IO.Directory]::GetDirectories($dir)) {
+      if ([System.IO.File]::Exists((Join-Path $sub 'chrome.dll'))) { return $true }
+    }
+  } catch { }
   return $false
+}
+
+# Packaged Electron apps leave resources\app.asar (or an unpacked app folder)
+# next to the executable. Checked before chrome.dll so an Electron app can never
+# be auto-detected as a browser, even if a stray chrome.dll ever sat beside it.
+function Test-ElectronApp($p) {
+  if (-not $p) { return $false }
+  $dir = [System.IO.Path]::GetDirectoryName($p)
+  if (-not $dir) { return $false }
+  return ([System.IO.File]::Exists((Join-Path $dir 'resources\app.asar')) -or [System.IO.Directory]::Exists((Join-Path $dir 'resources\app')))
+}
+
+function Get-WindowClass($h) {
+  $sb = New-Object System.Text.StringBuilder 256
+  [void][AvoidWin]::GetClassNameW($h, $sb, 256)
+  return $sb.ToString()
+}
+
+# The native browser UI's address bar. Chrome/Chromium browser windows have it;
+# Electron apps have no address bar at all. ego's UI is drawn in web content, so
+# it has none either -- this only proves "browser" when present, never the
+# reverse. A full-screen window may drop it too, which is fine: the runtime check
+# below still holds.
+function Test-Omnibox($h) {
+  $script:OmniHit = $false
+  $cb = [AvoidWin+EnumProc]{
+    param($child, $lparam)
+    $sb = New-Object System.Text.StringBuilder 256
+    [void][AvoidWin]::GetClassNameW($child, $sb, 256)
+    if ($sb.ToString() -eq 'Chrome_OmniboxView') { $script:OmniHit = $true; return $false }
+    return $true
+  }
+  [void][AvoidWin]::EnumChildWindows($h, $cb, [IntPtr]::Zero)
+  return $script:OmniHit
+}
+
+# Is this window a browser, and what proves it?
+#
+# Chrome_WidgetWin_1 alone is not enough: every Electron app uses it too
+# (DeepSeek Harness, Slack, VS Code). The discriminator is the Chromium browser
+# runtime (chrome.dll) in the install directory, with the address-bar control as
+# a fast confirm. Electron apps fail both:
+#   DeepSeek Harness  -> Chrome_WidgetWin_1, no Chrome_OmniboxView, no chrome.dll
+#   ego lite          -> Chrome_WidgetWin_1, no Chrome_OmniboxView, chrome.dll
+# Keeping the reason in the verdict is what makes -Probe / -Classify useful when
+# a new browser shows up.
+function Get-BrowserVerdict($h, $p) {
+  if (-not $p) { return [pscustomobject]@{ browser = $false; reason = 'no-path' } }
+  $leaf = [System.IO.Path]::GetFileName($p)
+  foreach ($b in $script:Browsers) {
+    if ($leaf -ieq $b) { return [pscustomobject]@{ browser = $true; reason = 'listed' } }
+  }
+  # Auto-detection touches the disk, so remember it per executable: the resident
+  # loop asks about the same foreground process every 100ms.
+  $key = ($p -replace '/', '\').ToLowerInvariant()
+  if ($script:BrowserCache.ContainsKey($key)) {
+    $cached = $script:BrowserCache[$key]
+    return [pscustomobject]@{ browser = $cached.browser; reason = 'cached-' + $cached.reason }
+  }
+  if ($h -eq [IntPtr]::Zero) { return [pscustomobject]@{ browser = $false; reason = 'no-window' } }
+  $cls = Get-WindowClass $h
+  if ($cls -ne 'Chrome_WidgetWin_1') {
+    return [pscustomobject]@{ browser = $false; reason = 'window-class=' + $cls }
+  }
+  if (Test-ElectronApp $p) {
+    $verdict = [pscustomobject]@{ browser = $false; reason = 'electron' }
+  } elseif (Test-Omnibox $h) {
+    $verdict = [pscustomobject]@{ browser = $true; reason = 'omnibox' }
+  } elseif (Test-ChromiumRuntime $p) {
+    $verdict = [pscustomobject]@{ browser = $true; reason = 'chromium-runtime' }
+  } else {
+    $verdict = [pscustomobject]@{ browser = $false; reason = 'no-chromium-runtime' }
+  }
+  $script:BrowserCache[$key] = $verdict
+  return $verdict
+}
+
+# The boolean the call sites want; Get-BrowserVerdict keeps the reason for -Probe
+# and -Classify. A missing window skips only the auto-detection, never the list.
+function Test-Browser($p, $h) {
+  if (-not $h) { $h = [IntPtr]::Zero }
+  return (Get-BrowserVerdict $h $p).browser
 }
 
 # Does this window cover the island's centre band at the top edge?
@@ -228,7 +326,7 @@ function Get-AvoidState($config) {
   if (-not $rect) { return 0 }
 
   $p = Get-ProcessImage $procId
-  $browserHit = ($config.browsers -and (Test-Browser $p))
+  $browserHit = ($config.browsers -and (Test-Browser $p $fg))
   $listedHit = Test-Listed $p $apps
 
   # Remember the process's normal window so a later ownerless panel can be
@@ -282,6 +380,8 @@ function Get-AvoidState($config) {
 # GetCurrentProcessId() would only ever name PowerShell itself.
 $script:AvoidSelf = $AppPid
 $script:AvoidSeen = @{}
+# exe path -> verdict; the 100ms loop asks about the same foreground process.
+$script:BrowserCache = @{}
 $script:AvoidOut = New-Object System.Collections.ArrayList
 
 $script:Collector = [AvoidWin+EnumProc]{
@@ -308,7 +408,7 @@ $script:Collector = [AvoidWin+EnumProc]{
     path = $p
     name = (Get-AppName $p)
     title = $sb.ToString()
-    browser = (Test-Browser $p)
+    browser = (Test-Browser $p $hwnd)
   })
   return $true
 }
@@ -336,6 +436,40 @@ function Get-IconDataUrl($p) {
   } finally { $icon.Dispose() }
 }
 
+# Standalone regression probe: print the verdict and the evidence for one
+# window. Pass a decimal/0x HWND, or "fg" for whatever is in front right now.
+if ($Classify) {
+  $target = [IntPtr]::Zero
+  if ($Classify -eq 'fg') {
+    $target = [AvoidWin]::GetForegroundWindow()
+  } elseif ($Classify -match '^0[xX][0-9a-fA-F]+$') {
+    $target = [IntPtr][Convert]::ToInt64($Classify.Substring(2), 16)
+  } elseif ($Classify -match '^[0-9]+$') {
+    $target = [IntPtr][int64]$Classify
+  } else {
+    [Console]::Error.WriteLine('classify-error: expected a decimal/0x HWND or "fg"')
+    exit 2
+  }
+  if ($target -eq [IntPtr]::Zero -or -not [AvoidWin]::IsWindow($target)) {
+    [Console]::Error.WriteLine('classify-error: no such window')
+    exit 2
+  }
+  $cpid = [uint32]0
+  [void][AvoidWin]::GetWindowThreadProcessId($target, [ref]$cpid)
+  $cpath = Get-ProcessImage $cpid
+  $cverdict = Get-BrowserVerdict $target $cpath
+  Write-Output ('hwnd=' + $target.ToInt64())
+  Write-Output ('class=' + (Get-WindowClass $target))
+  Write-Output ('pid=' + $cpid)
+  Write-Output ('path=' + $cpath)
+  Write-Output ('electron=' + (Test-ElectronApp $cpath))
+  Write-Output ('omnibox=' + (Test-Omnibox $target))
+  Write-Output ('chromiumRuntime=' + (Test-ChromiumRuntime $cpath))
+  Write-Output ('browser=' + $cverdict.browser)
+  Write-Output ('reason=' + $cverdict.reason)
+  exit 0
+}
+
 if ($Probe) {
   $cfg = Read-AvoidConfig $Config
   Write-Output ("cfg=" + ($cfg | ConvertTo-Json -Compress -Depth 5))
@@ -343,7 +477,12 @@ if ($Probe) {
   $fgpid = [uint32]0
   [void][AvoidWin]::GetWindowThreadProcessId($fgw, [ref]$fgpid)
   Write-Output ("fgpid=" + $fgpid)
-  Write-Output ("fgpath=" + (Get-ProcessImage $fgpid))
+  $fgpath = Get-ProcessImage $fgpid
+  Write-Output ("fgpath=" + $fgpath)
+  Write-Output ("fgclass=" + (Get-WindowClass $fgw))
+  $vg = Get-BrowserVerdict $fgw $fgpath
+  Write-Output ("fgbrowser=" + $vg.browser)
+  Write-Output ("fgreason=" + $vg.reason)
   $fgr = Get-Rect $fgw
   if ($fgr) { Write-Output ("fgrect=" + $fgr.Left + "," + $fgr.Top + "," + $fgr.Right + "," + $fgr.Bottom) }
   Write-Output ("fgvisible=" + (Test-Visible $fgw))

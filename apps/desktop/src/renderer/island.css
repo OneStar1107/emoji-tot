@@ -615,6 +615,32 @@ button.ghost:active,
  * like it failed to load. It takes the box and centres itself instead.
  */
 .pages > .empty { height: 100%; justify-content: center; }
+/*
+ * The mailbox page can carry the messenger switchboard above its empty state.
+ * Both used to be direct children of .pages, so the empty state still took a
+ * full 100% height below the switchboard: 301.7px in a 205px box, and the
+ * "添加邮箱" button was clipped outside the panel. The wrapper lets the empty
+ * state fill what the switchboard leaves, so the pure empty state still
+ * centres and the mixed state fits.
+ */
+.mail-empty { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.mail-empty::-webkit-scrollbar { width: 0; height: 0; display: none; }
+/* The switchboard keeps its rows and the prompt its content: shrinking either
+   squashed the 28px "添加邮箱" button to 18.7px when five apps were running. */
+.mail-empty > .msg { flex: none; }
+.mail-empty > .empty { flex: 1 0 auto; min-height: 0; height: auto; justify-content: center; }
+/*
+ * Two messenger rows leave the mailbox prompt about 108px, less than the
+ * 157.6px empty state needs. Drop the icon and tighten the padding so the
+ * title, the provider line and the button stay whole instead of pushing the
+ * button out of the panel.
+ */
+.mail-empty-with-msg > .empty { padding: 8px 10px; gap: 5px; }
+.mail-empty-with-msg > .empty > svg { display: none; }
+/* Three switchboard rows plus the prompt were 13px taller than the page. The
+   rows keep their content and the 28px button; only the row padding tightens. */
+.mail-empty .msg-item { padding: 3px 2px; }
+.mail-empty .msg-head { margin-bottom: 2px; }
 .empty svg { width: 26px; height: 26px; fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .empty b { font-size: 12.5px; font-weight: 550; color: var(--ink); }
 .empty span { font-size: 11.5px; color: var(--dim); line-height: 1.5; max-width: 250px; }
@@ -637,14 +663,15 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .music { display: flex; flex-direction: column; gap: 10px; }
 .cover-img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex: none; background: #222228; }
 .music-state { font-size: 10.5px; color: var(--faint); flex: none; }
-/* Three lines fill the 54px window exactly; the one-line "no lyrics" state and
-     the tail of a scrolling song do not, and left-aligned they left 23px of air
-     under the text, which read as the block being pushed up. */
-.lyric-box { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-height: 54px; padding: 0 4px; }
+/* Three 18px lines fill the 54px window exactly (line-height 1.5, no gap); the
+     one-line "no lyrics" state and the tail of a scrolling song do not, and
+     left-aligned they left 23px of air under the text, which read as the block
+     being pushed up. 1.55 + a 1px gap needed 57.8px and clipped the controls. */
+.lyric-box { display: flex; flex-direction: column; justify-content: center; gap: 0; min-height: 54px; padding: 0 4px; }
 .lyric-line {
   margin: 0;
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.5;
   color: var(--faint);
   white-space: nowrap;
   overflow: hidden;
@@ -859,7 +886,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .cal-empty { margin: 6px 2px; font-size: 11px; color: var(--faint); }
 
 /* focus */
-.focus { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 6px 0 4px; }
+.focus { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 4px; }
 .focus-ring {
   width: 132px;
   height: 132px;
@@ -1035,6 +1062,12 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   margin-bottom: 10px;
   border-bottom: 1px solid var(--line);
   padding-bottom: 8px;
+}
+
+.msg-more {
+  padding: 4px 2px;
+  font-size: 11px;
+  color: var(--faint);
 }
 
 .msg-head {

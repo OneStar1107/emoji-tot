@@ -624,7 +624,10 @@ function quotaPage() {
 function messengerBlock() {
   const apps = messengerState?.apps ?? [];
   if (!apps.length) return '';
-  const rows = apps
+  /* Three rows plus a count: five running apps used to push the mailbox prompt
+     out of the 205px page. The summary carries the count only, never names. */
+  const shown = apps.slice(0, 3);
+  const rows = shown
     .map((app) => `<div class="msg-item">
       <span class="msg-dot${app.unread ? ' on' : ''}"></span>
       <span class="msg-name">${escapeHtml(app.label)}</span>
@@ -632,17 +635,22 @@ function messengerBlock() {
       <button type="button" class="msg-open" data-local="messenger:activate" data-id="${app.handle}">切过去</button>
     </div>`)
     .join('');
+  const more = apps.length > shown.length
+    ? `<div class="msg-more">还有 ${apps.length - shown.length} 个在运行</div>`
+    : '';
   const unread = apps.reduce((sum, app) => sum + (Number(app.unread) || 0), 0);
   return `<div class="msg">
     <div class="msg-head"><span>消息</span><span class="spacer"></span><span>${unread ? unread + ' 条未读' : '没有未读'}</span></div>
     ${rows}
+    ${more}
   </div>`;
 }
 
 function mailPage() {
   const state = mailState ?? { accounts: [], messages: [] };
   if (!state.accounts.length) {
-    return messengerBlock() + empty(
+    const board = messengerBlock();
+    return `<div class="mail-empty${board ? ' mail-empty-with-msg' : ''}">${board}${empty(
       ICON.mail,
       '还没有添加邮箱',
       '支持 163、QQ、Gmail。授权码只保存在本机。',
@@ -650,7 +658,7 @@ function mailPage() {
       // The settings page is called comm; a stale key opens the window on the
       // wrong page, which reads as "the button does nothing".
       'settings:comm',
-    );
+    )}</div>`;
   }
   if (!state.messages.length) {
     const hint = state.syncing ? '正在同步…' : state.error ? state.error : '还没有拉取到邮件';
@@ -1090,7 +1098,7 @@ document.addEventListener(
   (event) => {
     const list =
       event.target instanceof Element
-        ? event.target.closest('.clip-list, .shelf-list, .todo-list')
+        ? event.target.closest('.clip-list, .shelf-list, .todo-list, .mail-empty')
         : null;
     if (list && list.scrollHeight > list.clientHeight + 1) event.stopPropagation();
   },

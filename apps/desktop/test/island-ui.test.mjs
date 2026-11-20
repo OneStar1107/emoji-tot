@@ -8,6 +8,9 @@ import {
   pagingVisibility,
 } from '../src/renderer/island-header.mjs';
 
+/** Directory of this test file, so the renderer sources can be read. */
+const here = dirname(fileURLToPath(import.meta.url));
+
 describe('island header title', () => {
   it('shows the playing title instead of repeating the page name', () => {
     const state = islandHeaderState({ active: true, playing: true, title: '正在播放的歌' });
@@ -39,5 +42,34 @@ describe('island paging affordances', () => {
 
   it('keeps both paging paths when more than one page exists', () => {
     assert.deepEqual(pagingVisibility(2), { arrows: true, dots: true });
+  });
+});
+
+/*
+ * The mailbox page is the one page that can carry another block above its empty
+ * state. With every messenger app running (five by default) the old markup put a
+ * 157.6px empty state below a 133px switchboard inside a 205px box: the "添加邮箱"
+ * button was clipped, and the wheel over it flipped the page instead of scrolling
+ * to the button. These three invariants are what keep that from coming back.
+ */
+const islandJs = readFileSync(resolve(here, '..', 'src', 'renderer', 'island.js'), 'utf8');
+const islandCss = readFileSync(resolve(here, '..', 'src', 'renderer', 'island.css'), 'utf8');
+
+describe('island mailbox page fits its 205px budget', () => {
+  it('caps the messenger switchboard and summarises the rest', () => {
+    assert.match(islandJs, /function messengerBlock/, 'the switchboard must still exist');
+    const block = islandJs.slice(islandJs.indexOf('function messengerBlock'));
+    const body = block.slice(0, block.indexOf('\n}'));
+    assert.match(body, /slice\(0,/, 'rows must be capped, not unbounded');
+    assert.match(body, /msg-more/, 'the overflow row tells the user how many are left');
+  });
+
+  it('lets the mailbox column scroll instead of clipping the button', () => {
+    assert.match(islandCss, /\.mail-empty\s*\{[^}]*overflow-y:\s*auto/, 'a squeezed empty state must scroll');
+  });
+
+  it('does not flip pages when the wheel is over that column', () => {
+    const wheel = islandJs.slice(islandJs.indexOf("document.addEventListener(\n  'wheel'"), islandJs.indexOf("document.addEventListener(\n  'wheel'") + 420);
+    assert.ok(wheel.includes("closest('.clip-list, .shelf-list, .todo-list, .mail-empty')"), 'the wheel over the mailbox belongs to the mailbox: ' + wheel);
   });
 });
