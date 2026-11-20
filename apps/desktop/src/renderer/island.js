@@ -1091,13 +1091,70 @@ document.addEventListener(
   { capture: true },
 );
 
+/*
+ * The capsule stretches into the panel — one object, not two.
+ *
+ * The window is resized by transitioning #island's own width and height, and the
+ * panel inside it is already its full size from the first frame. For the length
+ * of that transition the panel was therefore painted wider and taller than the
+ * window, and the OS clipped both of its sides: the "hard cut" you see for a
+ * third of a second every time the island opens. Scaling the panel by exactly
+ * the pill's ratio closes that gap frame by frame — the island and the panel
+ * interpolate between the same two boxes with the same curve, so the painted
+ * edge stays on the window edge the whole way, and what the eye sees is the
+ * capsule opening instead of a card appearing over it.
+ *
+ * The content fades in a third of the way through, once the surface has enough
+ * area to hold it.
+ */
+function morphPanel(fromBox) {
+  if (!fromBox || !fromBox.width || !fromBox.height) return;
+  /* The same switch the CSS motion rules obey: reduce-motion, and the user's
+     own "off", both mean the panel simply is there. */
+  if (document.body.dataset.motion === 'off') return;
+  const toBox = panelEl.getBoundingClientRect();
+  if (!toBox.width || !toBox.height) return;
+  const sx = Math.min(1, fromBox.width / toBox.width);
+  const sy = Math.min(1, fromBox.height / toBox.height);
+  /* The radius the panel would have had without this animation; --radius is a
+     preference, so it cannot be written out as 22px here. */
+  const radius = getComputedStyle(panelEl).borderTopLeftRadius || '22px';
+  panelEl.animate(
+    [
+      { transform: `scale(${sx}, ${sy})`, opacity: 0, borderRadius: '999px' },
+      { opacity: 1, offset: 0.34 },
+      { transform: 'none', opacity: 1, borderRadius: radius },
+    ],
+    /* Must match #island's width/height transition in island.css or the two
+       edges drift apart mid-flight. */
+    { duration: 300, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' },
+  );
+}
+
 function setOpen(next) {
+  const opening = next && !open;
+  /*
+   * The pill's box has to be read while it is still laid out — the very next
+   * line hides it. In the strip state the pill is visibility:hidden but keeps
+   * its box, while what is actually drawn is the 5px strip inside #frame, so the
+   * strip is what the panel grows out of there.
+   */
+  const fromBox = opening
+    ? (document.body.dataset.avoid === '1' ? frameEl : pillEl).getBoundingClientRect()
+    : null;
   open = next;
   islandEl.dataset.open = String(open);
   pillEl.hidden = open;
   panelEl.hidden = !open;
   pillEl.setAttribute('aria-expanded', String(open));
   if (open) renderPage();
+  /*
+   * Measured after renderPage, not before: the first frame's ratio is the pill
+   * over the panel's *final* box, and reading it before the page has rendered
+   * sized that box from a half-built panel (300 instead of 324), which left the
+   * card 3px taller than the window on its first frame.
+   */
+  if (opening) morphPanel(fromBox);
   /* Opening leaves the strip state (and unfreezes the box reports); closing it
      while a listed app still covers the island puts the strip back. */
   /*

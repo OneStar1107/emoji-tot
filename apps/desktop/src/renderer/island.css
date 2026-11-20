@@ -45,6 +45,25 @@
   --surface-1: rgba(255, 255, 255, 0.05);
   --surface-2: rgba(255, 255, 255, 0.1);
   --surface-3: rgba(255, 255, 255, 0.16);
+  /*
+   * Depth, drawn inside the box.
+   *
+   * A transparent Electron window clips anything painted past its edge into a
+   * straight line, so no surface here may carry an outer shadow wide enough to
+   * reach the window margin (see .panel). Light that comes from inside the box
+   * instead — a hairline on the top edge, a shade on the bottom, a one-pixel
+   * ring — builds the same depth with nothing to clip. The ring is what makes a
+   * translucent surface read as a material instead of as a hole in the desktop.
+   */
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.26);
+  --ring: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+  /* Radii, named so one corner is decided in one place. */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-full: 999px;
 }
 
 /*
@@ -70,6 +89,11 @@ body[data-theme="light"] {
   --surface-1: rgba(0, 0, 0, 0.055);
   --surface-2: rgba(0, 0, 0, 0.12);
   --surface-3: rgba(0, 0, 0, 0.2);
+  /* The same three shades flipped: a white highlight is invisible on a white
+     card, and a black top edge read as a smudge under the header. */
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+  --ring: inset 0 0 0 1px rgba(0, 0, 0, 0.045);
 }
 
 * { box-sizing: border-box; }
@@ -162,22 +186,30 @@ body {
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   height: var(--pill-h);
-  padding: 0 13px 0 5px;
+  padding: 0 12px 0 5px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--r-full);
   background: var(--card);
   color: var(--ink);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42), inset 0 1px 0 var(--surface-1);
+  /*
+   * One ring, one highlight, one lift. At 34px tall the old 24px blur read as a
+   * black halo, and the halo was the loudest thing on the desktop — louder than
+   * the character it belongs to. The collapsed state is the state that is on
+   * screen 99% of the time, so it is the one that has to be quiet.
+   */
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34), var(--hi), var(--ring);
   backdrop-filter: blur(18px);
-  transition: transform 160ms ease, border-color 160ms ease;
+  transition: transform 180ms var(--spring), box-shadow 180ms var(--ease), border-color 180ms var(--ease);
   cursor: pointer;
   white-space: nowrap;
 }
 
-.pill:hover { transform: scale(1.035); border-color: var(--surface-3); }
-.pill:active { transform: scale(0.99); }
+/* A 2% lift, not a 3.5% pop: the pill is a resting object, not a button that
+   jumps when the pointer crosses it. */
+.pill:hover { transform: translateY(-1px) scale(1.02); border-color: var(--surface-3); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38), var(--hi), var(--ring); }
+.pill:active { transform: translateY(0) scale(0.99); }
 
 .pill-face,
 /*
@@ -288,8 +320,11 @@ body[data-blur="off"] .pill { background: var(--card-solid); backdrop-filter: no
 /* The light theme needs the same three ideas in light surfaces. */
 /* Shadows read far heavier on a light surface: soften them or the island
    looks like it is floating on soot. */
-body[data-theme="light"] .pill { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.85); }
-body[data-theme="light"] .panel { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.16); }
+body[data-theme="light"] .pill { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14), var(--hi), var(--ring); }
+/* No outer shadow on the light panel either: a white card needs contrast, not
+   a blur reaching the window edge, which the OS cuts into a straight line. The
+   ring carries the separation. */
+body[data-theme="light"] .panel { box-shadow: var(--hi), var(--lo), var(--ring); }
 body[data-theme="light"] .sheet { box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.8); }
 
 body[data-theme="light"][data-skin="solid"] .panel,
@@ -318,8 +353,12 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    *
    * No backdrop-filter: in a transparent Electron window there is nothing real
    * behind the page to blur, and it darkens the window margin into a grey band.
+   *
+   * One light source for the whole card: a specular wash that fades out by the
+   * header. Layered into the background instead of drawn by a ::before, so it
+   * cannot cover the content, and the solid/plain skins drop it for free.
    */
-  background: var(--card);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 44%), var(--card);
   /*
    * Kept inside the window margin on purpose. The shadow used to be 44px of
    * blur with 18px of offset while the window padding was only 28/18, so the
@@ -337,16 +376,17 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    * panel. The inset highlight stays — it is drawn inside the box, so it cannot
    * be clipped into an edge.
    */
-  box-shadow: inset 0 1px 0 var(--surface-1);
+  box-shadow: var(--hi), var(--lo), var(--ring);
+  /*
+   * The morph origin, not a decoration.
+   *
+   * The panel is scaled up out of the pill (see morphPanel in island.js). With
+   * the origin at the top centre the top edge stays on the pill's top edge and
+   * both sides grow outwards along the same centre line the window is growing
+   * along; scaling about the middle dropped the top edge 145px on the first
+   * frame and read as the card falling into place from above.
+   */
   transform-origin: top center;
-  animation: panel-in 300ms var(--spring);
-}
-
-/* Same duration and curve as the window's size transition, so the content and
-   the window arrive together instead of one trailing the other. */
-@keyframes panel-in {
-  from { opacity: 0; transform: translateY(-4px) scale(0.94); }
-  to { opacity: 1; transform: none; }
 }
 
 .topbar {
@@ -441,26 +481,32 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--card-solid);
-  color: var(--ink);
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  /*
+   * A chevron, not a disc. Two filled 32px circles on a 420px card were the
+   * heaviest thing in the middle of the panel — heavier than the content they
+   * sit beside — and they read as holes punched in the card. The hit target
+   * stays 32px; only the paint gets quieter, and the surface appears on the one
+   * state that needs it.
+   */
+  background: transparent;
+  color: var(--dim);
   display: grid;
   place-items: center;
   cursor: pointer;
   /* Always visible but quiet: a control that only appears on hover is a
      control most people never find. */
-  opacity: 0.5;
+  opacity: 0.6;
   transform: translateY(-50%) scale(1);
-  transition: opacity 180ms var(--ease), transform 180ms var(--spring), background 140ms var(--ease);
+  transition: opacity 180ms var(--ease), transform 180ms var(--spring), background 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
 }
 .panel:hover .pager,
-.panel:focus-within .pager { opacity: 0.95; }
-.pager:hover { background: var(--surface-3); }
+.panel:focus-within .pager { opacity: 0.85; }
+.pager:hover { background: var(--surface-2); border-color: var(--line); color: var(--ink); opacity: 1; }
 .pager.prev { left: 4px; }
 .pager.next { right: 4px; }
 .pager:active { transform: translateY(-50%) scale(0.92); }
-.pager:active { transform: scale(0.92); }
 .pager svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 .dots { display: flex; justify-content: center; gap: 0; padding: 8px 22px 0; }
@@ -487,7 +533,7 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
 .dots button:focus-visible::after {
   background: var(--dim);
 }
-.dots button[aria-current="true"]::after { width: 14px; border-radius: 3px; background: rgba(255, 255, 255, 0.82); }
+.dots button[aria-current="true"]::after { width: 14px; border-radius: 3px; background: var(--ink); }
 
 /* ------------------------------------------------------------- transitions */
 
