@@ -751,7 +751,7 @@ function pageAbout() {
       row('天气', 'Open-Meteo · 免费 API', '<span class="badge">外部</span>'),
       row('歌词', 'LRCLIB · 公开曲库', '<span class="badge">外部</span>'),
     ])) +
-    '<p class="note">架构参考过 Islet、Istel、dsh-island、toki、岛仔（均为 MIT），代码按本项目风格重写，未复制。</p>';
+    '<p class="note">窗口与媒体桥的实现思路来自对公开 MIT 项目的调研（结论与许可证核对见仓库 docs/RESEARCH.md），代码与美术按本项目风格重写，未复制。</p>';
 }
 
 function pageCast() {
