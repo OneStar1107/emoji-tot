@@ -838,13 +838,29 @@ function paintRail() {
   rail.innerHTML = html;
 }
 
-/** Theme and scale are applied before the first paint, from prefs. */
+/*
+ * The font stacks, identical to the island's.
+ *
+ * The preference is one setting (设置 → 外观 → 字体), so it has to reach both
+ * windows; before this the island switched to JetBrains Mono and the settings
+ * window stayed on the system stack, which read as the setting not working.
+ */
+const FONT_STACKS = {
+  system: 'system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+  pingfang: '"PingFang SC", "Microsoft YaHei", sans-serif',
+  yahei: '"Microsoft YaHei", "PingFang SC", sans-serif',
+  mono: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace',
+};
+
+/** Theme, scale and type are applied before the first paint, from prefs. */
 function applyChrome() {
   const html = document.documentElement;
   const theme = prefs.theme ?? 'dark';
   const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
   const light = theme === 'light' || (theme === 'system' && prefersLight);
   html.dataset.theme = light ? 'light' : 'dark';
+  html.style.setProperty('--ui-font', FONT_STACKS[prefs.font] ?? FONT_STACKS.system);
+  html.style.setProperty('--ui-weight', String(prefs.weight || 400));
   const scale = Math.min(1.4, Math.max(0.8, (Number(prefs.uiScale) || 100) / 100));
   html.style.zoom = String(scale);
 }

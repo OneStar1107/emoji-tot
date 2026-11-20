@@ -16,6 +16,29 @@
   --faint: rgba(241, 241, 244, 0.5);
   --accent: #8f7bff;
   --good: #3ddc84;
+  /* The island's vocabulary, same names and same values. Two windows of one app
+     should not have two radius scales, and this file used 6/7/8/9/11/12/14px for
+     six sizes that are four ideas: small control, row, card, modal. */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 11px;
+  --r-lg: 14px;
+  --r-full: 999px;
+  --fast: 120ms;
+  --base: 160ms;
+  --slow: 200ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  /* Overlays over the window's own surface. Hard-coded white alphas were the
+     reason the whole light theme looked half-finished: 5% white on #ffffff is
+     nothing, so every hover, field and scrollbar thumb disappeared. */
+  --surface-1: rgba(255, 255, 255, 0.05);
+  --surface-2: rgba(255, 255, 255, 0.1);
+  --surface-3: rgba(255, 255, 255, 0.16);
+  --bad: #ff6b6b;
+  /* Filled field, so light mode does not need a second rule per control. */
+  --field: #23232a;
 }
 
 /*
@@ -34,10 +57,16 @@ html[data-theme="light"] {
   --faint: rgba(26, 26, 30, 0.5);
   --accent: #6c58e8;
   --good: #1f9d55;
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --surface-1: rgba(0, 0, 0, 0.05);
+  --surface-2: rgba(0, 0, 0, 0.09);
+  --surface-3: rgba(0, 0, 0, 0.14);
+  --bad: #cf2f2f;
+  --field: #ffffff;
 }
 
 html[data-theme="light"] select.ctl,
-html[data-theme="light"] input.ctl { background-color: #fff; color: var(--ink); }
+html[data-theme="light"] input.ctl { color: var(--ink); }
 
 /*
  * The rail needs its own light-theme pass. --dim on #eaeaea is about 3:1 at
@@ -57,7 +86,11 @@ html, body {
   overflow: hidden;
   background: var(--bg);
   color: var(--ink);
-  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  /* --ui-font is written by applyChrome() from the user's font preference —
+     the same value the island reads. Before this, picking JetBrains Mono changed
+     the island and left this window on the system stack. */
+  font-family: var(--ui-font, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif);
+  font-weight: var(--ui-weight, 400);
   -webkit-font-smoothing: antialiased;
   font-size: 13px;
 }
@@ -88,13 +121,13 @@ body { display: flex; flex-direction: column; }
   height: 30px;
   padding: 0;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--dim);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
-.win-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+.win-btn:hover { background: var(--surface-2); color: var(--ink); }
 .win-btn.close:hover { background: #c4372f; color: #fff; }
 .win-btn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; }
 
@@ -111,7 +144,7 @@ body { display: flex; flex-direction: column; }
   overflow-y: auto;
 }
 .rail::-webkit-scrollbar { width: 3px; }
-.rail::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 2px; }
+.rail::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 2px; }
 
 .rail-search {
   display: flex;
@@ -120,8 +153,8 @@ body { display: flex; flex-direction: column; }
   height: 30px;
   margin: 2px 4px 10px;
   padding: 0 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
   color: var(--faint);
 }
 .rail-search svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
@@ -145,16 +178,16 @@ body { display: flex; flex-direction: column; }
   height: 34px;
   padding: 0 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--dim);
   font: inherit;
   font-size: 12.5px;
   text-align: left;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
-.rail-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--ink); }
+.rail-item:hover { background: var(--surface-1); color: var(--ink); }
 .rail-item[aria-current="true"] { background: #2b2b34; color: var(--ink); }
 .rail-item svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
 .rail-item .dot { width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: var(--accent); }
@@ -162,7 +195,7 @@ body { display: flex; flex-direction: column; }
   margin: 10px 8px;
   padding: 12px 10px;
   border: 1px dashed var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--dim);
   font-size: 11.5px;
   line-height: 1.45;
@@ -174,19 +207,19 @@ body { display: flex; flex-direction: column; }
 
 .content { flex: 1; min-width: 0; overflow-y: auto; padding: 26px 34px 40px; }
 .content::-webkit-scrollbar { width: 8px; }
-.content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+.content::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 4px; }
 .content::-webkit-scrollbar-track { background: transparent; }
 
 /* A page change gets one quiet move; a control change gets none, or every
    toggle would re-animate the panel it just updated. */
-.page-swap { animation: page-swap 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.page-swap { animation: page-swap var(--slow) var(--ease); }
 @keyframes page-swap {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
 
-.row { transition: background 140ms ease; }
-.row:hover { background: rgba(255, 255, 255, 0.018); }
+.row { transition: background var(--fast) var(--ease); }
+.row:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
 
 .page-head { margin-bottom: 20px; }
 .page-head h1 { margin: 0 0 5px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
@@ -204,8 +237,11 @@ body { display: flex; flex-direction: column; }
 
 .card {
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: var(--r-md);
   background: var(--card);
+  /* Same single light source as the island's panel: one hairline on the top
+     edge, nothing outside the box. */
+  box-shadow: var(--hi);
   overflow: hidden;
 }
 
@@ -218,7 +254,7 @@ body { display: flex; flex-direction: column; }
   min-height: 84px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: var(--r-md);
   background: var(--card);
   color: var(--ink);
   text-align: left;
@@ -253,10 +289,10 @@ body { display: flex; flex-direction: column; }
   height: 22px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  border-radius: var(--r-full);
+  background: var(--surface-3);
   cursor: pointer;
-  transition: background 160ms ease;
+  transition: background var(--base) var(--ease);
   flex: none;
 }
 .switch::after {
@@ -268,33 +304,33 @@ body { display: flex; flex-direction: column; }
   height: 18px;
   border-radius: 50%;
   background: #fff;
-  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform var(--base) var(--spring);
 }
 .switch[aria-checked="true"] { background: #3ddc84; }
 .switch[aria-checked="true"]::after { transform: translateX(16px); }
 
 /* segmented */
-.seg { display: inline-flex; padding: 2px; border-radius: 8px; background: rgba(255, 255, 255, 0.055); }
+.seg { display: inline-flex; padding: 2px; border-radius: var(--r-sm); background: var(--surface-1); }
 .seg button {
   height: 24px;
   padding: 0 11px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--dim);
   font: inherit;
   font-size: 11.5px;
   cursor: pointer;
 }
-.seg button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.13); color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--ink); }
 
 /* select */
 select.ctl {
   height: 26px;
   padding: 0 24px 0 9px;
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: #23232a url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4'><path d='m6 9 6 6 6-6'/></svg>") no-repeat right 8px center;
+  border-radius: var(--r-sm);
+  background: var(--field) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4'><path d='m6 9 6 6 6-6'/></svg>") no-repeat right 8px center;
   color: var(--ink);
   font: inherit;
   font-size: 11.5px;
@@ -309,8 +345,8 @@ input.ctl {
   height: 26px;
   padding: 0 9px;
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: #23232a;
+  border-radius: var(--r-sm);
+  background: var(--field);
   color: var(--ink);
   font: inherit;
   font-size: 11.5px;
@@ -326,14 +362,14 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   height: 26px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
   color: var(--ink);
   font: inherit;
   font-size: 11.5px;
   cursor: pointer;
 }
-.btn:hover { background: rgba(255, 255, 255, 0.12); }
+.btn:hover { background: var(--surface-2); }
 .btn.primary { border-color: transparent; background: var(--accent); color: #14121f; font-weight: 550; }
 .btn.primary:hover { background: #a191ff; }
 
@@ -345,8 +381,8 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   gap: 10px;
   padding: 8px 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
   cursor: grab;
 }
 .order-item:active { cursor: grabbing; }
@@ -363,7 +399,7 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   height: 26px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--dim);
   display: grid;
@@ -380,7 +416,7 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
 
 .badge {
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--r-full);
   background: rgba(143, 123, 255, 0.16);
   color: #b7a9ff;
   font-size: 10px;
@@ -423,13 +459,13 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   gap: 6px;
   padding: 10px 4px 8px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--r-md);
   background: var(--surface-1);
   color: var(--dim);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
 
 .cast-cell:hover,
@@ -452,7 +488,7 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   margin: 8px 0 0;
   padding: 8px 11px;
   border: 1px solid color-mix(in srgb, var(--bad) 32%, transparent);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   color: var(--bad);
   background: color-mix(in srgb, var(--bad) 10%, transparent);
   font-size: 11.5px;
@@ -478,10 +514,10 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   place-items: center;
   width: 52px;
   height: 52px;
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
 }
-.avoid-app img { width: 32px; height: 32px; border-radius: 6px; }
+.avoid-app img { width: 32px; height: 32px; border-radius: var(--r-xs); }
 .avoid-app > span { font-size: 17px; color: var(--dim); }
 .avoid-x {
   position: absolute;
@@ -491,14 +527,14 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   height: 19px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
-  background: #2a2a31;
+  border-radius: var(--r-full);
+  background: var(--card-hover);
   color: var(--dim);
   font-size: 11px;
   line-height: 1;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 120ms ease;
+  transition: opacity var(--fast) var(--ease);
 }
 .avoid-app:hover .avoid-x,
 .avoid-x:focus-visible { opacity: 1; }
@@ -526,7 +562,8 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   flex-direction: column;
   padding: 16px 16px 12px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
+  box-shadow: var(--hi);
   /* --card-solid belongs to the island; this file only defines --card. */
   background: var(--card);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
@@ -538,13 +575,13 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--dim);
   font-size: 15px;
   cursor: pointer;
 }
-.avoid-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+.avoid-close:hover { background: var(--surface-2); color: var(--ink); }
 .avoid-sub { margin: 3px 0 12px; color: var(--faint); font-size: 11.5px; }
 .avoid-search { width: 100%; }
 .avoid-list {
@@ -562,12 +599,12 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   width: 100%;
   padding: 7px 8px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
-.avoid-item:hover { background: rgba(255, 255, 255, 0.05); }
+.avoid-item:hover { background: var(--surface-1); }
 .avoid-item.is-picked { background: rgba(143, 123, 255, 0.2); }
 .avoid-item.is-taken { cursor: default; opacity: 0.55; }
 .avoid-item.is-taken:hover { background: transparent; }
@@ -577,10 +614,10 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   width: 32px;
   height: 32px;
   flex: none;
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
 }
-.avoid-icon img { width: 32px; height: 32px; border-radius: 7px; }
+.avoid-icon img { width: 32px; height: 32px; border-radius: var(--r-sm); }
 .avoid-icon > span { font-size: 15px; color: var(--dim); }
 .avoid-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .avoid-text b { font-size: 12.5px; font-weight: 500; color: var(--ink); }
@@ -622,7 +659,7 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
 .avoid-confirm {
   margin-top: 10px;
   padding: 10px 12px;
-  border-radius: 9px;
+  border-radius: var(--r-sm);
   background: rgba(255, 179, 64, 0.12);
 }
 .avoid-confirm p { margin: 0 0 8px; font-size: 12px; }

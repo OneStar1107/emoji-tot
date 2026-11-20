@@ -94,3 +94,5 @@ either window --face:report <state>-> main  → 另一扇窗（face:apply / isla
 尺寸过渡只有一条：窗口尺寸跟着 `#island` 的 width/height 过渡走，而面板从第一帧就是 420 宽，所以展开的全过程它的左右两边都会超出窗口、被系统裁掉。`morphPanel()`（`renderer/island.js`）把面板按胶囊的比例放大着出场，并和窗口用同一条曲线、同一个 300ms 走完，于是两边逐帧重合（实测各帧左右差 ≤0.1px，高差 ≤0.1px），读起来是胶囊长成卡片，而不是卡片盖在胶囊上。内容在行程三分之一处淡入，那时表面才够大。
 
 圆角、间距、动效曲线都收在 `renderer/island.css` 的 `:root` 令牌里（`--r-*`、`--fast/--base/--slow`、`--spring/--ease`）；`--radius`、`--pill-h`、`--island-w` 由设置在运行时覆盖，所以 `morphPanel()` 读的是实时计算值，不写死 22px。
+
+同一套令牌名在另外两个窗口里也有：`renderer/settings.css` 用 `--r-*`／`--fast`／`--base`／`--slow`／`--ease`／`--spring`／`--hi`／`--surface-*`，`renderer/style.css`（球形态的对话气泡）用 `--r-*` 与 `--base`／`--ease`。设置窗口以前把这些写死成 6/7/8/9/11/12/14px 与 rgba(255,255,255,·) 的白色叠层——浅色主题下 5% 白叠在 #ffffff 上等于没有，输入框、悬停、开关轨道全都消失；换成 `--surface-*` 后两个主题共用同一份语义。字体偏好（设置 → 外观 → 字体）也改成两边都读 `--ui-font`，不再是「岛变了、设置窗没变」。

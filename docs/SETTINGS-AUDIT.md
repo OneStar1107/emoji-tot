@@ -50,8 +50,8 @@
 | `blur` | `true` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-blur]` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `uiScale` | `100` | 外观 | 渲染进程 | `island.js --ui-scale · settings.js zoom` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `radius` | `22` | 外观 | 渲染进程 | `island.js --radius` | 即时 |  | lists every path · writes dotted keys through setPath |
-| `font` | `system` | 外观 | 渲染进程 | `island.js --ui-font` | 即时 |  | lists every path · writes dotted keys through setPath |
-| `weight` | `400` | 外观 | 渲染进程 | `island.js --ui-weight` | 即时 |  | lists every path · writes dotted keys through setPath |
+| `font` | `system` | 外观 | 渲染进程 | `island.js --ui-font / settings.js applyChrome` | 即时 |  | lists every path · writes dotted keys through setPath |
+| `weight` | `400` | 外观 | 渲染进程 | `island.js --ui-weight / settings.js applyChrome` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `fontSize` | `0` | 外观 | 渲染进程 | `island.js --ui-size` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `motion` | `true` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-motion]` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `reduceMotion` | `false` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-reduce-motion]` | 即时 | 关掉呼吸与跳动，保留状态变化 | lists every path · writes dotted keys through setPath |

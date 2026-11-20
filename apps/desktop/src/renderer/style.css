@@ -4,6 +4,14 @@
 :root {
   color-scheme: light;
   font-family: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* The island's vocabulary, at this form's scale. The ball deliberately keeps
+     its single light look — a translucent card would fight the white die-cut
+     character — so only the geometry and the curve are shared. */
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-full: 999px;
+  --base: 160ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 emojitot-ball {
@@ -50,7 +58,7 @@ emojitot-ball {
   transform: translate(-50%, 4px);
   max-width: 260px;
   padding: 5px 9px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: #ffffff;
   color: #16161a;
   border: 1px solid #e6e6ea;
@@ -60,7 +68,7 @@ emojitot-ball {
   text-align: center;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition: opacity var(--base) var(--ease), transform var(--base) var(--ease);
   white-space: pre-wrap;
   word-break: break-word;
   width: max-content;
