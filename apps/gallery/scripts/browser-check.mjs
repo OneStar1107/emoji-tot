@@ -139,19 +139,32 @@ const preview = createServer(async (request, response) => {
   }
 });
 await new Promise((resolve) => preview.listen(4173, '127.0.0.1', resolve));
-const chrome = start(CHROME, [
-  '--headless=new',
-  '--disable-gpu',
-  '--no-first-run',
-  '--no-default-browser-check',
-  '--user-data-dir=' + CHROME_PROFILE,
-  '--remote-debugging-port=' + PORT,
-  '--window-size=1280,900',
-  'about:blank',
-]);
-chrome.on('error', (error) => {
-  console.error('[browser-check] Chrome failed to start:', error);
-});
+/*
+ * Chrome gets 30s and, if it never opens the debugging port, one relaunch.
+ *
+ * A loaded CI runner sometimes loses the first headless Chrome before it binds
+ * the port; waiting longer on a dead process cannot help, and relaunching on a
+ * live one costs a second. The single 15s attempt that used to be here is what
+ * failed as "chrome did not start" on a run whose every other step passed.
+ */
+const CDP_VERSION = 'http://127.0.0.1:' + PORT + '/json/version';
+function launchChrome() {
+  const child = start(CHROME, [
+    '--headless=new',
+    '--disable-gpu',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--user-data-dir=' + CHROME_PROFILE,
+    '--remote-debugging-port=' + PORT,
+    '--window-size=1280,900',
+    'about:blank',
+  ]);
+  child.on('error', (error) => {
+    console.error('[browser-check] Chrome failed to start:', error);
+  });
+  return child;
+}
+let chrome = launchChrome();
 
 let cdp = null;
 try {
@@ -159,7 +172,14 @@ try {
   ok('preview server is serving the built site', up, SITE);
   if (!up) throw new Error('preview server did not start');
 
-  const ready = await waitFor('http://127.0.0.1:' + PORT + '/json/version');
+  let ready = await waitFor(CDP_VERSION, 120);
+  if (!ready) {
+    console.log('  INFO  chrome did not answer in 30s; relaunching once');
+    chrome.kill();
+    await sleep(1000);
+    chrome = launchChrome();
+    ready = await waitFor(CDP_VERSION, 120);
+  }
   ok('headless Chrome is up', ready);
   if (!ready) throw new Error('chrome did not start');
 

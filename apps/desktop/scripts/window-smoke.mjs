@@ -120,8 +120,14 @@ try {
   // and the session id travels as a top-level field, not inside params.
   await browser.send('Runtime.enable', {}, 8000, sessionId).catch(() => {});
 
+  /*
+   * 25s, not 8: one of these expressions clicks through the pages up to twelve
+   * times with a real 80ms wait between clicks, and on a loaded CI runner that
+   * ran past the old budget — "Runtime.evaluate timed out" was the whole failure.
+   * The window it drives is the same either way; only the patience changed.
+   */
   const evaluate = async (expression) => {
-    const r = await browser.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, 8000, sessionId);
+    const r = await browser.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, 25000, sessionId);
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.text);
     return r.result.value;
   };
