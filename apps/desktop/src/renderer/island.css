@@ -215,6 +215,26 @@ body {
   will-change: width, height;
 }
 
+/*
+ * The close, on its own clock.
+ *
+ * The open runs the capsule out and then lets the height catch up; the fold has
+ * to be its mirror, or the seam reads as a different gesture. The height lets
+ * go first (the card drains downwards) and the width lands last, so the surface
+ * narrows into the capsule instead of snapping into it. 240ms end to end —
+ * inside the 200–260ms the composition spec gives the fold, and shorter than
+ * the open's 400ms because dismissing should feel quicker than arriving.
+ *
+ * island.js reads these longhands back (morphClock), so the schedule stays in
+ * one place: the frame loop, the opacity fade and the window report all run on
+ * the numbers written here.
+ */
+#island[data-closing="true"] {
+  transition:
+    width 210ms var(--morph) 30ms,
+    height 190ms var(--morph);
+}
+
 #frame {
   position: absolute;
   left: 50%;
@@ -257,6 +277,22 @@ body {
    jumps when the pointer crosses it. */
 .pill:hover { transform: translateY(-1px) scale(1.02); border-color: var(--surface-3); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38), var(--hi), var(--ring); }
 .pill:active { transform: translateY(0) scale(0.99); }
+
+/*
+ * While the panel folds, the pill is the fold's target box, not an item.
+ *
+ * Out of flow: the frame is a flex row, so a pill and the panel both rendered
+ * would report their sum and the window would grow instead of shrink. Still
+ * laid out: island.js measures the size the fold lands on, which the skin owns
+ * (plain rests at 104x7, the others at --fold-w / --fold-h).
+ */
+#island[data-closing="true"] .pill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  margin: 0 auto;
+}
 
 .pill-face,
 /*
@@ -1135,6 +1171,10 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   padding: 3px 4px;
   font: inherit;
   font-size: 11px;
+  /* A monospace stack (设置 → 字体 → 等宽) shrinks the line box this button
+     inherits down to 18.7px; the row is the page's only action, so hold a
+     tappable height instead of following the font. */
+  min-height: 20px;
   cursor: pointer;
 }
 
@@ -1195,10 +1235,6 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   padding: 3px 8px;
   font: inherit;
   font-size: 11px;
-  /* A monospace stack (设置 → 字体 → 等宽) shrinks the line box this button
-     inherits down to 18.7px; the row is the page's only action, so hold a
-     tappable height instead of following the font. */
-  min-height: 20px;
   cursor: pointer;
 }
 
@@ -1425,3 +1461,549 @@ body[data-avoid="1"] #frame {
 body[data-avoid="1"] #pill,
 body[data-avoid="1"] #panel { visibility: hidden; }
 body[data-avoid="1"] #avoid-strip { display: block; }
+
+/* =========================================== skins: magazine (direction E) */
+/*
+ * The fourth skin: a magazine page, not a piece of glass.
+ *
+ * Direction E carries exactly three signals, and only these three are built
+ * here:
+ *   - a serif headline over sans body text, from the platform stack only
+ *   - one accent colour, used for state and for the single rule under the
+ *     header
+ *   - margins at the panel edges, with content grouped as cards on paper
+ *     instead of widgets on a translucent surface
+ *
+ * Out of scope on purpose, and checked unchanged in the CDP run that accepts
+ * this skin: page markup, page layout, the 217px page box, the pager 32px hit
+ * target and the dots 24px one. No page geometry is edited below, so every
+ * page reports the same scrollHeight under magazine as it does under frost.
+ *
+ * The accent is E's warm gold in dark mode and a deeper gold in light mode.
+ * The hard-coded purple highlights further up this file (a ticked todo, a
+ * verification code, a drag hover) are re-pointed at var(--accent) so the
+ * "one accent" rule survives contact with those states.
+ */
+body[data-skin="magazine"] {
+  /*
+   * Latin from Georgia, CJK from the first serif the machine actually has.
+   * The Latin face is listed first on purpose: the stack is walked per glyph,
+   * so Georgia ahead of the CJK serifs gives Latin its editorial serif while
+   * Chinese still lands on Songti (macOS) or SimSun (Windows) instead of
+   * falling through to the sans default.
+   */
+  --serif: Georgia, "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", "宋体", serif;
+  --accent: #e9c46a;
+  /* Paper: opaque enough to hold a headline over any wallpaper. */
+  --card: rgba(20, 19, 24, 0.94);
+  /* Hairlines one step finer than frost: a magazine rules a column with a line
+     you barely see, not with a surface you can read. */
+  --line: rgba(255, 255, 255, 0.075);
+  --surface-1: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.085);
+  --surface-3: rgba(255, 255, 255, 0.14);
+}
+
+/* The card: one warm wash from the top edge, then paper. The wash is a
+   background layer, not a ::before, so it can never sit over the content. */
+body[data-skin="magazine"] .panel {
+  /*
+   * Vertical margin only. The side padding is the pager's lane (34px) and the
+   * page box is measured against it, so horizontally nothing moves.
+   */
+  padding: 14px 34px 10px;
+  background:
+    radial-gradient(120% 86% at 50% -18%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 62%),
+    var(--card);
+  border-color: var(--line);
+  box-shadow: var(--hi), var(--lo), var(--ring);
+}
+
+/* Folded: a rounded card rather than a full capsule. Width and height stay on
+   --fold-w / --fold-h, so the size preferences keep working. */
+body[data-skin="magazine"] .pill {
+  border-radius: calc(var(--fold-h) * 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 60%),
+    var(--card);
+  border-color: var(--line);
+}
+body[data-skin="magazine"] .pill-live i { background: var(--accent); }
+
+/* ------------------------------------------------------------------ header */
+/*
+ * The headline is the skin. 21px of serif over a 10px tracked kicker is the
+ * whole type hierarchy change; the title still rides #page-title's existing
+ * nowrap + scroll, so a long song name is clipped by the same rule as before.
+ *
+ * 24px of line box is the number the acceptance run reads back: headline 21px,
+ * line box 24px, and the pair still fits inside the 40px column the ball sets,
+ * which is why the header does not get taller than under the other skins.
+ */
+body[data-skin="magazine"] .top-titles { padding-left: 14px; gap: 2px; }
+body[data-skin="magazine"] #page-title {
+  font-family: var(--serif);
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 24px;
+  min-height: 24px;
+  letter-spacing: 0.005em;
+  color: var(--ink);
+}
+body[data-skin="magazine"] #page-sub {
+  font-family: var(--ui-font);
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0.18em;
+  color: var(--dim);
+  /* The kicker's signal is tracking plus caps. CJK ignores uppercase; a Latin
+     date or a city name does not. */
+  text-transform: uppercase;
+}
+body[data-skin="magazine"] .top-page-name {
+  font-family: var(--serif);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+/* The one rule: a warm hairline closing the header, on the border that was
+   already there, so the header keeps its height. */
+body[data-skin="magazine"] .topbar {
+  padding: 3px 4px 10px;
+  border-bottom-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+}
+
+/* ------------------------------------------------------------------- cards */
+/*
+ * Rings, not borders: boxing a cell with border would add 2px of height to
+ * rows that already fill the 217px page. An inset ring paints the same edge
+ * without touching the box model.
+ */
+body[data-skin="magazine"] .weather-cell,
+body[data-skin="magazine"] .health-block {
+  border-radius: 11px;
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+body[data-skin="magazine"] .cover,
+body[data-skin="magazine"] .cover-img {
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.34);
+}
+body[data-skin="magazine"] .shelf-hint { border-radius: 12px; }
+
+/* ------------------------------------------------------------ one accent */
+body[data-skin="magazine"] .music-bar i,
+body[data-skin="magazine"] .health-bar i { background: var(--accent); }
+body[data-skin="magazine"] .dots button[aria-current="true"]::after { background: var(--accent); }
+body[data-skin="magazine"] .todo-item.done .todo-check {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+body[data-skin="magazine"] .shelf.dragover .shelf-hint {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+body[data-skin="magazine"] .mail-code {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: color-mix(in srgb, var(--accent) 76%, var(--ink));
+}
+
+/* ------------------------------------------------------------- light paper */
+/*
+ * Same idea on a light desktop: warm paper, and a gold dark enough to hold
+ * contrast against it.
+ */
+body[data-theme="light"][data-skin="magazine"] {
+  --accent: #8a6410;
+  --card: #fcfaf4;
+  --line: rgba(32, 26, 14, 0.13);
+  --surface-1: rgba(32, 26, 14, 0.045);
+  --surface-2: rgba(32, 26, 14, 0.1);
+  --surface-3: rgba(32, 26, 14, 0.17);
+}
+body[data-theme="light"][data-skin="magazine"] .panel {
+  background:
+    radial-gradient(120% 86% at 50% -18%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%),
+    var(--card);
+  box-shadow: var(--hi), var(--lo), var(--ring);
+}
+body[data-theme="light"][data-skin="magazine"] .pill {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 60%), var(--card);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14), var(--hi), var(--ring);
+}
+
+
+/* =========================================== skins: console (direction D) */
+/*
+ * The fifth skin: an instrument panel, not a card.
+ *
+ * Direction D carries three signals, and only these are built here:
+ *   - a monospaced numeric voice (JetBrains Mono / Cascadia / Consolas) with
+ *     tabular figures, so a value does not shift the row it lives in
+ *   - a cold, near-black plate ruled with hairline cyan, denser than frost
+ *   - the numbers that were already on the page drawn as instruments: the
+ *     quota split, the focus ring and the health meters
+ *
+ * Out of scope on purpose, and read back in the CDP run that accepts this
+ * skin: page markup, page layout, the 217px page box, the pager's 32px hit
+ * target and the dots' 24px one. No rule below sets a width, height, padding
+ * or gap on page content: the meters are backgrounds, inset rings and
+ * absolutely positioned pseudo-elements, so the geometry is unchanged.
+ *
+ * The two cold accents replace the purple; --accent2 is the quota split's
+ * second segment and is not otherwise used by the base stylesheet.
+ */
+body[data-skin="console"] {
+  --accent: #4fd1ff;
+  --accent2: #7c9cff;
+  --good: #3ddc97;
+  --warn: #ffb454;
+  --bad: #ff5d6c;
+  --ink: #e6f4ff;
+  --dim: rgba(206, 230, 255, 0.62);
+  --faint: rgba(190, 218, 248, 0.4);
+  /* An instrument is read against its own face, not the wallpaper: the plate
+     is opaque, like the "solid" skin, and drops the blur with it. */
+  --card: #0b1017;
+  --card-solid: #0b1017;
+  --line: rgba(120, 190, 255, 0.2);
+  --surface-1: rgba(88, 168, 255, 0.07);
+  --surface-2: rgba(88, 168, 255, 0.14);
+  --surface-3: rgba(88, 168, 255, 0.24);
+  --hi: inset 0 1px 0 rgba(150, 215, 255, 0.14);
+  --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+  --ring: inset 0 0 0 1px rgba(96, 180, 255, 0.12);
+  --console-mono: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+  --console-grid: rgba(110, 180, 255, 0.045);
+  color-scheme: dark;
+}
+
+/* The plate: one cold wash from the top edge, then a 4px scan and a 32px
+   column rule. All three are background layers, so nothing can sit over the
+   content. */
+body[data-skin="console"] .panel {
+  background:
+    linear-gradient(180deg, rgba(79, 209, 255, 0.075), rgba(79, 209, 255, 0) 42%),
+    repeating-linear-gradient(0deg, var(--console-grid) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, var(--console-grid) 0 1px, transparent 1px 32px),
+    var(--card);
+  border-color: var(--line);
+  box-shadow: var(--hi), var(--lo), var(--ring);
+}
+/* The status rail: 2px of accent inside the top edge, in the panel's own
+   padding, so it cannot cover the header. */
+body[data-skin="console"] .panel::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 0;
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--accent) 14%, var(--accent) 86%, transparent);
+  opacity: 0.55;
+}
+
+body[data-skin="console"] .pill {
+  background:
+    repeating-linear-gradient(90deg, var(--console-grid) 0 1px, transparent 1px 20px),
+    linear-gradient(180deg, rgba(79, 209, 255, 0.1), rgba(79, 209, 255, 0) 70%),
+    var(--card);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.38), var(--hi), var(--ring);
+  backdrop-filter: none;
+}
+/* The folded pill's one expression becomes a terminal token. Width and height
+   stay on --fold-w / --fold-h and the text is clipped by the same max-width
+   rule every other skin uses. */
+body[data-skin="console"] .pill::after {
+  content: "[｡･ω･｡]";
+  font-family: var(--console-mono);
+  letter-spacing: -0.03em;
+  color: var(--accent);
+}
+body[data-skin="console"] .pill-live i { background: var(--accent); }
+
+/* ------------------------------------------------------------------ header */
+/*
+ * The header keeps its height: only colour, tracking and the value line's face
+ * change. #page-title keeps the system font so a long song name still clips
+ * and scrolls exactly as it did; #page-sub is the line that carries numbers,
+ * so that is the one that goes mono.
+ */
+body[data-skin="console"] .topbar {
+  border-bottom-color: color-mix(in srgb, var(--accent) 26%, var(--line));
+}
+body[data-skin="console"] #page-sub,
+body[data-skin="console"] .top-clock {
+  font-family: var(--console-mono);
+  letter-spacing: 0.02em;
+}
+body[data-skin="console"] .top-clock { color: var(--accent); }
+body[data-skin="console"] .top-page-name {
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+/* --------------------------------------------------------------- instruments */
+
+/*
+ * Quota.
+ *
+ * The page has two money values and no ratio of its own. The split between
+ * topped-up and granted balance is the one percentage those numbers already
+ * contain; island.js writes it as --quota-share on .quota[data-gauge], and no
+ * new data field is involved. The bar is absolutely positioned in the 10px gap
+ * under the head, so it adds no height to the page.
+ */
+body[data-skin="console"] .quota-head { position: relative; }
+body[data-skin="console"] .quota-amount {
+  font-family: var(--console-mono);
+  /* 27px, not 30: mono digits are wider, and the note beside the amount has to
+     keep fitting on one line. */
+  font-size: 27px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+body[data-skin="console"] .quota-amount small { color: var(--dim); }
+body[data-skin="console"] .quota-note { letter-spacing: 0.06em; }
+body[data-skin="console"] .quota-row span {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+body[data-skin="console"] .quota-row b { font-family: var(--console-mono); color: var(--ink); }
+body[data-skin="console"] .quota-row { border-bottom-color: color-mix(in srgb, var(--accent) 14%, transparent); }
+/* The two roster values are the bar's two segments, in the bar's two colours. */
+body[data-skin="console"] .quota[data-gauge] .quota-row:nth-child(1) b { color: var(--accent); }
+body[data-skin="console"] .quota[data-gauge] .quota-row:nth-child(2) b { color: var(--accent2); }
+body[data-skin="console"] .quota-meter {
+  display: block;
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: -7px;
+  height: 3px;
+  border-radius: 1px;
+  background:
+    linear-gradient(
+      90deg,
+      var(--accent) 0 calc(var(--quota-share, 0) * 1%),
+      color-mix(in srgb, var(--accent2) 72%, transparent) calc(var(--quota-share, 0) * 1%) 100%
+    );
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* Coded, not solid: one dark notch every 7px reads as a segmented instrument. */
+body[data-skin="console"] .quota-meter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 6px, rgba(8, 14, 22, 0.6) 6px 7px);
+}
+
+/* The meter exists in the markup for every skin so switching skins does not
+   need a re-render; outside console it is display:none, i.e. zero footprint. */
+body:not([data-skin="console"]) .quota-meter { display: none; }
+
+/*
+ * Focus.
+ *
+ * The ring was already a conic-gradient gauge driven by --pct, so the skin only
+ * changes the instrument: calibration ticks outside it, a hairline inside it,
+ * a mono countdown in the middle. 132px stays 132px.
+ */
+body[data-skin="console"] .focus-ring {
+  background:
+    repeating-conic-gradient(from -90deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 0.55deg, transparent 0.55deg 9deg),
+    conic-gradient(var(--accent) calc(var(--pct) * 1%), var(--surface-2) 0);
+  box-shadow:
+    0 0 26px color-mix(in srgb, var(--accent) 16%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+body[data-skin="console"] .focus-ring::before {
+  inset: 11px;
+  background: var(--card-solid);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+body[data-skin="console"] .focus-ring::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
+  pointer-events: none;
+}
+body[data-skin="console"] .focus-time {
+  font-family: var(--console-mono);
+  font-size: 25px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+body[data-skin="console"] .focus-phase {
+  letter-spacing: 0.2em;
+  color: var(--accent);
+}
+
+/*
+ * Health.
+ *
+ * The bars are the progress the page already reports: their width is written
+ * inline by healthPage(), so the skin only gives them a 6px instrument body,
+ * a segment grid and a cold fill. 2px taller per bar is the only box-model
+ * change in this block, and the acceptance run measures the page after it.
+ */
+body[data-skin="console"] .health-block {
+  border-radius: 3px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent 62%), var(--surface-1);
+  box-shadow: inset 2px 0 0 var(--accent), inset 0 0 0 1px var(--line);
+}
+body[data-skin="console"] .health-head b {
+  letter-spacing: 0.18em;
+  color: var(--accent);
+}
+body[data-skin="console"] .health-head span {
+  font-family: var(--console-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+body[data-skin="console"] .health-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+body[data-skin="console"] .health-bar i {
+  border-radius: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 52%, transparent), var(--accent));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+body[data-skin="console"] .health-bar i[data-due="true"] {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 52%, transparent), var(--warn));
+}
+body[data-skin="console"] .health-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(8, 14, 22, 0.55) 9px 10px);
+}
+
+/* ---------------------------------------------------------------- the rest */
+/* Colour and face only below this line: no page owns a new edge here. */
+body[data-skin="console"] .music-bar {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+body[data-skin="console"] .music-bar i { background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+body[data-skin="console"] .music-times,
+body[data-skin="console"] .music-state,
+body[data-skin="console"] .cal-time,
+body[data-skin="console"] .dev-bat,
+body[data-skin="console"] .todo-due {
+  font-family: var(--console-mono);
+}
+body[data-skin="console"] .cover,
+body[data-skin="console"] .cover-img {
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+body[data-skin="console"] .weather-temp {
+  font-family: var(--console-mono);
+  font-weight: 300;
+}
+body[data-skin="console"] .weather-cell {
+  border-radius: 3px;
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+body[data-skin="console"] .weather-day[data-today="true"] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+body[data-skin="console"] .cal-cell { border-radius: 3px; }
+body[data-skin="console"] .cal-day-title { font-family: var(--console-mono); }
+body[data-skin="console"] .todo-item.done .todo-check {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+body[data-skin="console"] .todo-check { border-radius: 2px; }
+body[data-skin="console"] .shelf-hint { border-radius: 3px; }
+body[data-skin="console"] .shelf.dragover .shelf-hint {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+body[data-skin="console"] .mail-code {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+}
+body[data-skin="console"] .dev-item {
+  box-shadow: inset 0 -1px 0 var(--surface-1);
+}
+body[data-skin="console"] .dots button::after {
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: var(--surface-3);
+}
+body[data-skin="console"] .dots button[aria-current="true"]::after {
+  width: 14px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+body[data-skin="console"] .pager { color: var(--accent); opacity: 0.55; }
+body[data-skin="console"] .pager:hover {
+  background: var(--surface-1);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------- light plate */
+/* Same instrument on a lit plate: cold blue ink, and accents dark enough to
+   hold contrast against paper. */
+body[data-theme="light"][data-skin="console"] {
+  --ink: #0b1520;
+  --dim: rgba(11, 32, 52, 0.66);
+  --faint: rgba(11, 32, 52, 0.45);
+  --card: #f2f7fc;
+  --card-solid: #f2f7fc;
+  --line: rgba(11, 76, 140, 0.22);
+  --accent: #0b6fb8;
+  --accent2: #5a4bd1;
+  --good: #128a55;
+  --warn: #a95a00;
+  --bad: #c62f3d;
+  --surface-1: rgba(11, 76, 140, 0.06);
+  --surface-2: rgba(11, 76, 140, 0.13);
+  --surface-3: rgba(11, 76, 140, 0.22);
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --lo: inset 0 -1px 0 rgba(11, 21, 32, 0.06);
+  --ring: inset 0 0 0 1px rgba(11, 76, 140, 0.08);
+  --console-grid: rgba(11, 76, 140, 0.05);
+  color-scheme: light;
+}
+body[data-theme="light"][data-skin="console"] .panel {
+  background:
+    linear-gradient(180deg, rgba(11, 111, 184, 0.05), rgba(11, 111, 184, 0) 42%),
+    repeating-linear-gradient(0deg, var(--console-grid) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, var(--console-grid) 0 1px, transparent 1px 32px),
+    var(--card);
+  box-shadow: var(--hi), var(--lo), var(--ring);
+}
+body[data-theme="light"][data-skin="console"] .pill {
+  background:
+    repeating-linear-gradient(90deg, var(--console-grid) 0 1px, transparent 1px 20px),
+    linear-gradient(180deg, rgba(11, 111, 184, 0.06), rgba(11, 111, 184, 0) 70%),
+    var(--card);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14), var(--hi), var(--ring);
+}
+body[data-theme="light"][data-skin="console"] .quota-meter::after {
+  background: repeating-linear-gradient(90deg, transparent 0 6px, rgba(242, 247, 252, 0.72) 6px 7px);
+}
+body[data-theme="light"][data-skin="console"] .health-bar::after {
+  background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(242, 247, 252, 0.66) 9px 10px);
+}

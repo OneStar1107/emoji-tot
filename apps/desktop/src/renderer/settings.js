@@ -186,7 +186,7 @@ function pageAppearance() {
       rowSeg('时间制式', '', 'timeFormat', [['24h', '24 小时'], ['12h', '12 小时']]),
     ])) +
     group('灵动岛样式', card([
-      rowSeg('皮肤', '毛玻璃半透明、实色卡片、极简收成一条线', 'skin', [['frost', '毛玻璃'], ['solid', '实色'], ['plain', '极简']]),
+      rowSeg('皮肤', '毛玻璃半透明、实色卡片、极简收成一条线、杂志衬线版、控制台仪表', 'skin', [['frost', '毛玻璃'], ['solid', '实色'], ['plain', '极简'], ['magazine', '杂志'], ['console', '控制台']]),
       rowToggle('背景模糊', '关掉后是纯色卡片', 'blur'),
       rowRange('圆角', '卡片的圆角半径', 'radius', 12, 30, 1, 'px'),
       rowRange('界面缩放', '岛与球按此比例绘制', 'uiScale', 80, 140, 5, '%'),

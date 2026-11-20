@@ -600,10 +600,22 @@ function quotaPage() {
       ${actions}
     </div>`;
   }
-  return `<div class="quota">
+  /*
+   * The console skin draws this balance as an instrument. The quota data has
+   * no percentage of its own, only amounts, so the one ratio the numbers
+   * already contain is their split: topped-up vs granted. It is written as a
+   * custom property for the skin's bar and is not stored anywhere — no new
+   * data field, and this wrapper paints identically under the other skins.
+   */
+  const topped = Number(last.topped) || 0;
+  const granted = Number(last.granted) || 0;
+  const split = topped + granted;
+  const share = split > 0 ? Math.round((topped / split) * 100) : 0;
+  return `<div class="quota" data-gauge="true" style="--quota-share:${share}">
     <div class="quota-head">
       <span class="quota-amount"><small>¥</small>${escapeHtml(last.total)}</span>
       <span class="quota-note">${escapeHtml(current?.name ?? '')}${last.available ? '' : ' · 不可用'}</span>
+      <div class="quota-meter" aria-hidden="true" data-share="${share}%"></div>
     </div>
     <div class="quota-rows">
       <div class="quota-row"><span>充值余额</span><b>¥${escapeHtml(last.topped)}</b></div>
@@ -1129,6 +1141,14 @@ document.addEventListener(
  * The content fades in once the surface has enough area to hold it.
  */
 let morphFrame = 0;
+/** True from the moment a fold starts until the pill is the surface again. */
+let closing = false;
+
+/** 0→1 with no corners: carries opacity, never the box. */
+const smoothstep = (t) => {
+  const x = Math.min(1, Math.max(0, t));
+  return x * x * (3 - 2 * x);
+};
 
 /** Where the morph's two tracks end, in the units the CSS resolved to. */
 function morphClock() {
@@ -1209,7 +1229,123 @@ function morphPanel(fromBox) {
   morphFrame = requestAnimationFrame(step);
 }
 
+/*
+ * The close, on the same loop as the open.
+ *
+ * Closing used to be a state flip: the panel was hidden in the same task, so
+ * the only thing left moving was the pill's own 220ms entrance — the card did
+ * not fold, it ceased to exist. The fold now runs the open backwards. #island's
+ * box is the schedule (its own transition, see island.css) and the panel is
+ * painted at the box of the frame we are on, so the surface collapses instead
+ * of vanishing.
+ *
+ * The window is the camera here, exactly as it is during the open: it keeps the
+ * panel's box while the card folds inside it, and lands on the pill in the same
+ * task as the hand-off. Following the fold with the window was tried and is
+ * wrong — the page re-lays out a frame or two behind the window, so the
+ * still-visible card would be clipped and shoved sideways on every frame of its
+ * own animation. What does move every frame is the *hit* box (reportHit): the
+ * wide transparent margin the fold leaves behind must never count as the island,
+ * neither for hover nor for a click meant for the app below.
+ *
+ * The pill is not shown until the hand-off. It stays laid out (absolute, so
+ * #frame keeps the panel's box) at opacity 0, and fades in over the last
+ * stretch; by then the panel has reached the pill's own box, so the swap is one
+ * silhouette dissolving into the other, not a change of shape.
+ */
+function closeMorph() {
+  closing = true;
+  islandEl.dataset.closing = 'true';
+  /*
+   * The pill measures the fold's target before it is painted. offsetWidth, not
+   * the rect: a hovered pill carries a 1.02 scale in its rect, and folding to
+   * that would leave the island 3px wider than the pill it lands on.
+   *
+   * The inline animation is set once and left there: the hand-off below is the
+   * entrance now, and the 220ms pill-in would replay on top of it every close.
+   */
+  pillEl.style.animation = 'none';
+  pillEl.hidden = false;
+  pillEl.style.opacity = '0';
+  const foldW = Math.ceil(pillEl.offsetWidth);
+  const foldH = Math.ceil(pillEl.offsetHeight);
+  const panelW = panelEl.offsetWidth;
+  const panelH = panelEl.offsetHeight;
+  if (!foldW || !foldH || !panelW || !panelH) return finishClose();
+  /*
+   * Drop the open loop without dropping what it painted: a close during an
+   * interrupted open has to start from the box on screen, not snap to full.
+   */
+  if (morphFrame) cancelAnimationFrame(morphFrame);
+  morphFrame = 0;
+  const start = islandEl.getBoundingClientRect();
+  const clock = morphClock();
+  const total = Math.max(clock.width, clock.height, 1);
+  /*
+   * The panel keeps whatever opacity the open left it at for most of the fold,
+   * so an interrupted open does not flash to full on its way out.
+   */
+  const startOpacity = Number(getComputedStyle(panelEl).opacity);
+  const startRadius = parseFloat(getComputedStyle(panelEl).borderTopLeftRadius);
+  const fade = (progress) => 1 - smoothstep((progress - 0.35) / 0.65);
+  const reveal = (progress) => smoothstep((progress - 0.55) / 0.45);
+  const paint = (box, progress) => {
+    const sx = Math.min(1, box.width / panelW);
+    const sy = Math.min(1, box.height / panelH);
+    panelEl.style.transform = `scale(${sx}, ${sy})`;
+    panelEl.style.opacity = String(startOpacity * fade(progress));
+    pillEl.style.opacity = String(reveal(progress));
+    if (Number.isFinite(startRadius)) {
+      panelEl.style.borderRadius = `${Math.round(startRadius + (999 - startRadius) * smoothstep(progress))}px`;
+    }
+  };
+  paint(start, 0);
+  if (total < 16) return finishClose();
+  const began = performance.now();
+  islandEl.style.width = foldW + 'px';
+  islandEl.style.height = foldH + 'px';
+  const step = (now) => {
+    const progress = Math.min(1, Math.max(0, (now - began) / total));
+    const box = islandEl.getBoundingClientRect();
+    const landed = box.width <= foldW + 0.5 && box.height <= foldH + 0.5;
+    if (progress >= 1 && landed) {
+      paint(box, 1);
+      return finishClose();
+    }
+    /* An app covering the island takes the strip over: there is nowhere left
+       for the fold to land, so hand off in this frame. */
+    if (document.body.dataset.avoid === '1') return finishClose();
+    paint(box, progress);
+    reportHit();
+    morphFrame = requestAnimationFrame(step);
+  };
+  morphFrame = requestAnimationFrame(step);
+}
+
+/** Land the fold: the pill is the surface now, and every report follows it. */
+function finishClose() {
+  closing = false;
+  if (morphFrame) cancelAnimationFrame(morphFrame);
+  morphFrame = 0;
+  panelEl.hidden = true;
+  pillEl.hidden = false;
+  islandEl.dataset.closing = 'false';
+  stopMorph();
+  pillEl.style.opacity = '';
+  syncAvoidVisual();
+  syncSize();
+  reportBoxNow();
+  reportHit();
+  measure();
+}
+
 function setOpen(next) {
+  /*
+   * The fold owns the next 240ms. A second toggle would fight the loop for the
+   * island's box, and the hover that just dismissed the panel must not reopen
+   * it from a card that is halfway gone.
+   */
+  if (closing) return;
   const opening = next && !open;
   /*
    * The pill's box has to be read while it is still laid out — the very next
@@ -1220,22 +1356,36 @@ function setOpen(next) {
   const fromBox = opening
     ? (document.body.dataset.avoid === '1' ? frameEl : pillEl).getBoundingClientRect()
     : null;
+  /*
+   * A fold under reduced motion, or while a listed app covers the island, is a
+   * state change, not an animation: it has to land in this same task so the
+   * measurement below describes the surface the user ends up with.
+   */
+  const folding = !next && open && !avoiding && document.body.dataset.motion !== 'off';
   open = next;
   islandEl.dataset.open = String(open);
-  pillEl.hidden = open;
-  panelEl.hidden = !open;
   pillEl.setAttribute('aria-expanded', String(open));
-  if (open) renderPage();
-  /*
-   * Measured after renderPage, not before: the first frame's ratio is the pill
-   * over the panel's *final* box, and reading it before the page has rendered
-   * sized that box from a half-built panel (300 instead of 324), which left the
-   * card 3px taller than the window on its first frame.
-   */
-  if (opening) morphPanel(fromBox);
-  /* A close is not a morph: the panel is hidden in this same task, so the
-     painted scale has nothing left to steer and the loop must stop with it. */
-  else stopMorph();
+  if (next) {
+    pillEl.hidden = true;
+    panelEl.hidden = false;
+    renderPage();
+    /*
+     * Measured after renderPage, not before: the first frame's ratio is the
+     * pill over the panel's *final* box, and reading it before the page has
+     * rendered sized that box from a half-built panel (300 instead of 324),
+     * which left the card 3px taller than the window on its first frame.
+     */
+    if (opening) morphPanel(fromBox);
+  } else if (folding) {
+    /* closeMorph paints, reports and hands off on its own loop; the frame is
+       still the panel, so nothing below may measure it yet. */
+    closeMorph();
+    return;
+  } else {
+    pillEl.hidden = false;
+    panelEl.hidden = true;
+    stopMorph();
+  }
   /* Opening leaves the strip state (and unfreezes the box reports); closing it
      while a listed app still covers the island puts the strip back. */
   /*
@@ -1284,9 +1434,19 @@ function setOpen(next) {
  * the pointer merely crosses the empty space around it.
  */
 function reportHit() {
-  const rect = frameEl.getBoundingClientRect();
+  /* During the fold the drawn surface is the island's animated box, not the
+     frame's pre-fold layout (see closeMorph). "collapsed" is the main process'
+     licence to hand the pointer straight to the app below whenever it is
+     outside the drawn box, whatever the click-through preference says — the
+     fold leaves a wide transparent margin behind it for a quarter of a second
+     and none of it may swallow a click. */
+  const rect = (closing ? islandEl : frameEl).getBoundingClientRect();
   if (!rect.width || !rect.height) return;
-  api.reportHit({ w: Math.ceil(rect.width), h: Math.ceil(rect.height), collapsed: avoidCollapsed });
+  api.reportHit({
+    w: Math.ceil(rect.width),
+    h: Math.ceil(rect.height),
+    collapsed: closing || avoidCollapsed,
+  });
 }
 
 /**
@@ -1313,7 +1473,9 @@ function reportBoxNow() {
  * opens — which is exactly how a click gets lost. Pressing is unambiguous.
  */
 function openFromPointer(event) {
-  if (open) return;
+  /* A press on the card while it folds is not an intent to reopen it: the
+     fold lands in 240ms and the pill is the next target. */
+  if (open || closing) return;
   if (event && event.button !== 0) return;
   /*
    * Only the drawn pill / panel / strip opens the island.
@@ -1551,7 +1713,7 @@ let hoverCloseTimer = null;
  */
 function scheduleHoverOpen() {
   clearTimeout(hoverCloseTimer);
-  if (open) return;
+  if (open || closing) return;
   clearTimeout(hoverOpenTimer);
   // A profile written before this setting existed has no value: default on.
   const raw = prefs.hoverOpenDelay;
