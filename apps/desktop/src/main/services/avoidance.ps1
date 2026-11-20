@@ -190,14 +190,23 @@ function Test-Omnibox($h) {
 #   ego lite          -> Chrome_WidgetWin_1, no Chrome_OmniboxView, chrome.dll
 # Keeping the reason in the verdict is what makes -Probe / -Classify useful when
 # a new browser shows up.
+#
+# Only executable-level facts are cached: the Electron layout and the Chromium
+# runtime describe the installation, not the window, so they hold for every
+# window of that exe. The address-bar verdict is window-level (a full-screen
+# window can drop its omnibox) and "no-chromium-runtime" is a negative that may
+# simply mean this window had no address bar -- caching either would pin one
+# window's answer onto every later window of the same executable, which is why
+# a browser whose runtime DLL is named differently (Edge-style) would stay
+# "not a browser" forever after its first full-screen window.
 function Get-BrowserVerdict($h, $p) {
   if (-not $p) { return [pscustomobject]@{ browser = $false; reason = 'no-path' } }
   $leaf = [System.IO.Path]::GetFileName($p)
   foreach ($b in $script:Browsers) {
     if ($leaf -ieq $b) { return [pscustomobject]@{ browser = $true; reason = 'listed' } }
   }
-  # Auto-detection touches the disk, so remember it per executable: the resident
-  # loop asks about the same foreground process every 100ms.
+  # The auto-detection touches the disk, so remember it per executable: the
+  # resident loop asks about the same foreground process every 100ms.
   $key = ($p -replace '/', '\').ToLowerInvariant()
   if ($script:BrowserCache.ContainsKey($key)) {
     $cached = $script:BrowserCache[$key]
@@ -211,11 +220,15 @@ function Get-BrowserVerdict($h, $p) {
   if (Test-ElectronApp $p) {
     $verdict = [pscustomobject]@{ browser = $false; reason = 'electron' }
   } elseif (Test-Omnibox $h) {
-    $verdict = [pscustomobject]@{ browser = $true; reason = 'omnibox' }
+    # Window-level evidence: another window of this exe may have no address bar,
+    # so this answer is returned but not cached.
+    return [pscustomobject]@{ browser = $true; reason = 'omnibox' }
   } elseif (Test-ChromiumRuntime $p) {
     $verdict = [pscustomobject]@{ browser = $true; reason = 'chromium-runtime' }
   } else {
-    $verdict = [pscustomobject]@{ browser = $false; reason = 'no-chromium-runtime' }
+    # Window-level negative: do not let one window without an address bar decide
+    # the executable's verdict for the rest of the process.
+    return [pscustomobject]@{ browser = $false; reason = 'no-chromium-runtime' }
   }
   $script:BrowserCache[$key] = $verdict
   return $verdict

@@ -621,12 +621,12 @@ function quotaPage() {
  * and a row's button brings that app's window forward — the island is a
  * switchboard, not a reader.
  */
-function messengerBlock() {
+function messengerBlock(limit) {
   const apps = messengerState?.apps ?? [];
   if (!apps.length) return '';
-  /* Three rows plus a count: five running apps used to push the mailbox prompt
-     out of the 205px page. The summary carries the count only, never names. */
-  const shown = apps.slice(0, 3);
+  /* The no-mailbox page caps the switchboard at three rows plus a count; a
+     configured mailbox keeps every row (the caller passes no limit). */
+  const shown = limit ? apps.slice(0, limit) : apps;
   const rows = shown
     .map((app) => `<div class="msg-item">
       <span class="msg-dot${app.unread ? ' on' : ''}"></span>
@@ -649,7 +649,7 @@ function messengerBlock() {
 function mailPage() {
   const state = mailState ?? { accounts: [], messages: [] };
   if (!state.accounts.length) {
-    const board = messengerBlock();
+    const board = messengerBlock(3);
     return `<div class="mail-empty${board ? ' mail-empty-with-msg' : ''}">${board}${empty(
       ICON.mail,
       '还没有添加邮箱',
