@@ -191,8 +191,18 @@ export const DEFAULTS = {
   /* behaviour */
   timeFormat: '24h',
   hideFullscreen: true,
-  /** Auto-avoid: collapse to a strip while a listed app covers the island. */
-  avoidEnabled: false,
+  /*
+   * Auto-avoid is on by default, and the scope is what makes that safe: it
+   * only reacts to browsers (avoidBrowsers) plus whatever the user adds.
+   *
+   * The island lives at the top centre of the screen — a maximised browser's
+   * tab strip. Left alone it would sit on top of those tabs permanently, which
+   * is the first thing a new user would call broken; and the fix (find this
+   * setting) is much harder to discover than the way back (hover the 5px strip
+   * that stays exactly where the island was). The watcher measured 0.02% CPU,
+   * so the cost of having it on is not a reason to make it off.
+   */
+  avoidEnabled: true,
   avoidBrowsers: true,
   avoidApps: [],
   trayIcon: true,

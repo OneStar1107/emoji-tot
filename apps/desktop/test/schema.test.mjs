@@ -80,6 +80,21 @@ describe('schema: every preference has a consumer', () => {
 });
 
 describe('schema: defaults', () => {
+  /*
+   * The auto-avoid default is a decision, not an accident.
+   *
+   * On, because the island sits where a maximised browser keeps its tabs and
+   * the way back from a collapsed strip (hover it) is far easier to find than
+   * the setting that would have prevented the overlap. Narrow, because it only
+   * reacts to browsers unless the user adds apps — that scoping is what makes
+   * an on-by-default overlay acceptable.
+   */
+  it('collapses away from browsers by default, and only from them', () => {
+    assert.equal(DEFAULTS.avoidEnabled, true, 'auto-avoid should be on for a fresh install');
+    assert.equal(DEFAULTS.avoidBrowsers, true, 'browsers are the scope that makes it safe');
+    assert.deepEqual(DEFAULTS.avoidApps, [], 'no third-party app is avoided until the user adds one');
+  });
+
   it('fills every page and status key the manifests describe', () => {
     const filled = withDefaults({});
     for (const page of PAGE_MANIFEST) {
