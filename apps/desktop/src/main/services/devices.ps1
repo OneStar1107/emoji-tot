@@ -95,6 +95,19 @@ while ($true) {
     $btNodes += [pscustomobject]@{ name = $name; status = [string]$node.Status; id = [string]$node.InstanceId }
   }
 
+  # Some headsets publish their level on the Hands-Free (HFP) node instead of
+  # the Bluetooth one: the T7 GT reports 100% on BTHENUM\{0000111E}, which the
+  # Bluetooth class does not list. Collect those and match them by MAC.
+  $hfpBattery = @{}
+  foreach ($node in (Get-PnpDevice -Class System -PresentOnly -ErrorAction SilentlyContinue)) {
+    $id = [string]$node.InstanceId
+    if ($id -notmatch 'BTHENUM\\\{0000111E') { continue }
+    $mac = ''
+    if ($id -match '([0-9A-F]{12})(?:_|$)') { $mac = $matches[1].ToUpper() }
+    if (-not $mac) { continue }
+    $hfpBattery[$mac] = $id
+  }
+
   $hidNodes = @()
   foreach ($node in (Get-PnpDevice -Class HIDClass, Mouse, Keyboard -PresentOnly -ErrorAction SilentlyContinue)) {
     $id = [string]$node.InstanceId
@@ -107,8 +120,12 @@ while ($true) {
   # ---- one batched battery read for every node -----------------------------
   $ids = @(@($btNodes) + @($hidNodes) | ForEach-Object { $_.id } | Where-Object { $_ })
   $battery = @{}
-  if ($ids.Count -gt 0) {
-    foreach ($prop in (Get-PnpDeviceProperty -InstanceId $ids -KeyName $BATTERY_KEY -ErrorAction SilentlyContinue)) {
+  $probe = @($ids) + @($hfpBattery.Values)
+  # Get-PnpDeviceProperty silently returns nothing when the array is large
+  # (341 ids measured: 0 rows in 15ms), so the reads go in blocks of 100.
+  for ($i = 0; $i -lt $probe.Count; $i += 100) {
+    $block = $probe[$i..([Math]::Min($i + 99, $probe.Count - 1))]
+    foreach ($prop in (Get-PnpDeviceProperty -InstanceId $block -KeyName $BATTERY_KEY -ErrorAction SilentlyContinue)) {
       if ($null -eq $prop.Data -or "$($prop.Data)" -eq '') { continue }
       $parsed = 0
       if ([int]::TryParse("$($prop.Data)", [ref]$parsed)) { $battery[[string]$prop.InstanceId] = $parsed }
@@ -131,9 +148,31 @@ while ($true) {
     $seen[$node.name] = $true
     $level = $null
     if ($battery.ContainsKey($node.id)) { $level = $battery[$node.id] }
+    if ($null -eq $level) {
+      # The HFP node carries the level for headsets like the T7 GT; match on MAC.
+      $mac = ''
+      if ($node.id -match '([0-9A-F]{12})(?:_|$)') { $mac = $matches[1].ToUpper() }
+      if ($mac -and $hfpBattery.ContainsKey($mac)) {
+        $hfpId = $hfpBattery[$mac]
+        if ($battery.ContainsKey($hfpId)) { $level = $battery[$hfpId] }
+      }
+    }
     $status = $node.status
     if (-not $status -and $wmiStatus.ContainsKey($node.id)) { $status = $wmiStatus[$node.id] }
     $list += [pscustomobject]@{ name = $node.name; status = $status; battery = $level; source = 'bluetooth' }
+  }
+
+  # Headsets whose level only lives on the HFP node: give them a row of their
+  # own, named after the Bluetooth device with the same MAC when there is one.
+  foreach ($mac in $hfpBattery.Keys) {
+    $hfpId = $hfpBattery[$mac]
+    if (-not $battery.ContainsKey($hfpId)) { continue }
+    $name = ''
+    foreach ($node in $btNodes) { if ($node.id -match ($mac + '(?:_|$)')) { $name = $node.name; break } }
+    if (-not $name) { $name = 'Bluetooth headset' }
+    if ($seen.ContainsKey($name)) { continue }
+    $seen[$name] = $true
+    $list += [pscustomobject]@{ name = $name; status = 'OK'; battery = $battery[$hfpId]; source = 'bluetooth' }
   }
 
   # A peripheral is one VID/PID: it answers as several collections (mouse,
