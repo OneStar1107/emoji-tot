@@ -729,25 +729,46 @@ function ensureStateFile() {
  */
 const AGENT_WORK = [30, 49];
 
-/** Last running flag per source, written by the same poll that feeds the pet. */
+/** Last running flag and the moment it changed, written by the poll below. */
 const agentRunning = {};
-let agentPush = '';
+const agentSince = {};
 
 function agentSnapshot() {
   const prefs = readPrefs();
   return AGENT_SOURCES.map((source) => {
     const on = Boolean(prefs[`agent_${source.id}`]);
-    return { id: source.id, label: source.label, on, running: on && Boolean(agentRunning[source.id]) };
+    const running = on && Boolean(agentRunning[source.id]);
+    return {
+      id: source.id,
+      label: source.label,
+      on,
+      running,
+      /* When this state began. A source with no readable file has never been
+         observed, so it reports null instead of a made-up zero. */
+      since: on ? (agentSince[source.id] ?? null) : null,
+    };
   });
 }
 
-/** Push only when a number changes: the poll below runs every 350ms. */
-function pushAgents() {
-  const snapshot = agentSnapshot();
+/**
+ * One snapshot for the AI page.
+ *
+ * The balance and the agent list are one screen, so they travel in one event
+ * and the island paints them in one pass. The 350ms agent poll and the quota
+ * service both call this; the JSON comparison keeps the channel quiet until
+ * either half actually changes.
+ */
+function quotaAgentSnapshot() {
+  return { quota: quota.snapshot(), agents: agentSnapshot() };
+}
+
+let quotaAgentPush = '';
+function pushQuotaAgent() {
+  const snapshot = quotaAgentSnapshot();
   const next = JSON.stringify(snapshot);
-  if (next === agentPush) return;
-  agentPush = next;
-  island.send('island:agents', snapshot);
+  if (next === quotaAgentPush) return;
+  quotaAgentPush = next;
+  island.send('island:quota-agent', snapshot);
 }
 
 /**
@@ -778,9 +799,15 @@ function startAgentWatch(prefs) {
       last = nextAgentMtime(last, stat.mtimeMs, raw);
       const id = source.map(raw);
       const work = Number(id);
-      agentRunning[source.id] = Number.isInteger(work) && work >= AGENT_WORK[0] && work <= AGENT_WORK[1];
+      const running = Number.isInteger(work) && work >= AGENT_WORK[0] && work <= AGENT_WORK[1];
+      /* The duration the page shows is the age of this transition, not a timer
+         that restarts whenever the island repaints. */
+      if (!(source.id in agentSince) || running !== Boolean(agentRunning[source.id])) {
+        agentSince[source.id] = Date.now();
+      }
+      agentRunning[source.id] = running;
       if (id) agentsArbiter().update({ sessionId: 'agent:' + source.id, emotionId: id });
-      pushAgents();
+      pushQuotaAgent();
     };
     tick();
     agentWatch[source.id] = setInterval(tick, 350);
@@ -791,12 +818,13 @@ function stopAgentWatch() {
   for (const timer of Object.values(agentWatch)) clearInterval(timer);
   agentWatch = {};
   for (const id of Object.keys(agentRunning)) delete agentRunning[id];
+  for (const id of Object.keys(agentSince)) delete agentSince[id];
   if (agentArbiter) {
     for (const source of AGENT_SOURCES) agentArbiter.remove('agent:' + source.id);
   }
   // A source switched off in settings is still shown as a session that is off;
   // pushing here keeps the row from claiming it runs until the next app start.
-  pushAgents();
+  pushQuotaAgent();
 }
 
 /* ------------------------------------------------------------- forms */
@@ -1104,7 +1132,7 @@ function createTray() {
  * turns that into an arbitrary call, so every channel states its shape here
  * and anything else is refused before the handler runs.
  */
-const checkMail = guard.actionPayload(['add', 'remove', 'refresh']);
+const checkMail = guard.actionPayload(['add', 'remove', 'markRead', 'delete', 'refresh']);
 const checkCalendar = guard.actionPayload([
   'add', 'remove', 'import', 'subscribe', 'unsubscribe', 'refresh-subscriptions',
 ]);
@@ -1382,7 +1410,7 @@ function startServices() {
   messenger.setPrefsReader(readPrefs);
   messenger.onChange((value) => island.send('island:messenger', value));
   devices.onChange((value) => island.send('island:devices', value));
-  quota.onChange((value) => island.send('island:quota', value));
+  quota.onChange(pushQuotaAgent);
   mail.onChange((value) => island.send('island:mail', value));
   // Same shape as the bootstrap payload: the page reads .events, and a bare
   // array here made every pushed update render as "nothing scheduled".
@@ -1476,8 +1504,9 @@ function startServices() {
   // parsing its page would drop the first frame.
   guard.guardedHandle('island:bootstrap', ['island'], () => ({
     battery: lastBattery,
-    // The quota page's agent row boots from the same sources the pet watches.
-    agents: agentSnapshot(),
+    /* The AI page boots from one snapshot: the balance and the sources the pet
+       watches, so its first paint cannot show half a page. */
+    quotaAgent: quotaAgentSnapshot(),
     weather: weather.cached(),
     media: media.current(),
     lyrics: lastLyrics,
@@ -1488,7 +1517,6 @@ function startServices() {
     clipboard: clipboardHistory.list(),
     messenger: messenger.snapshot(),
     devices: devices.snapshot(),
-    quota: quota.snapshot(),
     mail: mail.snapshot(),
     calendar: {
       events: calendar.list(),

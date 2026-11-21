@@ -27,7 +27,7 @@
 export const PAGE_MANIFEST = [
   { key: 'music', title: '音乐', sub: '系统正在播放', icon: 'music', service: 'media' },
   { key: 'weather', title: '天气', sub: '当地与七日', icon: 'sun', service: 'weather' },
-  { key: 'quota', title: 'AI 额度', sub: '余额与账号', icon: 'coin', service: 'quota' },
+  { key: 'quota', title: 'AI 工作台', sub: '余额与 Agent', icon: 'coin', service: 'quota' },
   { key: 'mail', title: '邮箱', sub: '摘要与验证码', icon: 'mail', service: 'mail' },
   { key: 'focus', title: '专注', sub: '番茄钟与休息', icon: 'timer', service: 'focus' },
   { key: 'todo', title: '待办', sub: '清单与到期', icon: 'check', service: 'todo' },
@@ -53,7 +53,7 @@ export const PAGE_MANIFEST = [
  * there is a test that walks this table and fails on a key nothing draws.
  */
 /**
- * The settings window's left rail: three groups, fifteen pages.
+ * The settings window's left rail: three groups, fourteen pages.
  *
  * It lives here rather than in the renderer because the site's docs page
  * prints the page count, and two copies of a list like this is exactly how a
@@ -69,7 +69,6 @@ export const SETTINGS_NAV = [
       { key: 'layout', label: '尺寸与位置', icon: 'move' },
       { key: 'behavior', label: '隐藏与交互', icon: 'eye' },
       { key: 'cast', label: '角色与表情', icon: 'palette' },
-      { key: 'agent', label: 'Agent 联动', icon: 'plug' },
       { key: 'pages', label: '页面管理', icon: 'grid' },
     ],
   },

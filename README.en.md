@@ -22,8 +22,8 @@
 <!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot.Setup.0.6.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.1/EmojiTot.Setup.0.6.1.exe) | Installer — starts from the Start menu |
-| [EmojiTot.0.6.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.1/EmojiTot.0.6.1.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.Setup.0.6.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.2/EmojiTot.Setup.0.6.2.exe) | Installer — starts from the Start menu |
+| [EmojiTot.0.6.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.2/EmojiTot.0.6.2.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases)
@@ -41,7 +41,7 @@ The desktop app has two forms, switchable from the tray or the settings window w
 
 One three-way `displayMode` field chooses Island, Ball or Both. The ball is created at startup, while the island is created on first display. Switching only changes visibility, so the island keeps the page it was on.
 
-The island sizes itself from its content: the page measures its own box with `ResizeObserver` and the main process calls `setBounds`, centred. The settings window has <!--facts:settingsPages-->15<!--/facts--> pages — general, appearance, size and position, hiding and interaction, cast and expressions, agent linkage, page manager, music and lyrics, focus and water, todos and shelf, notifications / mail / calendar, AI quota, weather, plugins, about — and every control writes straight to prefs with no save button.
+The island sizes itself from its content: the page measures its own box with `ResizeObserver` and the main process calls `setBounds`, centred. The settings window has <!--facts:settingsPages-->14<!--/facts--> pages — general, appearance, size and position, hiding and interaction, cast and expressions, page manager, music and lyrics, focus and water, todos and shelf, notifications / mail / calendar, AI quota, weather, plugins, about — and every control writes straight to prefs with no save button.
 
 ## What this is
 

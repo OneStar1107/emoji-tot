@@ -40,6 +40,8 @@ const ICON = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4a2 2 0 0 1 0 4H9"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13"/>',
+  dot: '<circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/>',
   timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4M9 2h6"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   drop: '<path d="M12 2.5S5.5 9.5 5.5 14a6.5 6.5 0 0 0 13 0C18.5 9.5 12 2.5 12 2.5z"/>',
@@ -93,7 +95,7 @@ let devicesState = { devices: [] };
 /** Why the Bluetooth footer is disabled, or '' while the system sheet opens. */
 let systemOpenError = '';
 let quotaState = { accounts: [], current: null, last: null };
-/** Latest snapshot of the agent sources behind the quota page's agent row. */
+/** Agent sources from the same snapshot that carries the balance. */
 let agentsState = null;
 let mailState = { accounts: [], messages: [], syncing: false, error: '', lastSync: 0 };
 let calendarState = { events: [], upcoming: [] };
@@ -804,31 +806,82 @@ const providerName = (value) => {
 const CURRENCY_MARKS = { CNY: '¥', USD: '$' };
 
 /**
- * The agent row under the balance.
+ * The agent block under the balance.
  *
- * Three figures, not a second quota: how many agent sessions the linkage
- * watches, how many of them are working right now, and the rest. The numbers
- * come from the agent sources' own status files through the main process; a
- * missing snapshot or every source switched off reads as "未连接" instead of a
- * row of zeros that would claim a measured zero.
+ * The balance and the linkage share one page and one snapshot, so this block
+ * answers the two questions the page can: how many sessions are watched, and
+ * which one is working or waiting for how long. Rows are read-only on purpose:
+ * the sources are status files, not windows, and no mapping from a source to a
+ * window handle exists — a button that cannot switch anywhere would be worse
+ * than a plain row. The one action is the summary line, which opens the
+ * settings page that owns these switches.
  */
-function agentRow() {
-  const list = Array.isArray(agentsState) ? agentsState : null;
-  const on = list ? list.filter((agent) => agent.on) : [];
+const AGENT_ROWS = 3;
+let agentClock = null;
+
+/** "12 秒 / 3 分 / 2 小时": the age of one linkage state change. */
+function agentAge(ms) {
+  const seconds = Math.max(0, Math.floor(Number(ms) / 1000));
+  if (!Number.isFinite(seconds)) return '';
+  if (seconds < 60) return seconds + ' 秒';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return minutes + ' 分';
+  return Math.floor(minutes / 60) + ' 小时';
+}
+
+/** Repaint the durations only; a live second must not rebuild the page. */
+function paintAgentAges() {
+  const now = Date.now();
+  for (const node of document.querySelectorAll('[data-agent-since]')) {
+    if (node.dataset.agentUnknown === '1') continue;
+    const prefix = node.dataset.agentRunning === '1' ? '运行 ' : '等待 ';
+    node.textContent = prefix + agentAge(now - Number(node.dataset.agentSince));
+  }
+}
+
+function stopAgentClock() {
+  if (agentClock) clearInterval(agentClock);
+  agentClock = null;
+}
+
+function startAgentClock() {
+  stopAgentClock();
+  if (!document.querySelector('[data-agent-since]')) return;
+  agentClock = setInterval(() => {
+    if (!open || enabledPages()[pageIndex]?.key !== 'quota') {
+      stopAgentClock();
+      return;
+    }
+    paintAgentAges();
+  }, 1000);
+}
+
+function agentBlock() {
+  const list = Array.isArray(agentsState) ? agentsState : [];
+  const on = list.filter((agent) => agent.on);
   const running = on.filter((agent) => agent.running).length;
-  const live = on.length > 0;
   const idle = Math.max(0, on.length - running);
-  const figure = (value) => (live ? String(value) : '—');
-  const state = !live ? 'off' : running ? 'busy' : 'idle';
-  const label = live
-    ? `Agent 联动：${on.length} 个会话，${running} 个运行中，${idle} 个空闲`
-    : 'Agent 联动：未连接';
-  return `<button type="button" class="quota-agent" data-action="settings:agent" data-state="${state}" aria-label="${escapeHtml(label)}">
-    <i class="quota-agent-dot" aria-hidden="true"></i>
-    <span class="quota-agent-name">Agent</span>
-    <span class="quota-agent-stats"><b>${figure(on.length)}</b>会话<b>${figure(running)}</b>运行<b>${figure(idle)}</b>空闲</span>
-    <span class="quota-agent-note">${live ? '' : '未连接'}</span>
-  </button>`;
+  const label = on.length
+    ? `Agent 联动：${on.length} 个会话，${running} 个运行中，${idle} 个空闲；打开 AI 额度设置`
+    : 'Agent 联动：没有启用的状态来源；打开 AI 额度设置';
+  const rows = on.slice(0, AGENT_ROWS).map((agent) => {
+    const since = Number(agent.since);
+    const known = Number.isFinite(since) && since > 0;
+    const state = agent.running ? 'run' : known ? 'wait' : 'unknown';
+    const time = known ? (agent.running ? '运行 ' : '等待 ') + agentAge(Date.now() - since) : '—';
+    return `<div class="quota-agent-row" data-state="${state}" title="${escapeHtml(agent.label)}">
+      <i class="quota-agent-dot" aria-hidden="true"></i>
+      <span class="quota-agent-label">${escapeHtml(agent.label)}</span>
+      <span class="quota-agent-time" data-agent-since="${known ? since : ''}" data-agent-running="${agent.running ? '1' : '0'}" data-agent-unknown="${known ? '0' : '1'}">${escapeHtml(time)}</span>
+    </div>`;
+  }).join('');
+  return `<div class="quota-agents">
+    <button type="button" class="quota-agent-sum" data-action="settings:quota" aria-label="${escapeHtml(label)}" title="在设置里改 Agent 联动">
+      <span class="quota-agent-figures"><b>${on.length}</b>会话<i>/</i><b>${running}</b>运行<i>/</i><b>${idle}</b>空闲</span>
+      <svg class="quota-agent-open" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    ${rows || '<p class="quota-agent-none">没有启用 Agent 联动</p>'}
+  </div>`;
 }
 
 function quotaPage() {
@@ -898,7 +951,7 @@ function quotaPage() {
         <span class="quota-part granted"><i class="quota-piece"></i>赠送 ${mark}${escapeHtml(last.granted)}</span>
       </div>
     </div>
-    ${agentRow()}
+    ${agentBlock()}
     <div class="quota-foot">
       <span>更新于 ${timeOf(last.at)}</span>
       <span class="spacer"></span>
@@ -977,27 +1030,68 @@ function messengerPage() {
   </div>`;
 }
 
+
 /**
- * Mailbox: two tabs over one fixed-height row per sender.
+ * The mailbox's own filter: which tab and which account the list draws.
  *
- * The page used to stack a messenger switchboard, a head line and two-line
- * subject rows: six messages in 205px, every row a different height, and a dot
- * that shifted the sender depending on whether the mail was read. Now the tabs
- * own the first 22px, a row is exactly 20px, and unread is a 3px accent bar on
- * the left. The subject moves to the row tooltip — this list is scanned for who
- * wrote and when. 全部/未读 is two radios plus :has(), so a mail push that
- * re-renders the page cannot leave stale script state behind.
+ * Radios keep the tab in the DOM, but a re-render rewrites the page from this
+ * state, so the two must agree. The account lives here because the list is
+ * sliced after filtering — a CSS-only filter would hide the rows below the
+ * fold instead of letting the chosen account fill them.
  */
+let mailFilter = { tab: 'all', account: 'all' };
+/** The last mail write that failed, drawn once on the stats line. */
+let mailActionError = '';
+
+/** The rows the mailbox draws under its two header lines. */
+const MAIL_ROWS = 7;
+
+/** The account the mailbox filters to, resolved against the live list. */
+function mailScope() {
+  const wanted = mailFilter?.account ?? 'all';
+  if (wanted === 'all') return 'all';
+  return (mailState?.accounts ?? []).some((account) => account.id === wanted) ? wanted : 'all';
+}
+
+/** The tab line: two radios plus the counts for what the list is showing. */
 function mailTabs(total, unread) {
-  return `<input type="radio" name="mail-tab" id="mail-tab-all" class="mail-tab-radio" checked />
+  const unreadTab = mailFilter.tab === 'unread';
+  return `<input type="radio" name="mail-tab" id="mail-tab-all" class="mail-tab-radio"${unreadTab ? '' : ' checked'} />
     <label class="mail-tab" for="mail-tab-all">全部<i>${total}</i></label>
-    <input type="radio" name="mail-tab" id="mail-tab-unread" class="mail-tab-radio" />
+    <input type="radio" name="mail-tab" id="mail-tab-unread" class="mail-tab-radio"${unreadTab ? ' checked' : ''} />
     <label class="mail-tab" for="mail-tab-unread">未读<i>${unread}</i></label>`;
+}
+
+/**
+ * The account picker.
+ *
+ * "全部账户" is the default; each other entry is one configured address. The
+ * label is the local part because the full address does not fit a 22px line;
+ * the option's title carries the address for the hover.
+ */
+function mailAccountPicker(accounts, scope) {
+  if (accounts.length < 2) return '';
+  const options = [
+    `<option value="all"${scope === 'all' ? ' selected' : ''}>全部账户</option>`,
+    ...accounts.map((account) => {
+      const address = String(account.address || account.id);
+      const local = address.includes('@') ? address.slice(0, address.indexOf('@')) : address;
+      return `<option value="${escapeHtml(account.id)}" title="${escapeHtml(address)}"${scope === account.id ? ' selected' : ''}>${escapeHtml(local.slice(0, 12))}</option>`;
+    }),
+  ].join('');
+  return `<select class="mail-account" data-mail-account aria-label="按账户筛选">${options}</select>`;
+}
+
+/** One line of error, short enough for the stats row. */
+function mailErrorLine(error) {
+  const text = String(error || '');
+  return text.length > 28 ? text.slice(0, 28) + '…' : text;
 }
 
 function mailPage() {
   const state = mailState ?? { accounts: [], messages: [] };
-  if (!state.accounts.length) {
+  const accounts = state.accounts ?? [];
+  if (!accounts.length) {
     /* One line and one action at the top of the page: the centred icon, title,
        provider note and button filled 205px with a band of air. */
     return `<div class="mail-page mail-page-empty">
@@ -1008,11 +1102,14 @@ function mailPage() {
     </div>`;
   }
   const messages = state.messages ?? [];
-  /* The tab counts follow the rows the page actually shows: the list is capped
-     at nine, so an unread mail below the fold must not inflate "未读" past the
-     bars the list can draw. */
-  const visible = messages.slice(0, 9);
-  const unread = visible.filter((message) => !message.seen).length;
+  const scope = mailScope();
+  mailFilter.account = scope;
+  const scoped = scope === 'all' ? messages : messages.filter((message) => message.accountId === scope);
+  /* The count is the account's own answer, not the visible slice: "未读 12" that
+     only ever drew nine rows was the mismatch the old tab count carried. */
+  const unreadAll = scoped.filter((message) => !message.seen).length;
+  const listed = mailFilter.tab === 'unread' ? scoped.filter((message) => !message.seen) : scoped;
+  const visible = listed.slice(0, MAIL_ROWS);
   const sync = state.syncing ? '同步中' : state.error ? '部分失败' : state.lastSync ? timeOf(state.lastSync) + ' 更新' : '';
   /* The tab line's one door to the message centre: "消息 N" opens that page.
      It is drawn only while that page is switched on — the rows, the empty state
@@ -1024,33 +1121,63 @@ function mailPage() {
   const msgEntry = msgPageOn
     ? `<button type="button" class="mail-msg-entry" data-goto="messenger" aria-label="消息${msgUnread ? '，' + msgUnread + ' 条未读' : ''}">消息${msgUnread ? ' ' + msgUnread : ''}</button>`
     : '';
-  /* The sync note rides on the tab line: a separate head row above the list
-     pushed the last message past the content box. */
-  const head = `<div class="mail-tabs">${mailTabs(messages.length, unread)}<span class="mail-tab-spacer"></span><span class="mail-sync" title="${escapeHtml(state.error || '')}">${escapeHtml(sync)}</span>${msgEntry}</div>`;
-  if (!messages.length) {
-    const hint = state.syncing ? '正在同步…' : state.error ? '检查授权码或网络，然后在设置里重新同步。' : '新邮件到达后会出现在这里。';
-    return `<div class="mail-page">${head}<div class="mail mail-empty-inline">
-      <p class="mail-empty-line">${escapeHtml(hint)}</p>
-      <button type="button" class="ghost" data-action="settings:comm">去设置</button>
+  const head = `<div class="mail-tabs">${mailTabs(scoped.length, unreadAll)}<span class="mail-tab-spacer"></span>${mailAccountPicker(accounts, scope)}</div>`;
+  /*
+   * One line under the tabs: 未读 N · 共 M answers "how much is left", and the
+   * bulk action is drawn only while there is something to mark — 全部已读 on an
+   * empty mailbox is a button that lies about having work.
+   */
+  const note = mailActionError
+    ? `<span class="mail-action-error" title="${escapeHtml(mailActionError)}">${escapeHtml(mailErrorLine(mailActionError))}</span>`
+    : `<span class="mail-sync" title="${escapeHtml(state.error || '')}">${escapeHtml(sync)}</span>`;
+  const allRead = unreadAll
+    ? '<button type="button" class="mail-allread" data-mail-all-read>全部已读</button>'
+    : '';
+  const stats = `<div class="mail-stats">
+    <span class="mail-stat">未读 <b>${unreadAll}</b> · 共 <b>${scoped.length}</b></span>
+    <span class="mail-tab-spacer"></span>${note}${allRead}${msgEntry}
+  </div>`;
+  if (!visible.length) {
+    /* One line and one action, at the top: the empty, the filtered-empty and
+       the failed mailbox are the three states this page can be wrong in. */
+    const hint = state.error
+      ? '拉取失败：' + mailErrorLine(state.error)
+      : state.syncing
+        ? '正在同步…'
+        : mailFilter.tab === 'unread'
+          ? '没有未读邮件'
+          : '新邮件到达后会出现在这里。';
+    const action = mailFilter.tab === 'unread' && !state.error
+      ? '<button type="button" class="ghost" data-mail-tab-all>看全部</button>'
+      : state.syncing
+        ? ''
+        : '<button type="button" class="ghost" data-action="settings:comm">去设置</button>';
+    return `<div class="mail-page">${head}${stats}<div class="mail mail-empty-inline">
+      <p class="mail-empty-line">${escapeHtml(hint)}</p>${action}
     </div></div>`;
   }
-  /* Nine rows is exactly what the 189px the tab line leaves can hold; the list
-     scrolls if a future row height widens it, but the page never grows. */
+  /* Unread is a 3px accent bar on the left and the row's own two keys on the
+     right; the row stays 20px, the keys carry a 28px hit that overhangs it. */
   const rows = visible
     .map((message) => {
       /* The sender is the line; the subject is the tooltip. An address without
          a display name is still a sender, so a row never renders blank. */
       const from = message.fromName || message.fromAddress || '未知发件人';
-      const isUnread = message.seen ? 0 : 1;
+      const unread = message.seen ? 0 : 1;
       const title = [message.subject, message.fromAddress].filter(Boolean).join(' · ');
-      return `<div class="mail-row${isUnread ? ' unread' : ''}" data-unread="${isUnread}" title="${escapeHtml(title)}">
+      const toggleLabel = unread ? '标为已读' : '标为未读';
+      return `<div class="mail-row${unread ? ' unread' : ''}" data-unread="${unread}" title="${escapeHtml(title)}">
         <span class="mail-from">${escapeHtml(from)}</span>
         <time class="mail-time">${timeOf(message.date)}</time>
+        <span class="mail-row-acts">
+          <button type="button" class="mail-row-act" data-mail-act="toggle" data-seen="${unread}" data-id="${escapeHtml(message.id)}" aria-label="${toggleLabel}" title="${toggleLabel}">${svg(unread ? ICON.check : ICON.dot, 'mail-act-icon')}</button>
+          <button type="button" class="mail-row-act" data-mail-act="delete" data-id="${escapeHtml(message.id)}" aria-label="删除" title="删除">${svg(ICON.trash, 'mail-act-icon')}</button>
+        </span>
       </div>`;
     })
     .join('');
-  return `<div class="mail-page">${head}<div class="mail">
-    <div class="mail-list">${rows}<p class="mail-none">没有未读邮件</p></div>
+  return `<div class="mail-page">${head}${stats}<div class="mail">
+    <div class="mail-list">${rows}</div>
   </div></div>`;
 }
 
@@ -1588,6 +1715,7 @@ function applyLocal(snapshot) {
 let pageDir = 1;
 
 function renderPage(animate = false) {
+  stopAgentClock();
   const list = enabledPages();
   // A new page is a new DOM: the old panel (and its open state) is gone.
   volumePanelOpen = false;
@@ -1643,6 +1771,7 @@ function renderPage(animate = false) {
   renderHeader();
   renderSub();
   pagesEl.innerHTML = (RENDERERS[page.key] ?? ((p) => fallbackPage(p)))(page);
+  startAgentClock();
   dotsEl.innerHTML = list
     .map((p, index) => `<button type="button" data-page="${index}" aria-current="${index === pageIndex}" aria-label="${p.title}"></button>`)
     .join('');
@@ -2168,6 +2297,48 @@ panelEl.addEventListener('click', (event) => {
     event.stopPropagation();
     return;
   }
+  /*
+   * Mailbox row actions and the bulk read. Every one of them is a service
+   * call: the mailbox owns read and delete state, so a row redraws only once
+   * the server (or its failure) comes back. A write that fails says so on the
+   * stats line instead of pretending the row moved.
+   */
+  const mailAllRead = event.target.closest('[data-mail-all-read]');
+  const mailToggle = event.target.closest('[data-mail-act]');
+  if (mailAllRead || mailToggle) {
+    const scope = mailScope();
+    const ids = mailAllRead
+      ? (mailState?.messages ?? [])
+        .filter((message) => !message.seen && (scope === 'all' || message.accountId === scope))
+        .map((message) => message.id)
+      : [mailToggle.dataset.id];
+    if (ids.length) {
+      const run = mailToggle?.dataset.mailAct === 'delete'
+        ? api.mailDo('delete', { ids })
+        : api.mailDo('markRead', { ids, seen: mailAllRead ? true : mailToggle.dataset.seen === '1' });
+      run
+        .then((snapshot) => {
+          mailActionError = snapshot?.actionResult?.ok === false ? (snapshot.actionResult.error || '操作失败') : '';
+          mailState = snapshot;
+          if (open) renderPage();
+        })
+        .catch(() => {
+          mailActionError = '操作失败';
+          if (open) renderPage();
+        });
+    }
+    event.stopPropagation();
+    return;
+  }
+  /* The unread tab's empty state offers the way back, not a settings door that
+     has nothing to do with an empty filter. */
+  const mailTabAll = event.target.closest('[data-mail-tab-all]');
+  if (mailTabAll) {
+    mailFilter.tab = 'all';
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
   const localButton = event.target.closest('[data-local]');
   if (localButton) {
     const [service, action] = localButton.dataset.local.split(':');
@@ -2247,6 +2418,25 @@ panelEl.addEventListener('click', (event) => {
      * island. Stop here; clicks inside the island never mean "dismiss".
      */
     event.stopPropagation();
+  }
+});
+
+panelEl.addEventListener('change', (event) => {
+  /*
+   * The mailbox's two filters. The list is rebuilt from mailFilter on every
+   * render, so the radios and the picker are read once here and never trusted
+   * to survive a re-render — the DOM is the echo, the state is the truth.
+   */
+  const mailTab = event.target.closest('input[name="mail-tab"]');
+  if (mailTab) {
+    mailFilter.tab = mailTab.id === 'mail-tab-unread' ? 'unread' : 'all';
+    renderPage();
+    return;
+  }
+  const picker = event.target.closest('[data-mail-account]');
+  if (picker) {
+    mailFilter.account = String(picker.value || 'all');
+    renderPage();
   }
 });
 
@@ -2654,20 +2844,20 @@ api.onDevices((value) => {
   if (open && enabledPages()[pageIndex]?.key === 'devices') renderPage();
 });
 
-api.onQuota((value) => {
+/* One event, one paint: the balance and the agent list arrive together, so the
+   page cannot show a fresh number beside a stale row. */
+api.onQuotaAgent((value) => {
   if (!value) return;
-  quotaState = value;
+  quotaState = value.quota ?? quotaState;
+  agentsState = Array.isArray(value.agents) ? value.agents : agentsState;
   if (open && enabledPages()[pageIndex]?.key === 'quota') renderPage();
   renderPillStatus();
 });
 
-api.onAgents((value) => {
-  if (!Array.isArray(value)) return;
-  agentsState = value;
-  if (open && enabledPages()[pageIndex]?.key === 'quota') renderPage();
-});
-
 api.onMail((value) => {
+  /* A snapshot from the service is newer than the last click: whatever failed
+     then is either fixed or already carried by state.error. */
+  mailActionError = '';
   if (!value) return;
   mailState = value;
   if (open && enabledPages()[pageIndex]?.key === 'mail') renderPage();
@@ -2700,8 +2890,8 @@ weather = boot?.weather ?? null;
 media = boot?.media ?? media;
 lyrics = boot?.lyrics ?? null;
 applyLocal(boot);
-quotaState = boot?.quota ?? quotaState;
-agentsState = Array.isArray(boot?.agents) ? boot.agents : agentsState;
+quotaState = boot?.quotaAgent?.quota ?? quotaState;
+agentsState = Array.isArray(boot?.quotaAgent?.agents) ? boot.quotaAgent.agents : agentsState;
 mailState = boot?.mail ?? mailState;
 calendarState = boot?.calendar ?? calendarState;
 document.body.dataset.playing = String(Boolean(media.active && media.playing));

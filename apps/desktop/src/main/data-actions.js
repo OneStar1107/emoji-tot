@@ -19,6 +19,8 @@ async function mailAction(mail, payload) {
   let result = success();
   if (action === 'add') result = resultOf(mail.add(data), '邮件账号添加失败');
   else if (action === 'remove') result = resultOf(mail.remove(data.id), '邮件账号删除失败');
+  else if (action === 'markRead') result = resultOf(await mail.markRead(data.ids, data.seen !== false), '标记已读失败');
+  else if (action === 'delete') result = resultOf(await mail.removeMessages(data.ids), '删除邮件失败');
   else if (action === 'refresh') await mail.refresh(true);
   return { ...mail.snapshot(), actionResult: result };
 }

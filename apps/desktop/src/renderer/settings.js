@@ -723,7 +723,8 @@ function pageQuota() {
     ? row('当前余额', `更新于 ${stamp(last.at)} · ${last.available ? '可用' : '不可用'}`, `<b>¥${escapeHtml(last.total)}</b>`)
     : row('当前余额', last?.error ? escapeHtml(last.error) : '还没有查询', `<button type="button" class="btn" data-act="button" data-key="quota-refresh">查询</button>`);
 
-  return head('AI 额度', 'Agent 余额与账号切换') +
+  const agents = meta?.agents ?? [];
+  return head('AI 额度', '余额、账号与 Agent 联动') +
     group('账号', '<div class="card">' + (accounts || emptyCardRow()) + balance + '</div>') +
     group('添加账号', card([
       row('服务商', '余额接口各不相同，选错会查询失败', '<select class="ctl" data-quota-input="provider">' +
@@ -738,7 +739,15 @@ function pageQuota() {
       rowToggle('低余额提醒', '低于阈值时在岛上提示', 'quota.alert'),
       rowRange('提醒阈值', '余额低于这个数就提醒一次', 'quota.threshold', 1, 50, 1, ' 元'),
     ])) +
-    '<p class="note">余额来自 DeepSeek <code>/user/balance</code>；子进程携带密钥，命令参数里看不到它。</p>';
+    /* The linkage used to have a page of its own. It is a second switch set on
+       this page now: the island's workbench already draws both halves from one
+       snapshot, and a separate page made a person hunt for the switches the
+       workbench pointed at. The hairline is the group boundary. */
+    '<div class="group-sep" role="separator"></div>' +
+    group('Agent 联动', card(agents.length
+      ? agents.map((agent) => rowActionToggle(agent.label, '读取它的状态文件来驱动表情', 'agent', agent.on, agent.id))
+      : [row('状态来源', '主进程没有提供 Agent 清单', '<span class="badge">未加载</span>')])) +
+    '<p class="note">余额来自 DeepSeek <code>/user/balance</code>；子进程携带密钥，命令参数里看不到它。Agent 联动每 350 毫秒读一次状态文件，工作台和球用的是同一份快照。</p>';
 }
 
 function emptyCardRow() {
@@ -774,7 +783,7 @@ function pageAbout() {
   return head('关于', 'EmojiTot') +
     group('版本', card([
       platformRow,
-      row('当前版本', '双形态、十个功能页、设置十五个分区', '<span class="badge">v' + escapeHtml(version) + '</span>'),
+      row('当前版本', '双形态、十个功能页、设置十四个分区', '<span class="badge">v' + escapeHtml(version) + '</span>'),
       row('数据目录', 'prefs.json、state.json 与缓存', '<button type="button" class="btn" data-act="button" data-key="open-data">打开</button>'),
       row('状态文件', '当前表情与状态，可给别的工具读', '<button type="button" class="btn" data-act="button" data-key="open-state">打开</button>'),
       row('项目主页', 'MIT 许可，代码与美术全部自研', '<button type="button" class="btn" data-act="button" data-key="open-repo">GitHub</button>'),
@@ -819,29 +828,12 @@ function pageCast() {
     group('表情', faceGrid);
 }
 
-/**
- * Agent 联动: the one page that owns the status-file switches.
- *
- * These switches used to sit at the bottom of 角色与表情, where the quota
- * page's agent row could not land on them. They keep the same rows and the
- * same action; only the page moved.
- */
-function pageAgent() {
-  const agents = meta?.agents ?? [];
-  return head('Agent 联动', '把编码 Agent 的状态接进来') +
-    group('状态来源', card(agents.map((agent) =>
-      rowActionToggle(agent.label, '读取它的状态文件来驱动表情', 'agent', agent.on, agent.id),
-    ))) +
-    '<p class="note">开启后每 350 毫秒读一次该 Agent 的状态文件，把工作状态映射成岛上和球上的表情；文件不存在时保持静默。AI 额度页顶部的 Agent 行用的是同一份状态。</p>';
-}
-
 const RENDERERS = {
   general: pageGeneral,
   appearance: pageAppearance,
   layout: pageLayout,
   behavior: pageBehavior,
   cast: pageCast,
-  agent: pageAgent,
   pages: pagePages,
   music: pageMusic,
   focus: pageFocus,

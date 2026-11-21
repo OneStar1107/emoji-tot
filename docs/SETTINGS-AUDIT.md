@@ -11,7 +11,7 @@
 | --- | --- | --- | --- | --- |
 | `music` | 音乐 | 系统正在播放 | `media` | 开 |
 | `weather` | 天气 | 当地与七日 | `weather` | 开 |
-| `quota` | AI 额度 | 余额与账号 | `quota` | 开 |
+| `quota` | AI 工作台 | 余额与 Agent | `quota` | 开 |
 | `mail` | 邮箱 | 摘要与验证码 | `mail` | 开 |
 | `focus` | 专注 | 番茄钟与休息 | `focus` | 开 |
 | `todo` | 待办 | 清单与到期 | `todo` | 开 |

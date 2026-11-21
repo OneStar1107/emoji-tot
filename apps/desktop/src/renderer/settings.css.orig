@@ -1,0 +1,998 @@
+/**
+ * Settings: a dark room with a rail and one page of cards.
+ *
+ * Deliberately boring compared with the island: settings are read, not
+ * admired. One column, one rhythm, every row the same height.
+ */
+:root {
+  --bg: #101013;
+  --rail: #17171b;
+  --card: #1b1b20;
+  --card-hover: #202027;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --ink: #f1f1f4;
+  --dim: rgba(241, 241, 244, 0.58);
+  --faint: rgba(241, 241, 244, 0.5);
+  --accent: #8f7bff;
+  --good: #3ddc84;
+  /* The island's vocabulary, same names and same values. Two windows of one app
+     should not have two radius scales, and this file used 6/7/8/9/11/12/14px for
+     six sizes that are four ideas: small control, row, card, modal. */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 11px;
+  --r-lg: 14px;
+  --r-full: 999px;
+  --fast: 120ms;
+  --base: 180ms;
+  --slow: 240ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  /* Overlays over the window's own surface. Hard-coded white alphas were the
+     reason the whole light theme looked half-finished: 5% white on #ffffff is
+     nothing, so every hover, field and scrollbar thumb disappeared. */
+  --surface-1: rgba(255, 255, 255, 0.05);
+  --surface-2: rgba(255, 255, 255, 0.1);
+  --surface-3: rgba(255, 255, 255, 0.16);
+  --bad: #ff6b6b;
+  /* Filled field, so light mode does not need a second rule per control. */
+  --field: #23232a;
+}
+
+/*
+ * Light mode is a variable swap, not a second stylesheet: every surface and
+ * line already reads from these tokens, so one block covers the whole window.
+ */
+html[data-theme="light"] {
+  --bg: #f2f2f4;
+  --rail: #eaeaea;
+  --card: #ffffff;
+  --card-hover: #f6f6f8;
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.16);
+  --ink: #1a1a1e;
+  --dim: rgba(26, 26, 30, 0.72);
+  --faint: rgba(26, 26, 30, 0.55);
+  --accent: #6c58e8;
+  --good: #1f9d55;
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --surface-1: rgba(0, 0, 0, 0.05);
+  --surface-2: rgba(0, 0, 0, 0.09);
+  --surface-3: rgba(0, 0, 0, 0.14);
+  --bad: #cf2f2f;
+  --field: #ffffff;
+}
+
+html[data-theme="light"] select.ctl,
+html[data-theme="light"] input.ctl { color: var(--ink); }
+
+/*
+ * The rail needs its own light-theme pass. --dim on #eaeaea is about 3:1 at
+ * 12.5px, and the selected row was a hard-coded dark block with dark text on
+ * it — which is exactly "I cannot read the left side".
+ */
+html[data-theme="light"] .rail-item { color: rgba(26, 26, 30, 0.8); }
+html[data-theme="light"] .rail-item:hover { background: rgba(0, 0, 0, 0.06); color: #1a1a1e; }
+html[data-theme="light"] .rail-item[aria-current="true"] { background: #1a1a1e; color: #ffffff; }
+html[data-theme="light"] .rail-item .dot { background: #ffffff; }
+
+* { box-sizing: border-box; }
+
+/*
+ * One focus ring for everything you can operate: 2px of the accent at 2px
+ * outside the control. Same rule as the island's, so Tab through either window
+ * looks the same; inputs keep their accent border as a second focus signal.
+ */
+:is(button, [role="button"], a[href], input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The island zeroes its transitions under the OS reduce-motion setting; this
+   window has no motion preference of its own, so the same query covers it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  /* --ui-font is written by applyChrome() from the user's font preference —
+     the same value the island reads. Before this, picking JetBrains Mono changed
+     the island and left this window on the system stack. */
+  font-family: var(--ui-font, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif);
+  font-weight: var(--ui-weight, 400);
+  -webkit-font-smoothing: antialiased;
+  font-size: 12.5px;
+}
+
+body { display: flex; flex-direction: column; }
+
+/* ------------------------------------------------------------- title bar */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  padding: 0 6px 0 16px;
+  background: var(--rail);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+  flex: none;
+}
+
+.titlebar-name { font-size: 11.5px; color: var(--dim); letter-spacing: 0.02em; }
+.titlebar-spacer { flex: 1; }
+
+.win-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.win-btn:hover { background: var(--surface-2); color: var(--ink); }
+.win-btn.close:hover { background: #c4372f; color: #fff; }
+.win-btn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; }
+
+/* ----------------------------------------------------------------- shells */
+
+.shell { display: flex; flex: 1; min-height: 0; }
+
+.rail {
+  width: 206px;
+  flex: none;
+  padding: 10px 8px 16px;
+  background: var(--rail);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+.rail::-webkit-scrollbar { width: 3px; }
+.rail::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 2px; }
+
+.rail-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  margin: 2px 4px 10px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+  color: var(--faint);
+}
+.rail-search svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.rail-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11.5px;
+  outline: none;
+}
+.rail-search input::placeholder { color: var(--faint); }
+
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.rail-item:hover { background: var(--surface-1); color: var(--ink); }
+.rail-item[aria-current="true"] { background: #2b2b34; color: var(--ink); }
+.rail-item svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+.rail-item .dot { width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: var(--accent); }
+.rail-empty {
+  margin: 10px 8px;
+  padding: 12px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--dim);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.rail-sep { height: 1px; margin: 8px 12px; background: var(--line); }
+
+/* ---------------------------------------------------------------- content */
+
+.content { flex: 1; min-width: 0; overflow-y: auto; padding: 26px 34px 40px; }
+.content::-webkit-scrollbar { width: 8px; }
+.content::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 4px; }
+.content::-webkit-scrollbar-track { background: transparent; }
+
+/* A page change gets one quiet move; a control change gets none, or every
+   toggle would re-animate the panel it just updated. */
+.page-swap { animation: page-swap var(--slow) var(--ease); }
+@keyframes page-swap {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.row { transition: background var(--fast) var(--ease); }
+.row:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+
+.page-head { margin-bottom: 20px; }
+.page-head h1 { margin: 0 0 5px; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.page-head p { margin: 0; font-size: 11.5px; color: var(--dim); }
+
+.group { margin-bottom: 24px; }
+.group > h2 {
+  margin: 0 0 8px;
+  padding-left: 2px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--dim);
+  letter-spacing: 0.02em;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--card);
+  /* Same single light source as the island's panel: one hairline on the top
+     edge, nothing outside the box. */
+  box-shadow: var(--hi);
+  overflow: hidden;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.preset-card {
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.preset-card:hover { background: var(--card-hover); border-color: var(--line-strong); }
+.preset-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.preset-card b { font-size: 12.5px; font-weight: 600; }
+.preset-card span { color: var(--faint); font-size: 10.5px; line-height: 1.4; }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 52px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.row:last-child { border-bottom: 0; }
+.row-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.row-label b { font-size: 12.5px; font-weight: 520; }
+.row-label span { font-size: 11.5px; color: var(--faint); line-height: 1.4; }
+.row-control { display: flex; align-items: center; gap: 7px; flex: none; }
+
+/* switch */
+.switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  cursor: pointer;
+  transition: background var(--base) var(--ease);
+  flex: none;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--base) var(--spring);
+}
+.switch[aria-checked="true"] { background: #3ddc84; }
+.switch[aria-checked="true"]::after { transform: translateX(16px); }
+
+/* segmented */
+.seg { display: inline-flex; padding: 2px; border-radius: var(--r-sm); background: var(--surface-1); }
+.seg button {
+  height: 24px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--ink); }
+
+/*
+ * Skin previews: five miniature islands below the text segmented control.
+ * They are buttons carrying the same `seg` action, so pointer, Tab + Enter and
+ * aria-pressed have one owner; the selected card reuses the accent that
+ * :focus-visible uses, and both themes read the same material colours.
+ */
+.skin-previews {
+  display: grid;
+  grid-template-columns: repeat(5, 76px);
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.skin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 76px;
+  padding: 7px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+  color: var(--dim);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.skin-card:hover { background: var(--surface-2); border-color: var(--line-strong); }
+.skin-card[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--ink);
+}
+.skin-card[aria-pressed="true"] .skin-card-name { font-weight: 600; }
+.skin-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.skin-card-name { font-size: 10.5px; line-height: 1.3; white-space: nowrap; }
+
+/* The 56×36 samples are drawn from CSS only: no images, no extra markup. */
+.skin-thumb {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 36px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  overflow: hidden;
+}
+.skin-thumb::before,
+.skin-thumb::after { content: ""; position: absolute; }
+
+/* frost: translucent light blue; the bars are what shows through the blur. */
+.skin-thumb-frost {
+  background: linear-gradient(165deg, rgba(205, 232, 255, 0.88), rgba(143, 196, 250, 0.52) 58%, rgba(96, 154, 214, 0.34));
+  border-color: rgba(221, 240, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 2px 5px rgba(24, 60, 96, 0.22);
+}
+.skin-thumb-frost::before {
+  left: 9px; top: 12px;
+  width: 24px; height: 3px;
+  border-radius: 2px;
+  background: rgba(22, 52, 86, 0.46);
+  box-shadow: 0 6px 0 rgba(22, 52, 86, 0.3), 0 12px 0 rgba(22, 52, 86, 0.18);
+}
+.skin-thumb-frost::after {
+  right: 10px; top: 15px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.34);
+}
+
+/* solid: an opaque near-black card, no translucency to read through. */
+.skin-thumb-solid {
+  background: #151519;
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.skin-thumb-solid::before {
+  left: 9px; top: 12px;
+  width: 24px; height: 3px;
+  border-radius: 2px;
+  background: rgba(241, 241, 244, 0.58);
+  box-shadow: 0 6px 0 rgba(241, 241, 244, 0.34), 0 12px 0 rgba(241, 241, 244, 0.2);
+}
+.skin-thumb-solid::after {
+  right: 10px; top: 15px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #3ddc84;
+  box-shadow: 0 0 5px rgba(61, 220, 132, 0.5);
+}
+
+/* plain: at rest the island is one thin line, so that is all the card shows. */
+.skin-thumb-plain {
+  background: transparent;
+  border-color: var(--line-strong);
+}
+.skin-thumb-plain::after {
+  left: 9px; right: 9px; top: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ink);
+  opacity: 0.42;
+}
+
+/* magazine: warm gold on paper, a serif initial and the column rule. */
+.skin-thumb-magazine {
+  background: linear-gradient(180deg, #262119, #141318);
+  border-color: rgba(233, 196, 106, 0.36);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.skin-thumb-magazine::before {
+  left: 9px; top: 7px;
+  font-family: Georgia, "Songti SC", "Noto Serif SC", "SimSun", serif;
+  font-size: 14.5px;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  color: #e9c46a;
+  content: "Aa";
+}
+.skin-thumb-magazine::after {
+  left: 9px; right: 9px; bottom: 8px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(233, 196, 106, 0.72), rgba(233, 196, 106, 0.16));
+}
+
+/* console: a cold instrument plate with a mono readout and a meter. */
+.skin-thumb-console {
+  background:
+    repeating-linear-gradient(0deg, rgba(110, 180, 255, 0.08) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(110, 180, 255, 0.06) 0 1px, transparent 1px 14px),
+    #0b1017;
+  border-color: rgba(96, 180, 255, 0.36);
+  box-shadow: inset 0 1px 0 rgba(150, 215, 255, 0.14);
+}
+.skin-thumb-console::before {
+  left: 8px; top: 7px;
+  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  font-size: 9px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  color: #4fd1ff;
+  content: "0x1F";
+}
+.skin-thumb-console::after {
+  left: 8px; right: 8px; bottom: 7px;
+  height: 5px;
+  background: repeating-linear-gradient(90deg, #4fd1ff 0 2px, rgba(79, 209, 255, 0.16) 2px 5px);
+  border-radius: 1px;
+  opacity: 0.82;
+}
+
+/* ----------------------------------------------------- live skin preview */
+/*
+ * The 96×64 live preview under the skin cards.
+ *
+ * The five 56×36 samples above draw each skin's idea; this box paints the
+ * island's CURRENT skin out of the island's own variable names — --card,
+ * --card-solid, --accent, --ink, --line, --ui-font — redefined per skin key
+ * below exactly as island.css defines them on body[data-skin=…]. Switching
+ * skin re-renders this page, so the box is the new skin on the next paint and
+ * never goes stale the way a screenshot would.
+ *
+ * Scope: the variables deliberately shadow the settings tokens of the same
+ * name inside .skin-preview only. Nothing else in this window sits under that
+ * selector, so the rest of the page keeps its own --card / --accent.
+ *
+ * Radii echo the radius each skin's smaller parts use in island.css: the
+ * panel's --radius for frost/solid, magazine's 11px cards, console's 3px
+ * instrument blocks, and plain's near-square minimal card.
+ */
+.skin-preview {
+  /* The island's --radius lives on its :root; this window has no copy, so the
+     fallback is the island default and a set radius still wins when it is
+     published here. */
+  --pv-radius: calc(var(--radius, 22px) * 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 96px;
+  height: 64px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--pv-radius);
+  background: var(--card);
+  box-shadow: var(--hi);
+  overflow: hidden;
+  font-family: var(--ui-font);
+}
+.skin-preview .sp-pill {
+  display: flex;
+  align-items: center;
+  width: 44px;
+  height: 13px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--card-solid);
+  flex: none;
+}
+.skin-preview .sp-dot { display: block; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
+.skin-preview .sp-body { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: 4px; min-height: 0; }
+.skin-preview .sp-title {
+  font-family: var(--ui-font);
+  font-size: 9px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+.skin-preview .sp-bar { height: 3px; width: 70%; border-radius: 2px; background: var(--accent); flex: none; }
+
+/* frost: the island default — translucent card, purple accent. */
+.skin-preview[data-skin-preview="frost"] {
+  --card: rgba(21, 21, 25, 0.9);
+  --card-solid: #151519;
+  --accent: #8f7bff;
+  --ink: #f2f2f5;
+  --line: rgba(255, 255, 255, 0.1);
+}
+/* solid: the same card, opaque; the pill goes with it. */
+.skin-preview[data-skin-preview="solid"] {
+  --card: #151519;
+  --card-solid: #151519;
+  --accent: #8f7bff;
+  --ink: #f2f2f5;
+  --line: rgba(255, 255, 255, 0.1);
+}
+/* plain: card plus the collapsed line it rests as, so the preview shows the
+   rest state rather than only the fill. */
+.skin-preview[data-skin-preview="plain"] {
+  --card: #151519;
+  --card-solid: #151519;
+  --accent: #8f7bff;
+  --ink: #f2f2f5;
+  --line: rgba(255, 255, 255, 0.1);
+  --pv-radius: 4px;
+}
+.skin-preview[data-skin-preview="plain"] .sp-pill {
+  width: 100%;
+  height: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: var(--ink);
+  opacity: 0.45;
+}
+.skin-preview[data-skin-preview="plain"] .sp-dot { display: none; }
+/* magazine: warm paper, gold accent, serif headline, small card radius. */
+.skin-preview[data-skin-preview="magazine"] {
+  --card: rgba(20, 19, 24, 0.94);
+  --card-solid: #141318;
+  --accent: #e9c46a;
+  --ink: #f2f2f5;
+  --line: rgba(255, 255, 255, 0.075);
+  --pv-radius: 11px;
+  --ui-font: Georgia, "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", "宋体", serif;
+}
+.skin-preview[data-skin-preview="magazine"] .sp-pill { border-radius: 5px; background: var(--card); }
+/* console: the cold plate, cyan accent, mono readout, instrument corners. */
+.skin-preview[data-skin-preview="console"] {
+  --card: #0b1017;
+  --card-solid: #0b1017;
+  --accent: #4fd1ff;
+  --ink: #e6f4ff;
+  --line: rgba(120, 190, 255, 0.2);
+  --pv-radius: 3px;
+  --ui-font: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+}
+.skin-preview[data-skin-preview="console"] .sp-pill { border-radius: 2px; background: var(--card); }
+
+/* The light theme flips the island's surfaces too; the preview follows the
+   same values island.css uses under body[data-theme="light"].
+   The font family is not repeated: it belongs to the skin, not the theme. */
+html[data-theme="light"] .skin-preview[data-skin-preview="frost"] {
+  --card: rgba(255, 255, 255, 0.92);
+  --card-solid: #fbfbfd;
+  --accent: #5b48d9;
+  --ink: #1a1a1e;
+  --line: rgba(0, 0, 0, 0.1);
+}
+html[data-theme="light"] .skin-preview[data-skin-preview="solid"],
+html[data-theme="light"] .skin-preview[data-skin-preview="plain"] {
+  --card: #ffffff;
+  --card-solid: #ffffff;
+  --accent: #5b48d9;
+  --ink: #1a1a1e;
+  --line: rgba(0, 0, 0, 0.1);
+}
+html[data-theme="light"] .skin-preview[data-skin-preview="magazine"] {
+  --card: #fcfaf4;
+  --card-solid: #fcfaf4;
+  --accent: #8a6410;
+  --ink: #1a1a1e;
+  --line: rgba(32, 26, 14, 0.13);
+}
+html[data-theme="light"] .skin-preview[data-skin-preview="console"] {
+  --card: #f2f7fc;
+  --card-solid: #f2f7fc;
+  --accent: #0b6fb8;
+  --ink: #0b1520;
+  --line: rgba(11, 76, 140, 0.22);
+}
+
+/* select */
+select.ctl {
+  height: 26px;
+  padding: 0 24px 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--field) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4'><path d='m6 9 6 6 6-6'/></svg>") no-repeat right 8px center;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11.5px;
+  appearance: none;
+  cursor: pointer;
+}
+select.ctl:focus { border-color: var(--accent); }
+select.ctl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* input */
+input.ctl {
+  width: 190px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 11.5px;
+  outline: none;
+}
+input.ctl:focus { border-color: var(--accent); }
+input.ctl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input.ctl::placeholder { color: var(--faint); }
+
+/* range */
+input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
+
+.btn {
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+  color: var(--ink);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.btn:hover { background: var(--surface-2); }
+.btn.primary { border-color: transparent; background: var(--accent); color: #14121f; font-weight: 550; }
+.btn.primary:hover { background: #a191ff; }
+
+/* order list */
+.order { display: flex; flex-direction: column; gap: 4px; padding: 8px; }
+.order-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+  cursor: grab;
+}
+.order-item:active { cursor: grabbing; }
+.order-item[data-dragging="true"] { opacity: 0.4; }
+.order-item:hover { border-color: var(--line-strong); }
+.order-grip { display: grid; gap: 2px; color: var(--faint); }
+.order-grip i { display: block; width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+.order-grip { grid-template-columns: repeat(2, 3px); }
+.order-name { flex: 1; font-size: 11.5px; }
+.order-name em { font-style: normal; color: var(--faint); font-size: 10.5px; margin-left: 6px; }
+.order-move { display: inline-flex; gap: 2px; flex: none; }
+.order-move button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--dim);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.order-move button:hover:not(:disabled) { background: var(--card-hover); color: var(--ink); }
+.order-move button:disabled { opacity: 0.25; cursor: default; }
+.order-move svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.order-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.order-item .switch { width: 34px; height: 20px; }
+.order-item .switch::after { width: 16px; height: 16px; }
+.order-item .switch[aria-checked="true"]::after { transform: translateX(14px); }
+
+.badge {
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: rgba(143, 123, 255, 0.16);
+  color: #b7a9ff;
+  font-size: 10.5px;
+}
+
+.note {
+  margin: 10px 2px 0;
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.4;
+}
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 22px;
+}
+.empty-card b { font-size: 12.5px; font-weight: 550; }
+.empty-card span { font-size: 11.5px; color: var(--dim); line-height: 1.4; }
+.empty-card .btn { margin-top: 2px; }
+
+/* Cast and face grids: the thing itself, not its name. */
+.cast-grid,
+.face-grid {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0 2px;
+}
+
+.cast-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
+.face-grid { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); }
+
+.cast-cell,
+.face-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  color: var(--dim);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.cast-cell:hover,
+.face-cell:hover { background: var(--surface-2); }
+
+.cast-cell.on {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.cast-cell span,
+.face-cell span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form-error {
+  margin: 8px 0 0;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--bad) 32%, transparent);
+  border-radius: var(--r-sm);
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* ------------------------------------------------------------- auto-avoid */
+
+.avoid-empty {
+  padding: 2px 18px 16px;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+.avoid-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 18px 8px;
+}
+.avoid-app {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+}
+.avoid-app img { width: 32px; height: 32px; border-radius: var(--r-xs); }
+.avoid-app > span { font-size: 14.5px; color: var(--dim); }
+.avoid-x {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: var(--card-hover);
+  color: var(--dim);
+  font-size: 11.5px;
+  line-height: 1.3;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+.avoid-app:hover .avoid-x,
+.avoid-x:focus-visible { opacity: 1; }
+.avoid-x:hover { background: var(--bad); color: #fff; }
+.hint {
+  margin: 0;
+  padding: 0 18px 14px;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.avoid-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.avoid-modal {
+  width: 410px;
+  max-height: 76vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--hi);
+  /* --card-solid belongs to the island; this file only defines --card. */
+  background: var(--card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+.avoid-head { display: flex; align-items: center; justify-content: space-between; }
+.avoid-head h2 { margin: 0; font-size: 14.5px; font-weight: 560; }
+.avoid-close {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--dim);
+  font-size: 14.5px;
+  cursor: pointer;
+}
+.avoid-close:hover { background: var(--surface-2); color: var(--ink); }
+.avoid-sub { margin: 3px 0 12px; color: var(--faint); font-size: 11.5px; }
+.avoid-search { width: 100%; }
+.avoid-list {
+  flex: 1;
+  min-height: 120px;
+  max-height: 300px;
+  margin-top: 8px;
+  overflow-y: auto;
+}
+.avoid-none { padding: 20px 4px; color: var(--faint); font-size: 11.5px; }
+.avoid-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.avoid-item:hover { background: var(--surface-1); }
+.avoid-item.is-picked { background: rgba(143, 123, 255, 0.2); }
+.avoid-item.is-taken { cursor: default; opacity: 0.55; }
+.avoid-item.is-taken:hover { background: transparent; }
+.avoid-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+}
+.avoid-icon img { width: 32px; height: 32px; border-radius: var(--r-sm); }
+.avoid-icon > span { font-size: 14.5px; color: var(--dim); }
+.avoid-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.avoid-text b { font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.avoid-text em {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.avoid-reason { flex: none; font-size: 10.5px; color: var(--faint); }
+.avoid-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.avoid-hint {
+  color: var(--faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.avoid-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding-top: 10px;
+}
+.avoid-foot .btn,
+.avoid-actions .btn {
+  flex: none;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+.avoid-confirm {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 179, 64, 0.12);
+}
+.avoid-confirm p { margin: 0 0 8px; font-size: 11.5px; }
+.avoid-confirm-actions { display: flex; gap: 8px; }

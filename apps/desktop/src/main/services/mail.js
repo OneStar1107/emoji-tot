@@ -393,6 +393,97 @@ function remove(id) {
   return { ok: true };
 }
 
+/* ------------------------------------------------------------ row actions */
+
+/** One snapshot id is `<accountId>:<uid>`; anything else is not a message. */
+function splitId(id) {
+  const text = String(id ?? '');
+  const at = text.indexOf(':');
+  if (at <= 0) return null;
+  const accountId = text.slice(0, at);
+  const uid = text.slice(at + 1);
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(accountId) || !/^\d{1,10}$/.test(uid)) return null;
+  return { accountId, uid };
+}
+
+/**
+ * Run one IMAP write across the accounts the ids live in.
+ *
+ * The mailbox is the source of truth: a refresh reads flags back from the
+ * server, so a local-only edit would be undone by the next sync. One
+ * connection and one failure per account, so a dead server cannot turn the
+ * rest of the batch into a silent no-op.
+ */
+async function writeMessages(ids, run) {
+  const list = Array.isArray(ids) ? ids : [];
+  const grouped = new Map();
+  for (const id of list) {
+    const parts = splitId(id);
+    if (!parts) return { ok: false, error: '邮件标识无效', updated: [] };
+    if (!grouped.has(parts.accountId)) grouped.set(parts.accountId, []);
+    if (!grouped.get(parts.accountId).includes(parts.uid)) grouped.get(parts.accountId).push(parts.uid);
+  }
+  if (!grouped.size) return { ok: true, error: '', updated: [] };
+  const updated = [];
+  const errors = [];
+  for (const [accountId, uids] of grouped) {
+    const account = accounts.find((entry) => entry.id === accountId);
+    if (!account || account.enabled === false) {
+      errors.push((account?.address || accountId) + '：账号不可用');
+      continue;
+    }
+    const client = makeClient(account);
+    try {
+      await client.connect();
+      const lock = await client.getMailboxLock('INBOX');
+      try {
+        await run(client, uids.join(','));
+      } finally {
+        lock.release();
+      }
+      for (const uid of uids) updated.push(accountId + ':' + uid);
+    } catch (error) {
+      errors.push((account.address || accountId) + '：' + String(error?.message ?? error).slice(0, 80));
+    } finally {
+      await client.logout().catch(() => {});
+    }
+  }
+  return { ok: !errors.length, error: errors.join('；'), updated };
+}
+
+/**
+ * Mark messages read or unread — one row, or every unread row the page shows.
+ *
+ * Local state follows only the ids the server accepted, so a half-failed batch
+ * draws the truth instead of an optimistic guess.
+ */
+async function markRead(ids, seen = true) {
+  const result = await writeMessages(ids, (client, range) =>
+    seen
+      ? client.messageFlagsAdd(range, ['\\Seen'], { uid: true })
+      : client.messageFlagsRemove(range, ['\\Seen'], { uid: true }),
+  );
+  if (result.updated.length) {
+    const done = new Set(result.updated);
+    messages = messages.map((message) => (done.has(message.id) ? { ...message, seen } : message));
+    save();
+    emit();
+  }
+  return { ok: result.ok, error: result.error, updated: result.updated.length };
+}
+
+/** Delete messages from the mailbox, then drop the rows it accepted. */
+async function removeMessages(ids) {
+  const result = await writeMessages(ids, (client, range) => client.messageDelete(range, { uid: true }));
+  if (result.updated.length) {
+    const done = new Set(result.updated);
+    messages = messages.filter((message) => !done.has(message.id));
+    save();
+    emit();
+  }
+  return { ok: result.ok, error: result.error, updated: result.updated.length };
+}
+
 function startService() {
   load();
   emit();
@@ -417,4 +508,4 @@ function onChange(fn) {
 
 module.exports = {
   decodeHeader,
-  extractCalendar, startService, stopService, onChange, snapshot, refresh, add, remove, PROVIDERS, extractCode };
+  extractCalendar, startService, stopService, onChange, snapshot, refresh, add, remove, markRead, removeMessages, PROVIDERS, extractCode };
