@@ -862,41 +862,61 @@ const RENDERERS = {
 
 /* ------------------------------------------------------------------- paint */
 
-let railQuery = '';
-const searchTextCache = new Map();
+/**
+ * The face the main process says every window is wearing right now.
+ *
+ * Not computed here: the ball, the island and this preview all receive the
+ * same face:apply payload, so a mood that plays on the desktop plays in the
+ * settings rail at the same moment. The preview is a consumer, exactly like
+ * the renderers in the other two windows.
+ */
+let faceState = 'idle';
 
-function pageSearchText(key) {
-  if (searchTextCache.has(key)) return searchTextCache.get(key);
-  const renderer = RENDERERS[key] ?? RENDERERS.general;
-  const host = document.createElement('div');
-  host.innerHTML = renderer();
-  const text = (host.textContent ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
-  searchTextCache.set(key, text);
-  return text;
+/**
+ * The rail opens with the live character.
+ *
+ * It used to open with a search box. Without a width of its own the icon was
+ * laid out at the SVG default 300x150 — the black circle — and the box pushed
+ * the page list 208px down. Fourteen rows fit any window, so the slot now
+ * shows the cast instead: the same 46px renderer 角色与表情 uses, drawing the
+ * state handed over by the main process. With no cast member there is no
+ * preview — never an empty circle.
+ */
+function railCast() {
+  const id = meta?.castId;
+  if (!id) return '';
+  const member = (meta.casts ?? []).flatMap((family) => family.members).find((item) => item.id === id);
+  if (!member) return '';
+  return '<div class="rail-cast" role="img" aria-label="当前角色：' + escapeHtml(member.label) + '" title="' + escapeHtml(member.label) + '">' +
+    '<emojitot-ball cast="' + escapeHtml(id) + '" size="46" state="' + escapeHtml(faceState) + '"></emojitot-ball>' +
+    '<b>' + escapeHtml(member.label) + '</b></div>';
 }
 
 function paintRail() {
-  const term = railQuery.trim().toLowerCase();
-  let html = '<div class="rail-search">' +
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>' +
-    '<input id="rail-filter" type="search" aria-label="搜索设置" placeholder="搜索设置" ' +
-      'value="' + escapeHtml(railQuery) + '" spellcheck="false" /></div>';
-  let shown = 0;
+  let html = railCast();
   for (const group of NAV) {
-    const items = group.items.filter((item) => {
-      if (!term) return true;
-      return item.label.toLowerCase().includes(term) || pageSearchText(item.key).includes(term);
-    });
-    for (const item of items) {
-      shown += 1;
+    for (const item of group.items) {
       html += '<button type="button" class="rail-item" data-nav="' + item.key + '" aria-current="' +
         (page === item.key) + '">' + '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[item.icon] + '</svg>' +
         '<span>' + escapeHtml(item.label) + '</span></button>';
     }
-    if (items.length) html += '<div class="rail-sep"></div>';
+    html += '<div class="rail-sep"></div>';
   }
-  if (!shown) html += '<div class="rail-empty">没有匹配的设置</div>';
   rail.innerHTML = html;
+}
+
+/**
+ * Repaint the preview in place.
+ *
+ * A full paint() would rebuild the page under the pointer; one attribute is
+ * what a face change is.
+ */
+function applyFace(payload) {
+  const state = payload && typeof payload === 'object' ? payload.state : '';
+  if (!state || state === faceState) return;
+  faceState = state;
+  const ball = rail.querySelector('.rail-cast emojitot-ball');
+  if (ball) ball.setAttribute('state', state);
 }
 
 /*
@@ -957,13 +977,11 @@ async function load() {
   quotaState = (await api.quota?.()) ?? quotaState;
   mailState = (await api.mail?.()) ?? mailState;
   calendarState = (await api.calendar?.()) ?? calendarState;
-  searchTextCache.clear();
   paint();
 }
 
 async function patch(update) {
   prefs = merge(await api.patch(update));
-  searchTextCache.clear();
   paint();
   // Rail focus is lost on repaint; keep the current page selected without
   // stealing focus back from a text input the user is still typing in.
@@ -1375,15 +1393,6 @@ rail.addEventListener('click', (event) => {
   paint();
 });
 
-rail.addEventListener('input', (event) => {
-  if (event.target.id !== 'rail-filter') return;
-  railQuery = event.target.value;
-  paintRail();
-  const input = rail.querySelector('#rail-filter');
-  input?.focus();
-  input?.setSelectionRange(input.value.length, input.value.length);
-});
-
 document.getElementById('btn-min').addEventListener('click', () => api.minimize());
 document.getElementById('btn-max').addEventListener('click', () => api.maximize());
 document.getElementById('btn-close').addEventListener('click', () => api.close());
@@ -1401,5 +1410,11 @@ api.onGoto((target) => {
     paint();
   }
 });
+
+/* One face, one source: the main process sends the same payload the ball and
+   the island receive, so the rail preview cannot show a mood the desktop is
+   not wearing. It also re-sends the current value on load, so a reopened
+   window starts on the live expression. */
+api.onFace?.(applyFace);
 
 load();

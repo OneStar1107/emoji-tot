@@ -47,6 +47,9 @@ const { safeSend } = guard;
 const platform = require('./main/platform');
 const { passThroughWhileDragging, sameDisplayId } = require('./main/window-state');
 const { nextAgentMtime } = require('./main/agent-file');
+// One face, one owner: the bus is plain state, so the sequence guarantees are
+// testable without Electron (apps/desktop/test/face-sync.test.mjs).
+const { createFaceBus } = require('./main/face-bus');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -744,17 +747,13 @@ function endDrag() {
  * states.
  */
 function emitState(payload) {
-  if (!win || win.isDestroyed()) return;
   const message = parseAgentMessage(payload);
   if (!message) return;
-  // The island shows the same character: one state, two windows.
-  island.send('island:state', message);
-  try {
-    safeSend(win, 'state:apply', message);
-  } catch {
-    // The window can be between load and ready; dropping one frame beats
-    // throwing inside a polling timer, which would stop the poll for good.
-  }
+  // One producer, every window: the ball, the island and the settings preview
+  // each receive this same payload, and the bus keeps the copy a reloaded page
+  // asks for. Rendering is not attempted here, so a window between load and
+  // ready loses nothing — the next resend covers it.
+  faceBus.set(message.state, 'state', message.tips ? { tips: message.tips } : null);
 }
 
 /** Tell the renderer which edge the ball is on, so the bubble grows inward. */
@@ -1318,24 +1317,28 @@ guard.guardedSend('pet:action', ['ball'], () => {
 }, { maxBytes: 64 });
 
 /*
- * One face, two windows.
+ * One face, three windows.
  *
- * The ball runs its own idle moods — a pet that only rests is a screensaver —
- * and the island wears the same character. Without this relay the island sat
- * on the task state while the ball borrowed an expression every few seconds,
- * so the two faces drifted apart within one cycle. Both windows report what
- * they are showing; both receive what the other one reported.
+ * The face is decided once, where the protocol is parsed; the ball, the island
+ * and the settings preview are consumers of the same payload, which is why
+ * they cannot drift apart. It used to be relayed: a renderer invented the face
+ * and reported it back, so a report that arrived after the next change
+ * repainted one window with a face the other had already left — the drift the
+ * user saw. Nothing reports any more.
+ *
+ * A window that loads late is handed the current face by the bus itself
+ * (attach), and a reloaded page is covered by resend() on did-finish-load, so
+ * the settings preview starts on the live expression instead of an idle one.
  */
-function relayFace(state) {
-  const next = typeof state === 'string' ? state.slice(0, 32) : '';
-  if (!next) return;
-  island.send('island:face', next);
-  safeSend(win, 'face:apply', next);
-}
-guard.guardedSend('face:report', ['ball', 'island'], relayFace, {
-  check: (value) => (typeof value === 'string' && value.length > 0 ? value : undefined),
-  maxBytes: 256,
+const faceBus = createFaceBus();
+faceBus.attach((payload) => island.send('face:apply', payload));
+faceBus.attach((payload) => {
+  if (win && !win.isDestroyed()) safeSend(win, 'face:apply', payload);
 });
+faceBus.attach((payload) => settings.sendFace(payload));
+// The settings window is created lazily; a page that has just loaded missed
+// every broadcast while it was away.
+settings.setFaceLoader(() => faceBus.resend());
 /** The renderer saw the pointer on the ball, or leave it. */
 
 
@@ -1645,6 +1648,19 @@ function startServices() {
    */
   guard.guardedSend('island:devices-focus', ['island'], (active) => devices.setFocused(active === true), { maxBytes: 32 });
 
+  /*
+   * The devices page's refresh: one probe now, outside both clocks.
+   *
+   * The reply is the list at hand-off, not the probe's result - a vendor sweep
+   * takes seconds and blocking the renderer on it would freeze a 217px page. The
+   * result reaches the page through the normal devices push once the child
+   * exits.
+   */
+  guard.guardedHandle('island:devices-refresh', ['island'], () => {
+    devices.refresh();
+    return devices.snapshot();
+  });
+
   guard.guardedHandle('media:control', ['island'], (payload) => {
     media.command(payload.kind, Number(payload.arg) || 0);
     return media.current();
@@ -1763,7 +1779,13 @@ if (!gotTheLock) {
     castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'tot';
     displayMode = stored.displayMode;
     createWindow();
-    if (win) win.webContents.on('did-finish-load', () => safeSend(win, 'cast:changed', castId));
+    if (win) {
+      win.webContents.on('did-finish-load', () => {
+        safeSend(win, 'cast:changed', castId);
+        // A reloaded ball missed every face broadcast while it was away.
+        faceBus.resend();
+      });
+    }
     settings.registerIpc();
     island.registerIpc();
     // The island page cannot hold data that was pushed before it listened.
@@ -1772,6 +1794,8 @@ if (!gotTheLock) {
       if (runningServices.has('weather')) refreshWeather();
       island.send('settings:changed', readPrefs());
       pushAvoid();
+      // The island is created lazily, long after the first face was chosen.
+      faceBus.resend();
     });
     createTray();
     screen.on('display-removed', handleDisplayChange);

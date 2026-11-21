@@ -41,4 +41,10 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   avoidIcons: (paths) => ipcRenderer.invoke('settings:avoid-icons', paths),
   onGoto: (listener) => on('settings:goto', listener),
   onChanged: (listener) => on('settings:changed', listener),
+  /**
+   * The face the main process owns — the same payload the ball and the island
+   * receive. One-way on purpose: this window draws the character in its rail,
+   * it never decides what that character is feeling.
+   */
+  onFace: (listener) => on('face:apply', listener),
 });

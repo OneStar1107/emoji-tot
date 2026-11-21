@@ -1,0 +1,29 @@
+Licensed under the MIT License (see LICENSE).
+
+Third-party reference notice
+----------------------------
+
+The vendor battery protocols implemented in
+apps/desktop/src/main/services/device-battery.ps1 were written from protocol
+facts documented by BatteryHub (formerly Wireless Battery):
+
+  https://github.com/krisgfx9/Wireless-Device-Battery-Monitor
+  commit 632f204c50c43355616bd32d17483c63b1bcac54
+
+BatteryHub is licensed under the GNU General Public License, version 3
+(GPL-3.0), not the MIT License. No source code from that repository is copied,
+modified, linked or redistributed here. Only uncopyrightable protocol facts were
+used: vendor/product ids, HID report ids, command bytes, reply offsets and
+status values. Those facts are independently documented by HaloBattery, Solaar,
+OpenRazer, G-Helper, HeadsetControl and the vendors' own web drivers, which the
+upstream driver comments also cite.
+
+The same protocol facts were used earlier for the Logitech HID++ 2.0, Razer and
+ASUS ROG readers already present in this project. EmojiTot remains MIT-licensed
+as a whole; the reference does not change the license of this repository.
+
+If GPL-3.0 code from BatteryHub is ever reused directly, the affected files must
+be distributed under GPL-3.0 and the combined distribution re-evaluated. Do not
+label such a reuse as MIT.
+diff --git a/apps/desktop/src/main/services/device-battery.js b/apps/desktop/src/main/services/device-battery.js
+new file mode 100644

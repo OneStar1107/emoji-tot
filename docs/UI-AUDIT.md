@@ -104,12 +104,12 @@ pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：五套皮肤�
 
 ```css
 /* apps/desktop/src/renderer/island.css */
-.pages { padding: 12px 2px 0; height: 217px; overflow-y: auto; scrollbar-width: none; }
+.pages { padding: 12px 2px 0; height: 217px; overflow-y: auto; overflow-x: hidden; }
 ```
 
 - **217** 是 `.pages` 的固定盒高。面板不随页面变高，翻页时窗口不跳。
 - **12** 是它的 `padding-top`。这 12px 是视觉留白，不属于可用内容。
-- **205 = 217 − 12**，是一页真正能画东西的高度。内容超过 205 时 `scrollHeight` 会大于 217；而 `.pages` 隐藏了滚动条，用户看不到「下面还有」，所以溢出就是 bug，不是可滚动。
+- **205 = 217 − 12**，是一页真正能画东西的高度。内容超过 205 时 `scrollHeight` 会大于 217，而面板高度固定、翻页靠左右箭头，所以溢出就是 bug，不是「可以滚一滚」。滚动条属于页内自己封顶的列表（待办、消息、置物架、设备），不属于页面本身。
 - **200** 是每页的工作预算：每页底部固定留 5px 余量（`.pages > * { max-height: calc(100% - 5px) }`）。改动前音乐 / 邮箱 / 待办三页靠 `height: 100%` 撑满内容盒，`usedHeight` 正好 205.0——一点字体度量误差就会变成违规；现在三页收在 200 / 192 / 200，其余页不受影响。
 - **20px** 是最小可点高度。当前设计里开关是 20–22px（`.switch`），20 是下限；低于 20 的按钮在 140% 缩放下很难点中。
 - 测量值允许 **1px** 误差（`TOLERANCE`），避免小数像素和字体度量造成假阳性。

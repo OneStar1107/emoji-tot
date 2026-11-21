@@ -119,13 +119,41 @@ html, body {
 
 body { display: flex; flex-direction: column; }
 
+/* ------------------------------------------------------------- scrollbars */
+
+/*
+ * One scrollbar for the whole app, replacing the platform's.
+ *
+ * Windows draws its own: it slides in when you touch the wheel and fades out
+ * again on a timer, so on a page that scrolls it is missing exactly when a
+ * person looks for it. This is a quiet 6px bar instead — the same width in the
+ * settings window and in the island, --dim at 35% so it sits below the text,
+ * 60% on hover so it can be grabbed. No track, no arrows, no fade: it is where
+ * it is.
+ *
+ * The standard properties are the Firefox half and are guarded: setting them
+ * unconditionally makes Chromium prefer the native scrollbar over the
+ * ::-webkit-scrollbar rules below, which lands back on the bar this replaces
+ * (measured: 15px instead of 6px).
+ */
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--dim) 35%, transparent); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--dim) 60%, transparent); }
+*::-webkit-scrollbar-corner { background: transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--dim) 35%, transparent) transparent; }
+}
+
 /* ------------------------------------------------------------- title bar */
 
 /*
- * One compact bar: the app's name, the search box, the theme switch, and the
- * window buttons. The bar is the only thing that never scrolls, so the two
- * controls people reach for from anywhere (find a setting, flip the theme) live
- * here instead of at the top of the rail and three rows into 外观.
+ * One compact bar: the app's name and the window buttons. It never scrolls, so
+ * it is where a window-level control lives when the window has one.
+ *
+ * The search box styled here went with the one in the rail: fourteen rows fit
+ * any window height, so there is nothing left to filter. The rail opens with
+ * the live character instead.
  */
 .titlebar {
   display: flex;
@@ -142,36 +170,7 @@ body { display: flex; flex-direction: column; }
 .titlebar-name { font-size: 12px; font-weight: 550; color: var(--ink); letter-spacing: 0.01em; }
 .titlebar-spacer { flex: 1; }
 
-/* Both injected controls are interactive, so they opt out of the drag region. */
-.tb-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 208px;
-  height: 28px;
-  margin-left: 8px;
-  padding: 0 9px;
-  border-radius: var(--r-sm);
-  background: var(--surface-1);
-  color: var(--faint);
-  -webkit-app-region: no-drag;
-}
-.tb-search svg { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
-.tb-search input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: 11.5px;
-  outline: none;
-}
-.tb-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
-.tb-search input::placeholder { color: var(--faint); }
-.tb-search:focus-within { background: var(--surface-2); }
-
+/* The theme switch is interactive, so it opts out of the drag region. */
 .theme-btn {
   display: grid;
   place-items: center;
@@ -220,8 +219,31 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
   border-right: 1px solid var(--line);
   overflow-y: auto;
 }
-.rail::-webkit-scrollbar { width: 3px; }
-.rail::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 2px; }
+
+/*
+ * The rail opens with the live character, not with a search box.
+ *
+ * 46px is the size 角色与表情 draws the grid at, so the preview is the same
+ * renderer at the same scale; the name sits beside it so the circle is not a
+ * mystery. When the cast table has no member for the current id, railCast()
+ * emits nothing — the page list moves up and there is no hole.
+ */
+.rail-cast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 8px 12px;
+  min-height: 46px;
+}
+.rail-cast b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink);
+}
 
 /* Four groups, four small headings: the rail reads as a list of sections
    instead of fifteen rows with hairlines between them. */
@@ -257,22 +279,10 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 .rail-item[aria-current="true"] { background: #2b2b34; color: var(--ink); }
 .rail-item svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
 .rail-item .dot { width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: var(--accent); }
-.rail-empty {
-  margin: 10px 8px;
-  padding: 12px 10px;
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--r-sm);
-  color: var(--dim);
-  font-size: 11.5px;
-  line-height: 1.4;
-}
 
 /* ---------------------------------------------------------------- content */
 
 .content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 28px 32px; }
-.content::-webkit-scrollbar { width: 8px; }
-.content::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 4px; }
-.content::-webkit-scrollbar-track { background: transparent; }
 
 /* A page change gets one quiet move; a control change gets none, or every
    toggle would re-animate the panel it just updated. */

@@ -138,6 +138,30 @@ body[data-theme="light"] {
 
 * { box-sizing: border-box; }
 
+/* -------------------------------------------------------------- scrollbars */
+
+/*
+ * One scrollbar for the whole app, the same 6px bar the settings window draws.
+ *
+ * The island used to hide its scrollbars (scrollbar-width: none), so a list
+ * that scrolled past its cap looked like a list that had ended. The bars below
+ * replace the platform's: Windows slides its own in on the wheel and fades it
+ * out on a timer, which is exactly the bar a person cannot find when they look
+ * for it. 6px, --dim at 35%, 60% on hover, no track, no fade.
+ *
+ * The standard properties are the Firefox half and are guarded: setting them
+ * unconditionally makes Chromium prefer the native scrollbar over the
+ * ::-webkit-scrollbar rules, which lands back on the bar this replaces.
+ */
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--dim) 35%, transparent); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--dim) 60%, transparent); }
+*::-webkit-scrollbar-corner { background: transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--dim) 35%, transparent) transparent; }
+}
+
 [hidden] { display: none !important; }
 
 /*
@@ -636,11 +660,11 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
 /*
  * 217px, not 300px. The panel is meant to end right under the media controls;
  * 300 left a band of empty space that made the island feel bottom-heavy.
- * Scrolling still happens — it is just not drawn: a 3px thumb inside a 420px
- * panel reads as a stray bar, and every page already fits or fades its edges.
+ * Scrolling still happens, and the 6px bar above is what says so: the page
+ * budget keeps ordinary pages from overflowing at all, so a bar on this box is
+ * the exception, not the furniture.
  */
-.pages { padding: 12px 2px 0; height: 217px; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
-.pages::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.pages { padding: 12px 2px 0; height: 217px; overflow-y: auto; overflow-x: hidden; }
 /*
  * Five pixels of headroom under every page.
  *
@@ -823,12 +847,10 @@ button.ghost:active,
 .mail-page { display: flex; flex-direction: column; height: calc(100% + 8px); min-height: 0; margin-top: -8px; overflow: hidden; }
 /* The no-mailbox page keeps its own scroller, so the one action stays reachable
    in a short panel. */
-.mail-page-empty { overflow-y: auto; scrollbar-width: none; }
-.mail-page-empty::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.mail-page-empty { overflow-y: auto; }
 /* The list is the growing half: it fills what the tab line leaves and scrolls
    there, so a long mailbox never needs a second scroll layer. */
-.mail-page > .mail { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
-.mail-page > .mail::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.mail-page > .mail { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .empty svg { width: 26px; height: 26px; fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .empty b { font-size: 12.5px; font-weight: 550; color: var(--ink); }
 .empty span { font-size: 11.5px; color: var(--dim); line-height: 1.4; max-width: 250px; }
@@ -1591,8 +1613,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   font-size: 11.5px; color: var(--dim); cursor: pointer; overflow: hidden; white-space: nowrap;
 }
 .todo-due-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.todo-list { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 1px; overflow-y: auto; scrollbar-width: none; }
-.todo-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.todo-list { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 1px; overflow-y: auto; }
 /* A row is 32px: the 28px tap target plus 2px of air, so three rows fit the
    list window and every control on the row is thumb-sized. */
 .todo-item { position: relative; display: flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: 7px; animation: row-in var(--base) var(--ease); }
@@ -1827,12 +1848,23 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 /* Bluetooth is a state, not a switch; with no settings sheet wired, no action. */
 .dev-foot { display: flex; align-items: center; height: 20px; margin-top: 0; font-size: 11px; color: var(--dim); }
 /*
- * In the hero the footer is absolutely placed at the top right: the block only
- * draws two digits and a word, and the rest of the line is where a fifth device
- * row comes from. Height stays 20px so it remains a real target.
+ * In the hero the page actions are absolutely placed at the top right: the block
+ * only draws two digits and a word, and the rest of the line is where a fifth
+ * device row comes from. Height stays 20px so each remains a real target.
  */
-.dev-hero .dev-foot { position: absolute; top: 0; right: 0; }
+.dev-hero .dev-tools {
+  position: absolute; top: 0; right: 0;
+  display: flex; align-items: center; gap: 10px;
+}
 .dev-hero .dev-foot[data-open-system] { width: auto; height: 20px; }
+/* The refresh control: one quiet word, no chrome - it asks for a probe, not a page. */
+.dev-refresh {
+  padding: 0; border: 0; background: transparent;
+  font: inherit; font-size: 11px; line-height: 20px;
+  color: var(--dim); cursor: pointer;
+}
+.dev-refresh:hover:not(:disabled) { color: var(--ink); }
+.dev-refresh:disabled { cursor: default; color: var(--faint); }
 /*
  * The footer is a button since the Bluetooth row opens the system settings.
  * It has to look like the status line it replaces: no chrome, inherited type,
@@ -1957,11 +1989,9 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   max-height: 96px;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: none;
 }
-.msg-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
 /* The rows below the fold, named the way the device page names its extra
-   devices: a scroll with no visible scrollbar needs a sentence. */
+   devices: 96px is four rows, and the count is what says there are more. */
 .msg-more { padding: 2px 2px 0; font-size: 10.5px; color: var(--faint); }
 
 /* One group per app. Today the probe publishes a single window title per app,
@@ -2095,9 +2125,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   min-height: 0;
   max-height: 120px;
   overflow-y: auto;
-  scrollbar-width: none;
 }
-.clip-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
 
 .clip-item {
   display: flex;
@@ -2149,9 +2177,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   max-height: 112px;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: none;
 }
-.shelf-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
 /* With no clipboard row the list owns the page: five 28px bands. */
 .shelf.shelf-no-clip .shelf-list { max-height: 140px; }
 /*

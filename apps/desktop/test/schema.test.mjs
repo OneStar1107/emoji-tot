@@ -327,10 +327,18 @@ describe('settings UI actually reads and writes the schema', () => {
     assert.ok(!settings.includes("rowActionToggle('显示灵动岛'"), 'visibility is owned by displayMode');
   });
 
-  it('offers an accessible search across page content', () => {
-    assert.ok(settings.includes('aria-label="搜索设置"'), 'search input needs an accessible name');
-    assert.ok(settings.includes('pageSearchText'), 'search must index rendered setting labels');
-    assert.ok(settings.includes('searchTextCache'), 'the page search index must be memoized');
+  it('opens the rail with the live character, not a search box', () => {
+    assert.ok(!settings.includes('rail-filter'), 'the search box is gone: fourteen rows need no filter');
+    assert.ok(!settings.includes('searchTextCache'), 'the page search index goes with it');
+    assert.ok(settings.includes('class="rail-cast"'), 'the rail starts with the cast preview');
+    assert.ok(settings.includes('<emojitot-ball cast='), 'the preview must use the shared ball renderer');
+    assert.ok(settings.includes('if (!member) return'), 'a missing cast draws nothing, never an empty circle');
+  });
+
+  it('draws the face the main process sends, never its own', () => {
+    assert.ok(settings.includes('api.onFace?.(applyFace)'), 'the preview must subscribe to the main process face');
+    assert.ok(settings.includes("ball.setAttribute('state', state)"), 'the payload reaches the renderer unchanged');
+    assert.ok(!settings.includes('setInterval('), 'no mood clock in this window — the face has one owner');
   });
 
   it('offers keyboard-operable order controls beside drag and drop', () => {

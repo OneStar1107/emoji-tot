@@ -104,6 +104,8 @@ const shelfFolded = new Set();
 let clipboardItems = [];
 let messengerState = { apps: [], unread: 0 };
 let devicesState = { devices: [] };
+/** True while the refresh control waits for its probe to be handed off. */
+let devicesRefreshing = false;
 /** Why the Bluetooth footer is disabled, or '' while the system sheet opens. */
 let systemOpenError = '';
 let quotaState = { accounts: [], current: null, last: null };
@@ -2013,6 +2015,33 @@ function syncDevicesFocus() {
   api.devicesFocus?.(active);
 }
 
+/**
+ * The refresh control: ask main for one vendor probe now.
+ *
+ * The reply is the list as it stands at hand-off, so it cannot be mistaken for
+ * the probe's answer. That answer arrives through the normal devices push,
+ * which is also why the control only shows its pending word until the call
+ * returns - waiting for a slow HID sweep behind a spinner on a 217px page
+ * would cost more than it tells.
+ */
+function refreshDevices() {
+  if (devicesRefreshing) return;
+  devicesRefreshing = true;
+  if (open) renderPage();
+  const settle = () => {
+    devicesRefreshing = false;
+    if (open) renderPage();
+  };
+  const call = api.devicesRefresh;
+  if (typeof call !== 'function') {
+    settle();
+    return;
+  }
+  Promise.resolve(call()).then((value) => {
+    if (value && Array.isArray(value.devices)) devicesState = value;
+  }).catch(() => {}).then(settle);
+}
+
 function devicesPage() {
   const list = devicesState?.devices ?? [];
   const showBattery = prefs.devices?.showBattery !== false;
@@ -2033,9 +2062,19 @@ function devicesPage() {
    * the wrong trade: the level block is already 64px of mostly empty width.
    */
   const bluetoothOn = list.length ? ' on' : '';
-  const footer = systemOpenError
+  const systemButton = systemOpenError
     ? '<button type="button" class="dev-foot" data-open-system="bluetooth" disabled><span class="dev-bt"><i class="' + bluetoothOn + '"></i>蓝牙</span><span class="dev-foot-note">' + escapeHtml(systemOpenError) + '</span></button>'
     : '<button type="button" class="dev-foot" data-open-system="bluetooth" title="打开系统蓝牙设置"><span class="dev-bt"><i class="' + bluetoothOn + '"></i>蓝牙</span><span class="dev-foot-note">系统设置</span></button>';
+  /*
+   * The refresh control is the third reading path: the probe runs on its own
+   * five-minute clock and on the page opening, so before this there was no way
+   * to ask for one now. It sits beside the Bluetooth footer because both are
+   * page-level actions, not row actions.
+   */
+  const footer = '<div class="dev-tools">'
+    + '<button type="button" class="dev-refresh" data-action="devices:refresh" title="立即重新探测外设电量"' + (devicesRefreshing ? ' disabled' : '') + '>' + (devicesRefreshing ? '探测中' : '刷新') + '</button>'
+    + systemButton
+    + '</div>';
   const hero = `<div class="dev-hero">
       <b class="dev-level">${level === null ? '—' : `${level}<span>%</span>`}</b>
       <span class="dev-charge">${level === null ? '未检测到电池' : battery?.charging ? '充电中' : '使用电池'}</span>
@@ -3048,6 +3087,7 @@ panelEl.addEventListener('click', (event) => {
   if (action) {
     const [kind, page] = action.split(':');
     if (kind === 'settings') api.openSettings(page);
+    if (kind === 'devices' && page === 'refresh') refreshDevices();
     return;
   }
   const dot = event.target.closest('[data-page]');

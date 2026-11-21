@@ -22,6 +22,12 @@ let refreshWeatherHook = null;
  * through one channel instead of four, so a new action is one case there.
  */
 let actionHook = null;
+/**
+ * Injected by boot: re-delivering the current face to a page that just loaded.
+ * The settings rail draws the live character, so this window is a consumer of
+ * the same face payload the ball and the island receive.
+ */
+let faceLoader = null;
 
 function setWeatherRefresher(fn) {
   refreshWeatherHook = fn;
@@ -29,6 +35,21 @@ function setWeatherRefresher(fn) {
 
 function setActionHook(fn) {
   actionHook = fn;
+}
+
+function setFaceLoader(fn) {
+  faceLoader = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * Push one face payload to the open settings window.
+ *
+ * Closed window, dropped payload — the bus replays the current value when the
+ * page finishes loading, so a reopened window starts on the live expression.
+ */
+function sendFace(payload) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('face:apply', payload);
 }
 
 function create(page) {
@@ -60,6 +81,8 @@ function create(page) {
   // already attributed to this window.
   guard.claim('settings', win.webContents);
   win.loadFile(path.join(__dirname, '..', 'renderer', 'settings.html'));
+  // A page that has just loaded missed every face broadcast while it was away.
+  win.webContents.on('did-finish-load', () => faceLoader?.());
   win.once('ready-to-show', () => {
     win.show();
     if (page) win.webContents.send('settings:goto', page);
@@ -257,4 +280,14 @@ function isOpen() {
   return Boolean(win && !win.isDestroyed());
 }
 
-module.exports = { create, registerIpc, isOpen, onPrefs, applyPatch, setWeatherRefresher, setActionHook };
+module.exports = {
+  create,
+  registerIpc,
+  isOpen,
+  onPrefs,
+  applyPatch,
+  sendFace,
+  setWeatherRefresher,
+  setActionHook,
+  setFaceLoader,
+};

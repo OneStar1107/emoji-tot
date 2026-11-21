@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('islandAPI', {
    * as it opens and keeps it on a 30s clock while it stays visible.
    */
   devicesFocus: (active) => ipcRenderer.send('island:devices-focus', active),
+  devicesRefresh: () => ipcRenderer.invoke('island:devices-refresh'),
   /**
    * Pin or unpin one device. Main owns the three-pin cap and replies with the
    * whole preference object, so the page renders the answer instead of

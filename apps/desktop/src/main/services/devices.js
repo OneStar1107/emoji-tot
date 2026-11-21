@@ -45,7 +45,14 @@ function snapshot() {
   });
   return {
     devices: rows,
-    withBattery: devices.filter((device) => Number.isFinite(Number(device.battery))).length,
+    /* Counted from the merged rows: a level the vendor probe supplied is on
+     * screen, so leaving it out of the count was the one place the page said
+     * "0 devices with a level" while the list showed one. */
+    withBattery: rows.filter((device) => Number.isFinite(Number(device.battery))).length,
+    /* When the vendor probe last finished. It advances on the five-minute
+     * background clock even with the page closed, which is what makes "the
+     * reading is fresh without opening the page" observable. */
+    probedAt: deviceBattery.status().probedAt,
   };
 }
 
@@ -163,4 +170,9 @@ function setFocused(active) {
   deviceBattery.setFocused(active);
 }
 
-module.exports = { start, stop, snapshot, onChange, setFocused };
+/** The page's refresh button: one vendor probe now, outside both clocks. */
+function refresh() {
+  return deviceBattery.probeNow();
+}
+
+module.exports = { start, stop, snapshot, onChange, setFocused, refresh };

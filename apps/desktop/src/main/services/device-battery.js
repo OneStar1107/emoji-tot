@@ -4,17 +4,25 @@
  * devices.ps1 reads what PnP knows: Bluetooth publishes a level, HID collections
  * usually do not. A 2.4 GHz receiver keeps its mouse's level behind a vendor
  * protocol, so those rows stay at null and the page draws an em dash. This module
- * runs device-battery.ps1 - Logitech HID++, Razer, ASUS ROG - and hands the answer
- * back by name, which is the same PnP name the device list already uses.
+ * runs device-battery.ps1 - Logitech HID++, Razer, ASUS ROG and the BatteryHub
+ * families - and hands the answer back by name, which is the same PnP name the
+ * device list already uses.
  *
- * The probe is a one-shot child, not a watcher: it enumerates PnP and opens
- * three families of HID collections, and a battery percentage does not change
- * faster than that. It runs every five minutes while the page is elsewhere, and
- * every 30 seconds while the devices page is on screen - plus once the instant
- * that page opens, because a 2.4 GHz mouse only answers in a short window after
- * it wakes, so the first look at it matters more than the clock. A missing brand,
- * a sleeping device and a refused collection all end the same way - an empty
- * result, so the row keeps its em dash.
+ * Three layers, because "when is the level read" is the whole feature:
+ *
+ *   1. The page opening (or coming back into view) probes at once, three spaced
+ *      attempts. A 2.4 GHz mouse only answers in the short window after it
+ *      wakes, and one attempt that lands in its sleep answers 65 zero bytes;
+ *      three attempts a few seconds apart are what turn "-" into a number.
+ *   2. The probe keeps its own clock in the background: every five minutes,
+ *      whether or not the devices page is on screen. Closing the page does not
+ *      stop the readings, so a level that changed is already current when the
+ *      page opens instead of being discovered by it.
+ *   3. The page's refresh button asks for one more probe now (probeNow),
+ *      without waiting for either clock.
+ *
+ * A missing brand, a sleeping device and a refused collection all end the same
+ * way - an empty result, so the row keeps its em dash.
  */
 const platform = require('../platform');
 const { scriptFile } = require('../paths');
@@ -22,14 +30,23 @@ const { scriptFile } = require('../paths');
 const IDLE_REFRESH_MS = 5 * 60 * 1000;
 /** While the devices page is open the row is being watched: keep it fresh. */
 const FOCUS_REFRESH_MS = 30 * 1000;
+/** Attempts when the page opens: the first lands, the rest catch a wake-up. */
+const FOCUS_ATTEMPTS = 3;
+/** Spacing between those attempts; a sleeping mouse needs a look-up window. */
+const FOCUS_RETRY_MS = 3000;
 const PROBE_TIMEOUT_MS = 20000;
 
 const levels = new Map();
 const listeners = new Set();
 let timer = null;
 let child = null;
+let inFlight = null;
+let burstLeft = 0;
+let burstTimer = null;
 let stopped = true;
 let focused = false;
+/** When the last probe finished, successful or not. Snapshot field for the UI. */
+let probedAt = 0;
 
 function emit() {
   for (const fn of listeners) fn();
@@ -71,8 +88,15 @@ function ingest(text) {
   emit();
 }
 
+/**
+ * One probe. The child runs to completion (or the watchdog kills it) and the
+ * promise settles when the answer has been ingested - that is what lets the
+ * three open-page attempts be spaced instead of overlapping: a second spawn
+ * while the first child is alive would be dropped by the lock below.
+ */
 function probe() {
-  if (stopped || child) return;
+  if (stopped) return Promise.resolve(false);
+  if (inFlight) return inFlight;
   let current;
   try {
     current = platform.spawnPowerShell(
@@ -80,36 +104,42 @@ function probe() {
       { stdio: ['ignore', 'pipe', 'ignore'] },
     );
   } catch {
-    return;
+    return Promise.resolve(false);
   }
   // Unsupported platform, or no shell: leave the feature off instead of retrying.
   if (!current) {
     stopped = true;
-    return;
+    return Promise.resolve(false);
   }
   child = current;
   let output = '';
-  const watchdog = setTimeout(() => {
-    try {
-      current.kill();
-    } catch {
-      // Already gone.
-    }
-  }, PROBE_TIMEOUT_MS);
-  watchdog.unref?.();
-  current.stdout.setEncoding('utf8');
-  current.stdout.on('data', (chunk) => {
-    // The probe prints one short line; the cap is a guard against a script that
-    // loops, not a limit anyone should reach.
-    if (output.length < 65536) output += chunk;
+  inFlight = new Promise((resolve) => {
+    const watchdog = setTimeout(() => {
+      try {
+        current.kill();
+      } catch {
+        // Already gone.
+      }
+    }, PROBE_TIMEOUT_MS);
+    watchdog.unref?.();
+    current.stdout.setEncoding('utf8');
+    current.stdout.on('data', (chunk) => {
+      // The probe prints one short line; the cap is a guard against a script
+      // that loops, not a limit anyone should reach.
+      if (output.length < 65536) output += chunk;
+    });
+    const finish = () => {
+      clearTimeout(watchdog);
+      if (child === current) child = null;
+      inFlight = null;
+      ingest(output);
+      probedAt = Date.now();
+      resolve(true);
+    };
+    current.on('exit', finish);
+    current.on('error', finish);
   });
-  const finish = () => {
-    clearTimeout(watchdog);
-    if (child === current) child = null;
-    ingest(output);
-  };
-  current.on('exit', finish);
-  current.on('error', finish);
+  return inFlight;
 }
 
 /** One clock, two speeds: the focused page reads 30s, everything else 5min. */
@@ -123,6 +153,32 @@ function schedule() {
   timer.unref?.();
 }
 
+/**
+ * The three open-page attempts, one after another.
+ *
+ * Cancelled by stop(), by the page closing, and by a refresh (which is a single
+ * probe of its own). Each attempt waits for the previous child to exit, so the
+ * spacing is real time on the device, not three spawns in one tick.
+ */
+function stepBurst() {
+  if (stopped || burstLeft <= 0) return;
+  burstLeft -= 1;
+  probe().then((ran) => {
+    if (!ran || stopped || burstLeft <= 0) return;
+    burstTimer = setTimeout(stepBurst, FOCUS_RETRY_MS);
+    burstTimer.unref?.();
+  });
+}
+
+function runBurst() {
+  if (burstTimer) {
+    clearTimeout(burstTimer);
+    burstTimer = null;
+  }
+  burstLeft = FOCUS_ATTEMPTS;
+  stepBurst();
+}
+
 function start() {
   if (!stopped) return;
   stopped = false;
@@ -133,10 +189,10 @@ function start() {
 /**
  * The devices page is open (true) or not.
  *
- * Coming into view probes once immediately: the user is looking at the row, and
- * waiting up to five minutes for a level that is already on screen is the whole
- * bug. While it stays open the probe repeats every 30 seconds; closing it hands
- * the schedule back to the idle clock.
+ * Coming into view probes immediately, three times: the user is looking at the
+ * row, and waiting up to five minutes for a level that is already on screen is
+ * the whole bug. It stays at the 30-second rate while open; closing it hands the
+ * schedule back to the idle clock, which keeps running.
  */
 function setFocused(active) {
   const next = Boolean(active);
@@ -144,16 +200,34 @@ function setFocused(active) {
   focused = next;
   if (stopped) return;
   schedule();
-  if (focused) probe();
+  if (focused) {
+    runBurst();
+  } else {
+    burstLeft = 0;
+    if (burstTimer) {
+      clearTimeout(burstTimer);
+      burstTimer = null;
+    }
+  }
 }
 
-/** One probe now, unless a child is already running (the in-flight lock). */
+/** The page's refresh button: one probe now, without waiting for a clock. */
 function probeNow() {
-  probe();
+  burstLeft = 0;
+  if (burstTimer) {
+    clearTimeout(burstTimer);
+    burstTimer = null;
+  }
+  return probe();
 }
 
 function stop() {
   stopped = true;
+  burstLeft = 0;
+  if (burstTimer) {
+    clearTimeout(burstTimer);
+    burstTimer = null;
+  }
   if (timer) {
     clearInterval(timer);
     timer = null;
@@ -173,8 +247,13 @@ function get(name) {
   return levels.get(String(name || '').toLowerCase()) || null;
 }
 
+/** The probe's state, for the devices snapshot and for the acceptance run. */
+function status() {
+  return { probedAt, focused, running: Boolean(inFlight), attempts: burstLeft };
+}
+
 function onChange(fn) {
   listeners.add(fn);
 }
 
-module.exports = { start, stop, get, onChange, setFocused, probeNow };
+module.exports = { start, stop, get, onChange, setFocused, probeNow, status };
