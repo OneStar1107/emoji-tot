@@ -426,18 +426,23 @@ function musicPage() {
   const art = media.art
     ? `<img class="cover-img" src="${media.art}" alt="" />`
     : `<div class="cover">${svg(ICON.music)}</div>`;
+  /*
+   * Cover + one lyric line + progress + four keys, stacked to the top of the
+   * page. The old block centred a 56px cover and a three-line 54px lyric
+   * window, so the page read as three islands inside the card. The lyric stays
+   * a one-line window: the current sentence at reading size, the next one dimmed
+   * underneath (the previous line is hidden by CSS), and the heights are fixed
+   * so a long title or a font preference cannot push the controls past 205px.
+   */
   return `<div class="music">
     <div class="music-row">
-      ${art}
+      <div class="music-cover">${art}</div>
       <div class="music-meta">
         <b>${escapeHtml(media.title || '未命名')}</b>
         <span>${escapeHtml(media.artist || media.album || (browser ? '媒体 · ' + (media.source || '浏览器') : media.source || ''))}</span>
+        ${prefs.music?.lyrics === false ? '' : `<div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>`}
       </div>
-      <!-- The state badge was removed on request: the header already says what is
-           playing, and the progress row keeps the only 直播 marker that carries
-           information (no duration). -->
     </div>
-    ${prefs.music?.lyrics === false ? '' : `<div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>`}
     ${live
       ? '<div class="music-bar live"><i></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span>直播</span></div>'
       : '<div class="music-bar"><i data-progress style="width:' + pct.toFixed(1) + '%"></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-dur>' + clock(media.duration) + '</span></div>'}
@@ -445,6 +450,7 @@ function musicPage() {
       <button type="button" data-media="prev" aria-label="上一首">${svg(ICON.prev)}</button>
       <button type="button" class="main" data-media="toggle" aria-label="${media.playing ? '暂停' : '播放'}">${svg(media.playing ? ICON.pause : ICON.play)}</button>
       <button type="button" data-media="next" aria-label="下一首">${svg(ICON.next)}</button>
+      <button type="button" data-action="settings:music" aria-label="歌词设置" title="歌词设置">${svg('<path d="M4 7h16M4 12h9M4 17h13"/>')}</button>
     </div>
   </div>`;
 }
@@ -577,13 +583,20 @@ const timeOf = (ms) => {
 function quotaPage() {
   const state = quotaState ?? { accounts: [], current: null, last: null };
   if (!state.accounts.length) {
-    return empty(
+    /*
+     * One wrapper, so the empty state is not the whole page.
+     *
+     * .pages > .empty is centred in 205px by design, and on the quota page that
+     * read as "content floating in the middle with a band above and below it".
+     * The wrapper is what scopes the top-aligned override to this page alone.
+     */
+    return `<div class="quota-page quota-page-empty">${empty(
       ICON.coin,
       '还没有连接账号',
       '在设置里填入 DeepSeek API Key，这里会显示余额和账号。',
       '去添加账号',
       'settings:quota',
-    );
+    )}</div>`;
   }
   const current = state.accounts.find((account) => account.current);
   const last = state.last;
@@ -592,12 +605,12 @@ function quotaPage() {
     ${state.accounts.length > 1 ? '<button type="button" class="ghost" data-local="quota:next">切换账号</button>' : ''}
   </div>`;
   if (!last || last.error) {
-    return `<div class="quota">
+    /* No numbers yet: the page is the account name, one line of status and the
+       refresh button, stacked at the top instead of spread over 205px. */
+    return `<div class="quota quota-broken">
       <div class="quota-head"><span class="quota-note">${escapeHtml(current?.name ?? '')}</span></div>
-      <div class="quota-rows">
-        <div class="quota-row"><span>状态</span><b>${escapeHtml(last?.error ?? '正在查询…')}</b></div>
-      </div>
-      ${actions}
+      <div class="quota-flag">${escapeHtml(last?.error ?? '正在查询…')}</div>
+      <div class="quota-foot"><span class="spacer"></span>${actions}</div>
     </div>`;
   }
   /*
@@ -611,18 +624,28 @@ function quotaPage() {
   const granted = Number(last.granted) || 0;
   const split = topped + granted;
   const share = split > 0 ? Math.round((topped / split) * 100) : 0;
+  /*
+   * Three rows, top-aligned: the amount (and the console skin's split bar that
+   * hangs under the head), the split as one legend line, then 更新于 + 刷新 on
+   * the same line. The two roster rows used to be their own paragraphs with an
+   * action row underneath, which stacked 185px into a 205px box and left the
+   * page reading as a block floating in the middle.
+   */
   return `<div class="quota" data-gauge="true" style="--quota-share:${share}">
     <div class="quota-head">
       <span class="quota-amount"><small>¥</small>${escapeHtml(last.total)}</span>
       <span class="quota-note">${escapeHtml(current?.name ?? '')}${last.available ? '' : ' · 不可用'}</span>
       <div class="quota-meter" aria-hidden="true" data-share="${share}%"></div>
     </div>
-    <div class="quota-rows">
-      <div class="quota-row"><span>充值余额</span><b>¥${escapeHtml(last.topped)}</b></div>
-      <div class="quota-row"><span>赠送余额</span><b>¥${escapeHtml(last.granted)}</b></div>
-      <div class="quota-row"><span>更新于</span><b>${timeOf(last.at)}</b></div>
+    <div class="quota-split">
+      <span class="quota-part topped"><i class="quota-piece topped"></i>充值 ¥${escapeHtml(last.topped)}</span>
+      <span class="quota-part granted"><i class="quota-piece granted"></i>赠送 ¥${escapeHtml(last.granted)}</span>
     </div>
-    ${actions}
+    <div class="quota-foot">
+      <span>更新于 ${timeOf(last.at)}</span>
+      <span class="spacer"></span>
+      ${actions}
+    </div>
   </div>`;
 }
 
@@ -915,15 +938,22 @@ function shelfPage() {
   if (prefs.shelf?.enabled === false) {
     return empty(ICON.tray, '置物架已关闭', '打开后可以把文件拖到岛上暂存。', '去打开', 'settings:todo');
   }
-  const rows = shelfFiles.length
-    ? shelfFiles
-        .map((file) => `<div class="shelf-item" data-id="${escapeHtml(file.name)}">
+  /*
+   * An empty shelf is a small drop target pinned to the top, not a page.
+   *
+   * The page used to be a full-height column: the hint at the top, a centred
+   * "置物架是空的" paragraph, and the clipboard panel stretching into whatever
+   * was left. That reads as three blocks floating in 205px. With no files there
+   * is one 96px prompt, and the clipboard keeps its own natural height below.
+   */
+  const emptyShelf = shelfFiles.length === 0;
+  const rows = shelfFiles
+    .map((file) => `<div class="shelf-item" data-id="${escapeHtml(file.name)}">
             <button type="button" class="shelf-open" data-local="shelf:open" data-name="${escapeHtml(file.name)}" title="打开">${escapeHtml(file.name)}</button>
             <span class="shelf-size">${sizeLabel(file.size)}</span>
             <button type="button" class="shelf-del" data-local="shelf:remove" data-name="${escapeHtml(file.name)}" aria-label="删除">×</button>
           </div>`)
-        .join('')
-    : '<p class="todo-empty">置物架是空的。把文件拖到这块面板上就能放进来。</p>';
+    .join('');
   const clips = clipboardItems.slice(0, 6).map((item) => `<div class="clip-item">
       <button type="button" class="clip-text" data-local="clipboard:copy" data-id="${escapeHtml(item.id)}" title="点击复制">${escapeHtml(clipLabel(item.text))}</button>
       <button type="button" class="clip-pin${item.pinned ? ' on' : ''}" data-local="clipboard:togglePin" data-id="${escapeHtml(item.id)}" aria-label="固定">★</button>
@@ -932,9 +962,11 @@ function shelfPage() {
     <div class="clip-head"><span>剪贴板</span>${clipboardItems.length ? '<button type="button" class="ghost" data-local="clipboard:clear">清空</button>' : ''}</div>
     <div class="clip-list">${clips || '<p class="todo-empty">复制文字后会出现在这里。</p>'}</div>
   </div>`;
-  return `<div class="shelf" data-shelf-drop>
-    <div class="shelf-hint">把文件拖到这里 · 复制到 <code>shelf</code> 文件夹</div>
-    <div class="shelf-list">${rows}</div>
+  return `<div class="shelf${emptyShelf ? ' shelf-empty' : ''}" data-shelf-drop>
+    <div class="shelf-hint">${emptyShelf
+      ? '<b>置物架是空的</b><span>把文件拖到这里 · 复制到 <code>shelf</code> 文件夹</span>'
+      : '把文件拖到这里 · 复制到 <code>shelf</code> 文件夹'}</div>
+    ${emptyShelf ? '' : `<div class="shelf-list">${rows}</div>`}
     ${clipBlock}
   </div>`;
 }
