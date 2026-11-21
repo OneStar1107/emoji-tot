@@ -14,6 +14,22 @@ param([string]$CityB64, [switch]$AutoLocate)
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 
+# One retry behind each Open-Meteo request. The TLS stack on this machine
+# occasionally closes the first connection ("基础连接已经关闭"), and a second
+# attempt 400ms later usually gets through. A retried request that still fails
+# throws that error, so the caller's error path does not change.
+function Invoke-WithRetry([string]$Label, [string]$Uri) {
+  for ($attempt = 1; ; $attempt++) {
+    try {
+      return Invoke-RestMethod -Uri $Uri -TimeoutSec 12
+    } catch {
+      if ($attempt -ge 2) { throw }
+      [Console]::Error.WriteLine("[weather] retry $Label after: $($_.Exception.Message)")
+      Start-Sleep -Milliseconds 400
+    }
+  }
+}
+
 $place = $null
 
 if ($AutoLocate) {
@@ -52,7 +68,8 @@ if ($AutoLocate) {
 } else {
   $city = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($CityB64))
   $escaped = [uri]::EscapeDataString($city)
-  $geo = Invoke-RestMethod -Uri "https://geocoding-api.open-meteo.com/v1/search?name=$escaped&count=1&language=zh&format=json" -TimeoutSec 12
+  $geoUri = "https://geocoding-api.open-meteo.com/v1/search?name=$escaped&count=1&language=zh&format=json"
+  $geo = Invoke-WithRetry -Label 'geocode' -Uri $geoUri
   if (-not $geo.results -or $geo.results.Count -eq 0) { Write-Output 'null'; exit 0 }
   $hit = $geo.results[0]
   $place = [pscustomobject]@{ name = $hit.name; country = $hit.country; lat = $hit.latitude; lon = $hit.longitude }
@@ -63,7 +80,7 @@ $forecast += "&current=temperature_2m,relative_humidity_2m,apparent_temperature,
 $forecast += "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset"
 $forecast += "&timezone=auto&forecast_days=7"
 
-$data = Invoke-RestMethod -Uri $forecast -TimeoutSec 12
+$data = Invoke-WithRetry -Label 'forecast' -Uri $forecast
 
 [pscustomobject]@{
   place   = [pscustomobject]@{ name = $place.name; country = $place.country; lat = $place.lat; lon = $place.lon }

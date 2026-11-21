@@ -1,7 +1,7 @@
 {
   "name": "emoji-tot",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "EmojiTot: an expressive character for the desktop and the web, driven by a two-digit protocol",
   "type": "commonjs",
   "license": "MIT",
@@ -28,7 +28,8 @@
     "settings:audit": "node scripts/settings-audit.mjs",
     "settings:check": "node scripts/settings-audit.mjs --check",
     "check": "pnpm typecheck && pnpm build && pnpm test && pnpm docs:check && pnpm settings:check && pnpm preview && pnpm check:gallery && pnpm smoke:desktop && pnpm audit:ci && pnpm scan",
-    "ui:audit": "node apps/desktop/scripts/ui-audit.mjs"
+    "ui:audit": "node apps/desktop/scripts/ui-audit.mjs",
+    "version:check": "node scripts/check-version.mjs"
   },
   "devDependencies": {
     "gh-pages": "^6.3.0"

@@ -1287,10 +1287,6 @@ function applyServicePlan() {
   let wanted;
   if (SCHEMA) {
     wanted = SCHEMA.enabledServices(readPrefs());
-    // The messenger has no island page of its own; it follows its five app
-    // switches instead, and runs when any of them is on.
-    const messengerPrefs = readPrefs().messenger ?? {};
-    if (Object.values(messengerPrefs).some((value) => value !== false)) wanted.add('messenger');
   } else {
     wanted = new Set(Object.keys(SERVICE_PLAN));
   }
@@ -1424,7 +1420,9 @@ function startServices() {
       else if (action === 'clear') clipboardHistory.clear();
       else if (action === 'clearUnpinned') clipboardHistory.clearUnpinned();
     } else if (service === 'messenger') {
-      if (action === 'activate') messenger.activate(data?.handle);
+      /* The island sends a row's window handle as `id` (its one generic data
+         shape), so accepting only `handle` made every switch a no-op. */
+      if (action === 'activate') messenger.activate(data?.handle ?? data?.id);
     }
     return {
       focus: focus.snapshot(),

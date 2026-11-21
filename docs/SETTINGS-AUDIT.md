@@ -19,6 +19,7 @@
 | `shelf` | 置物架 | 临时收纳 | `clipboard` | 开 |
 | `devices` | 设备 | 蓝牙与电量 | `devices` | 关 |
 | `calendar` | 日程 | 月历与邀请 | `calendar` | 开 |
+| `messenger` | 消息 | 未读与切换 | `messenger` | 开 |
 
 ### 状态组件（收起时仍在胶囊里）
 
@@ -31,7 +32,7 @@
 
 ## 服务计划
 
-默认配置下运行的服务：`battery`、`calendar`、`mail`、`media`、`quota`、`todo`、`weather`。
+默认配置下运行的服务：`battery`、`calendar`、`mail`、`media`、`messenger`、`quota`、`todo`、`weather`。
 
 规则：页面开 = 服务跑；页面关 = 服务停。例外只有一条——胶囊里的状态组件还要用的服务保留
 （关掉天气页但胶囊仍显示温度时，`weather` 继续跑）。另有功能级开关独立于页面：
@@ -77,8 +78,8 @@
 | `hoverCloseDelay` | `120` | 隐藏与交互 | 渲染进程 | `island.js hover watcher` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `hoverAutoHide` | `true` | 隐藏与交互 | 渲染进程 | `island.js hover watcher` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `statusItems` | `[battery, clock, weather]` | 页面管理 | 渲染进程 | `island.js enabledStatusKeys → renderPillStatus()` | 即时 |  | draws every status item |
-| `pages` | 9/10 项开 | 页面管理 | 主进程 | `main.js applyServicePlan() · island.js enabledPages()` | 即时 | 同时控制渲染入口与后台服务 | pages drive services |
-| `pageOrder` | `[music, weather, quota, mail, focus, todo, health, shelf, devices, calendar]` | 页面管理 | 渲染进程 | `island.js enabledPages()` | 即时 |  | pages drive services |
+| `pages` | 10/11 项开 | 页面管理 | 主进程 | `main.js applyServicePlan() · island.js enabledPages()` | 即时 | 同时控制渲染入口与后台服务 | pages drive services |
+| `pageOrder` | `[music, weather, quota, mail, focus, todo, health, shelf, devices, calendar, messenger]` | 页面管理 | 渲染进程 | `island.js enabledPages()` | 即时 |  | pages drive services |
 | `defaultPage` | `music` | 页面管理 | 渲染进程 | `island.js initial page selection` | 重启后 | 下次打开生效 | lists every path · writes dotted keys through setPath |
 | `weather.city` | `香港` | 天气 | 主进程 | `main.js refreshWeather()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `weather.unit` | `c` | 天气 | 渲染进程 | `island.js renderPillStatus() / weather card` | 即时 |  | lists every path · writes dotted keys through setPath |

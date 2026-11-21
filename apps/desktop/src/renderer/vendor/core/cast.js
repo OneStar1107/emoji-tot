@@ -28,7 +28,9 @@ const RAW = [
     ['lizi', '梨子', 'Pear', 'fruit', 'pear', 'green', 'leaf', 'shy', 'wobble', '上小下大，天生适合被捧在手心。'],
     ['xinbao', '心宝', 'Hearty', 'form', 'heart', 'pink', 'blush', 'excited', 'bounce', '心形，跳得比说话快。'],
     ['youling', '幽灵', 'Ghosty', 'form', 'ghost', 'white', 'patch', 'playful', 'float', '半圆顶波浪底，不是吓人只是透明。'],
-    ['jiqiren', '机器人', 'Beep', 'form', 'tot', 'gray', 'antenna', 'working', 'pulse', '圆角方身加天线，按一下会响。'],
+    // Beep's antenna is part of the tot body; a trait on top would draw a second
+    // one, detached, at the size the island renders (0.5.1).
+    ['jiqiren', '机器人', 'Beep', 'form', 'tot', 'gray', '', 'working', 'pulse', '圆角方身加天线，按一下会响。'],
 ];
 export const CAST = RAW.map(([id, zh, en, family, body, color, trait, face, motion, desc]) => ({
     id,

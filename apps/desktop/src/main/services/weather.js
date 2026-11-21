@@ -15,6 +15,19 @@ const path = require('node:path');
 const { cachePath, readJson, writeJson, scriptFile } = require('../paths');
 
 const CACHE_TTL = 10 * 60 * 1000;
+
+/**
+ * How long a failed lookup is remembered, in this process only.
+ *
+ * A failure is never written to disk: the next five-minute tick should try
+ * again. But the island can open, a settings refresh can be asked for and the
+ * timer can tick within seconds of each other, and each of those used to spawn
+ * another PowerShell round-trip against a network already known to be down.
+ * Thirty seconds folds that burst into one attempt.
+ */
+const FAILURE_TTL = 30 * 1000;
+/** The last failed lookup: { key, at, message }. */
+let failure = null;
 const SCRIPT = scriptFile('weather.ps1');
 
 /** WMO weather codes, the vocabulary Open-Meteo answers in. */
@@ -110,7 +123,17 @@ async function load(city, autoLocate) {
   if (saved && saved.city === key && saved.data && Date.now() - saved.data.fetchedAt < CACHE_TTL) {
     return saved.data;
   }
-  const data = normalize(await fetchRemote(city, autoLocate));
+  if (failure && failure.key === key && Date.now() - failure.at < FAILURE_TTL) {
+    throw new Error(failure.message);
+  }
+  let data;
+  try {
+    data = normalize(await fetchRemote(city, autoLocate));
+  } catch (error) {
+    failure = { key, at: Date.now(), message: String(error?.message ?? error) };
+    throw error;
+  }
+  failure = null;
   writeJson(file, { city: key, data });
   return data;
 }

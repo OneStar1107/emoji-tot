@@ -77,6 +77,12 @@ let battery = null;
 let weather = null;
 let media = { active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '' };
 let lyrics = null;
+/*
+ * The music page's second state: the words own the page. This is a view flag,
+ * not a preference — nothing writes it to prefs, so every start opens in the
+ * default card and the mode is re-entered from the lyric window.
+ */
+let musicLyricsMode = false;
 let focusState = { phase: 'idle', running: false, remaining: 0, total: 0, cycles: 0 };
 let healthState = { enabled: false, waterMin: 45, standMin: 60, sinceWater: 0, sinceStand: 0, waterDue: false, standDue: false, waterCount: 0, standCount: 0 };
 let todos = [];
@@ -102,9 +108,11 @@ let pageIndex = 0;
  */
 const enabledPages = () => {
   const on = prefs.pages && typeof prefs.pages === 'object' ? prefs.pages : null;
-  const order = Array.isArray(prefs.pageOrder) && prefs.pageOrder.length
-    ? prefs.pageOrder
-    : PAGES.map((p) => p.key);
+  const stored = Array.isArray(prefs.pageOrder) && prefs.pageOrder.length ? prefs.pageOrder : [];
+  /* A page added to the manifest after this profile was written is not in its
+     stored order. Appending it is what makes "add a page" show up on an
+     existing profile instead of waiting for prefs.json to be reset. */
+  const order = stored.concat(PAGES.map((p) => p.key).filter((key) => !stored.includes(key)));
   // The main process fills in every schema default, so a missing key here only
   // happens before the first prefs payload arrives — then show everything.
   const isOn = (key) => (on && key in on ? on[key] !== false : true);
@@ -389,12 +397,22 @@ function currentLyricLine() {
 
 const clip = (text, max) => (String(text).length > max ? String(text).slice(0, max - 1) + '…' : String(text));
 
-function lyricSliceHtml(index) {
+function lyricSliceHtml(index, span = 3) {
   if (!lyrics?.synced || !lyrics.lines.length) return '<span class="lyric-empty">这首歌没有同步歌词</span>';
-  const start = Math.max(0, index - 1);
+  /*
+   * data-n is the signed distance from "now": the default window shows one
+   * line either side, lyrics mode two, and the stylesheet fades by |data-n|.
+   * Carrying the distance instead of relying on child position keeps two lines
+   * visible above and below the current one when the window hits the start or
+   * the end of the song and cannot be recentred.
+   */
+  const start = Math.max(0, index - (span - 1) / 2);
   return lyrics.lines
-    .slice(start, start + 3)
-    .map((line, offset) => `<p class="lyric-line${start + offset === index ? ' on' : ''}">${escapeHtml(line.text)}</p>`)
+    .slice(start, start + span)
+    .map((line, offset) => {
+      const distance = start + offset - index;
+      return `<p class="lyric-line${distance === 0 ? ' on' : ''}" data-n="${distance}">${escapeHtml(line.text)}</p>`;
+    })
     .join('');
 }
 
@@ -429,6 +447,22 @@ function musicPage() {
     ? `<img class="cover-img" src="${media.art}" alt="" />`
     : `<div class="cover">${svg(ICON.music)}</div>`;
   /*
+   * The output badge names the device the sound leaves through. Only some
+   * Windows media sessions report an endpoint, so it is drawn when the frame
+   * actually carries an output field: a placeholder would claim a route we
+   * have not been told about. It is a badge, not a key — nothing to press.
+   */
+  const output = media.output
+    ? `<span class="music-out" title="输出设备：${escapeHtml(media.output)}" aria-label="输出设备：${escapeHtml(media.output)}">${svg(ICON.volume)}</span>`
+    : '';
+  /*
+   * Lyrics mode is entered from the lyric window itself, and only when there
+   * are synced lines to fill the page with. With the lyric window switched off
+   * in settings there is nothing to tap, so the second state stays unreachable.
+   */
+  const canLyrics = prefs.music?.lyrics !== false && Boolean(lyrics?.synced && lyrics.lines?.length);
+  const lyricMode = canLyrics && musicLyricsMode;
+  /*
    * Cover + one lyric line + progress + four keys, stacked to the top of the
    * page. The old block centred a 56px cover and a three-line 54px lyric
    * window, so the page read as three islands inside the card. The lyric stays
@@ -436,15 +470,17 @@ function musicPage() {
    * underneath (the previous line is hidden by CSS), and the heights are fixed
    * so a long title or a font preference cannot push the controls past 205px.
    */
-  return `<div class="music">
+  return `<div class="music" data-music="${lyricMode ? 'lyrics' : 'default'}">
     <div class="music-row">
-      <div class="music-cover">${art}</div>
+      <div class="music-cover">${art}${output}</div>
       <div class="music-meta">
         <b>${escapeHtml(media.title || '未命名')}</b>
         <span>${escapeHtml(media.artist || media.album || (browser ? '媒体 · ' + (media.source || '浏览器') : media.source || ''))}</span>
       </div>
     </div>
-    ${prefs.music?.lyrics === false ? '' : `<div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>`}
+    ${prefs.music?.lyrics === false
+      ? ''
+      : `<div class="lyric-box" data-lyric-box${canLyrics ? ` role="button" tabindex="0" data-lyric-toggle="1" aria-pressed="${lyricMode}" aria-label="${lyricMode ? '收起歌词' : '展开歌词'}"` : ''}>${lyricSliceHtml(lyricAt(media.position), lyricMode ? 5 : 3)}</div>`}
     ${live
       ? '<div class="music-bar live"><i></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span>直播</span></div>'
       : '<div class="music-bar"><i data-progress style="width:' + pct.toFixed(1) + '%"></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-dur>' + clock(media.duration) + '</span></div>'}
@@ -459,9 +495,11 @@ function musicPage() {
       <div class="volume-body" data-volume-body>
         <div class="volume-head">
           <button type="button" data-volume="mute" aria-label="静音" aria-pressed="false" title="静音">${svg(ICON.volume)}</button>
+        </div>
+        <div class="volume-slide">
+          <input type="range" min="0" max="100" step="1" value="0" aria-label="音量" data-volume-range disabled />
           <output data-volume-value>--</output>
         </div>
-        <input type="range" min="0" max="100" step="1" value="0" aria-label="音量" data-volume-range disabled />
       </div>
       <p class="volume-note" data-volume-note hidden>系统音量不可用</p>
     </div>
@@ -623,7 +661,10 @@ function updateMusicLive() {
   if (index !== lastLyricIndex) {
     lastLyricIndex = index;
     const box = pagesEl.querySelector('[data-lyric-box]');
-    if (box) box.innerHTML = lyricSliceHtml(index);
+    if (box) {
+      const span = box.closest('.music')?.dataset.music === 'lyrics' ? 5 : 3;
+      box.innerHTML = lyricSliceHtml(index, span);
+    }
   }
 }
 
@@ -836,34 +877,71 @@ function quotaPage() {
 }
 
 /**
- * Message apps: who is running, and how many unread the title admits.
+ * "(3) 张三" is a window title; a row wants the conversation.
  *
- * It lives above the mailbox because both answer "is anyone waiting for me?",
- * and a row's button brings that app's window forward — the island is a
- * switchboard, not a reader.
+ * The probe publishes only that title, so its unread prefix is stripped here.
+ * The app label stays in front of the name on purpose: six pixels of colour
+ * beside "张三" does not say which app is waiting.
  */
-function messengerBlock(limit) {
+function sessionLabel(app) {
+  const label = String(app.label ?? '');
+  let title = String(app.title ?? '').replace(/^\s*(?:\(\d+\)|\[\d+\s*条|\d+\s*条)\s*/, '').trim();
+  if (title.startsWith(label)) title = title.slice(label.length).replace(/^\s*[-–—·:：]\s*/, '').trim();
+  return title && title !== label ? label + ' · ' + title : label;
+}
+
+/** Rows the message centre shows at once; the rest scroll inside the list. */
+const MESSAGE_ROWS = 4;
+
+/**
+ * Message centre: every running app, one 24px row each, grouped by app.
+ *
+ * The probe publishes one window title per app (plus how many windows it has),
+ * so a group is one row today; the group wrapper is what keeps a second window
+ * under the same dot instead of looking like a new app. The row is the whole
+ * switch — clicking it brings that window forward (messenger:activate).
+ *
+ * No "全部已读" button: Windows exposes no way to mark an app read, and
+ * services/messenger.js only starts, stops, snapshots and activates. A button
+ * with nothing behind it is worse than no button.
+ */
+function messengerPage() {
   const apps = messengerState?.apps ?? [];
-  if (!apps.length) return '';
-  /* Every mailbox page caps the switchboard at three rows plus a count: with
-     five apps running, five rows plus the mail block stacked 43px past the
-     panel. The count line keeps the hidden apps visible as running. */
-  const shown = limit ? apps.slice(0, limit) : apps;
-  const rows = shown
-    .map((app) => `<div class="msg-item">
-      <span class="msg-dot${app.unread ? ' on' : ''}"></span>
-      <span class="msg-name">${escapeHtml(app.label)}</span>
-      <span class="msg-count">${app.unread ? app.unread + ' 条' : '运行中'}</span>
-      <button type="button" class="msg-open" data-local="messenger:activate" data-id="${app.handle}">切过去</button>
-    </div>`)
+  if (!apps.length) {
+    /* One line and one action, at the top: an empty box reads as a failure. */
+    return `<div class="msg-page msg-page-empty">
+      <p class="msg-empty-line">没有消息应用在运行</p>
+      <button type="button" class="ghost" data-action="settings:comm">去设置</button>
+    </div>`;
+  }
+  const groups = apps
+    .map((app) => {
+      const name = sessionLabel(app);
+      const pending = Number(app.unread) || 0;
+      const aria = name + '，' + (pending ? pending + ' 条未读，' : '') + '切过去';
+      return `<div class="msg-group" data-app="${escapeHtml(app.id)}">
+      <button type="button" class="msg-row" data-local="messenger:activate" data-id="${escapeHtml(app.handle)}" title="${escapeHtml(app.title || app.label)}" aria-label="${escapeHtml(aria)}">
+        <span class="msg-dot" aria-hidden="true"></span>
+        <span class="msg-session">${escapeHtml(name)}</span>
+        <span class="msg-unread">${pending ? pending : ''}</span>
+      </button>
+    </div>`;
+    })
     .join('');
-  const more = apps.length > shown.length
-    ? `<div class="msg-more">还有 ${apps.length - shown.length} 个在运行</div>`
-    : '';
   const unread = apps.reduce((sum, app) => sum + (Number(app.unread) || 0), 0);
-  return `<div class="msg">
-    <div class="msg-head"><span>消息</span><span class="spacer"></span><span>${unread ? unread + ' 条未读' : '没有未读'}</span></div>
-    ${rows}
+  /* The number is the page's answer, so it owns the first line and is tabular;
+     the two words beside it are what turn it into a sentence. */
+  const head = unread
+    ? `<b class="msg-total">${unread}</b><span class="msg-total-label">条未读</span>`
+    : '<span class="msg-quiet">没有未读</span>';
+  /* A list that silently hides a fifth app is a list you cannot trust: the
+     count line carries the rows below the fold the way the device page does. */
+  const more = apps.length > MESSAGE_ROWS
+    ? `<div class="msg-more">还有 ${apps.length - MESSAGE_ROWS} 个应用</div>`
+    : '';
+  return `<div class="msg-page">
+    <div class="msg-top">${head}</div>
+    <div class="msg-list">${groups}</div>
     ${more}
   </div>`;
 }
@@ -905,14 +983,15 @@ function mailPage() {
   const visible = messages.slice(0, 9);
   const unread = visible.filter((message) => !message.seen).length;
   const sync = state.syncing ? '同步中' : state.error ? '部分失败' : state.lastSync ? timeOf(state.lastSync) + ' 更新' : '';
-  /* The messenger switchboard used to sit above the list; the tabs own the
-     first 22px now, so a compact "消息 N" entry opens the same app list as a
-     popover over the rows. It exists only while an app is running — a dead
-     control is worse than a missing one. */
+  /* The tab line's one door to the message centre: "消息 N" opens that page.
+     It is drawn only while that page is switched on — the rows, the empty state
+     and the settings hint all live there, so an entry jumping into a hidden
+     page would be exactly the dead control the popover was. */
   const apps = messengerState?.apps ?? [];
   const msgUnread = apps.reduce((sum, app) => sum + (Number(app.unread) || 0), 0);
-  const msgEntry = apps.length
-    ? `<span class="mail-msg"><button type="button" class="mail-msg-entry" aria-haspopup="true" aria-label="消息应用">消息 ${msgUnread}</button><span class="mail-msg-pop" role="menu">${apps.slice(0, 3).map((app) => `<button type="button" class="mail-msg-row" role="menuitem" data-local="messenger:activate" data-id="${escapeHtml(app.handle)}"><i${app.unread ? ' class="on"' : ''}></i><span class="mail-msg-name">${escapeHtml(app.label)}</span><em>${app.unread ? app.unread + ' 条' : '运行中'}</em></button>`).join('')}${apps.length > 3 ? `<span class="mail-msg-more">还有 ${apps.length - 3} 个在运行</span>` : ''}</span></span>`
+  const msgPageOn = enabledPages().some((page) => page.key === 'messenger');
+  const msgEntry = msgPageOn
+    ? `<button type="button" class="mail-msg-entry" data-goto="messenger" aria-label="消息${msgUnread ? '，' + msgUnread + ' 条未读' : ''}">消息${msgUnread ? ' ' + msgUnread : ''}</button>`
     : '';
   /* The sync note rides on the tab line: a separate head row above the list
      pushed the last message past the content box. */
@@ -1288,47 +1367,70 @@ function clipLabel(text) {
 const DEVICE_ICON = '<path d="m7 7 10 10-5 5V2l5 5L7 17"/>';
 
 /**
- * Paired Bluetooth devices: one row each, at most three.
+ * Battery first, paired devices second.
  *
- * A row is icon, name, a 60x3 battery bar and the number — the number is the
- * point, so it is tabular and right-aligned while the bar only gives it a shape.
- * A device with no battery property still gets a row: knowing the headset is
- * connected is half the answer. Three rows is the density the page promises;
- * the count line carries the rest rather than a scrolling list that would hide
- * the levels below the fold.
+ * The level is the page's answer, so it owns the first line at 30px in tabular
+ * figures; charging is one quiet caption under it. The 4px bar below only gives
+ * the number a shape, and it changes colour in three bands — red under 20,
+ * amber under 50, the accent from there up — so the state is legible before the
+ * digits are read.
  *
- * The Bluetooth switch is a status dot, not a button: the island cannot toggle
- * the radio, and a switch that only looks interactive is a false affordance.
+ * A device row is 28px: 20px glyph, name at 12.5 with an ellipsis, a 60x3 bar
+ * and the number at 11 in tabular figures. A device with no battery property
+ * still gets a row — "the headset is connected" is half the answer — with an
+ * em dash where the number would be. Three rows is the density the page
+ * promises; the count line carries the rest rather than a scrolling list that
+ * would hide the levels below the fold.
+ *
+ * The footer dot is a status, not a switch: the island cannot toggle the radio,
+ * and a switch that only looks interactive is a false affordance. No system
+ * Bluetooth settings sheet is wired behind this page, so the row carries no
+ * action either — a button that opens nothing is the same lie.
  */
 function devicesPage() {
   const list = devicesState?.devices ?? [];
+  /* One source for both the number and the bar: a missing battery is "-", not 0. */
+  const knownLevel = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const level = Number(value);
+    if (!Number.isFinite(level)) return null;
+    return Math.max(0, Math.min(100, Math.round(level)));
+  };
+  const toneOf = (level) => (level === null ? '' : level < 20 ? ' bad' : level < 50 ? ' warn' : '');
+  const level = knownLevel(battery?.level);
+  const hero = `<div class="dev-hero">
+      <b class="dev-level">${level === null ? '—' : `${level}<span>%</span>`}</b>
+      <span class="dev-charge">${level === null ? '未检测到电池' : battery?.charging ? '充电中' : '使用电池'}</span>
+    </div>
+    <div class="dev-power${toneOf(level)}" aria-hidden="true"><i style="width:${level === null ? 0 : level}%"></i></div>`;
   if (!list.length) {
-    return `<div class="dev dev-empty">
-      <div class="dev-head"><span class="dev-bt"><i></i>蓝牙</span></div>
-      <p class="dev-empty-line">没有已连接的蓝牙设备</p>
-      <button type="button" class="ghost" data-action="settings:general">去设置</button>
+    return `<div class="dev">
+      ${hero}
+      <div class="dev-empty">
+        <p class="dev-empty-line">没有已连接的蓝牙设备</p>
+        <button type="button" class="ghost" data-action="settings:general">去设置</button>
+      </div>
+      <div class="dev-foot"><span class="dev-bt"><i></i>蓝牙</span></div>
     </div>`;
   }
   const shown = list.slice(0, 3);
   const rest = list.length - shown.length;
   const rows = shown
     .map((device) => {
-      const raw = device.battery;
-      const known = raw !== null && raw !== undefined && raw !== '' && Number.isFinite(Number(raw));
-      const level = known ? Math.max(0, Math.min(100, Math.round(Number(raw)))) : 0;
-      const low = known && level <= 20;
+      const level = knownLevel(device.battery);
       return `<div class="dev-item">
         <span class="dev-icon">${svg(DEVICE_ICON)}</span>
         <span class="dev-name">${escapeHtml(device.name)}</span>
-        <span class="dev-meter${low ? ' low' : ''}" aria-hidden="true"><i style="width:${level}%"></i></span>
-        <span class="dev-bat${low ? ' low' : ''}">${known ? level + '%' : '—'}</span>
+        <span class="dev-meter${toneOf(level)}" aria-hidden="true"><i style="width:${level === null ? 0 : level}%"></i></span>
+        <span class="dev-bat${toneOf(level)}">${level === null ? '—' : level + '%'}</span>
       </div>`;
     })
     .join('');
   return `<div class="dev">
-    <div class="dev-head"><span class="dev-bt"><i class="on"></i>蓝牙</span><span class="spacer"></span><span class="dev-count">${list.length} 台</span></div>
+    ${hero}
     <div class="dev-list">${rows}</div>
-    ${rest > 0 ? `<div class="dev-more">还有 ${rest} 台已配对</div>` : ''}
+    ${rest > 0 ? `<div class="dev-more">还有 ${rest} 台</div>` : ''}
+    <div class="dev-foot"><span class="dev-bt"><i class="on"></i>蓝牙</span></div>
   </div>`;
 }
 
@@ -1343,6 +1445,7 @@ const RENDERERS = {
   health: healthPage,
   shelf: shelfPage,
   calendar: calendarPage,
+  messenger: messengerPage,
 };
 
 /** Replace local state from any snapshot (bootstrap, push or action reply). */
@@ -1950,6 +2053,15 @@ panelEl.addEventListener('click', (event) => {
   }
   if (volumePanelOpen && !event.target.closest('[data-volume-panel]')) closeVolumePanel();
 
+  /* The lyric window is the switch between the card and lyrics mode. */
+  const lyricToggle = event.target.closest('[data-lyric-toggle]');
+  if (lyricToggle) {
+    musicLyricsMode = !musicLyricsMode;
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
+
   const mediaButton = event.target.closest('[data-media]');
   if (mediaButton) {
     api.control(mediaButton.dataset.media);
@@ -2019,6 +2131,20 @@ panelEl.addEventListener('click', (event) => {
     event.stopPropagation();
     return;
   }
+  /* A control that opens another page ("消息 N" on the mail tab line). The
+     index is resolved against the live page list, so a page switched off in
+     settings is simply not a target. */
+  const gotoButton = event.target.closest('[data-goto]');
+  if (gotoButton) {
+    const target = enabledPages().findIndex((page) => page.key === gotoButton.dataset.goto);
+    if (target >= 0) {
+      pageDir = target >= pageIndex ? 1 : -1;
+      pageIndex = target;
+      renderPage(true);
+    }
+    event.stopPropagation();
+    return;
+  }
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action) {
     const [kind, page] = action.split(':');
@@ -2052,6 +2178,15 @@ panelEl.addEventListener('input', (event) => {
 panelEl.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && volumePanelOpen) {
     closeVolumePanel();
+    event.stopPropagation();
+    return;
+  }
+
+  /* The lyric window is focusable, so it answers the keyboard as well. */
+  if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-lyric-toggle]')) {
+    musicLyricsMode = !musicLyricsMode;
+    renderPage();
+    event.preventDefault();
     event.stopPropagation();
     return;
   }
@@ -2391,7 +2526,10 @@ api.onClipboard((value) => {
 api.onMessenger((value) => {
   if (!value || !Array.isArray(value.apps)) return;
   messengerState = value;
-  if (open && enabledPages()[pageIndex]?.key === 'mail') renderPage();
+  const current = enabledPages()[pageIndex]?.key;
+  /* The probe pushes on every title change, so the row list is the page's only
+     live data; the mail tab line's count reads the same snapshot. */
+  if (open && (current === 'messenger' || current === 'mail')) renderPage();
 });
 
 /*

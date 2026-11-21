@@ -57,11 +57,13 @@ const islandCss = readFileSync(resolve(here, '..', 'src', 'renderer', 'island.cs
 
 describe('island mailbox page fits its 205px budget', () => {
   it('caps the messenger switchboard and summarises the rest', () => {
-    assert.match(islandJs, /function messengerBlock/, 'the switchboard must still exist');
-    const block = islandJs.slice(islandJs.indexOf('function messengerBlock'));
+    // 0.6.0 moved the switchboard out of the mailbox page into its own page.
+    assert.match(islandJs, /function messengerPage/, 'the switchboard must still exist');
+    const block = islandJs.slice(islandJs.indexOf('function messengerPage'));
     const body = block.slice(0, block.indexOf('\n}'));
-    assert.match(body, /slice\(0,/, 'rows must be capped, not unbounded');
+    assert.match(islandJs, /MESSAGE_ROWS/, 'the row cap is a named constant');
     assert.match(body, /msg-more/, 'the overflow row tells the user how many are left');
+    assert.match(body, /messenger:activate/, 'a row still brings its window forward');
   });
 
   it('lets the mailbox column scroll instead of clipping the button', () => {

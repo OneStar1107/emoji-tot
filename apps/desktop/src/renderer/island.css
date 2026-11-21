@@ -872,6 +872,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 /* The cover is the anchor of the page; the text column beside it owns the
    ellipsis and the one-line lyric window. */
 .music-cover {
+  position: relative;
   width: 96px;
   height: 96px;
   border-radius: 12px;
@@ -882,6 +883,25 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .music-cover .cover-img,
 .music-cover .cover { width: 100%; height: 100%; border-radius: 12px; }
 .music-cover .cover svg { width: 22px; height: 22px; }
+/*
+ * The output badge sits in the cover's top-right corner: the device the sound
+ * leaves through, not a key. 18px is a label, not a target — nothing here is
+ * clickable — and the title attribute carries the full device name, which a
+ * 96px cover has no room to print.
+ */
+.music-out {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(10, 10, 12, 0.62);
+  color: var(--ink);
+}
+.music-out svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .music-meta { min-width: 0; display: flex; flex-direction: column; flex: 1; justify-content: center; gap: 0; }
 .music-meta b { font-size: 14.5px; line-height: 1.25; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .music-meta > span { margin-top: 2px; font-size: 11.5px; line-height: 1.35; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -909,7 +929,10 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  * budget. The lyric window shows the current line at reading size and drops
  * the previous one; the next line stays as a dimmed, bottom-faded preview.
  */
-.music .lyric-box { margin-top: 4px; height: 24px; min-height: 24px; padding: 0; gap: 2px; justify-content: flex-start; overflow: hidden; flex: none; }
+/* 28px box with a 4px top inset: the same 24px window as before, with the
+   whole row as a 28px tap target for lyrics mode. */
+.music .lyric-box { margin-top: 0; height: 28px; min-height: 28px; padding: 4px 0 0; gap: 2px; justify-content: flex-start; overflow: hidden; flex: none; }
+.music .lyric-box[data-lyric-toggle] { cursor: pointer; }
 .music .lyric-box .lyric-line { font-size: 12.5px; line-height: 1.3; font-weight: 400; opacity: 0.45; }
 .music .lyric-box .lyric-line.on {
   font-size: 15.5px;
@@ -925,9 +948,50 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   -webkit-mask-image: linear-gradient(180deg, #000 25%, rgba(0, 0, 0, 0.08) 100%);
   mask-image: linear-gradient(180deg, #000 25%, rgba(0, 0, 0, 0.08) 100%);
 }
+/*
+ * Lyrics mode: tapping the window trades the cover row for the words.
+ *
+ * The header already carries the track title, so the page spends its whole box
+ * on lyrics: two faded lines above the current one, two below, the rail shrunk
+ * to a 2px hairline sitting on the bottom, and the transport still in the last
+ * 40px row. Fading is keyed to data-n (signed distance from "now") rather than
+ * child position, so a window clamped at the first or last line of a song
+ * still reads as "this one, and the four around it".
+ */
+.music[data-music="lyrics"] .music-row { display: none; }
+.music[data-music="lyrics"] .lyric-box {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  margin-top: 0;
+  padding: 0 2px;
+  gap: 0;
+  justify-content: space-between;
+}
+.music[data-music="lyrics"] .lyric-box .lyric-line {
+  font-size: 12px;
+  line-height: 1.3;
+  opacity: 0.55;
+}
+.music[data-music="lyrics"] .lyric-box .lyric-line.on {
+  font-size: 15.5px;
+  line-height: 1.25;
+  font-weight: 600;
+  opacity: 1;
+}
+.music[data-music="lyrics"] .lyric-box .lyric-line[data-n="-2"],
+.music[data-music="lyrics"] .lyric-box .lyric-line[data-n="2"] { opacity: 0.3; }
+.music[data-music="lyrics"] .lyric-box .lyric-line:first-child:not(.on) { display: block; }
+.music[data-music="lyrics"] .lyric-box .lyric-line.on + .lyric-line {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.music[data-music="lyrics"] .music-bar { height: 2px; border-radius: 1px; margin-top: 4px; }
+.music[data-music="lyrics"] .music-bar i { border-radius: 1px; }
+.music[data-music="lyrics"] .music-times { display: none; }
 /* A track without synced lyrics keeps one 11px line where the lyric would
    start; the 24px slot exists for a lyric row, so it collapses to the text. */
-.music .lyric-box:has(> .lyric-empty) { height: auto; min-height: 0; margin-top: 3px; }
+.music .lyric-box:has(> .lyric-empty) { height: auto; min-height: 0; margin-top: 3px; padding-top: 0; }
 .music .lyric-empty { padding: 0; font-size: 11px; line-height: 1.25; color: var(--faint); }
 .music .music-bar { height: 4px; border-radius: 2px; margin-top: 8px; flex: none; }
 .music .music-bar i { border-radius: 2px; }
@@ -995,7 +1059,18 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 }
 .volume-head button:hover { background: var(--surface-2); opacity: 1; }
 .volume-head button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.volume-head output { margin-left: auto; font-size: 13px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+/* The reading sits beside the slider, not above it: 11px tabular digits in a
+   reserved slot, so 100 and 8 do not move the thumb's lane. */
+.volume-slide { display: flex; align-items: center; gap: 8px; }
+.volume-panel .volume-slide input[type="range"] { flex: 1 1 auto; width: auto; min-width: 0; }
+.volume-slide output {
+  min-width: 22px;
+  font-size: 11px;
+  line-height: 1;
+  text-align: right;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
 .volume-panel input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -1386,39 +1461,54 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   to { transform: translateX(320%); }
 }
 
-/* Paired devices: one row each; the battery number is the point. */
+/* Battery and paired devices: the charge answers first, the list explains. */
 .dev { display: flex; flex-direction: column; margin-top: -8px; }
-.dev-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 22px;
-  font-size: 11px;
-  color: var(--dim);
-  flex: none;
+/*
+ * 30px is the page's one big number; tabular figures keep it from shifting when
+ * the level ticks over. The unit rides small so the digits stay the subject,
+ * and the charge state is one quiet caption under it — a fact, not a headline.
+ */
+.dev-hero { display: flex; flex-direction: column; gap: 4px; }
+.dev-level {
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
-.dev-head .spacer { flex: 1; }
-/* Bluetooth is a state, not a switch: the island cannot toggle the radio, so a
-   control here would be a button that draws a lie. */
-.dev-bt { display: inline-flex; align-items: center; gap: 5px; }
-.dev-bt i { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
-.dev-bt i.on { background: var(--good); }
-.dev-count { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
-.dev-list { display: flex; flex-direction: column; }
-.dev-item { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 2px; font-size: 12.5px; }
+.dev-level span { font-size: 15px; color: var(--dim); }
+.dev-charge { font-size: 11.5px; line-height: 1.2; color: var(--dim); }
+/*
+ * 4px, not 6: the bar is a scale, not a card. Three bands answer "will this last
+ * the afternoon" before the number is read — red under 20, amber under 50, the
+ * accent from there up.
+ */
+.dev-power { height: 4px; margin-top: 6px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.dev-power i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+.dev-power.bad i { background: var(--bad); }
+.dev-power.warn i { background: var(--warn); }
+/* 28px a row: 20px glyph, 12.5px name, a 60x3 bar, an 11px number. */
+.dev-list { display: flex; flex-direction: column; margin-top: 8px; }
+.dev-item { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 2px; font-size: 12.5px; }
 .dev-icon { display: flex; width: 20px; height: 20px; color: var(--dim); flex: none; }
 .dev-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .dev-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
 .dev-meter { width: 60px; height: 3px; border-radius: 2px; background: var(--surface-2); overflow: hidden; flex: none; }
-.dev-meter i { display: block; height: 100%; background: var(--good); border-radius: 2px; }
-.dev-meter.low i { background: var(--bad); }
+.dev-meter i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.dev-meter.bad i { background: var(--bad); }
+.dev-meter.warn i { background: var(--warn); }
 .dev-bat { width: 32px; text-align: right; color: var(--ink); font-size: 11px; font-variant-numeric: tabular-nums; flex: none; }
-.dev-bat.low { color: var(--bad); }
-.dev-more { padding: 2px 2px 0; font-size: 10.5px; color: var(--faint); }
-/* No devices: one line and one action, 81px tall instead of a centred page. */
-.dev-empty { height: auto; }
-.dev-empty-line { margin: 8px 2px; font-size: 12.5px; color: var(--dim); }
-.dev-empty .ghost { align-self: flex-start; }
+.dev-bat.bad { color: var(--bad); }
+.dev-more { margin-top: 4px; padding: 0 2px; font-size: 10.5px; line-height: 12px; color: var(--faint); }
+/* Empty: one line and one action, 70px from the page top, never a centred page. */
+.dev-empty { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.dev-empty-line { margin: 0; font-size: 12.5px; color: var(--dim); }
+/* Bluetooth is a state, not a switch; with no settings sheet wired, no action. */
+.dev-foot { display: flex; align-items: center; height: 28px; margin-top: 4px; font-size: 11px; color: var(--dim); }
+.dev-bt { display: inline-flex; align-items: center; gap: 6px; }
+.dev-bt i { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
+.dev-bt i.on { background: var(--good); }
 
 /* Repeating tasks: one word where the due date already lives. */
 .todo-repeat {
@@ -1458,67 +1548,97 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   color: var(--ink);
 }
 
-/* Message apps: the switchboard above the mailbox. */
-.msg {
-  /*
-   * 2px, not 10: the mailbox list starts on the row after the switchboard
-   * instead of leaving an 18.7px band (8px padding + 1px rule + 10px margin)
-   * between the two halves of the page.
-   */
-  margin-bottom: 2px;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 8px;
+/*
+ * Message centre: the unread total, then one 24px row per running app.
+ *
+ * The 8px lift cancels .pages' 12px top padding, so the total starts 4px from
+ * the panel's top edge like every other page; the box gives the 8px back at the
+ * bottom. Four rows is the density the page promises — a fifth scrolls inside
+ * the list instead of pushing the panel past 217px.
+ */
+.msg-page {
+  display: flex;
+  flex-direction: column;
+  margin-top: -8px;
+  min-height: 0;
 }
+.msg-page-empty { align-items: flex-start; gap: 6px; }
+.msg-empty-line { margin: 0; font-size: 12.5px; color: var(--dim); }
 
-.msg-more {
-  padding: 4px 2px;
-  font-size: 11px;
-  color: var(--faint);
+/* The number is the page's answer: first in reading order, tabular so a push
+   does not shift it, and the only 20px type on the page. */
+.msg-top { display: flex; align-items: center; gap: 4px; height: 28px; flex: none; }
+.msg-total { font-size: 20px; line-height: 1; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.msg-total-label { font-size: 11px; color: var(--dim); }
+.msg-quiet { font-size: 12.5px; color: var(--dim); }
+
+/* 4 x 24px (MESSAGE_ROWS in island.js). The list, not the page, scrolls. */
+.msg-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 96px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
 }
+.msg-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
+/* The rows below the fold, named the way the device page names its extra
+   devices: a scroll with no visible scrollbar needs a sentence. */
+.msg-more { padding: 2px 2px 0; font-size: 10.5px; color: var(--faint); }
 
-.msg-head {
+/* One group per app. Today the probe publishes a single window title per app,
+   so a group is one row; the wrapper is what keeps a second window under the
+   same colour dot instead of looking like a new app. */
+.msg-group { display: flex; flex-direction: column; flex: none; }
+
+.msg-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  color: var(--faint);
-  margin-bottom: 4px;
-}
-
-.msg-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 2px;
-  font-size: 12px;
-}
-
-.msg-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--faint);
+  height: 24px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   flex: none;
 }
+.msg-row:hover { background: var(--surface-1); }
+.msg-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-.msg-dot.on { background: var(--bad); }
+.msg-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
 
-.msg-name { flex: none; color: var(--ink); }
+/* Six pixels cannot carry a brand mark: these are the apps' dominant hues,
+   spread far enough apart to stay tellable from each other on all five skins. */
+.msg-group[data-app="wechat"] .msg-dot { background: #2fbf5c; }
+.msg-group[data-app="qq"] .msg-dot { background: #3b82f6; }
+.msg-group[data-app="wecom"] .msg-dot { background: #22b8cf; }
+.msg-group[data-app="feishu"] .msg-dot { background: #a855f7; }
+.msg-group[data-app="dingtalk"] .msg-dot { background: #f59e0b; }
 
-.msg-count { flex: 1; color: var(--dim); font-size: 11.5px; }
-
-.msg-open {
-  background: var(--surface-1);
-  border: 0;
-  color: var(--dim);
-  border-radius: 7px;
-  padding: 3px 8px;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
+.msg-session {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
-.msg-open:hover { background: var(--surface-2); color: var(--ink); }
+/* Right rail: always 26px wide so a push that changes one number cannot shift
+   the names; the blank state of a running app stays blank, not "0". */
+.msg-unread {
+  flex: none;
+  width: 26px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.msg-unread:not(:empty) { color: var(--ink); font-weight: 600; }
 
 /* Clipboard history lives under the shelf: both are "things I just had". */
 .clip {
@@ -1762,35 +1882,14 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .mail-tab-radio:focus-visible + .mail-tab { outline: 2px solid var(--accent); outline-offset: 1px; }
 .mail-tab-spacer { flex: 1; }
 .mail-sync { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
-/* The messenger entry on the tab line: "消息 N", with the app list in a popover
-   under it. The switchboard is gone from the page, so this is the one door to
-   the running apps — and it only exists while one is running. */
-.mail-msg { position: relative; display: inline-flex; align-items: center; flex: none; }
+/* The one door from the mailbox to the message centre: "消息 N" opens that
+   page. No popover — the page owns the rows, the empty state and the hint. */
 .mail-msg-entry {
-  height: 22px; padding: 0 6px; border: 0; border-radius: 6px; background: none;
+  flex: none; height: 22px; padding: 0 6px; border: 0; border-radius: 6px; background: none;
   color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer;
 }
 .mail-msg-entry:hover { color: var(--ink); background: var(--surface-1); }
-.mail-msg-pop {
-  display: none; position: absolute; top: 100%; right: 0; z-index: 3; min-width: 150px;
-  padding: 6px; border-radius: 8px; border: 1px solid var(--line);
-  background: var(--card); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(10px);
-}
-/* Focus, not a click state: the entry is a button, so clicking anywhere else
-   moves the focus out and closes the popover with no outside-click handler. */
-.mail-msg:focus-within .mail-msg-pop { display: flex; flex-direction: column; }
-.mail-msg-row {
-  display: flex; align-items: center; gap: 6px; width: 100%; height: 22px;
-  padding: 0 6px; border: 0; border-radius: 5px; background: none;
-  color: var(--ink); font-size: 11.5px; text-align: left; cursor: pointer;
-}
-.mail-msg-row:hover { background: var(--surface-1); }
-.mail-msg-row i { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); flex: none; }
-.mail-msg-row i.on { background: var(--bad); }
-.mail-msg-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mail-msg-row em { font-style: normal; font-size: 10.5px; color: var(--dim); font-variant-numeric: tabular-nums; flex: none; }
-.mail-msg-more { padding: 2px 6px 0; font-size: 10px; color: var(--faint); }
+.mail-msg-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .mail-list { display: flex; flex-direction: column; }
 .mail-row { position: relative; display: flex; align-items: center; gap: 8px; height: 20px; padding: 0 2px 0 9px; border-radius: 6px; animation: row-in 200ms var(--ease); }
 .mail-row:hover { background: var(--surface-1); }

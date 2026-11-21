@@ -37,6 +37,9 @@ export const PAGE_MANIFEST = [
   { key: 'shelf', title: '置物架', sub: '临时收纳', icon: 'tray', service: null, alsoServices: ['clipboard'] },
   { key: 'devices', title: '设备', sub: '蓝牙与电量', icon: 'tray', service: 'devices' },
   { key: 'calendar', title: '日程', sub: '月历与邀请', icon: 'calendar', service: 'calendar' },
+  // One page for every message app. It starts the probe its rows are read from,
+  // and the rows are switches, not a reader: Windows exposes no "mark read".
+  { key: 'messenger', title: '消息', sub: '未读与切换', icon: 'mail', service: 'messenger' },
 ];
 
 /**
@@ -137,7 +140,7 @@ export const PRESET_MANIFEST = [
   {
     key: 'full',
     label: '全部',
-    description: '开启全部十页，保留默认状态组件。',
+    description: '开启全部十一页，保留默认状态组件。',
     pages: PAGE_MANIFEST.map((page) => page.key),
     statusItems: ['battery', 'clock', 'weather'],
     defaultPage: 'music',
@@ -231,8 +234,9 @@ export const DEFAULTS = {
     shelf: true,
     devices: false,
     calendar: true,
+    messenger: true,
   },
-  pageOrder: ['music', 'weather', 'quota', 'mail', 'focus', 'todo', 'health', 'shelf', 'devices', 'calendar'],
+  pageOrder: ['music', 'weather', 'quota', 'mail', 'focus', 'todo', 'health', 'shelf', 'devices', 'calendar', 'messenger'],
   defaultPage: 'music',
 
   /* grouped */

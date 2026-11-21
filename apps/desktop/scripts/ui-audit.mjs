@@ -41,9 +41,11 @@
  *   pnpm ui:audit -- --skins all  # all five skins, 10 island pages each
  *   pnpm ui:audit -- --skins all --stress  # skin × stress matrix: 5 × 10 island pages
  *
- * A first launch can be measured before the island has a box: every page then
- * reads scrollHeight 0. That pass is relaunched once and the report says
- * "retried"; two zero passes in a row are a violation, never a PASS.
+ * A first launch can be measured before the island has a box: pages then read
+ * scrollHeight 0, and a half-ready window shows up as a few real measurements
+ * among zeros rather than ten of them. Three or more zero pages are that
+ * window; the pass is relaunched once and the report says "retried". A second
+ * such pass is a violation that names the pages, never a PASS.
  *
  * Exit code is 1 as soon as one page violates the contract, so this can be a
  * gate. Every failure carries the page, the metric and the offending element.
@@ -858,18 +860,31 @@ async function runPass(options, name, skin, measureSettings, stress) {
   }
 }
 
+/** How many zero-height pages mean the window was not laid out yet. */
+const ZERO_PAGE_LIMIT = 3;
+
+/** Pages whose `.pages` box measured 0: no layout, not a small layout. */
+function zeroHeightPages(pass) {
+  return (pass.island?.pages ?? []).filter((page) => page.metrics && page.metrics.scrollHeight === 0);
+}
+
 /**
  * Did this pass measure a window that had not been laid out yet?
  *
  * A first launch can reach CDP before the island has a box: the panel answers
- * every DOM query, but it is still display:none, so `.pages` measures 0 on all
- * ten pages. That is not a layout, it is a window that never got ready — and
- * reporting it as PASS would publish ten zeros as if they were measurements.
- * The pass is relaunched once; two zero passes in a row are a real failure.
+ * every DOM query, but it is still display:none, so pages measure 0. Waiting
+ * for every page to read 0 missed the real case — a half-laid-out window that
+ * reported three real pages and seven zeros, and the zeros were published as
+ * if they were measurements. Three or more zero pages is that window. The pass
+ * is relaunched once; a second one is a failure that names the pages.
  */
 function windowNotReady(pass) {
-  const pages = pass.island?.pages ?? [];
-  return pages.length > 0 && pages.every((page) => page.metrics && page.metrics.scrollHeight === 0);
+  return zeroHeightPages(pass).length >= ZERO_PAGE_LIMIT;
+}
+
+/** "待办、音乐、邮件" — which pages measured 0, for the failure message. */
+function nameZeroPages(pass) {
+  return zeroHeightPages(pass).map((page) => page.title || page.key || '#' + (page.index + 1)).join('、');
 }
 
 /* --------------------------------------------------------------- output */
@@ -901,7 +916,7 @@ function printPass(pass, skinsMode, settingsMeasuredOn) {
     ' · ' + pass.prefs.font + ' / ' + pass.prefs.weight + ' / ' + pass.prefs.uiScale + '%');
   /* A relaunched pass has to say so: its numbers came from the second launch,
      and a reader comparing two reports must be able to see why they differ. */
-  if (pass.retried) console.log('  retried: the first launch had not laid the window out yet (ten pages measured 0)');
+  if (pass.retried) console.log('  retried: the first launch had not laid the window out yet (pages measured scrollHeight 0)');
   console.log('');
   console.log('Island · ' + island.foundPages + '/' + island.expectedPages + ' pages · .pages ' +
     (first ? first.boxHeight + 'px − ' + first.paddingTop + 'px padding = ' + first.availableHeight + 'px available' : 'n/a'));
@@ -1038,18 +1053,24 @@ async function main() {
     let retried = false;
     try {
       pass = await runPass(options, item.name, item.skin, item.measureSettings, item.stress);
-      /* The launch is the flaky part, not the page: when all ten pages read
-         scrollHeight 0 nothing was laid out, so relaunch this skin once
-         instead of reporting zeros. The retry is marked on the pass and in
-         the console, and the second zero pass is the failure. */
+      /* The launch is the flaky part, not the page: three or more pages that
+         read scrollHeight 0 mean the window never finished laying out, so
+         relaunch this skin once instead of reporting zeros. The retry is
+         marked on the pass and in the console; a second one is the failure,
+         and it says which pages were 0. */
       if (windowNotReady(pass)) {
         retried = true;
-        console.error('[ui-audit] ' + item.name + ': all ten island pages measured scrollHeight 0 — window not ready, relaunching this pass once (retried)');
+        console.error('[ui-audit] ' + item.name + ': ' + zeroHeightPages(pass).length +
+          ' island pages measured scrollHeight 0 (' + nameZeroPages(pass) +
+          ') — window not ready, relaunching this pass once (retried)');
         pass = await runPass(options, item.name, item.skin, item.measureSettings, item.stress);
         pass.retried = true;
         if (windowNotReady(pass)) {
+          const zeros = zeroHeightPages(pass);
           const notReady = issue('window-not-ready',
-            '窗口未就绪：十页 scrollHeight 全为 0，自动重启该皮肤一次后仍为 0');
+            '窗口未就绪：' + zeros.length + ' 页 scrollHeight 为 0（' + nameZeroPages(pass) +
+            '），自动重启该皮肤一次后仍为 0',
+            zeros.map((page) => ({ page: page.title, key: page.key, scrollHeight: 0 })));
           pass.issues.push(notReady);
           pass.island.issues.push(notReady);
         }
