@@ -184,6 +184,8 @@ export const DEFAULTS = {
      Default sits at the minimum — the folded island should be a strip with a
      face in it, not a small card, and the user can grow it from the settings. */
   pillHeight: 30,
+  /** Space between the island and the top edge of the work area, in px. */
+  islandTopGap: 8,
   sizeKey: 'md',
   pinned: true,
   clickThrough: true,
@@ -480,6 +482,7 @@ export function pageOfPath(path) {
     reduceMotion: 'appearance',
     islandWidth: 'layout',
     pillHeight: 'layout',
+    islandTopGap: 'layout',
     sizeKey: 'layout',
     pinned: 'layout',
     clickThrough: 'layout',
@@ -552,6 +555,7 @@ export const CONSUMERS = {
 
   islandWidth: { scope: 'renderer', at: 'island.js --island-w', live: true },
   pillHeight: { scope: 'renderer', at: 'island.js --pill-h', live: true },
+  islandTopGap: { scope: 'main', at: 'main/island.js place() · topEdge()', live: true },
   sizeKey: { scope: 'main', at: 'main.js createWindow() SIZES[sizeKey]', live: false, note: '改尺寸需要重开球窗口' },
   pinned: { scope: 'main', at: 'main.js createWindow() alwaysOnTop · applyMainPrefs()', live: true },
   clickThrough: { scope: 'main', at: 'main/island.js · main.js setIgnoreMouseEvents', live: true },

@@ -37,6 +37,7 @@ const FEATURES = {
     quota: true,
     calendar: true,
     clipboard: true,
+    volume: true,
   },
   darwin: {
     // Battery has a real pmset reader; nothing else does.

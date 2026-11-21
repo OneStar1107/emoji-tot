@@ -57,6 +57,7 @@
 | `reduceMotion` | `false` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-reduce-motion]` | 即时 | 关掉呼吸与跳动，保留状态变化 | lists every path · writes dotted keys through setPath |
 | `islandWidth` | `420` | 尺寸与位置 | 渲染进程 | `island.js --island-w` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `pillHeight` | `30` | 尺寸与位置 | 渲染进程 | `island.js --pill-h` | 即时 |  | lists every path · writes dotted keys through setPath |
+| `islandTopGap` | `8` | 尺寸与位置 | 主进程 | `main/island.js place() · topEdge()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `sizeKey` | `md` | 尺寸与位置 | 主进程 | `main.js createWindow() SIZES[sizeKey]` | 重启后 | 改尺寸需要重开球窗口 | has a SERVICE_PLAN entry · lists every path |
 | `pinned` | `true` | 尺寸与位置 | 主进程 | `main.js createWindow() alwaysOnTop · applyMainPrefs()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `clickThrough` | `true` | 尺寸与位置 | 主进程 | `main/island.js · main.js setIgnoreMouseEvents` | 即时 |  | has a SERVICE_PLAN entry · lists every path |

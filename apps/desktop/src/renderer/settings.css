@@ -479,6 +479,159 @@ body { display: flex; flex-direction: column; }
   opacity: 0.82;
 }
 
+/* ----------------------------------------------------- live skin preview */
+/*
+ * The 96×64 live preview under the skin cards.
+ *
+ * The five 56×36 samples above draw each skin's idea; this box paints the
+ * island's CURRENT skin out of the island's own variable names — --card,
+ * --card-solid, --accent, --ink, --line, --ui-font — redefined per skin key
+ * below exactly as island.css defines them on body[data-skin=…]. Switching
+ * skin re-renders this page, so the box is the new skin on the next paint and
+ * never goes stale the way a screenshot would.
+ *
+ * Scope: the variables deliberately shadow the settings tokens of the same
+ * name inside .skin-preview only. Nothing else in this window sits under that
+ * selector, so the rest of the page keeps its own --card / --accent.
+ *
+ * Radii echo the radius each skin's smaller parts use in island.css: the
+ * panel's --radius for frost/solid, magazine's 11px cards, console's 3px
+ * instrument blocks, and plain's near-square minimal card.
+ */
+.skin-preview {
+  /* The island's --radius lives on its :root; this window has no copy, so the
+     fallback is the island default and a set radius still wins when it is
+     published here. */
+  --pv-radius: calc(var(--radius, 22px) * 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 96px;
+  height: 64px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--pv-radius);
+  background: var(--card);
+  box-shadow: var(--hi);
+  overflow: hidden;
+  font-family: var(--ui-font);
+}
+.skin-preview .sp-pill {
+  display: flex;
+  align-items: center;
+  width: 44px;
+  height: 13px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--card-solid);
+  flex: none;
+}
+.skin-preview .sp-dot { display: block; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
+.skin-preview .sp-body { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: 4px; min-height: 0; }
+.skin-preview .sp-title {
+  font-family: var(--ui-font);
+  font-size: 9px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+.skin-preview .sp-bar { height: 3px; width: 70%; border-radius: 2px; background: var(--accent); flex: none; }
+
+/* frost: the island default — translucent card, purple accent. */
+.skin-preview[data-skin-preview="frost"] {
+  --card: rgba(21, 21, 25, 0.9);
+  --card-solid: #151519;
+  --accent: #8f7bff;
+  --ink: #f2f2f5;
+  --line: rgba(255, 255, 255, 0.1);
+}
+/* solid: the same card, opaque; the pill goes with it. */
+.skin-preview[data-skin-preview="solid"] {
+  --card: #151519;
+  --card-solid: #151519;
+  --accent: #8f7bff;
+  --ink: #f2f2f5;
+  --line: rgba(255, 255, 255, 0.1);
+}
+/* plain: card plus the collapsed line it rests as, so the preview shows the
+   rest state rather than only the fill. */
+.skin-preview[data-skin-preview="plain"] {
+  --card: #151519;
+  --card-solid: #151519;
+  --accent: #8f7bff;
+  --ink: #f2f2f5;
+  --line: rgba(255, 255, 255, 0.1);
+  --pv-radius: 4px;
+}
+.skin-preview[data-skin-preview="plain"] .sp-pill {
+  width: 100%;
+  height: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: var(--ink);
+  opacity: 0.45;
+}
+.skin-preview[data-skin-preview="plain"] .sp-dot { display: none; }
+/* magazine: warm paper, gold accent, serif headline, small card radius. */
+.skin-preview[data-skin-preview="magazine"] {
+  --card: rgba(20, 19, 24, 0.94);
+  --card-solid: #141318;
+  --accent: #e9c46a;
+  --ink: #f2f2f5;
+  --line: rgba(255, 255, 255, 0.075);
+  --pv-radius: 11px;
+  --ui-font: Georgia, "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", "宋体", serif;
+}
+.skin-preview[data-skin-preview="magazine"] .sp-pill { border-radius: 5px; background: var(--card); }
+/* console: the cold plate, cyan accent, mono readout, instrument corners. */
+.skin-preview[data-skin-preview="console"] {
+  --card: #0b1017;
+  --card-solid: #0b1017;
+  --accent: #4fd1ff;
+  --ink: #e6f4ff;
+  --line: rgba(120, 190, 255, 0.2);
+  --pv-radius: 3px;
+  --ui-font: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+}
+.skin-preview[data-skin-preview="console"] .sp-pill { border-radius: 2px; background: var(--card); }
+
+/* The light theme flips the island's surfaces too; the preview follows the
+   same values island.css uses under body[data-theme="light"].
+   The font family is not repeated: it belongs to the skin, not the theme. */
+html[data-theme="light"] .skin-preview[data-skin-preview="frost"] {
+  --card: rgba(255, 255, 255, 0.92);
+  --card-solid: #fbfbfd;
+  --accent: #5b48d9;
+  --ink: #1a1a1e;
+  --line: rgba(0, 0, 0, 0.1);
+}
+html[data-theme="light"] .skin-preview[data-skin-preview="solid"],
+html[data-theme="light"] .skin-preview[data-skin-preview="plain"] {
+  --card: #ffffff;
+  --card-solid: #ffffff;
+  --accent: #5b48d9;
+  --ink: #1a1a1e;
+  --line: rgba(0, 0, 0, 0.1);
+}
+html[data-theme="light"] .skin-preview[data-skin-preview="magazine"] {
+  --card: #fcfaf4;
+  --card-solid: #fcfaf4;
+  --accent: #8a6410;
+  --ink: #1a1a1e;
+  --line: rgba(32, 26, 14, 0.13);
+}
+html[data-theme="light"] .skin-preview[data-skin-preview="console"] {
+  --card: #f2f7fc;
+  --card-solid: #f2f7fc;
+  --accent: #0b6fb8;
+  --ink: #0b1520;
+  --line: rgba(11, 76, 140, 0.22);
+}
+
 /* select */
 select.ctl {
   height: 26px;

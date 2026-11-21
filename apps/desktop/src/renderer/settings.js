@@ -112,6 +112,21 @@ const skinPreviewCards = () =>
     '</button>').join('') +
   '</div>';
 
+/*
+ * 实时预览：96×64 的迷你岛，不是截图。
+ *
+ * 盒子带 data-skin-preview 和当前皮肤键，settings.css 把每套皮肤映射到岛自己
+ * 的变量名（--card / --accent / --radius / --ui-font），所以换皮肤后本页重绘，
+ * 盒子在下一帧就是新皮肤。用变量画而不是放图：皮肤一改，预览不会过期。
+ */
+const skinPreviewRow = () =>
+  row('实时预览', '与岛同源，换皮肤立即更新',
+    '<span class="skin-preview" data-skin-preview="' + escapeHtml(prefs.skin ?? 'frost') +
+      '" role="img" aria-label="当前皮肤实时预览">' +
+      '<span class="sp-pill"><i class="sp-dot"></i></span>' +
+      '<span class="sp-body"><span class="sp-title">EmojiTot</span><span class="sp-bar"></span></span>' +
+    '</span>');
+
 const rowSelect = (label, sub, key, options, selected) =>
   row(label, sub, '<select class="ctl" data-act="set" data-key="' + key + '">' + options.map(([value, text]) =>
     '<option value="' + value + '"' + (String(selected ?? valueOf(key)) === String(value) ? ' selected' : '') + '>' +
@@ -211,6 +226,7 @@ function pageAppearance() {
       /* The cards carry the name and the look of every skin; the text segment row
          above them repeated the same five labels, so it is gone. */
       row('皮肤', '毛玻璃半透明、实色卡片、极简收成一条线、杂志衬线版、控制台仪表', skinPreviewCards()),
+      skinPreviewRow(),
       rowToggle('背景模糊', '关掉后是纯色卡片', 'blur'),
       rowRange('圆角', '卡片的圆角半径', 'radius', 12, 30, 1, 'px'),
       rowRange('界面缩放', '岛与球按此比例绘制', 'uiScale', 80, 140, 5, '%'),
@@ -240,6 +256,7 @@ function pageLayout() {
     group('灵动岛', card([
       rowRange('面板宽度', '展开状态的宽度', 'islandWidth', 360, 560, 10, 'px'),
       rowRange('收起高度', '折叠时只留脸的那条：越小越窄', 'pillHeight', 30, 44, 1, 'px'),
+      rowRange('顶部留白', '岛与屏幕顶边之间留出的空隙', 'islandTopGap', 0, 24, 1, 'px'),
     ])) +
     group('桌面球', card([
       rowSeg('尺寸', '球的直径', 'sizeKey', [['xs', '64'], ['sm', '88'], ['md', '120'], ['lg', '160'], ['xl', '220']]),

@@ -14,10 +14,12 @@
  * What it measures
  * ----------------
  *   island (10 pages)   .pages is a fixed 217px box with 12px of top padding,
- *                       so 205px of content is visible. scrollHeight above
- *                       that, content that spills out of the box, text that is
- *                       clipped without an ellipsis, scroll areas that collapsed
- *                       to zero height, and interactive controls under 20px.
+ *                       so 205px of content is visible and 200px is the working
+ *                       budget (every page leaves the bottom 5px clear).
+ *                       scrollHeight above the box, content that spills out of
+ *                       it, text that is clipped without an ellipsis, scroll
+ *                       areas that collapsed to zero height, and interactive
+ *                       controls under 20px.
  *   settings (14 pages) horizontal overflow of the content column, elements
  *                       that escape their card, clipped text, and controls
  *                       under 20px. The settings window scrolls vertically by
@@ -38,6 +40,10 @@
  *   pnpm ui:audit -- --skin solid # one skin; written to prefs.json before launch
  *   pnpm ui:audit -- --skins all  # all five skins, 10 island pages each
  *   pnpm ui:audit -- --skins all --stress  # skin × stress matrix: 5 × 10 island pages
+ *
+ * A first launch can be measured before the island has a box: every page then
+ * reads scrollHeight 0. That pass is relaunched once and the report says
+ * "retried"; two zero passes in a row are a violation, never a PASS.
  *
  * Exit code is 1 as soon as one page violates the contract, so this can be a
  * gate. Every failure carries the page, the metric and the offending element.
@@ -852,6 +858,20 @@ async function runPass(options, name, skin, measureSettings, stress) {
   }
 }
 
+/**
+ * Did this pass measure a window that had not been laid out yet?
+ *
+ * A first launch can reach CDP before the island has a box: the panel answers
+ * every DOM query, but it is still display:none, so `.pages` measures 0 on all
+ * ten pages. That is not a layout, it is a window that never got ready — and
+ * reporting it as PASS would publish ten zeros as if they were measurements.
+ * The pass is relaunched once; two zero passes in a row are a real failure.
+ */
+function windowNotReady(pass) {
+  const pages = pass.island?.pages ?? [];
+  return pages.length > 0 && pages.every((page) => page.metrics && page.metrics.scrollHeight === 0);
+}
+
 /* --------------------------------------------------------------- output */
 
 const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/;
@@ -879,6 +899,9 @@ function printPass(pass, skinsMode, settingsMeasuredOn) {
   console.log('');
   console.log('== ' + heading +
     ' · ' + pass.prefs.font + ' / ' + pass.prefs.weight + ' / ' + pass.prefs.uiScale + '%');
+  /* A relaunched pass has to say so: its numbers came from the second launch,
+     and a reader comparing two reports must be able to see why they differ. */
+  if (pass.retried) console.log('  retried: the first launch had not laid the window out yet (ten pages measured 0)');
   console.log('');
   console.log('Island · ' + island.foundPages + '/' + island.expectedPages + ' pages · .pages ' +
     (first ? first.boxHeight + 'px − ' + first.paddingTop + 'px padding = ' + first.availableHeight + 'px available' : 'n/a'));
@@ -919,7 +942,8 @@ function printPass(pass, skinsMode, settingsMeasuredOn) {
 
   const settingsIssues = settings?.issues ?? [];
   const surfaceIssues = [
-    ...island.issues.filter((item) => item.code === 'page-count' || (item.code === 'page-error' && !island.pages.some((page) => page.issues.includes(item)))),
+    ...island.issues.filter((item) => item.code === 'page-count' || item.code === 'window-not-ready' ||
+      (item.code === 'page-error' && !island.pages.some((page) => page.issues.includes(item)))),
     ...settingsIssues.filter((item) => item.code === 'page-count' || (item.code === 'page-error' && !settings.pages.some((page) => page.issues.includes(item)))),
   ];
   if (pass.issues.length) {
@@ -1011,13 +1035,31 @@ async function main() {
   for (const item of plan) {
     console.error('[ui-audit] ' + item.name + ' pass: launching ' + options.exe);
     let pass;
+    let retried = false;
     try {
       pass = await runPass(options, item.name, item.skin, item.measureSettings, item.stress);
+      /* The launch is the flaky part, not the page: when all ten pages read
+         scrollHeight 0 nothing was laid out, so relaunch this skin once
+         instead of reporting zeros. The retry is marked on the pass and in
+         the console, and the second zero pass is the failure. */
+      if (windowNotReady(pass)) {
+        retried = true;
+        console.error('[ui-audit] ' + item.name + ': all ten island pages measured scrollHeight 0 — window not ready, relaunching this pass once (retried)');
+        pass = await runPass(options, item.name, item.skin, item.measureSettings, item.stress);
+        pass.retried = true;
+        if (windowNotReady(pass)) {
+          const notReady = issue('window-not-ready',
+            '窗口未就绪：十页 scrollHeight 全为 0，自动重启该皮肤一次后仍为 0');
+          pass.issues.push(notReady);
+          pass.island.issues.push(notReady);
+        }
+      }
     } catch (error) {
       /* One skin that cannot start must not erase the four that already did:
          the failure becomes a FAIL report for that skin and the run goes on. */
       console.error('[ui-audit] ' + item.name + ': ' + (error?.stack || error?.message || error));
       pass = failedPass(item.name, item.skin, error, item.stress);
+      if (retried) pass.retried = true;
     }
     passes.push(pass);
     report.passes.push(stripPass(pass));
@@ -1078,6 +1120,7 @@ function failedPass(name, skin, error, stress = false) {
 function stripPass(pass) {
   return {
     name: pass.name,
+    retried: Boolean(pass.retried),
     stress: Boolean(pass.stress),
     prefs: pass.prefs,
     island: pass.island,

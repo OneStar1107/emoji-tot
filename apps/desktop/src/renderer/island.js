@@ -35,6 +35,8 @@ const svg = (body, cls = '') =>
 
 const ICON = {
   music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  volume: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.6 8.4a5 5 0 0 1 0 7.2"/><path d="M18.4 5.8a9 9 0 0 1 0 12.4"/>',
+  volumeOff: '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m16 9 5 6M21 9l-5 6"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4a2 2 0 0 1 0 4H9"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
@@ -451,8 +453,158 @@ function musicPage() {
       <button type="button" class="main" data-media="toggle" aria-label="${media.playing ? '暂停' : '播放'}">${svg(media.playing ? ICON.pause : ICON.play)}</button>
       <button type="button" data-media="next" aria-label="下一首">${svg(ICON.next)}</button>
       <button type="button" data-action="settings:music" aria-label="歌词设置" title="歌词设置">${svg('<path d="M4 7h16M4 12h9M4 17h13"/>')}</button>
+      <button type="button" data-volume="toggle" aria-label="系统音量" aria-expanded="false" aria-controls="volume-panel" title="系统音量">${svg(ICON.volume)}</button>
+    </div>
+    <div class="volume-panel" id="volume-panel" data-volume-panel data-state="loading" hidden>
+      <div class="volume-body" data-volume-body>
+        <div class="volume-head">
+          <button type="button" data-volume="mute" aria-label="静音" aria-pressed="false" title="静音">${svg(ICON.volume)}</button>
+          <output data-volume-value>--</output>
+        </div>
+        <input type="range" min="0" max="100" step="1" value="0" aria-label="音量" data-volume-range disabled />
+      </div>
+      <p class="volume-note" data-volume-note hidden>系统音量不可用</p>
     </div>
   </div>`;
+}
+
+/*
+ * The volume key is a fifth control, not a switch on the player.
+ *
+ * A player's own volume only changes that player; this panel drives the
+ * machine's master volume through CoreAudio in the main process, which is
+ * what the volume keys on a keyboard change. The panel is absolutely
+ * positioned and 96px tall: the page's 205px box is already full, so anything
+ * that opened in the flow would either scroll or push the keys out of view.
+ *
+ * The first open pays for starting the PowerShell watcher; after that a drag
+ * is a line on its stdin. Sets are coalesced here so a fast drag never builds
+ * a queue of old positions behind the one the finger is on now.
+ */
+let volumeState = { volume: null, muted: false };
+let volumePanelOpen = false;
+let volumeSetBusy = false;
+let volumeSetPending = null;
+let volumeFailed = false;
+
+function paintVolume() {
+  const panel = pagesEl.querySelector('[data-volume-panel]');
+  const toggle = pagesEl.querySelector('[data-volume="toggle"]');
+  if (toggle) toggle.setAttribute('aria-expanded', String(volumePanelOpen));
+  if (!panel) return;
+  panel.hidden = !volumePanelOpen;
+  panel.dataset.state = volumeFailed ? 'error' : volumeState.volume === null ? 'loading' : 'ready';
+  const body = panel.querySelector('[data-volume-body]');
+  const note = panel.querySelector('[data-volume-note]');
+  if (body) body.hidden = volumeFailed;
+  if (note) note.hidden = !volumeFailed;
+  const value = panel.querySelector('[data-volume-value]');
+  if (value) value.textContent = volumeState.volume === null ? '--' : String(volumeState.volume);
+  const range = panel.querySelector('[data-volume-range]');
+  if (range) {
+    range.disabled = volumeState.volume === null;
+    if (document.activeElement !== range) range.value = String(volumeState.volume ?? 0);
+  }
+  const mute = panel.querySelector('[data-volume="mute"]');
+  if (mute) {
+    mute.disabled = volumeState.volume === null;
+    mute.setAttribute('aria-pressed', String(volumeState.muted));
+    const label = volumeState.muted ? '取消静音' : '静音';
+    mute.setAttribute('aria-label', label);
+    mute.title = label;
+    mute.innerHTML = svg(volumeState.muted ? ICON.volumeOff : ICON.volume);
+  }
+}
+
+/** One failed read is a permanent state for this page until it re-renders. */
+function failVolume(state) {
+  volumeFailed = true;
+  volumeState = { volume: null, muted: false };
+  const toggle = pagesEl.querySelector('[data-volume="toggle"]');
+  if (toggle) {
+    toggle.disabled = true;
+    toggle.title = '系统音量不可用';
+    toggle.setAttribute('aria-label', '系统音量不可用');
+  }
+  const note = pagesEl.querySelector('[data-volume-note]');
+  if (note && state?.error) note.title = String(state.error);
+  paintVolume();
+}
+
+function applyVolume(state) {
+  volumeFailed = false;
+  volumeState = { volume: state.volume, muted: state.muted === true };
+  paintVolume();
+}
+
+function toggleVolumePanel() {
+  volumePanelOpen = !volumePanelOpen;
+  paintVolume();
+  if (!volumePanelOpen) return;
+  // Always re-read on open: the volume keys on the keyboard can change the
+  // machine while the panel is closed, and a stale slider would lie.
+  api
+    .volumeGet()
+    .then((state) => {
+      if (!volumePanelOpen) return;
+      if (state?.ok) applyVolume(state);
+      else failVolume(state);
+    })
+    .catch((error) => failVolume({ error: error?.message }));
+}
+
+function closeVolumePanel() {
+  if (!volumePanelOpen) return;
+  volumePanelOpen = false;
+  paintVolume();
+}
+
+function setVolume(level) {
+  const value = Math.max(0, Math.min(100, Math.round(Number(level) || 0)));
+  volumeState = { ...volumeState, volume: value };
+  paintVolume();
+  if (volumeSetBusy) {
+    volumeSetPending = value;
+    return;
+  }
+  volumeSetBusy = true;
+  api
+    .volumeSet(value)
+    .then((state) => {
+      volumeSetBusy = false;
+      if (!state?.ok) {
+        volumeSetPending = null;
+        failVolume(state);
+        return;
+      }
+      volumeState = { ...volumeState, muted: state.muted === true };
+      paintVolume();
+      if (volumeSetPending !== null) {
+        const next = volumeSetPending;
+        volumeSetPending = null;
+        setVolume(next);
+      }
+    })
+    .catch(() => {
+      volumeSetBusy = false;
+    });
+}
+
+function setVolumeMute(next) {
+  const muted = next === true;
+  volumeState = { ...volumeState, muted };
+  paintVolume();
+  api
+    .volumeMute(muted)
+    .then((state) => {
+      if (state?.ok) {
+        volumeState = { ...volumeState, volume: state.volume, muted: state.muted === true };
+        paintVolume();
+      } else {
+        failVolume(state);
+      }
+    })
+    .catch((error) => failVolume({ error: error?.message }));
 }
 
 /** Cheap per-second update: progress, time and the lyric window only. */
@@ -1208,6 +1360,41 @@ function resolveTheme() {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
+/** The skin the island currently paints; null until the boot paint. */
+let appliedSkin = null;
+
+/**
+ * One 120ms cross-fade on a skin switch.
+ *
+ * The frame is dropped to 0.72 with transitions off, then handed back to the
+ * stylesheet one frame later: opacity goes 0.72 → 1 through the 120ms opacity
+ * transition on #frame instead of repainting as a jump cut. Dropping the
+ * transition for that first write matters — with it on, setting 0.72 starts a
+ * 1 → 0.72 transition, the restore then reverses a half-finished one, and the
+ * visible result is a 6ms bounce that never reaches 0.72.
+ *
+ * Opacity only: no layout number and no hit area moves, and the morph clock is
+ * untouched (that lives on #island, this is #frame). Under reduced motion the
+ * stylesheet keeps the transition off (its rules are !important), so the two
+ * values land in one style pass — the new skin simply appears.
+ *
+ * Both inline values are cleared rather than written to 1, so nothing is left
+ * outranking the skin rules or the reduce-motion rules afterwards.
+ */
+function crossFadeSkin() {
+  const frame = document.getElementById('frame');
+  if (!frame) return;
+  frame.style.transition = 'none';
+  frame.style.opacity = '0.72';
+  // Lock the drop in before the transition comes back, or the same style pass
+  // would still see a 1 → 0.72 change and animate it.
+  void frame.offsetWidth;
+  requestAnimationFrame(() => {
+    frame.style.transition = '';
+    frame.style.opacity = '';
+  });
+}
+
 function applyPrefs() {
   const root = document.documentElement;
   root.style.setProperty('--radius', `${Number(prefs.radius) || 22}px`);
@@ -1230,7 +1417,11 @@ function applyPrefs() {
   root.style.setProperty('--ui-font', fonts[prefs.font] ?? fonts.system);
   root.style.setProperty('--ui-size', `${(13 + (Number(prefs.fontSize) || 0)) * scale}px`);
   root.style.setProperty('--ui-weight', String(prefs.weight || 400));
-  document.body.dataset.skin = prefs.skin ?? 'frost';
+  const skin = prefs.skin ?? 'frost';
+  // The boot paint has nothing to fade from; every later skin value is a switch.
+  if (appliedSkin !== null && appliedSkin !== skin) crossFadeSkin();
+  appliedSkin = skin;
+  document.body.dataset.skin = skin;
   document.body.dataset.blur = prefs.blur === false ? 'off' : 'on';
   document.body.dataset.motion = prefs.motion === false ? 'off' : 'on';
   document.body.dataset.reduceMotion = prefs.reduceMotion === true ? 'on' : 'off';
@@ -1254,6 +1445,29 @@ let pageDir = 1;
 
 function renderPage(animate = false) {
   const list = enabledPages();
+  // A new page is a new DOM: the old panel (and its open state) is gone.
+  volumePanelOpen = false;
+  if (!list.length) {
+    document.body.dataset.pages = '0';
+    /* Write the inner span, never the host: textContent on #page-title would
+       delete the span the marquee needs, and every later render would find
+       nothing to write into. */
+    const titleText = titleEl.firstElementChild;
+    if (titleText) titleText.textContent = '还没有页面';
+    titleEl.dataset.over = 'false';
+    const subText = subEl.firstElementChild;
+    if (subText) subText.textContent = '去设置里打开';
+    subEl.dataset.muted = 'false';
+    subEl.dataset.over = 'false';
+    pagesEl.innerHTML = empty(ICON.check, '页面都是关的', '在设置 → 页面管理里打开至少一个。', '打开设置', 'settings:pages');
+    dotsEl.innerHTML = '';
+    dotsEl.hidden = true;
+    for (const pager of document.querySelectorAll('.pager')) {
+      pager.hidden = true;
+    }
+    measure();
+    return;
+  }
   if (!list.length) {
     document.body.dataset.pages = '0';
     /* Write the inner span, never the host: textContent on #page-title would
@@ -1727,6 +1941,15 @@ panelEl.addEventListener('pointerdown', (event) => {
 });
 
 panelEl.addEventListener('click', (event) => {
+  const volumeControl = event.target.closest('[data-volume]');
+  if (volumeControl) {
+    if (volumeControl.dataset.volume === 'toggle') toggleVolumePanel();
+    else if (volumeControl.dataset.volume === 'mute') setVolumeMute(!volumeState.muted);
+    event.stopPropagation();
+    return;
+  }
+  if (volumePanelOpen && !event.target.closest('[data-volume-panel]')) closeVolumePanel();
+
   const mediaButton = event.target.closest('[data-media]');
   if (mediaButton) {
     api.control(mediaButton.dataset.media);
@@ -1819,7 +2042,20 @@ panelEl.addEventListener('click', (event) => {
   }
 });
 
+panelEl.addEventListener('input', (event) => {
+  const range = event.target.closest('[data-volume-range]');
+  if (!range) return;
+  setVolume(Number(range.value));
+  event.stopPropagation();
+});
+
 panelEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && volumePanelOpen) {
+    closeVolumePanel();
+    event.stopPropagation();
+    return;
+  }
+
   if (event.key !== 'Enter') return;
   const input = event.target.closest('[data-todo-input]');
   if (!input) return;

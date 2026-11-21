@@ -76,6 +76,36 @@ function anchorRect(prefs) {
   return area;
 }
 
+/**
+ * How far below the screen's top edge the island sits, in pixels.
+ *
+ * Eight is the default because a pill drawn flush against the edge reads as
+ * clipped rather than anchored; zero keeps the old flush behaviour for anyone
+ * who asks for it. The settings slider is the only writer, so the clamp here
+ * guards against a hand-edited prefs.json.
+ */
+const TOP_GAP_DEFAULT = 8;
+const TOP_GAP_MAX = 24;
+
+function topGap(prefs) {
+  const raw = Number(prefs.islandTopGap);
+  if (!Number.isFinite(raw)) return TOP_GAP_DEFAULT;
+  return Math.max(0, Math.min(TOP_GAP_MAX, Math.round(raw)));
+}
+
+/**
+ * The window's top edge: the chosen display's top plus the user's gap.
+ *
+ * When avoidTopBar is false the island is deliberately allowed over a
+ * top-docked taskbar, so the display's bounds anchor it then; the gap still
+ * applies on top of whichever edge that switch picked.
+ */
+function topEdge(prefs) {
+  const display = displayFor(prefs);
+  const base = prefs.avoidTopBar === false ? display.bounds.y : (display.workArea ?? display.bounds).y;
+  return Math.round(base + topGap(prefs));
+}
+
 /** Keep the window glued to the page's measured box, centred on the display. */
 function place() {
   if (!win || win.isDestroyed()) return;
@@ -87,10 +117,12 @@ function place() {
   /*
    * The work area already excludes the taskbar, so "avoid the top bar" is the
    * default for free. Turning it off means the island may sit over a top-0
-   * docked taskbar, which is what that switch promises.
+   * docked taskbar, which is what that switch promises. Either way the top gap
+   * applies: the window — and with it the pill, the panel, the collapsed strip
+   * and the hover rectangle derived from this rectangle — starts that far below
+   * the screen's top edge.
    */
-  const display = displayFor(prefs);
-  const y = Math.round(prefs.avoidTopBar === false ? display.bounds.y : area.y);
+  const y = topEdge(prefs);
   windowRect = { x, y, width, height };
   notifyBounds();
   const bounds = win.getBounds();
@@ -287,7 +319,7 @@ function create() {
     width,
     height,
     x: Math.round(area.x + (area.width - width) / 2),
-    y: area.y,
+    y: topEdge(prefs),
     frame: false,
     transparent: true,
     resizable: false,

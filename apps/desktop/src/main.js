@@ -26,6 +26,7 @@ const { mailAction, quotaAction, calendarAction } = require('./main/data-actions
 const battery = require('./main/services/battery');
 const weather = require('./main/services/weather');
 const media = require('./main/services/media');
+const volume = require('./main/services/volume');
 const lyrics = require('./main/services/lyrics');
 const focus = require('./main/services/focus');
 const health = require('./main/services/health');
@@ -1077,6 +1078,9 @@ const checkMedia = (payload) => {
   if (payload.arg !== undefined && !guard.isNumber(payload.arg, -1e9, 1e9)) return undefined;
   return payload;
 };
+/** A slider position is a whole percent; anything else is not a volume. */
+const checkVolumeLevel = (level) => (guard.isNumber(level, 0, 100) ? Math.round(level) : undefined);
+const checkVolumeMute = (muted) => (guard.isBool(muted) ? muted : undefined);
 const checkPoint = (point) => {
   if (!guard.isPlainObject(point)) return undefined;
   if (!guard.isNumber(point.x, -100000, 100000) || !guard.isNumber(point.y, -100000, 100000)) return undefined;
@@ -1465,6 +1469,12 @@ function startServices() {
     media.command(payload.kind, Number(payload.arg) || 0);
     return media.current();
   }, { check: checkMedia, maxBytes: 1024 });
+
+  // Master volume: a read is cheap once the watcher is warm, and the set path
+  // returns the new state so the panel never shows a value it did not apply.
+  guard.guardedHandle('volume:get', ['island'], () => volume.get());
+  guard.guardedHandle('volume:set', ['island'], (level) => volume.set(level), { check: checkVolumeLevel, maxBytes: 256 });
+  guard.guardedHandle('volume:mute', ['island'], (muted) => volume.mute(muted), { check: checkVolumeMute, maxBytes: 256 });
 }
 
 /* --------------------------------------------------------------- hardening */
@@ -1637,6 +1647,7 @@ if (!gotTheLock) {
       // shutting down anyway
     }
     fullscreen.stop();
+    volume.stop();
     // Anything a service spawned but did not stop (a watcher whose kill raced the
     // quit) must not survive us: an orphan PowerShell keeps polling with a console
     // of its own and nothing on screen says where it came from.
