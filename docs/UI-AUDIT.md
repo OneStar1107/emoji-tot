@@ -4,12 +4,13 @@
 
 ```powershell
 pnpm ui:audit                  # 默认一轮：10 个岛页 + 14 个设置页
-pnpm ui:audit -- --stress      # 再加一轮：等宽字体 + 字重 600 + 缩放 140%
+pnpm ui:audit -- --stress      # 压力轮：等宽字体 + 字重 600 + 缩放 140%（可与 --skin/--skins 组合）
 pnpm ui:audit -- --json        # stdout 只有一份 JSON，适合接 CI
 pnpm ui:audit -- --port 9580   # 指定 CDP 端口
 pnpm ui:audit -- --exe <path>  # 指定另一个安装版 exe
 pnpm ui:audit -- --skin solid  # 只跑一套皮肤
 pnpm ui:audit -- --skins all   # 五套皮肤各量 10 个岛页，设置窗只量一次
+pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：五套皮肤各量 10 页，全在等宽 / 600 / 140%
 ```
 
 脚本只读界面：它不修改 `renderer/` 或 `main/` 的源码，也不碰你正在用的 profile；唯一的写入是 `%TEMP%` 下自己的临时 profile。退出码在发现违规时为 1，可以直接当闸门。
@@ -42,14 +43,24 @@ pnpm ui:audit -- --skins all   # 五套皮肤各量 10 个岛页，设置窗只�
 
 启动后脚本会读 `document.body.dataset.skin`，和预期不一致就把这一轮判失败：未知皮肤值会静默回退到 frost，报告若还挂着 solid 的标题，量到的就是另一套布局。
 
-`--skin` / `--skins` 与 `--stress` 互斥：stress 轮固定用默认皮肤，皮肤轮固定用默认字体与缩放，避免「某套皮肤 + 140%」这种组合把报告撑成二维矩阵。
+## 皮肤 × 压力矩阵（--skins all --stress）
 
-`--json` 在顶层多一层 `skins`，键是皮肤名。每套皮肤一个对象：
+两轴可以叠在一起：五套皮肤各起一次应用，每一次都用 `--stress` 的极端 prefs（`mono` / `600` / `140%`），每套量 10 个岛页，合计 **50 个岛页**。这是「每套皮肤都在压力下」的五轮，不是「默认五轮 + 压力五轮」的十轮：
+
+- 想要默认轮的基线，分开跑 `pnpm ui:audit -- --skins all`；矩阵只回答「压力下每套皮肤还守不守得住」。
+- 每轮仍然先把皮肤写进临时 profile 的 `prefs.json`，启动后核对 `body[data-skin]`；没生效就判这一轮失败，避免用 frost 的数字顶着 solid 的标题。
+- 设置窗 14 页照旧只在第一套（frost）量一次；这一轮本身也带压力 prefs（`settings.js` 的 `zoom`、字体与字重同样来自 prefs），所以量到的是「frost @ stress」。设置窗不套皮肤，换四套皮肤重测只会拿到同一份数字。
+- 人读模式每一轮的标题是 `== solid @ stress · mono / 600 / 140%`，总表标题是 `Skins @ stress`，最后一行是 `PASS 5 skins @ stress · 50 island pages · 14 settings pages`。
+- `--json` 下 `passes[]` 与 `skins.<key>` 每项都多一个 `stress`（矩阵模式为 `true`），`notes` 会多一条「every skin pass ran at mono / 600 / 140%」。
+- `--skin <一套> --stress` 也合法：只跑那一套的压力轮；设置窗仍只在那一轮量一次，同样带压力 prefs。
+
+`--json` 在顶层多一层 `skins`，键是皮肤名；默认皮肤轮与矩阵轮共用同一形状。每套皮肤一个对象：
 
 ```json
 "skins": {
   "frost": {
     "name": "frost",
+    "stress": false,
     "prefs": { "skin": "frost", "font": "system", "weight": 400, "uiScale": 100 },
     "island": { "expectedPages": 10, "foundPages": 10, "pages": [], "issues": [] },
     "settings": { "expectedPages": 14, "foundPages": 14, "pages": [], "issues": [] },
@@ -59,6 +70,7 @@ pnpm ui:audit -- --skins all   # 五套皮肤各量 10 个岛页，设置窗只�
   },
   "solid": {
     "name": "solid",
+    "stress": false,
     "prefs": { "skin": "solid", "font": "system", "weight": 400, "uiScale": 100 },
     "island": { "expectedPages": 10, "foundPages": 10, "pages": [], "issues": [] },
     "settings": null,
@@ -70,6 +82,23 @@ pnpm ui:audit -- --skins all   # 五套皮肤各量 10 个岛页，设置窗只�
 ```
 
 `skins.<key>.settings` 为 `null`、`settingsMeasured` 为 `false`，表示这一套没有再量设置窗；顶层 `settingsMeasuredOn` 说明设置窗实际量在哪套皮肤上。
+
+矩阵模式下同一条目变成 `"stress": true`，`prefs` 也换成压力值：
+
+```json
+"skins": {
+  "solid": {
+    "name": "solid",
+    "stress": true,
+    "prefs": { "skin": "solid", "font": "mono", "weight": 600, "uiScale": 140 },
+    "island": { "expectedPages": 10, "foundPages": 10, "pages": [], "issues": [] },
+    "settings": null,
+    "errors": [],
+    "violations": 0,
+    "settingsMeasured": false
+  }
+}
+```
 
 ## 阈值从哪来
 
@@ -98,7 +127,9 @@ pnpm ui:audit -- --skins all   # 五套皮肤各量 10 个岛页，设置窗只�
 
 安装版必须和当前源码的 schema 对得上。如果页数对不上，先重新构建安装，再判断是不是脚本的问题。
 
-`--stress` 的 prefs 是 `font: mono`、`weight: 600`、`uiScale: 140`，也就是最宽的字符、最重的字重、允许的最大缩放。它比默认轮更严，可能真的报出违规：例如等宽字体下固定 `font-size: 11px` 的小按钮（`.msg-open`）会掉到 18.7px。看到 exit 1 先读 `Violations` 段；这是界面问题，不是脚本报错。
+`--stress` 的 prefs 是 `font: mono`、`weight: 600`、`uiScale: 140`，也就是最宽的字符、最重的字重、允许的最大缩放。它比默认轮更严，可能真的报出违规——0.3.49 之前，等宽字体下的 `.msg-open` 按钮就掉到过 18.7px，低于 20px 下限。看到 exit 1 先读 `Violations` 段；这是界面问题，不是脚本报错。
+
+同一页的 `usedHeight` 会随页面数据异步到达而波动：天气页在同样的压力 prefs 下，重复测量拿到过 174 和 205 两种结果。判定只看是否越过 205，不比较两轮的具体数值；要拿单页的稳定数字，多跑两轮取最差值。
 
 ## 加一个页面
 
@@ -111,9 +142,9 @@ pnpm ui:audit -- --skins all   # 五套皮肤各量 10 个岛页，设置窗只�
 
 ## 输出
 
-人读模式按轮分节。单轮（默认 / `--stress` / `--skin`）是一张岛表（每页的 `scrollHeight`、`used/available`、横向越界、裁字、滚动区、小控件和 `ok/FAIL`）加设置表，最后是违规清单和这一轮的 PASS/FAIL。
+人读模式按轮分节。单轮（默认 / `--stress` / `--skin`，以及单套的 `--skin <key> --stress`）是一张岛表（每页的 `scrollHeight`、`used/available`、横向越界、裁字、滚动区、小控件和 `ok/FAIL`）加设置表，最后是违规清单和这一轮的 PASS/FAIL。
 
-`--skins all` 每套皮肤一个小节，五套跑完再打一张总表：
+`--skins all` 每套皮肤一个小节，五套跑完再打一张总表；矩阵模式下每节标题带 `@ stress`，总表也换成 `Skins @ stress`，提醒这 50 个岛页全部跑在压力 prefs 下：
 
 ```text
 Skins · island .pages scrollHeight (px) · contract ≤ 217
@@ -123,12 +154,14 @@ Skins · island .pages scrollHeight (px) · contract ≤ 217
   verdict     ok     ok     ok     FAIL      ok
 ```
 
+矩阵模式把首行换成 `Skins @ stress · island .pages scrollHeight (px) · contract ≤ 217`，并在标题下多印一行 `all skins measured at mono / 600 / 140%`。
+
 总表一眼能看出「哪套皮肤、哪一页先撞线」；最后一行是全局 PASS/FAIL，只要有任意一套违规就是 `FAIL`，退出码 1。`--json` 输出同样内容的机器可读版本，除 `passes` 外还有「皮肤」一节描述的 `skins`：
 
 ```json
 {
   "ok": false,
-  "passes": [{ "name": "solid", "prefs": { "skin": "solid", "font": "system", "weight": 400, "uiScale": 100 } }],
+  "passes": [{ "name": "solid", "stress": false, "prefs": { "skin": "solid", "font": "system", "weight": 400, "uiScale": 100 } }],
   "skins": { "frost": { "violations": 0 }, "solid": { "violations": 2 } },
   "settingsMeasuredOn": "frost",
   "notes": ["settings pages are measured once, on frost: skins restyle the island window only, the settings window keeps one layout"],

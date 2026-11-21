@@ -37,6 +37,7 @@
  *   pnpm ui:audit -- --exe <path> # another installed build
  *   pnpm ui:audit -- --skin solid # one skin; written to prefs.json before launch
  *   pnpm ui:audit -- --skins all  # all five skins, 10 island pages each
+ *   pnpm ui:audit -- --skins all --stress  # skin × stress matrix: 5 × 10 island pages
  *
  * Exit code is 1 as soon as one page violates the contract, so this can be a
  * gate. Every failure carries the page, the metric and the offending element.
@@ -100,7 +101,7 @@ function usage() {
   return [
     'Usage: node apps/desktop/scripts/ui-audit.mjs [options]',
     '',
-    '  --stress        add a second pass with mono font, weight 600, 140% scale',
+    '  --stress        measure with mono font, weight 600, 140% scale; combines with --skin/--skins',
     '  --json          print one JSON document on stdout (nothing else on stdout)',
     '  --port <n>      CDP port (default 9576; the default moves to the next free port)',
     '  --exe <path>    installed EmojiTot.exe (default %LOCALAPPDATA%\\Programs\\@emojitotdesktop\\EmojiTot.exe)',
@@ -108,8 +109,9 @@ function usage() {
     '  --skins all     all five island skins; settings pages are measured once',
     '  -h, --help      this text',
     '',
-    '  --skin/--skins and --stress are mutually exclusive.',
     '  --skin cannot be combined with --skins.',
+    '  --stress with --skins all measures the five-skin matrix: 5 × 10 island pages,',
+    '  all at mono / 600 / 140%; the settings pages are still measured once.',
   ].join('\n');
 }
 
@@ -158,9 +160,6 @@ function parseArgs(argv) {
     }
   }
   if (options.skin && options.skins) throw new Error('--skin and --skins are mutually exclusive');
-  if ((options.skin || options.skins) && options.stress) {
-    throw new Error('--skin/--skins and --stress are mutually exclusive: skin passes always run at the default font/scale');
-  }
   options.exe = options.exe ? resolve(options.exe) : '';
   return options;
 }
@@ -789,8 +788,8 @@ async function auditSettings(cdp, sessionId, errors, label) {
   return { expectedPages: expected.length, foundPages: rail.length, pages, issues };
 }
 
-async function runPass(options, name, skin, measureSettings) {
-  const passOptions = { ...options, stress: name === 'stress', skin };
+async function runPass(options, name, skin, measureSettings, stress) {
+  const passOptions = { ...options, stress: Boolean(stress), skin };
   const { child, profile, prefs } = await launchApp(passOptions);
   let browser = null;
   const errors = [];
@@ -839,6 +838,7 @@ async function runPass(options, name, skin, measureSettings) {
     return {
       name,
       skin: skin ?? prefs.skin ?? 'frost',
+      stress: Boolean(stress),
       prefs,
       island,
       settings,
@@ -871,8 +871,13 @@ function printPass(pass, skinsMode, settingsMeasuredOn) {
   const island = pass.island;
   const settings = pass.settings;
   const first = island.pages.find((page) => page.metrics)?.metrics;
+  /* A stressed skin pass is not "the stress pass, on frost": name it by both
+     axes so no line of the report can be read under the wrong prefs. */
+  const heading = pass.stress && pass.name === pass.skin
+    ? pass.skin + ' @ stress'
+    : pass.name + (pass.name === pass.skin ? '' : ' · skin ' + pass.skin);
   console.log('');
-  console.log('== ' + pass.name + (pass.name === pass.skin ? '' : ' · skin ' + pass.skin) +
+  console.log('== ' + heading +
     ' · ' + pass.prefs.font + ' / ' + pass.prefs.weight + ' / ' + pass.prefs.uiScale + '%');
   console.log('');
   console.log('Island · ' + island.foundPages + '/' + island.expectedPages + ' pages · .pages ' +
@@ -905,7 +910,10 @@ function printPass(pass, skinsMode, settingsMeasuredOn) {
         pad(m ? m.smallControls.length : '-', 7) + verdict(page));
     }
   } else {
-    console.log('Settings · skipped — measured once on ' + (settingsMeasuredOn ?? 'the first skin') +
+    const measuredOn = settingsMeasuredOn
+      ? settingsMeasuredOn.skin + (settingsMeasuredOn.stress ? ' @ stress' : '')
+      : 'the first skin';
+    console.log('Settings · skipped — measured once on ' + measuredOn +
       ' (skins restyle the island window only)');
   }
 
@@ -940,13 +948,14 @@ function printPass(pass, skinsMode, settingsMeasuredOn) {
 }
 
 /** Skin × page scrollHeight, the one table that makes five passes comparable. */
-function printSkinTable(passes) {
+function printSkinTable(passes, stress) {
   const skins = passes.filter((pass) => pass.skin);
   if (!skins.length) return;
   const pageCount = Math.max(...skins.map((pass) => pass.island.pages.length));
   const width = Math.max(4, ...skins.map((pass) => displayWidth(pass.skin))) + 2;
   console.log('');
-  console.log('Skins · island .pages scrollHeight (px) · contract ≤ 217');
+  console.log('Skins' + (stress ? ' @ stress' : '') + ' · island .pages scrollHeight (px) · contract ≤ 217');
+  if (stress) console.log('  all skins measured at mono / 600 / 140%');
   console.log('  ' + pad('page', 12) + skins.map((pass) => pad(pass.skin, width)).join(''));
   for (let index = 0; index < pageCount; index += 1) {
     const title = skins[0].island.pages[index]?.title ?? '-';
@@ -985,8 +994,8 @@ async function main() {
    * asked for it would make "frost" and "console" the same picture.
    */
   const plan = skinsMode
-    ? skinPlan.map((skin, index) => ({ name: skin, skin, measureSettings: index === 0 }))
-    : passNames.map((name) => ({ name, skin: null, measureSettings: true }));
+    ? skinPlan.map((skin, index) => ({ name: skin, skin, stress: options.stress, measureSettings: index === 0 }))
+    : passNames.map((name) => ({ name, skin: null, stress: name === 'stress', measureSettings: true }));
   const report = {
     tool: 'ui-audit',
     generatedAt: new Date().toISOString(),
@@ -1003,18 +1012,18 @@ async function main() {
     console.error('[ui-audit] ' + item.name + ' pass: launching ' + options.exe);
     let pass;
     try {
-      pass = await runPass(options, item.name, item.skin, item.measureSettings);
+      pass = await runPass(options, item.name, item.skin, item.measureSettings, item.stress);
     } catch (error) {
       /* One skin that cannot start must not erase the four that already did:
          the failure becomes a FAIL report for that skin and the run goes on. */
       console.error('[ui-audit] ' + item.name + ': ' + (error?.stack || error?.message || error));
-      pass = failedPass(item.name, item.skin, error);
+      pass = failedPass(item.name, item.skin, error, item.stress);
     }
     passes.push(pass);
     report.passes.push(stripPass(pass));
     report.issues.push(...pass.issues.map((entry) => ({ pass: item.name, ...entry })));
     if (skinsMode) report.skins[pass.skin] = { ...stripPass(pass), settingsMeasured: pass.settingsMeasured };
-    if (!options.json) printPass(pass, skinsMode, plan[0].skin);
+    if (!options.json) printPass(pass, skinsMode, passes.find((item) => item.settingsMeasured));
   }
 
   if (skinsMode) {
@@ -1023,19 +1032,23 @@ async function main() {
       'settings pages are measured once, on ' + report.settingsMeasuredOn +
         ': skins restyle the island window only, the settings window keeps one layout',
     ];
+    if (options.stress) {
+      report.notes.push('every skin pass ran at mono / 600 / 140% (the stress prefs)');
+    }
   }
 
   report.ok = report.issues.length === 0;
   if (options.json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
-    if (skinsMode) printSkinTable(passes);
+    if (skinsMode) printSkinTable(passes, options.stress);
     console.log('');
     const islandPages = passes.reduce((total, pass) => total + pass.island.foundPages, 0);
     const settingsPages = passes.reduce((total, pass) => total + (pass.settings ? pass.settings.foundPages : 0), 0);
     const failedSkins = [...new Set(passes.filter((pass) => pass.issues.length).map((pass) => pass.skin))];
     const scope = skinsMode
-      ? passes.length + ' skins · ' + islandPages + ' island pages · ' + settingsPages + ' settings pages'
+      ? passes.length + ' skins' + (options.stress ? ' @ stress' : '') + ' · ' +
+        islandPages + ' island pages · ' + settingsPages + ' settings pages'
       : islandPages + settingsPages + ' pages';
     const blame = skinsMode && failedSkins.length
       ? ' — ' + failedSkins.join(', ') + (failedSkins.length === 1 ? ' has violations' : ' have violations')
@@ -1046,12 +1059,13 @@ async function main() {
 }
 
 /** A pass that never produced measurements still has to fail the run loudly. */
-function failedPass(name, skin, error) {
+function failedPass(name, skin, error, stress = false) {
   const failure = issue('pass-error', '本轮未完成：' + (error?.message ?? error));
   return {
     name,
     skin: skin ?? 'frost',
-    prefs: seedPrefs(false, skin),
+    stress: Boolean(stress),
+    prefs: seedPrefs(stress, skin),
     island: { expectedPages: schema.PAGE_MANIFEST.length, foundPages: 0, pages: [], issues: [failure] },
     settings: null,
     settingsMeasured: false,
@@ -1064,6 +1078,7 @@ function failedPass(name, skin, error) {
 function stripPass(pass) {
   return {
     name: pass.name,
+    stress: Boolean(pass.stress),
     prefs: pass.prefs,
     island: pass.island,
     settings: pass.settings,

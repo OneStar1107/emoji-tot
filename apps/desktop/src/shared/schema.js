@@ -180,7 +180,10 @@ export const DEFAULTS = {
 
   /* layout */
   islandWidth: 420,
-  pillHeight: 34,
+  /* The collapsed strip: 30 (the slider minimum) folds to 40px, 34 to 44.9px.
+     Default sits at the minimum — the folded island should be a strip with a
+     face in it, not a small card, and the user can grow it from the settings. */
+  pillHeight: 30,
   sizeKey: 'md',
   pinned: true,
   clickThrough: true,

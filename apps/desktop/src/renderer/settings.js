@@ -90,6 +90,28 @@ const rowSeg = (label, sub, key, options) =>
     '<button type="button" data-act="seg" data-key="' + key + '" data-value="' + value + '" aria-pressed="' +
     (String(valueOf(key)) === String(value)) + '">' + escapeHtml(text) + '</button>').join('') + '</span>');
 
+/*
+ * 皮肤预览：五张迷你岛，和上面的文字段共用同一个 seg 动作。
+ * 点击、Tab + Enter 和 aria-pressed 因此只有一条路径，两种控件不会各说各话。
+ */
+const SKIN_PREVIEWS = [
+  ['frost', '毛玻璃', '半透明浅蓝，桌面会透出来'],
+  ['solid', '实色', '不透明深色卡片'],
+  ['plain', '极简', '收起时只剩一条细线'],
+  ['magazine', '杂志', '暖金衬线标题'],
+  ['console', '控制台', '冷蓝网格与等宽读数'],
+];
+
+const skinPreviewCards = () =>
+  '<div class="skin-previews" role="group" aria-label="皮肤预览">' +
+  SKIN_PREVIEWS.map(([value, label, hint]) =>
+    '<button type="button" class="skin-card" data-act="seg" data-key="skin" data-value="' + value +
+      '" aria-pressed="' + (String(valueOf('skin')) === value) + '" title="' + escapeHtml(hint) + '">' +
+      '<span class="skin-thumb skin-thumb-' + value + '" aria-hidden="true"></span>' +
+      '<span class="skin-card-name">' + escapeHtml(label) + '</span>' +
+    '</button>').join('') +
+  '</div>';
+
 const rowSelect = (label, sub, key, options, selected) =>
   row(label, sub, '<select class="ctl" data-act="set" data-key="' + key + '">' + options.map(([value, text]) =>
     '<option value="' + value + '"' + (String(selected ?? valueOf(key)) === String(value) ? ' selected' : '') + '>' +
@@ -186,7 +208,9 @@ function pageAppearance() {
       rowSeg('时间制式', '', 'timeFormat', [['24h', '24 小时'], ['12h', '12 小时']]),
     ])) +
     group('灵动岛样式', card([
-      rowSeg('皮肤', '毛玻璃半透明、实色卡片、极简收成一条线、杂志衬线版、控制台仪表', 'skin', [['frost', '毛玻璃'], ['solid', '实色'], ['plain', '极简'], ['magazine', '杂志'], ['console', '控制台']]),
+      /* The cards carry the name and the look of every skin; the text segment row
+         above them repeated the same five labels, so it is gone. */
+      row('皮肤', '毛玻璃半透明、实色卡片、极简收成一条线、杂志衬线版、控制台仪表', skinPreviewCards()),
       rowToggle('背景模糊', '关掉后是纯色卡片', 'blur'),
       rowRange('圆角', '卡片的圆角半径', 'radius', 12, 30, 1, 'px'),
       rowRange('界面缩放', '岛与球按此比例绘制', 'uiScale', 80, 140, 5, '%'),
@@ -215,7 +239,7 @@ function pageLayout() {
   return head('尺寸与位置', '岛和球各自多大、放在哪') +
     group('灵动岛', card([
       rowRange('面板宽度', '展开状态的宽度', 'islandWidth', 360, 560, 10, 'px'),
-      rowRange('收起高度', '胶囊的高度', 'pillHeight', 30, 44, 1, 'px'),
+      rowRange('收起高度', '折叠时只留脸的那条：越小越窄', 'pillHeight', 30, 44, 1, 'px'),
     ])) +
     group('桌面球', card([
       rowSeg('尺寸', '球的直径', 'sizeKey', [['xs', '64'], ['sm', '88'], ['md', '120'], ['lg', '160'], ['xl', '220']]),
@@ -1101,6 +1125,11 @@ content.addEventListener('click', async (event) => {
     const value = target.dataset.value;
     const numeric = ['uiScale', 'radius', 'fontSize', 'pillHeight', 'islandWidth', 'hoverOpenDelay', 'hoverCloseDelay'].includes(key);
     await patch(setPath(key, numeric ? Number(value) : value));
+    // 重绘会换掉整棵 DOM；键盘按 Enter 选卡后把焦点送回同一张卡，
+    // 否则 Tab 到这里就断了。
+    if (key === 'skin' && target.classList.contains('skin-card')) {
+      content.querySelector('.skin-card[data-value="' + value + '"]')?.focus();
+    }
     return;
   }
   if (act === 'button') {

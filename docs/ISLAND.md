@@ -1,6 +1,18 @@
 # 灵动岛形态 / Island
 
-tot 的第二种形态：贴在屏幕顶部中间的一条胶囊。收起时只有脸和时间；点击展开成一张卡片，横向翻页放功能。
+tot 的第二种形态：贴在屏幕顶部中间的一条胶囊。收起时只剩一张脸和一句颜文字；点击展开成一张卡片，横向翻页放功能。
+
+| 收起 · frost | 展开 · frost |
+| --- | --- |
+| ![收起 · frost](screenshots/island-folded-frost.png) | ![展开 · frost](screenshots/island-open-frost.png) |
+
+| 展开 · magazine | 展开 · console |
+| --- | --- |
+| ![展开 · magazine](screenshots/island-open-magazine.png) | ![展开 · console](screenshots/island-open-console.png) |
+
+| 展开 · frost · 浅色 |
+| --- |
+| ![展开 · frost · 浅色](screenshots/island-open-frost-light.png) |
 
 > 一句话：不是 macOS 刘海，也不是一条横贯屏幕的岛 —— 是「顶部居中、按内容长宽、点击展开」的一个 tot。
 
@@ -8,7 +20,7 @@ tot 的第二种形态：贴在屏幕顶部中间的一条胶囊。收起时只�
 
 | 状态 | 宽 | 高 | 内容 |
 | --- | --- | --- | --- |
-| 收起 pill | 168–220（按组件算） | 36 | tot 小脸 28px + 组件区（时间/电量/温度/余额）+ 播放指示 |
+| 收起 pill | 168 | 40（滑块 30）– 58（滑块 44） | 只有 tot 的脸（26–38px）和一句颜文字；电量、时间、温度与播放指示都在展开后 |
 | 展开面板 | 420 | 按页面 300–380 | 顶栏（脸/播放标题/电量/时间/齿轮）+ 页面区 + 分页点 |
 | 展开 + 通知 | 420 | 按内容最多 460 | 临时插页，3.5s 后回到原页 |
 

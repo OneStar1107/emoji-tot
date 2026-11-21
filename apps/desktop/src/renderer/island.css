@@ -62,8 +62,16 @@
    * scale, the same one the pill height already carries.
    */
   --fold-w: calc(168px * var(--ui-scale, 1));
-  --fold-h: calc(var(--pill-h) * 1.8824);
-  --fold-face: calc(var(--fold-h) * 0.6875);
+  /*
+   * Folded height follows 收起高度, but at 1.32x rather than the old 1.88x: a
+   * 34px setting used to unfold into a 64px card, which read as "still big"
+   * even at the slider's minimum (30 → 56px). 30 now bottoms out at 40px and
+   * the default lands on 44.9px, so the collapsed island is a strip with a
+   * face in it rather than a small card. The face scales with it and is capped
+   * so the head never dominates the strip.
+   */
+  --fold-h: clamp(40px, calc(var(--pill-h) * 1.32), 72px);
+  --fold-face: clamp(22px, calc(var(--fold-h) * 0.66), 44px);
   --ui-font: system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --ui-size: 13px;
   --ui-weight: 400;
