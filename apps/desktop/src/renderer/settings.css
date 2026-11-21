@@ -121,20 +121,75 @@ body { display: flex; flex-direction: column; }
 
 /* ------------------------------------------------------------- title bar */
 
+/*
+ * One compact bar: the app's name, the search box, the theme switch, and the
+ * window buttons. The bar is the only thing that never scrolls, so the two
+ * controls people reach for from anywhere (find a setting, flip the theme) live
+ * here instead of at the top of the rail and three rows into 外观.
+ */
 .titlebar {
   display: flex;
   align-items: center;
-  gap: 2px;
-  height: 40px;
-  padding: 0 6px 0 16px;
+  gap: 6px;
+  height: 42px;
+  padding: 0 6px 0 14px;
   background: var(--rail);
   border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
   flex: none;
 }
 
-.titlebar-name { font-size: 11.5px; color: var(--dim); letter-spacing: 0.02em; }
+.titlebar-name { font-size: 12px; font-weight: 550; color: var(--ink); letter-spacing: 0.01em; }
 .titlebar-spacer { flex: 1; }
+
+/* Both injected controls are interactive, so they opt out of the drag region. */
+.tb-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 208px;
+  height: 28px;
+  margin-left: 8px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+  color: var(--faint);
+  -webkit-app-region: no-drag;
+}
+.tb-search svg { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.tb-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11.5px;
+  outline: none;
+}
+.tb-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.tb-search input::placeholder { color: var(--faint); }
+.tb-search:focus-within { background: var(--surface-2); }
+
+.theme-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.theme-btn:hover { background: var(--surface-2); color: var(--ink); }
+.theme-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+/* Dark shows the way out of the dark; light shows the moon. */
+html[data-theme="dark"] .theme-btn .tb-moon { display: none; }
+html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 
 .win-btn {
   display: grid;
@@ -158,9 +213,9 @@ body { display: flex; flex-direction: column; }
 .shell { display: flex; flex: 1; min-height: 0; }
 
 .rail {
-  width: 206px;
+  width: 200px;
   flex: none;
-  padding: 10px 8px 16px;
+  padding: 12px 8px 18px;
   background: var(--rail);
   border-right: 1px solid var(--line);
   overflow-y: auto;
@@ -168,39 +223,28 @@ body { display: flex; flex-direction: column; }
 .rail::-webkit-scrollbar { width: 3px; }
 .rail::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 2px; }
 
-.rail-search {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  margin: 2px 4px 10px;
-  padding: 0 10px;
-  border-radius: var(--r-sm);
-  background: var(--surface-1);
+/* Four groups, four small headings: the rail reads as a list of sections
+   instead of fifteen rows with hairlines between them. */
+.rail-group { margin: 0 0 14px; }
+.rail-group:last-child { margin-bottom: 2px; }
+.rail-heading {
+  margin: 0 0 4px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-weight: 500;
   color: var(--faint);
+  letter-spacing: 0.09em;
 }
-.rail-search svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
-.rail-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: 11.5px;
-  outline: none;
-}
-.rail-search input::placeholder { color: var(--faint); }
 
 .rail-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  height: 34px;
-  padding: 0 10px;
+  height: 32px;
+  padding: 0 8px;
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--dim);
   font: inherit;
@@ -223,11 +267,9 @@ body { display: flex; flex-direction: column; }
   line-height: 1.4;
 }
 
-.rail-sep { height: 1px; margin: 8px 12px; background: var(--line); }
-
 /* ---------------------------------------------------------------- content */
 
-.content { flex: 1; min-width: 0; overflow-y: auto; padding: 26px 34px 40px; }
+.content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 28px 32px; }
 .content::-webkit-scrollbar { width: 8px; }
 .content::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 4px; }
 .content::-webkit-scrollbar-track { background: transparent; }
@@ -243,30 +285,35 @@ body { display: flex; flex-direction: column; }
 .row { transition: background var(--fast) var(--ease); }
 .row:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
 
-.page-head { margin-bottom: 20px; }
-.page-head h1 { margin: 0 0 5px; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.page-head { margin-bottom: 16px; }
+.page-head h1 { margin: 0 0 4px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 .page-head p { margin: 0; font-size: 11.5px; color: var(--dim); }
 
 /* One page can carry two switch sets; this hairline is the boundary between
    them, so the second heading does not read as another card in the first set. */
 .group-sep { height: 1px; margin: -6px 2px 18px; background: var(--line); }
-.group { margin-bottom: 24px; }
+.group { margin-bottom: 18px; }
 .group > h2 {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   padding-left: 2px;
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 500;
-  color: var(--dim);
-  letter-spacing: 0.02em;
+  color: var(--faint);
+  letter-spacing: 0.09em;
 }
 
+/*
+ * A card is a surface, not a frame.
+ *
+ * The 1px border plus the inset highlight made every card read as a box drawn
+ * around its content, and two of them stacked was a wall of frames. The rows
+ * carry the separation now — one hairline between them, 8px corners on the
+ * surface — so the eye groups by fill, not by outline.
+ */
 .card {
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border: 0;
+  border-radius: 8px;
   background: var(--card);
-  /* Same single light source as the island's panel: one hairline on the top
-     edge, nothing outside the box. */
-  box-shadow: var(--hi);
   overflow: hidden;
 }
 
@@ -296,9 +343,9 @@ body { display: flex; flex-direction: column; }
 .row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  min-height: 52px;
-  padding: 9px 14px;
+  gap: 14px;
+  min-height: 44px;
+  padding: 5px 12px;
   border-bottom: 1px solid var(--line);
 }
 .row:last-child { border-bottom: 0; }
@@ -306,6 +353,21 @@ body { display: flex; flex-direction: column; }
 .row-label b { font-size: 12.5px; font-weight: 520; }
 .row-label span { font-size: 11.5px; color: var(--faint); line-height: 1.4; }
 .row-control { display: flex; align-items: center; gap: 7px; flex: none; }
+
+/* ------------------------------------------------------------------ danger */
+
+/*
+ * The destructive row sits at the foot of its page and wears the only red in
+ * the window. The first click arms it (the row says so in its own sub line),
+ * the second one clears, and 取消 disarms — see dangerCard() in settings.js.
+ */
+.danger-group { margin-top: 26px; }
+.danger-group > h2 { color: var(--bad); }
+.danger-group .card { background: color-mix(in srgb, var(--bad) 7%, var(--card)); }
+.btn.danger { border-color: color-mix(in srgb, var(--bad) 46%, transparent); color: var(--bad); background: transparent; }
+.btn.danger:hover { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.btn.ghost-danger { border-color: transparent; background: transparent; color: var(--dim); }
+.btn.ghost-danger:hover { background: var(--surface-2); color: var(--ink); }
 
 /* switch */
 .switch {
@@ -689,6 +751,11 @@ input.ctl {
 input.ctl:focus { border-color: var(--accent); }
 input.ctl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input.ctl::placeholder { color: var(--faint); }
+
+/* Four fixed slots for the island's city switcher; the label column already
+   explains the limit, so the fields only need to line up. */
+.city-fields { display: flex; flex-direction: column; gap: 4px; }
+.city-fields input { width: 190px; }
 
 /* range */
 input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }

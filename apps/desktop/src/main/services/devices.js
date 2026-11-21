@@ -42,9 +42,11 @@ function handleLine(line) {
   if (!parsed || !Array.isArray(parsed.devices)) return;
   /*
    * One device can appear as several PnP nodes (an audio node and a transport
-   * node share a name). Keep one row per name, preferring the node that
-   * actually knows its battery. Number(null) is 0, so null must be checked
-   * before the numeric test.
+   * node share a name, and a Bluetooth keyboard and its 2.4G receiver both
+   * call themselves by the same model name). Keep one row per name, preferring
+   * the node that actually knows its battery — that row also carries the source
+   * worth printing, since the one without a level would say "unavailable".
+   * Number(null) is 0, so null must be checked before the numeric test.
    */
   const byName = new Map();
   for (const device of parsed.devices) {
@@ -56,6 +58,12 @@ function handleLine(line) {
       name,
       status: String(device.status ?? ''),
       battery: Number.isFinite(battery) ? battery : null,
+      /*
+       * Where the level came from: 'bluetooth', 'hid-wireless' (a 2.4G
+       * receiver) or 'hid'. The page prints it in the row's title, because
+       * "why is this one an em dash" is answered by the source, not the level.
+       */
+      source: String(device.source ?? ''),
     };
     const existing = byName.get(name);
     if (!existing || (existing.battery === null && entry.battery !== null)) byName.set(name, entry);

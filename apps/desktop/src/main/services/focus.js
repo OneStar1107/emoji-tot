@@ -8,7 +8,16 @@
 const { cachePath, readJson, writeJson, readPrefs } = require('../paths');
 const { notify: pushNotify } = require('./notify');
 
-const EMPTY = { phase: 'idle', running: false, remaining: 0, total: 0, cycles: 0, endsAt: 0 };
+const EMPTY = { phase: 'idle', running: false, remaining: 0, total: 0, cycles: 0, endsAt: 0, history: [] };
+/**
+ * Every fourth finished pomodoro is followed by a long rest. The count is the
+ * lifetime `cycles` figure the page already shows, so the rule survives a
+ * restart instead of resetting when the app reopens.
+ */
+const LONG_REST_EVERY = 4;
+const LONG_REST_MINUTES = 15;
+/** Two weeks of finished pomodoros: enough for "this week", small enough to keep. */
+const HISTORY_DAYS = 14;
 let state = { ...EMPTY };
 let timer = null;
 const listeners = new Set();
@@ -38,6 +47,48 @@ function notify(title, body) {
   pushNotify(title, body);
 }
 
+/** Midnight at the start of the day that contains `at`, in local time. */
+function startOfDay(at) {
+  const day = new Date(at);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+}
+/** Monday 00:00 of the week that contains `at`: the page reports a Monday week. */
+function startOfWeek(at) {
+  const day = new Date(startOfDay(at));
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+  return day.getTime();
+}
+function summary(since) {
+  let count = 0;
+  let minutes = 0;
+  for (const entry of Array.isArray(state.history) ? state.history : []) {
+    if (!entry || Number(entry.at) < since) continue;
+    count += 1;
+    minutes += Math.max(0, Number(entry.minutes) || 0);
+  }
+  return { count, minutes };
+}
+/** Today and this week: the two rows the focus page prints. */
+function stats() {
+  const now = Date.now();
+  return { today: summary(startOfDay(now)), week: summary(startOfWeek(now)) };
+}
+/** Remember one finished pomodoro, dropping records older than the window. */
+function record(minutes) {
+  const now = Date.now();
+  const keepFrom = startOfDay(now) - (HISTORY_DAYS - 1) * 86400000;
+  const kept = (Array.isArray(state.history) ? state.history : []).filter(
+    (entry) => entry && Number(entry.at) >= keepFrom,
+  );
+  state.history = [...kept, { at: now, minutes: Math.max(1, Math.round(minutes)) }];
+}
+/** Minutes of rest after the next finished pomodoro: every fourth one is long. */
+function restMinutes() {
+  const { rest } = prefs();
+  return state.cycles > 0 && state.cycles % LONG_REST_EVERY === 0 ? LONG_REST_MINUTES : rest;
+}
+
 function remaining() {
   if (state.phase === 'idle') return 0;
   if (state.running) return Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000));
@@ -45,12 +96,17 @@ function remaining() {
 }
 
 function snapshot() {
+  const longRest = state.cycles > 0 && state.cycles % LONG_REST_EVERY === 0;
   return {
     phase: state.phase,
     running: state.running,
     remaining: remaining(),
     total: state.total,
     cycles: state.cycles,
+    /* What the rest after this phase will be: 15 minutes on every fourth. */
+    restMinutes: longRest ? LONG_REST_MINUTES : prefs().rest,
+    longRest,
+    stats: stats(),
   };
 }
 
@@ -78,8 +134,12 @@ function startPhase(phase, minutes) {
 function finish() {
   if (state.phase === 'work') {
     state.cycles += 1;
-    const rest = prefs().rest;
-    notify('专注完成', `休息 ${rest} 分钟，起来走两步。`);
+    /* The phase that just ended was this many minutes long; the settings may
+       have changed since it started. */
+    record(state.total / 60);
+    const rest = restMinutes();
+    const long = rest === LONG_REST_MINUTES;
+    notify('专注完成', long ? `长休息 ${rest} 分钟，起来走两步。` : `休息 ${rest} 分钟，起来走两步。`);
     startPhase('rest', rest);
     return;
   }
@@ -132,15 +192,16 @@ function stop() {
 function skip() {
   if (state.phase === 'idle') return start();
   if (state.phase === 'work') {
-    startPhase('rest', prefs().rest);
+    startPhase('rest', restMinutes());
     return true;
   }
   stop();
   return true;
 }
 
+/** Reset the clock. Finished pomodoros are a record, not clock state: keep them. */
 function restart() {
-  state = { ...EMPTY };
+  state = { ...EMPTY, history: Array.isArray(state.history) ? state.history : [] };
   save();
   emit();
 }

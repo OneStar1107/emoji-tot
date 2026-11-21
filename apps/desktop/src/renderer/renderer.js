@@ -6,7 +6,7 @@
  * so the protocol table has exactly one home.
  */
 import { faceFor } from './faces.js';
-import { castMember, FACE_META } from './vendor/core/index.js';
+import { castMember } from './vendor/core/index.js';
 
 const pet = document.getElementById('pet');
 const bubble = document.getElementById('bubble');
@@ -30,11 +30,14 @@ let bubbleTimer = null;
 let bubbleAllowed = false;
 
 function say(text) {
+  // The text is the current face even while the bubble is hidden: docking
+  // later shows the same expression instead of a stale one, and a probe can
+  // read the mapping without forcing the bubble on screen.
+  bubble.textContent = text || '';
   if (!text || !bubbleAllowed) {
     bubble.dataset.visible = 'false';
     return;
   }
-  bubble.textContent = text;
   bubble.dataset.visible = 'true';
   clearTimeout(bubbleTimer);
   bubbleTimer = setTimeout(() => {
@@ -117,151 +120,44 @@ pet.addEventListener('contextmenu', (event) => {
  * arrive. The renderer stays out of it.
  */
 
-/** A counter so a late timer cannot overwrite a state that just arrived. */
-let actionToken = 0;
+/*
+ * One face, two windows — and this renderer is only a consumer.
+ *
+ * The main process owns the current face (state + source + timestamp). It
+ * sends the same payload to the ball and to the island; this page paints it
+ * and spells it with the fixed kaomoji table. There is deliberately no idle
+ * mood timer here: the pet still borrows expressions, but the main process
+ * picks them, so both windows cannot be holding different ones.
+ */
+let faceState = 'idle';
 
-/** The state the host asked for; a borrowed mood must never outlive it. */
-let taskState = 'idle';
-
-api.onState((message) => {
-  actionToken += 1;
-  if (message.state) {
-    taskState = message.state;
-    ball.state = taskState;
-  }
-  const face = faceFor(taskState);
-  if (face) say(face);
-});
-
-/* What the other window reported — the island has no moods of its own. */
-api.onFace((state) => {
+api.onFace((payload) => {
+  const state = payload && typeof payload === 'object' ? payload.state : '';
   if (!state) return;
-  actionToken += 1;
+  faceState = state;
   ball.state = state;
+  // The bubble is the same face in text: one key, one table entry, no RNG.
+  say(faceFor(state));
+  // A borrowed mood carries the motion that plays with it; the main process
+  // keeps that decision next to the face.
+  if (payload.motion) ball.play?.(payload.motion);
 });
 
 // The main process picks the action, so a poke and the menu agree on what is
 // possible.
 api.onAction((action) => {
-  const token = ++actionToken;
   if (action === 'bounce') ball.bounce?.(0.5);
   else if (action === 'spin') ball.spin?.(1.5);
   else if (action === 'burst') ball.burst?.(18);
-
-  // A poke is a moment, not a condition: once it has played, the face goes
-  // back to waiting. Without this the ball kept whatever expression the poke
-  // happened to land on.
-  window.setTimeout(() => {
-    if (token !== actionToken) return;
-    ball.state = 'idle';
-    api.reportFace('idle');
-  }, 1700);
 });
-
-/*
- * Left alone, it lives.
- *
- * The resting face is idle, but a pet that only ever rests is a screensaver.
- * Every 7–16 seconds it borrows one expression from a pool, holds it for a
- * couple of seconds, then goes back to idle — and the next borrow never
- * repeats the last one. Timers are chained rather than fixed so the rhythm
- * does not turn into a metronome.
- */
-/*
- * Two pools, because a ball with a job and a ball with nothing to do are not
- * the same character.
- *
- * Idle, it may wear any living or feeling face — that is what makes it feel
- * alive. Busy, it may only wear faces the job itself could produce; a pet that
- * starts giggling mid-task reads as "not actually doing anything".
- */
-const IDLE_MOODS = FACE_META
-  .filter((m) => m.group !== 'agent' && !['idle', 'sleeping', 'powering-down', 'spawning'].includes(m.id))
-  .map((m) => m.id);
-const AGENT_MOODS = FACE_META.filter((m) => m.group === 'agent' && m.id !== 'waiting').map((m) => m.id);
-
-/*
- * The member the pet is wearing. Its signature expression leads the mood pool
- * and its signature motion plays when the mood ends, so switching the cast
- * changes behaviour, not just paint.
- */
-let member = castMember('tot');
-
-/*
- * A shuffled queue instead of a random pick.
- *
- * Random picks repeat, and a repeat is what makes an idle pet feel scripted.
- * Drawing without replacement from a reshuffled bag guarantees no two
- * consecutive moods are the same, and that every mood appears once per cycle.
- */
-let moodBag = [];
-
-function refillBag() {
-  const busy = taskState !== 'idle';
-  const pool = busy ? AGENT_MOODS : [member?.face, ...IDLE_MOODS].filter(Boolean);
-  const unique = [...new Set(pool)].filter((state) => state !== 'idle' && state !== taskState);
-  for (let i = unique.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [unique[i], unique[j]] = [unique[j], unique[i]];
-  }
-  moodBag = unique;
-}
-
-function nextMood() {
-  if (!moodBag.length) refillBag();
-  return moodBag.pop();
-}
-let moodTimer = null;
-
-function scheduleMood() {
-  clearTimeout(moodTimer);
-  moodTimer = window.setTimeout(() => {
-    /*
-     * A running task owns the face.
-     *
-     * With a job in flight the ball only borrows other *agent* states — never
-     * a feeling. Sadness or delight in the middle of a task is a lie about
-     * what is happening; another agent state is just a change of activity.
-     */
-    if (!document.hidden && !dragging) {
-      const mood = nextMood();
-      const token = ++actionToken;
-      ball.state = mood;
-      /*
-       * Say it out loud: the island cannot invent a mood of its own, so an
-       * unannounced borrow here is exactly the drift the user saw.
-       */
-      api.reportFace(mood);
-      const face = faceFor(mood);
-      if (face) say(face);
-      // A little motion with the expression, or it reads as a freeze-frame.
-      const motion = member?.motion ?? 'bounce';
-      if (Math.random() < 0.7) ball.play?.(motion);
-      // Every hold is a different length; a fixed beat turns into a metronome.
-      const hold = 1800 + Math.random() * 2600;
-      window.setTimeout(() => {
-        if (token !== actionToken) return;
-        // Snap straight back to whatever the host asked for: the borrowed mood
-        // is a guest, the task state is the resident.
-        ball.state = taskState;
-        api.reportFace(taskState);
-        ball.play?.(motion);
-      }, hold);
-    }
-    scheduleMood();
-  }, 7000 + Math.random() * 9000);
-}
-
-scheduleMood();
 
 /** Switch the character: new paint, new signature face, new signature motion. */
 api.onCast((id) => {
   const next = castMember(id);
   if (!next) return;
-  member = next;
   ball.cast = id;
-  ball.state = 'idle';
-  api.reportFace('idle');
+  // The face does not move here; the main process broadcasts the resident
+  // state again after the cast changes the signature expression pool.
 });
 
 api.onSize((px) => {
@@ -291,7 +187,7 @@ api.onDock((side) => {
   if (!bubbleAllowed) bubble.dataset.visible = 'false';
   // Docked, the bubble should say something at once rather than wait for the
   // next mood; an empty bubble beside a tucked pet looks broken.
-  else say(faceFor(ball.state) || faceFor(taskState));
+  else say(faceFor(faceState));
 });
 
 if (typeof api.debugState === 'function') {

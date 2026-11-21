@@ -9,7 +9,7 @@
 
 | key | 标题 | 副标题 | 后台服务 | 默认 |
 | --- | --- | --- | --- | --- |
-| `music` | 音乐 | 系统正在播放 | `media` | 开 |
+| `music` | 媒体 | 系统正在播放 | `media` | 开 |
 | `weather` | 天气 | 当地与七日 | `weather` | 开 |
 | `quota` | AI 工作台 | 余额与 Agent | `quota` | 开 |
 | `mail` | 邮箱 | 摘要与验证码 | `mail` | 开 |
@@ -70,6 +70,7 @@
 | `avoidEnabled` | `true` | 隐藏与交互 | 主进程 | `main.js applyAvoidanceWatch() avoidance.start/stop` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `avoidBrowsers` | `true` | 隐藏与交互 | 主进程 | `main/services/avoidance.js update() → avoidance.ps1 浏览器名单` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `avoidApps` | `[]` | 隐藏与交互 | 主进程 | `main/services/avoidance.js update() → avoidance.ps1 owner 链匹配` | 即时 | 按 exe 完整路径匹配 | has a SERVICE_PLAN entry · lists every path |
+| `mediaEmotion` | `true` | 常规 | 主进程 | `main.js applyEmotionWatch() → main/media-emotion.js` | 即时 | 媒体情绪映射总开关 | has a SERVICE_PLAN entry · lists every path |
 | `trayIcon` | `true` | 隐藏与交互 | 主进程 | `main.js createTray()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `hotkey` | `true` | 隐藏与交互 | 主进程 | `main.js applyMainPrefs() globalShortcut` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `wheelPaging` | `true` | 隐藏与交互 | 渲染进程 | `island.js wheel handler` | 即时 |  | lists every path · writes dotted keys through setPath |
@@ -81,6 +82,8 @@
 | `pages` | 10/11 项开 | 页面管理 | 主进程 | `main.js applyServicePlan() · island.js enabledPages()` | 即时 | 同时控制渲染入口与后台服务 | pages drive services |
 | `pageOrder` | `[music, weather, quota, mail, focus, todo, health, shelf, devices, calendar, messenger]` | 页面管理 | 渲染进程 | `island.js enabledPages()` | 即时 |  | pages drive services |
 | `defaultPage` | `music` | 页面管理 | 渲染进程 | `island.js initial page selection` | 重启后 | 下次打开生效 | lists every path · writes dotted keys through setPath |
+| `devices.showBattery` | `true` | 页面管理 | 渲染进程 | `island.js devicesPage() → 行的电量条与百分比` | 即时 | 关掉后只画名称与连接状态 | lists every path · writes dotted keys through setPath |
+| `devices.pinned` | `[]` | 页面管理 | 渲染进程 | `island.js devicesPage() → 置顶排序与星标` | 即时 | 最多 3 台；在设备页行尾星标切换 | lists every path · writes dotted keys through setPath |
 | `weather.city` | `香港` | 天气 | 主进程 | `main.js refreshWeather()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `weather.unit` | `c` | 天气 | 渲染进程 | `island.js renderPillStatus() / weather card` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `weather.intervalMin` | `15` | 天气 | 主进程 | `main.js scheduleWeather()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |

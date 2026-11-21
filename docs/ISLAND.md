@@ -74,7 +74,8 @@ tot 的第二种形态：贴在屏幕顶部中间的一条胶囊。收起时只�
 renderer(island) --island:box {w,h}--> main  → setBounds 居中
 renderer --island:hover bool--------> main  → setIgnoreMouseEvents 兜底
 main --island:* data---------------> renderer
-either window --face:report <state>-> main  → 另一扇窗（face:apply / island:face）：两边表情永远同一张
+main --face:apply {state,source,at,seq}--> 球窗口 + 岛窗口：表情只在主进程持有，变化广播同一份载荷
+                                  （页面重载/重连时 main 立即重发当前值；渲染层不能上报表情）
 ```
 
 尺寸同步用 `ResizeObserver` + `requestAnimationFrame` 节流，每帧最多上报一次；key 相同则不发。

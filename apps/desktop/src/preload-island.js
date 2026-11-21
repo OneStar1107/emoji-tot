@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld('islandAPI', {
   reportHit: (hit) => ipcRenderer.send('island:hit', hit),
   bootstrap: () => ipcRenderer.invoke('island:bootstrap'),
   openSettings: (page) => ipcRenderer.invoke('settings:open', page),
+  /**
+   * The weather page's city switcher: one preference write, the same channel
+   * settings uses. The main process merges it, tells every window and refreshes
+   * the city through serviceChanges(), so the page does not own a second path.
+   */
+  patchPrefs: (patch) => ipcRenderer.invoke('settings:patch', patch),
   /** The devices page's Bluetooth row: open the system's own Bluetooth page. */
   openSystem: (target) => ipcRenderer.invoke('settings:openSystem', target),
   quit: () => ipcRenderer.invoke('app:quit').catch(() => {}),
@@ -38,9 +44,14 @@ contextBridge.exposeInMainWorld('islandAPI', {
   onClipboard: (listener) => on('island:clipboard', listener),
   onMessenger: (listener) => on('island:messenger', listener),
   onDevices: (listener) => on('island:devices', listener),
-  onState: (listener) => on('island:state', listener),
-  onFace: (listener) => on('island:face', listener),
-  reportFace: (state) => ipcRenderer.send('face:report', state),
+  /**
+   * Pin or unpin one device. Main owns the three-pin cap and replies with the
+   * whole preference object, so the page renders the answer instead of
+   * predicting it.
+   */
+  pinDevice: (name) => ipcRenderer.invoke('island:devices-pin', name),
+  /* One face, one event: the same payload the ball window receives. */
+  onFace: (listener) => on('face:apply', listener),
   onCast: (listener) => on('island:cast', listener),
   onQuotaAgent: (listener) => on('island:quota-agent', listener),
   quotaDo: (action, data) => ipcRenderer.invoke('quota:do', { action, data }),

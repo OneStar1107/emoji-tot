@@ -100,6 +100,32 @@ function remove(id) {
   save();
   emit();
 }
+/**
+ * Retitle one event, and move it when a new start is given.
+ *
+ * The end follows the start by the same delta, so editing "21:30" into "22:00"
+ * moves an hour-long meeting instead of stretching it. The reminder key is the
+ * event id plus its start, so the move also re-arms the reminder — a meeting
+ * that moved must warn again.
+ */
+function update(id, payload) {
+  const event = events.find((item) => item.id === id);
+  if (!event) return null;
+  const title = String(payload?.title ?? event.title).trim();
+  if (!title) return null;
+  const start = Number(payload?.start);
+  if (Number.isFinite(start) && start !== event.start) {
+    const delta = start - event.start;
+    event.start = start;
+    if (Number.isFinite(Number(event.end))) event.end = Number(event.end) + delta;
+  }
+  event.title = title.slice(0, 160);
+  reminded = pruneReminderKeys(reminded, events);
+  save();
+  emit();
+  return event;
+}
+
 
 /* ------------------------------------------------------------------ ICS */
 
@@ -297,6 +323,7 @@ module.exports = {
   list,
   upcoming,
   add,
+  update,
   remove,
   parseIcs,
   importIcs,

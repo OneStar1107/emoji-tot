@@ -73,8 +73,8 @@ describe('normaliseId', () => {
 describe('stateForEmotion', () => {
   it('resolves known ids', () => {
     expect(stateForEmotion('00')).toBe('sleeping');
-    expect(stateForEmotion('34')).toBe('alerting');
-    expect(stateForEmotion(33)).toBe('celebrate');
+    expect(stateForEmotion('34')).toBe('error');
+    expect(stateForEmotion(33)).toBe('done');
   });
 
   it('falls back inside the segment for unknown ids', () => {
@@ -94,8 +94,8 @@ describe('stateForEmotion', () => {
 
 describe('parseAgentMessage', () => {
   it('accepts the documented shapes', () => {
-    expect(parseAgentMessage('{"emotion":34}')?.state).toBe('alerting');
-    expect(parseAgentMessage({ emotionId: 33 })?.state).toBe('celebrate');
+    expect(parseAgentMessage('{"emotion":34}')?.state).toBe('error');
+    expect(parseAgentMessage({ emotionId: 33 })?.state).toBe('done');
     expect(parseAgentMessage({ emotion: '14' })?.emotionId).toBe('14');
     expect(parseAgentMessage({ state: 'thinking' })?.emotionId).toBe('30');
     expect(parseAgentMessage('13')?.state).toBe('surprised');
@@ -140,7 +140,7 @@ describe('createEmotionChannel', () => {
     expect(changes).toEqual(['34']);
     expect(tips).toEqual(['失败了']);
     expect(errors).toEqual(['unknown-id']);
-    expect(channel.current().state).toBe('alerting');
+    expect(channel.current().state).toBe('error');
   });
 
   it('keeps the current face when a message cannot be read', () => {

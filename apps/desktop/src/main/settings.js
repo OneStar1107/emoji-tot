@@ -74,6 +74,34 @@ function broadcastPrefs(next) {
   for (const fn of listeners) fn(next);
 }
 
+/**
+ * Write one patch and tell every window about it.
+ *
+ * The settings channel is not the only writer any more — the devices page's
+ * pin star writes through island:devices-pin — so the write, the login-item
+ * side effect and the two notifications live in one function both channels
+ * call. A second copy is how a preference ends up applied in one window and
+ * stale in the other.
+ */
+function applyPatch(patch) {
+  const next = writePrefs(patch);
+  // Applying the OS login item is the one patch with a side effect outside
+  // prefs.json; doing it here keeps every entry point (tray, settings,
+  // future onboarding) consistent.
+  if ('launchAtLogin' in patch) {
+    try {
+      app.setLoginItemSettings({ openAtLogin: Boolean(patch.launchAtLogin) });
+    } catch {
+      // Unsupported on some Linux desktops; prefs still records the intent.
+    }
+  }
+  // The window that made the change also gets the merged object, so a
+  // control can be changed by the tray or by another window and still repaint.
+  if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next);
+  broadcastPrefs(next);
+  return next;
+}
+
 /* ----------------------------------------------------------------- guard */
 
 /** Action kinds the settings page may ask for, and nothing else. */
@@ -115,25 +143,11 @@ function registerIpc() {
 
   guard.guardedHandle(
     'settings:patch',
-    ['settings'],
-    (patch) => {
-      const next = writePrefs(patch);
-      // Applying the OS login item is the one patch with a side effect outside
-      // prefs.json; doing it here keeps every entry point (tray, settings,
-      // future onboarding) consistent.
-      if ('launchAtLogin' in patch) {
-        try {
-          app.setLoginItemSettings({ openAtLogin: Boolean(patch.launchAtLogin) });
-        } catch {
-          // Unsupported on some Linux desktops; prefs still records the intent.
-        }
-      }
-      // The window that made the change also gets the merged object, so a
-      // control can be changed by the tray or by another window and still repaint.
-      if (win && !win.isDestroyed()) win.webContents.send('settings:changed', next);
-      broadcastPrefs(next);
-      return next;
-    },
+    /* The island writes one group through this channel: the weather page's
+       city switcher. The patch is still filtered by the schema, so naming this
+       role does not widen what can be written, only which window may write. */
+    ['settings', 'island'],
+    (patch) => applyPatch(patch),
     { check: checkPatch, maxBytes: PATCH_LIMIT },
   );
 
@@ -243,4 +257,4 @@ function isOpen() {
   return Boolean(win && !win.isDestroyed());
 }
 
-module.exports = { create, registerIpc, isOpen, onPrefs, setWeatherRefresher, setActionHook };
+module.exports = { create, registerIpc, isOpen, onPrefs, applyPatch, setWeatherRefresher, setActionHook };

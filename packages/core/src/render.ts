@@ -119,6 +119,13 @@ function eye(style: EyeStyle, x: number, y: number, scale: number, ink: string, 
       return `<path d="M${x - 4 * s} ${y} L${x + 4 * s} ${y}" fill="none" stroke="${ink}" stroke-width="${2.6 * s * weight}" stroke-linecap="round"/>`;
     case 'star':
       return `<path d="M${x} ${y - 6 * s}L${x + 1.8 * s} ${y - 1.8 * s}L${x + 6 * s} ${y}L${x + 1.8 * s} ${y + 1.8 * s}L${x} ${y + 6 * s}L${x - 1.8 * s} ${y + 1.8 * s}L${x - 6 * s} ${y}L${x - 1.8 * s} ${y - 1.8 * s}Z" fill="${ink}"/>`;
+    /*
+     * A half-lidded eye: the lid is the line, the pupil is what is still
+     * visible under it. That is the difference between tired and asleep —
+     * asleep is a closed line with nothing below it.
+     */
+    case 'half':
+      return `<path d="M${(x - 5.2 * s).toFixed(1)} ${(y - 1 * s).toFixed(1)} Q${x.toFixed(1)} ${(y + 3.2 * s).toFixed(1)} ${(x + 5.2 * s).toFixed(1)} ${(y - 1 * s).toFixed(1)}" fill="none" stroke="${ink}" stroke-width="${2.5 * s * weight}" stroke-linecap="round"/><circle cx="${x}" cy="${y + 2.4 * s}" r="${2.3 * s}" fill="${ink}"/>`;
     default:
       return '';
   }
@@ -147,8 +154,49 @@ function mouth(style: MouthStyle, x: number, y: number, scale: number, ink: stri
       return `<ellipse cx="${x}" cy="${y + 1.4 * s}" rx="${5.4 * s}" ry="${6.6 * s}" fill="${ink}"/><ellipse cx="${x}" cy="${y + 3.6 * s}" rx="${3 * s}" ry="${2.4 * s}" fill="#F0526E" opacity="0.9"/>`;
     case 'smirk':
       return `<path d="M${x - 4.4 * s} ${y + 1} Q${x - 1} ${y + 4.4 * s} ${x + 4.4 * s} ${y - 1.4 * s}" fill="none" stroke="${ink}" stroke-width="${2.3 * s * weight}" stroke-linecap="round"/>`;
+    /* A small round mouth: the "lost in thought" dot, not a kiss. */
+    case 'dot':
+      return `<circle cx="${x}" cy="${(y + 1.2 * s).toFixed(1)}" r="${(1.9 * s).toFixed(1)}" fill="${ink}"/>`;
+    /* The mirrored smile: corners down, the whole face follows. */
+    case 'frown':
+      return `<path d="M${(x - 4 * s).toFixed(1)} ${(y + 2.2 * s).toFixed(1)} Q${x.toFixed(1)} ${(y - 2.2 * s).toFixed(1)} ${(x + 4 * s).toFixed(1)} ${(y + 2.2 * s).toFixed(1)}" fill="none" stroke="${ink}" stroke-width="${2.2 * s * weight}" stroke-linecap="round"/>`;
     default:
       return '';
+  }
+}
+
+/**
+ * Eyebrows, as six postures rather than six drawings.
+ *
+ * `s` is the same eye scale the eyes use, so a brow follows the face it sits
+ * on. The stroke is a little lighter than the eyes: a brow that competes with
+ * the pupil reads as a second pair of eyes at 46px.
+ */
+function brow(style: string, x: number, y: number, s: number, ink: string, weight = 1): string {
+  const unit = s * weight;
+  const left = x - 14.5 * s;
+  const right = x + 14.5 * s;
+  const line = (cx: number, cy: number, slope: number) =>
+    `<path d="M${(cx - 4.6 * s).toFixed(1)} ${(cy + slope * 4.6 * s).toFixed(1)} L${(cx + 4.6 * s).toFixed(1)} ${(cy - slope * 4.6 * s).toFixed(1)}" fill="none" stroke="${ink}" stroke-width="${2.3 * unit}" stroke-linecap="round" opacity="0.86"/>`;
+  const arc = (cx: number, cy: number) =>
+    `<path d="M${(cx - 4.6 * s).toFixed(1)} ${cy.toFixed(1)} Q${cx.toFixed(1)} ${(cy - 3.4 * s).toFixed(1)} ${(cx + 4.6 * s).toFixed(1)} ${cy.toFixed(1)}" fill="none" stroke="${ink}" stroke-width="${2.3 * unit}" stroke-linecap="round" opacity="0.86"/>`;
+  switch (style) {
+    case 'raised':
+      return arc(left, y) + arc(right, y);
+    // Angry: the inner ends drop toward the nose.
+    case 'down':
+      return line(left, y, 0.55) + line(right, y, -0.55);
+    // Worried: the inner ends lift, the outer ends drop.
+    case 'knit':
+      return line(left, y, -0.5) + line(right, y, 0.5);
+    // Skeptic: one flat brow, one cocked.
+    case 'one-up':
+      return line(left, y, 0) + arc(right, y - 1.4 * s);
+    // Resigned: both brows flat but sagging outward.
+    case 'skeptic':
+      return line(left, y, 0.34) + line(right, y, 0.34);
+    default:
+      return line(left, y, 0) + line(right, y, 0);
   }
 }
 
@@ -164,15 +212,30 @@ export function renderFace(state: string, face: { x: number; y: number }, ink: s
    */
   const LEAN = 1.6;
   const SCALE = 1.25;
-  const dx = face.x + (spec.dx ?? 0) * LEAN;
-  const dy = face.y + (spec.dy ?? 0) * LEAN;
+  /*
+   * A shaking face is drawn shaking.
+   *
+   * The element also animates it, but the gallery, the settings grid and the
+   * evidence screenshots are stills; a state whose whole point is trembling
+   * has to say so in one frame. The offset is deliberately uneven — equal
+   * offsets on both eyes read as a smear, not as a tremble.
+   */
+  const shake = Math.max(0, Math.min(1, spec.shake ?? 0));
+  const wob = shake * 1.8;
+  const dx = face.x + (spec.dx ?? 0) * LEAN + wob * 0.6;
+  const dy = face.y + (spec.dy ?? 0) * LEAN - wob * 0.4;
   const es = baseEyeScale * (1 + ((spec.eyeScale ?? 1) - 1) * SCALE);
   const ms = baseEyeScale * (1 + ((spec.mouthScale ?? 1) - 1) * SCALE);
-  const parts = [
-    eye(spec.eye, dx - 14.5 * baseEyeScale, dy - 3, es, ink, weight),
-    eye(spec.eye, dx + 14.5 * baseEyeScale, dy - 3, es, ink, weight),
-    mouth(spec.mouth, dx, dy + 12, ms, ink, weight),
-  ];
+  const leftEye = eye(spec.eye, dx - 14.5 * baseEyeScale + wob, dy - 3 + wob * 0.4, es, ink, weight);
+  const rightEye = eye(spec.eye, dx + 14.5 * baseEyeScale - wob * 0.7, dy - 3 - wob * 0.3, es * (spec.eyeAsym ?? 1), ink, weight);
+  const parts = [leftEye, rightEye, mouth(spec.mouth, dx - wob * 0.5, dy + 12, ms, ink, weight)];
+  if (spec.brow) parts.push(brow(spec.brow, dx, dy - 14 * baseEyeScale, baseEyeScale, ink, weight));
+  if (shake > 0) {
+    // Two motion ticks at the temples: the drawn half of a tremble.
+    const tick = (dir: number) =>
+      `<path d="M${(dx + dir * 27 * baseEyeScale).toFixed(1)} ${(dy - 7).toFixed(1)} q${dir * 3} 4 0 8" fill="none" stroke="${ink}" stroke-width="${2 * baseEyeScale * weight}" stroke-linecap="round" opacity=${(0.35 + shake * 0.3).toFixed(2)}/>`;
+    parts.push(tick(-1), tick(1));
+  }
   for (const mark of spec.marks ?? []) parts.push(markSvg(mark, dx, dy, baseEyeScale));
 
   if (spec.blush) {

@@ -112,15 +112,22 @@ export interface Arbiter {
  */
 export const DEFAULT_PRIORITY: Partial<Record<StateId, number>> = {
   alerting: 80,
+  error: 80,
   refusing: 70,
+  panicked: 66,
   celebrate: 60,
+  done: 60,
   surprised: 55,
+  satisfied: 52,
   receiving: 50,
   notifying: 48,
   dragging: 46,
   searching: 42,
   loading: 42,
   working: 40,
+  busy: 40,
+  focused: 40,
+  replying: 40,
   writing: 40,
   reading: 40,
   sending: 40,
@@ -128,15 +135,25 @@ export const DEFAULT_PRIORITY: Partial<Record<StateId, number>> = {
   composing: 36,
   progress: 34,
   thinking: 30,
+  recalling: 29,
   waiting: 28,
   listening: 26,
+  resigned: 24,
   'powering-down': 22,
+  'powering-off': 22,
+  puzzled: 20,
   waking: 15,
+  'shake-awake': 15,
   spawning: 15,
+  booting: 12,
+  tired: 8,
+  down: 6,
+  'spacing-out': 4,
+  dormant: 2,
 };
 
 const DEFAULT_ONESHOT_STATES: readonly StateId[] = [
-  'celebrate', 'alerting', 'surprised', 'receiving', 'notifying', 'refusing', 'waking', 'spawning',
+  'celebrate', 'alerting', 'done', 'error', 'panicked', 'surprised', 'receiving', 'notifying', 'refusing', 'waking', 'shake-awake', 'spawning',
 ];
 
 const priorityOf = (state: StateId, table: Partial<Record<StateId, number>>): number =>

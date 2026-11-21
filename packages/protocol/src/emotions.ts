@@ -27,7 +27,12 @@ export type StateId =
   | 'dragging' | 'happy' | 'excited' | 'laughing' | 'playful' | 'proud'
   | 'celebrate' | 'bouncing' | 'shy' | 'sad' | 'angry' | 'confused'
   | 'suspicious' | 'surprised' | 'scared' | 'curious' | 'humming' | 'alerting'
-  | 'notifying' | 'refusing';
+  | 'notifying' | 'refusing'
+  // The thirty-three-state lexicon (see @emojitot/core's LEXICON): the names
+  // below came from the reference wall, the drawings from this engine.
+  | 'spacing-out' | 'booting' | 'dormant' | 'shake-awake'
+  | 'puzzled' | 'down' | 'tired' | 'focused' | 'panicked' | 'resigned' | 'satisfied'
+  | 'busy' | 'done' | 'error' | 'recalling' | 'replying' | 'powering-off';
 
 /** Two-digit id, kept as a string so leading zeros survive JSON and shell quoting. */
 export type EmotionId = string;
@@ -66,24 +71,24 @@ export const EMOTIONS: readonly EmotionDef[] = [
   { id: '01', state: 'waking', name: { en: 'Waking', zh: '唤醒' }, oneshot: true },
   { id: '02', state: 'idle', name: { en: 'Idle', zh: '待机' } },
   { id: '03', state: 'curious', name: { en: 'Curious', zh: '好奇' } },
-  { id: '04', state: 'bored', name: { en: 'Spacing out', zh: '发呆' } },
-  { id: '05', state: 'loading', name: { en: 'Booting', zh: '加载苏醒' } },
-  { id: '06', state: 'drowsy', name: { en: 'Dormant', zh: '休眠' } },
-  { id: '07', state: 'waking', name: { en: 'Shake awake', zh: '抖动唤醒' }, oneshot: true },
+  { id: '04', state: 'spacing-out', name: { en: 'Spacing out', zh: '发呆' } },
+  { id: '05', state: 'booting', name: { en: 'Booting', zh: '加载苏醒' } },
+  { id: '06', state: 'dormant', name: { en: 'Dormant', zh: '休眠' } },
+  { id: '07', state: 'shake-awake', name: { en: 'Shake awake', zh: '抖动唤醒' }, oneshot: true },
   { id: '08', state: 'spawning', name: { en: 'Spawning', zh: '登场' }, oneshot: true },
   { id: '09', state: 'dragging', name: { en: 'Dragging', zh: '拖拽' } },
 
   // Feeling
   { id: '10', state: 'happy', name: { en: 'Happy', zh: '开心' } },
-  { id: '11', state: 'confused', name: { en: 'Puzzled', zh: '疑惑' } },
-  { id: '12', state: 'sad', name: { en: 'Down', zh: '失落' } },
+  { id: '11', state: 'puzzled', name: { en: 'Puzzled', zh: '疑惑' } },
+  { id: '12', state: 'down', name: { en: 'Down', zh: '失落' } },
   { id: '13', state: 'surprised', name: { en: 'Surprised', zh: '惊讶' }, oneshot: true },
   { id: '14', state: 'shy', name: { en: 'Shy', zh: '害羞' } },
-  { id: '15', state: 'drowsy', name: { en: 'Tired', zh: '疲惫' } },
-  { id: '16', state: 'working', name: { en: 'Focused', zh: '专注' } },
-  { id: '17', state: 'scared', name: { en: 'Panicked', zh: '慌张' } },
-  { id: '18', state: 'suspicious', name: { en: 'Resigned', zh: '无奈' } },
-  { id: '19', state: 'proud', name: { en: 'Satisfied', zh: '满意' } },
+  { id: '15', state: 'tired', name: { en: 'Tired', zh: '疲惫' } },
+  { id: '16', state: 'focused', name: { en: 'Focused', zh: '专注' } },
+  { id: '17', state: 'panicked', name: { en: 'Panicked', zh: '慌张' } },
+  { id: '18', state: 'resigned', name: { en: 'Resigned', zh: '无奈' } },
+  { id: '19', state: 'satisfied', name: { en: 'Satisfied', zh: '满意' } },
   { id: '20', state: 'confused', name: { en: 'Confused', zh: '困惑' } },
   { id: '21', state: 'angry', name: { en: 'Angry', zh: '生气' } },
   { id: '22', state: 'excited', name: { en: 'Excited', zh: '兴奋' } },
@@ -96,16 +101,16 @@ export const EMOTIONS: readonly EmotionDef[] = [
   // Agent work
   { id: '30', state: 'thinking', name: { en: 'Thinking', zh: '思考中' } },
   { id: '31', state: 'receiving', name: { en: 'Receiving', zh: '接收任务' }, oneshot: true },
-  { id: '32', state: 'working', name: { en: 'Busy', zh: '处理中' } },
-  { id: '33', state: 'celebrate', name: { en: 'Done', zh: '任务完成' }, oneshot: true },
-  { id: '34', state: 'alerting', name: { en: 'Error', zh: '出错' }, oneshot: true },
+  { id: '32', state: 'busy', name: { en: 'Busy', zh: '处理中' } },
+  { id: '33', state: 'done', name: { en: 'Done', zh: '任务完成' }, oneshot: true },
+  { id: '34', state: 'error', name: { en: 'Error', zh: '出错' }, oneshot: true },
   { id: '35', state: 'listening', name: { en: 'Listening', zh: '等待输入' } },
   { id: '36', state: 'loading', name: { en: 'Loading', zh: '联网加载' } },
-  { id: '37', state: 'listening', name: { en: 'Recalling', zh: '复述回忆' } },
+  { id: '37', state: 'recalling', name: { en: 'Recalling', zh: '复述回忆' } },
   { id: '38', state: 'refusing', name: { en: 'Refusing', zh: '拒绝/受限' }, oneshot: true },
-  { id: '39', state: 'composing', name: { en: 'Replying', zh: '输出回复' } },
+  { id: '39', state: 'replying', name: { en: 'Replying', zh: '输出回复' } },
   { id: '40', state: 'searching', name: { en: 'Searching', zh: '检索资料' } },
-  { id: '41', state: 'powering-down', name: { en: 'Powering off', zh: '停止终止' } },
+  { id: '41', state: 'powering-off', name: { en: 'Powering off', zh: '停止终止' } },
   { id: '42', state: 'reading', name: { en: 'Reading', zh: '阅读' } },
   { id: '43', state: 'writing', name: { en: 'Writing', zh: '写入' } },
   { id: '44', state: 'sending', name: { en: 'Sending', zh: '发送' } },

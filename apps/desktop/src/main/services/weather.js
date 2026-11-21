@@ -15,6 +15,27 @@ const path = require('node:path');
 const { cachePath, readJson, writeJson, scriptFile } = require('../paths');
 
 const CACHE_TTL = 10 * 60 * 1000;
+/*
+ * The place is cached for half an hour: the locate chain (the system locator
+ * plus three IP services) is the slow, rate-limited half, and a city does not
+ * move between two five-minute refreshes. The reading above it still refreshes
+ * every ten minutes.
+ */
+const LOCATE_TTL = 30 * 60 * 1000;
+
+/*
+ * The cache file is not just the reading: a build that adds a field has to
+ * invalidate the old file, or the island shows yesterday's shape for ten
+ * minutes / until the next scheduled refresh. Bump this whenever normalize()
+ * starts returning a field the page needs.
+ */
+const CACHE_VERSION = 2;
+/*
+ * Twelve hours, starting at the next whole hour. Open-Meteo returns whole
+ * hours from the current one, so the first entry is the hour already on the
+ * clock and "未来 12 小时" is the twelve after it.
+ */
+const HOURS = 12;
 
 /**
  * How long a failed lookup is remembered, in this process only.
@@ -64,17 +85,63 @@ function cacheFile() {
   return cachePath('weather');
 }
 
+function locateFile() {
+  return cachePath('weather-locate');
+}
+
+/** The place the locate chain settled on, while it is under half an hour old. */
+function cachedPlace() {
+  const saved = readJson(locateFile(), null);
+  const place = saved && saved.place;
+  if (!place || !Number.isFinite(Number(place.lat)) || !Number.isFinite(Number(place.lon))) return null;
+  return Date.now() - Number(saved.at) < LOCATE_TTL ? place : null;
+}
+
+/** Remember a fresh place; the forecast may refresh sooner than the place. */
+function savePlace(place) {
+  if (!place || !Number.isFinite(Number(place.lat)) || !Number.isFinite(Number(place.lon))) return;
+  writeJson(locateFile(), {
+    at: Date.now(),
+    place: { name: place.name ?? '', country: place.country ?? '', lat: Number(place.lat), lon: Number(place.lon) },
+  });
+}
+
+const SCRIPT_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT];
+
+/** Chinese city names travel as base64 so they survive the argv encoding. */
+const encode = (text) => Buffer.from(text, 'utf8').toString('base64');
+
 /** Ask the child process; resolve the raw object or reject with a reason. */
-async function fetchRemote(city, autoLocate) {
-  const encoded = Buffer.from(city, 'utf8').toString('base64');
-  const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT];
-  if (autoLocate) args.push('-AutoLocate');
-  else args.push('-CityB64', encoded);
-  const result = await platform.runPowerShell(args, { timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
+async function runWeather(args, timeout) {
+  const result = await platform.runPowerShell([...SCRIPT_ARGS, ...args], { timeout, maxBuffer: 2 * 1024 * 1024 });
   if (!result.ok) throw new Error(String(result.stderr || result.error).trim().slice(0, 200));
   const text = result.stdout.trim();
   if (!text || text === 'null') throw new Error('city not found');
   return JSON.parse(text);
+}
+
+/** A named city: geocode it, then forecast it. */
+function fetchCity(city) {
+  return runWeather(['-CityB64', encode(city)], 30000);
+}
+
+/**
+ * The locate chain: Windows location first, then the IP services. It returns
+ * the place and the reading in one call, and prints the chain's own log lines
+ * so the terminal says which step answered and which city it found.
+ */
+async function fetchAuto() {
+  const raw = await runWeather(['-AutoLocate'], 60000);
+  for (const line of Array.isArray(raw.log) ? raw.log : []) console.log('[weather] ' + line);
+  return raw;
+}
+
+/** Forecast for coordinates a previous locate settled on. */
+function fetchCoordinates(place) {
+  const args = ['-Lat', String(place.lat), '-Lon', String(place.lon)];
+  if (place.name) args.push('-NameB64', encode(place.name));
+  if (place.country) args.push('-CountryB64', encode(place.country));
+  return runWeather(args, 30000);
 }
 
 function normalize(raw) {
@@ -87,6 +154,17 @@ function normalize(raw) {
     min: Math.round(daily.temperature_2m_min?.[index] ?? 0),
     rain: daily.precipitation_probability_max?.[index] ?? 0,
   }));
+  /* Whole hours in, whole hours out: the strip shows HH and a number, not a
+     minute nobody reads. Open-Meteo starts at the hour already on the clock,
+     so the first entry is skipped and the strip is the twelve after now. */
+  const hourly = (raw.hourly?.time ?? [])
+    .slice(1, HOURS + 1)
+    .map((time, index) => ({
+      time,
+      ...describe(raw.hourly.weather_code?.[index + 1]),
+      temp: Math.round(raw.hourly.temperature_2m?.[index + 1] ?? 0),
+      rain: raw.hourly.precipitation_probability?.[index + 1] ?? 0,
+    }));
   return {
     place: { name: raw.place?.name ?? '', country: raw.place?.country ?? '', lat: raw.place?.lat, lon: raw.place?.lon },
     current: {
@@ -100,6 +178,7 @@ function normalize(raw) {
       ...describe(current.weather_code ?? 0),
     },
     days,
+    hourly,
     fetchedAt: Date.now(),
   };
 }
@@ -120,7 +199,13 @@ async function load(city, autoLocate) {
   // reuse the coordinates the locator happened to find.
   const key = autoLocate ? 'auto' : city;
   const saved = readJson(file, null);
-  if (saved && saved.city === key && saved.data && Date.now() - saved.data.fetchedAt < CACHE_TTL) {
+  if (
+    saved &&
+    saved.city === key &&
+    saved.v === CACHE_VERSION &&
+    saved.data &&
+    Date.now() - saved.data.fetchedAt < CACHE_TTL
+  ) {
     return saved.data;
   }
   if (failure && failure.key === key && Date.now() - failure.at < FAILURE_TTL) {
@@ -128,13 +213,24 @@ async function load(city, autoLocate) {
   }
   let data;
   try {
-    data = normalize(await fetchRemote(city, autoLocate));
+    if (!autoLocate) {
+      data = normalize(await fetchCity(city));
+    } else {
+      const known = cachedPlace();
+      if (known) {
+        data = normalize(await fetchCoordinates(known));
+      } else {
+        const raw = await fetchAuto();
+        data = normalize(raw);
+        savePlace(raw.place);
+      }
+    }
   } catch (error) {
     failure = { key, at: Date.now(), message: String(error?.message ?? error) };
     throw error;
   }
   failure = null;
-  writeJson(file, { city: key, data });
+  writeJson(file, { city: key, v: CACHE_VERSION, data });
   return data;
 }
 

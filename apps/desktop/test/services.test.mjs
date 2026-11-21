@@ -62,6 +62,8 @@ const platform = require('../src/main/platform.js');
 const cal = (body) => ['BEGIN:VCALENDAR', 'VERSION:2.0', body, 'END:VCALENDAR'].join('\r\n');
 const vevent = (lines) => ['BEGIN:VEVENT', ...lines, 'END:VEVENT'].join('\r\n');
 const writePrefs = (value) => writeFileSync(join(dataDir, 'prefs.json'), JSON.stringify(value));
+const writeFocusCache = (value) => writeFileSync(join(dataDir, 'cache-focus.json'), JSON.stringify(value));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('focus: enabled and skip semantics', () => {
   it('cannot start while the feature is disabled', () => {
@@ -80,6 +82,61 @@ describe('focus: enabled and skip semantics', () => {
     assert.equal(snapshot.phase, 'rest');
     assert.equal(snapshot.cycles, 0);
     focus.restart();
+  });
+});
+
+/*
+ * The statistics are the page s second reading and the long rest is the one
+ * rule that depends on lifetime history: both are driven by a finished work
+ * phase, so the test runs the real one-second tick against a pinned clock
+ * instead of reimplementing finish() in the test.
+ */
+describe('focus: today and week totals, and the long rest', () => {
+  it('credits a finished pomodoro and gives the fourth one a 15-minute rest', async () => {
+    writePrefs({ focus: { enabled: true, work: 25, rest: 5 } });
+    writeFocusCache({ phase: 'idle', running: false, remaining: 0, total: 0, cycles: 3, endsAt: 0, history: [] });
+    focus.startService();
+    const realNow = Date.now;
+    let now = new Date(2026, 0, 5, 9, 0, 0).getTime(); // a Monday
+    Date.now = () => now;
+    try {
+      assert.equal(focus.start(), true);
+      // The pinned clock jumps the full work phase, so the next tick finishes it.
+      now += 25 * 60 * 1000 + 1000;
+      await sleep(1250);
+      const snapshot = focus.snapshot();
+      assert.equal(snapshot.phase, 'rest');
+      assert.equal(snapshot.cycles, 4, 'the finished pomodoro is counted');
+      assert.equal(snapshot.total, 15 * 60, 'the fourth rest is a long one');
+      assert.equal(snapshot.restMinutes, 15);
+      assert.equal(snapshot.longRest, true);
+      assert.deepEqual(snapshot.stats.today, { count: 1, minutes: 25 });
+      assert.deepEqual(snapshot.stats.week, { count: 1, minutes: 25 });
+      const saved = JSON.parse(readFileSync(join(dataDir, 'cache-focus.json'), 'utf8'));
+      assert.equal(saved.history.length, 1, 'the pomodoro is written through');
+      assert.equal(saved.history[0].minutes, 25);
+    } finally {
+      Date.now = realNow;
+      focus.stopService();
+      focus.restart();
+    }
+  });
+
+  it('returns to the configured rest after the long one', () => {
+    writePrefs({ focus: { enabled: true, work: 25, rest: 5 } });
+    writeFocusCache({ phase: 'idle', running: false, remaining: 0, total: 0, cycles: 5, endsAt: 0, history: [] });
+    focus.startService();
+    try {
+      focus.start();
+      focus.skip();
+      const snapshot = focus.snapshot();
+      assert.equal(snapshot.phase, 'rest');
+      assert.equal(snapshot.total, 5 * 60, 'the fifth pomodoro rests the normal five minutes');
+      assert.equal(snapshot.longRest, false);
+    } finally {
+      focus.stopService();
+      focus.restart();
+    }
   });
 });
 
@@ -118,6 +175,65 @@ describe('health: the two clear buttons are separate', () => {
     const snap = health.snapshot();
     assert.equal(snap.waterCount, 0);
     assert.equal(snap.standCount, 0);
+  });
+});
+
+describe('health: the counters belong to a local date', () => {
+  const cacheFile = join(dataDir, 'cache-health.json');
+  const key = (date) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+  };
+  const yesterday = () => {
+    const at = new Date();
+    return new Date(at.getFullYear(), at.getMonth(), at.getDate() - 1);
+  };
+
+  it('reports seven days, oldest first, today last', () => {
+    health.drink();
+    const snap = health.snapshot();
+    assert.equal(snap.trend.length, 7, 'a week is seven buckets');
+    assert.equal(snap.trend[6].today, true, 'the last bucket is today');
+    assert.equal(snap.trend[6].key, key(new Date()));
+    assert.equal(snap.trend.filter((day) => day.today).length, 1, 'exactly one bucket is today');
+    assert.equal(snap.trend[6].water, snap.waterCount, 'the last bar is the today count');
+  });
+
+  it('resets on a new local day but keeps the day it left', () => {
+    writeFileSync(
+      cacheFile,
+      JSON.stringify({
+        lastWater: Date.now() - 60 * 60 * 1000,
+        lastStand: Date.now() - 60 * 60 * 1000,
+        waterAt: 0,
+        standAt: 0,
+        day: key(yesterday()),
+        days: { [key(yesterday())]: { water: 4, stand: 2 } },
+        waterCount: 4,
+        standCount: 2,
+      }),
+    );
+    health.startService();
+    try {
+      const snap = health.snapshot();
+      assert.equal(snap.waterCount, 0, 'yesterday water is not today water');
+      assert.equal(snap.standCount, 0, 'yesterday posture is not today posture');
+      const left = snap.trend.find((day) => day.key === key(yesterday()));
+      assert.deepEqual({ water: left.water, stand: left.stand }, { water: 4, stand: 2 }, 'the day it left keeps its count');
+      assert.equal(snap.trend[6].water, 0, 'only today was reset');
+    } finally {
+      health.stopService();
+    }
+  });
+
+  it('clears today without emptying the week', () => {
+    health.drink();
+    health.stand();
+    health.resetWater();
+    const snap = health.snapshot();
+    assert.equal(snap.trend[6].water, 0, 'today water cleared');
+    assert.equal(snap.trend[6].stand, 1, 'clearing water leaves posture alone');
+    assert.ok(snap.trend.slice(0, 6).some((day) => day.water > 0 || day.stand > 0), 'earlier days survive a clear');
   });
 });
 
@@ -189,6 +305,40 @@ describe('calendar: importing the same invite twice', () => {
     ]));
     assert.equal(calendar.importIcs(text, 'mail:c'), 3);
     assert.equal(calendar.importIcs(text, 'mail:c'), 0, 'all three instances already exist');
+  });
+});
+
+/*
+ * The island edits events in place. This is the backend half of that: the same
+ * id keeps the same row, the title changes, and a moved meeting keeps its
+ * length instead of growing or shrinking around the new start.
+ */
+describe('calendar: editing an event in place', () => {
+  const event = () => {
+    const text = cal(vevent(['UID:edit-1', 'SUMMARY:旧标题', 'DTSTART:20261121T213000']));
+    calendar.importIcs(text, 'mail:edit');
+    return calendar.list().find((item) => item.uid === 'edit-1');
+  };
+
+  it('retitles the same event and keeps its id', () => {
+    const before = event();
+    const updated = calendar.update(before.id, { title: '新标题' });
+    assert.equal(updated.id, before.id);
+    assert.equal(calendar.list().find((item) => item.id === before.id).title, '新标题');
+  });
+
+  it('moves the event and shifts the end by the same delta', () => {
+    const before = event();
+    const moved = calendar.update(before.id, { start: before.start + 30 * 60 * 1000 });
+    assert.equal(moved.start, before.start + 30 * 60 * 1000);
+    assert.equal(moved.end - moved.start, before.end - before.start, 'the appointment keeps its length');
+  });
+
+  it('refuses to retitle to nothing and leaves the row alone', () => {
+    const before = event();
+    assert.equal(calendar.update(before.id, { title: '   ' }), null);
+    assert.equal(calendar.list().find((item) => item.id === before.id).title, '旧标题');
+    assert.equal(calendar.update('no-such-id', { title: 'x' }), null);
   });
 });
 

@@ -73,18 +73,18 @@ describe('desktop: agents are arbitrated, not last-writer-wins', () => {
       onApply: (result) => applied.push(result.state),
     });
 
-    arb.update({ sessionId: 'agent:dsh', emotionId: '32' }); // working 40
+    arb.update({ sessionId: 'agent:dsh', emotionId: '32' }); // busy 40
     arb.update({ sessionId: 'agent:claude', emotionId: '30' }); // thinking 30
-    assert.equal(arb.current().state, 'working');
+    assert.equal(arb.current().state, 'busy');
 
     // A third agent errors: the highest priority wins regardless of order.
-    arb.update({ sessionId: 'agent:codex', emotionId: '34' }); // alerting 80
-    assert.equal(arb.current().state, 'alerting');
+    arb.update({ sessionId: 'agent:codex', emotionId: '34' }); // error 80
+    assert.equal(arb.current().state, 'error');
 
     // The error ends, the two background sessions are still there.
     arb.remove('agent:codex');
     clock.advance(1000);
-    assert.equal(arb.current().state, 'working');
+    assert.equal(arb.current().state, 'busy');
     arb.dispose();
   });
 });

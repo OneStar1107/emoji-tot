@@ -85,10 +85,10 @@ for (const state of FACE_IDS) {
 
 /* ---- The parser must agree with the id table ---- */
 const probes = [
-  ['34', 'alerting'],
-  ['{"emotionId":"33"}', 'celebrate'],
+  ['34', 'error'],
+  ['{"emotionId":"33"}', 'done'],
   ['thinking', 'thinking'],
-  ['07', 'waking'],
+  ['07', 'shake-awake'],
   ['52', 'messaging'],
 ];
 for (const [input, expected] of probes) {
@@ -100,7 +100,16 @@ for (const [input, expected] of probes) {
 }
 
 /* ---- Every face must be reachable from at least one id ---- */
+/* 0.6.3 renamed a batch of states to the shared vocabulary (working -> busy,
+   alerting -> error, proud -> satisfied, ...). The old drawings are kept so
+   older ids and saved preferences still resolve, but they are no longer ids of
+   their own; the successor above is what carries them. */
+const SUPERSEDED = new Set([
+  'drowsy', 'bored', 'powering-down', 'working', 'composing',
+  'proud', 'sad', 'suspicious', 'scared', 'alerting',
+]);
 for (const state of FACE_IDS) {
+  if (SUPERSEDED.has(state)) continue;
   if (!idsByState.has(state)) {
     failures += 1;
     console.error(`✗ face "${state}" is not reachable from any protocol id`);

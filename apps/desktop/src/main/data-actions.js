@@ -42,6 +42,8 @@ async function calendarAction(calendar, payload) {
     result = calendar.add(data) ? success() : { ok: false, error: '日程标题或时间无效' };
   } else if (action === 'remove') {
     calendar.remove(data.id);
+  } else if (action === 'update') {
+    result = calendar.update(data.id, data) ? success() : { ok: false, error: '日程标题或时间无效' };
   } else if (action === 'import') {
     calendar.importIcs(data.ics, 'manual-import');
   } else if (action === 'subscribe') {

@@ -6,8 +6,16 @@
  * curve, not a new drawing. Keeping it a vocabulary also means a new state
  * costs three words.
  */
-export type EyeStyle = 'dot' | 'arc' | 'closed' | 'wide' | 'star' | 'line' | 'heart' | 'squint' | 'pill';
-export type MouthStyle = 'smile' | 'open' | 'flat' | 'wave' | 'o' | 'grin' | 'tiny' | 'tongue' | 'big' | 'smirk';
+export type EyeStyle = 'dot' | 'arc' | 'closed' | 'wide' | 'star' | 'line' | 'heart' | 'squint' | 'pill' | 'half';
+export type MouthStyle = 'smile' | 'open' | 'flat' | 'wave' | 'o' | 'grin' | 'tiny' | 'tongue' | 'big' | 'smirk' | 'dot' | 'frown';
+/**
+ * The eyebrow line, as a posture rather than a picture.
+ *
+ * Eyebrows are the one part a mouth cannot fake: "puzzled" and "confused" are
+ * the same mouth and different brows, and so are "satisfied" and "proud".
+ * Six postures cover every pair the lexicon actually distinguishes.
+ */
+export type BrowStyle = 'flat' | 'raised' | 'down' | 'one-up' | 'knit' | 'skeptic';
 /** Which part of the day a state belongs to. */
 export type FaceGroup = 'life' | 'emotion' | 'agent';
 /**
@@ -44,6 +52,19 @@ export interface FaceSpec {
     eyeScale?: number;
     /** Extra mouth size. */
     mouthScale?: number;
+    /** Second eye size relative to the first: one waking eye, one still shut. */
+    eyeAsym?: number;
+    /** Eyebrow posture drawn above the eyes, in ink. */
+    brow?: BrowStyle;
+    /**
+     * How hard the whole face trembles, 0–1.
+     *
+     * Drawn as a small uneven offset plus two motion ticks at the temples: a
+     * still image of a shaking face still has to read as shaking, because the
+     * gallery renders stills and a screenshot is the only evidence a reviewer
+     * has.
+     */
+    shake?: number;
     /** Prop drawn next to the face (tear, sweat, anger vein, sparkle, zzz). */
     marks?: FaceMark[];
 }

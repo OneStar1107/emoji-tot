@@ -42,6 +42,7 @@ const fullscreen = require('./main/services/fullscreen');
 const avoidance = require('./main/services/avoidance');
 const guard = require('./main/ipc-guard');
 const { safeSend } = guard;
+const { createFaceBus } = require('./main/face-bus');
 const platform = require('./main/platform');
 const { passThroughWhileDragging, sameDisplayId } = require('./main/window-state');
 const { nextAgentMtime } = require('./main/agent-file');
@@ -204,6 +205,15 @@ function setCast(id) {
   island.send('island:cast', id);
   if (win) safeSend(win, 'cast:changed', id);
   refreshMenus();
+  /*
+   * A new character changes the signature expression, not the resident state.
+   * The old renderer forced the ball to idle here and reported it, which reset
+   * a running task's face on one window and not the other.
+   */
+  moodBag = [];
+  cancelMood();
+  faceBus.set(baseState, 'cast');
+  scheduleMood();
 }
 
 /** Which surface set is on screen. This is the only display-state source. */
@@ -657,26 +667,17 @@ function endDrag() {
 /* -------------------------------------------------------------- linkage */
 
 /**
- * The one way a state reaches the character.
+ * The one way a host state reaches the character.
  *
- * Everything that produces a state — the state file, the menu, an agent
- * source — goes through the protocol parser here, so the renderer only ever
- * receives a resolved `{ emotionId, state, tips? }`. Sending the raw
- * `{ emotionId }` left the face unchanged, because the renderer speaks in
- * states.
+ * Everything that produces a state — the state file, the settings demo, an
+ * agent source through its arbiter — goes through the protocol parser here and
+ * then into setBaseState(). No channel of its own: a state is not a second
+ * face, it is the value the one face returns to between moods.
  */
 function emitState(payload) {
-  if (!win || win.isDestroyed()) return;
   const message = parseAgentMessage(payload);
   if (!message) return;
-  // The island shows the same character: one state, two windows.
-  island.send('island:state', message);
-  try {
-    safeSend(win, 'state:apply', message);
-  } catch {
-    // The window can be between load and ready; dropping one frame beats
-    // throwing inside a polling timer, which would stop the poll for good.
-  }
+  setBaseState(message.state, 'host');
 }
 
 /** Tell the renderer which edge the ball is on, so the bubble grows inward. */
@@ -1158,7 +1159,7 @@ const LOCAL_ACTIONS = {
   focus: ['start', 'pause', 'resume', 'stop', 'skip', 'restart'],
   health: ['drink', 'stand', 'reset', 'resetWater', 'resetStand'],
   todo: ['add', 'toggle', 'remove', 'update', 'clearDone'],
-  shelf: ['add', 'addBuffer', 'open', 'reveal', 'remove'],
+  shelf: ['add', 'addBuffer', 'open', 'reveal', 'remove', 'setGroup'],
   clipboard: ['copy', 'togglePin', 'remove', 'clear', 'clearUnpinned'],
   messenger: ['activate'],
 };
@@ -1176,6 +1177,11 @@ const checkLocal = (payload) => {
     // here as well as in the guard, because the outer limit has to cover it.
     if (guard.byteSize(data.bytes) > SHELF_BUFFER_LIMIT) return undefined;
     if (!guard.isString(data.name, 255)) return undefined;
+  } else if (payload.action === 'setGroup') {
+    // A shelf group is 0 (未分组) through 4, and the name is a name, not a path.
+    if (!guard.isString(data.name, 255)) return undefined;
+    if (!guard.isNumber(data.group, 0, 4)) return undefined;
+    return { service: 'shelf', action: 'setGroup', data: { name: data.name, group: Math.round(data.group) } };
   } else if (guard.byteSize(payload) > BUS_LIMIT) {
     return undefined;
   }
@@ -1228,31 +1234,129 @@ guard.guardedSend('pet:action', ['ball'], () => {
   const actions = ['bounce', 'spin', 'burst'];
   const action = actions[Math.floor(Math.random() * actions.length)];
   if (win) safeSend(win, 'state:action', action);
+  // A poke is a moment, not a condition: a borrowed mood gives the face back.
+  cancelMood();
+  faceBus.set(baseState, 'poke');
+  scheduleMood();
 }, { maxBytes: 64 });
 
-/*
- * One face, two windows.
- *
- * The ball runs its own idle moods — a pet that only rests is a screensaver —
- * and the island wears the same character. Without this relay the island sat
- * on the task state while the ball borrowed an expression every few seconds,
- * so the two faces drifted apart within one cycle. Both windows report what
- * they are showing; both receive what the other one reported.
- */
-function relayFace(state) {
-  const next = typeof state === 'string' ? state.slice(0, 32) : '';
-  if (!next) return;
-  island.send('island:face', next);
-  safeSend(win, 'face:apply', next);
-}
-guard.guardedSend('face:report', ['ball', 'island'], relayFace, {
-  check: (value) => (typeof value === 'string' && value.length > 0 ? value : undefined),
-  maxBytes: 256,
+/* ---------------------------------------------------------- face ownership */
+
+const faceBus = createFaceBus();
+// Both windows are consumers; neither one is allowed to produce a face. The
+// same payload object reaches both, so "identical" is not an accident of two
+// timers that happen to agree.
+faceBus.attach((payload) => island.send('face:apply', payload));
+faceBus.attach((payload) => {
+  if (win && !win.isDestroyed()) safeSend(win, 'face:apply', payload);
 });
-/** The renderer saw the pointer on the ball, or leave it. */
 
+/**
+ * What the host asked the pet to be.
+ *
+ * A borrowed idle mood is a guest; this is the resident it returns to. The
+ * host state arrives from the state file, an agent's status file, or the
+ * settings page's demo buttons — all through emitState().
+ */
+let baseState = 'idle';
+let moodBag = [];
+let moodTimer = null;
+let moodHoldTimer = null;
+let moodToken = 0;
 
+/** Drop a borrowed mood without changing the resident state. */
+function cancelMood() {
+  clearTimeout(moodHoldTimer);
+  moodHoldTimer = null;
+  moodToken += 1;
+}
 
+/**
+ * The host state changed: paint it now, then let idle moods resume from it.
+ *
+ * This is the only door a producer may use — the state file, an agent's
+ * arbiter, the settings demo, or a service such as media. No renderer gets to
+ * report a face back, because two producers is exactly how the windows drifted.
+ *
+ * Resetting the bag is deliberate — a face that was legal under the old state
+ * (a feeling during a task) must not survive in the queue after the state has
+ * moved on.
+ */
+function setBaseState(state, source) {
+  baseState = state;
+  moodBag = [];
+  cancelMood();
+  faceBus.set(state, source);
+  scheduleMood();
+}
+
+/**
+ * Idle moods — still "a pet that only rests is a screensaver", now with one
+ * clock instead of one per window.
+ *
+ * The renderer used to run this with window timers. That made the ball the
+ * producer and the island a follower, so any dropped report was a permanent
+ * drift, and a window that was hidden stopped the mood for both. The pools and
+ * the shuffled bag are the same rules as before: idle may wear any living or
+ * feeling face, busy may only borrow another agent state, and no two
+ * consecutive moods repeat.
+ */
+function moodPool() {
+  if (!CORE || !Array.isArray(CORE.FACE_META)) return [];
+  const member = typeof CORE.castMember === 'function' ? CORE.castMember(castId) : null;
+  const busy = baseState !== 'idle';
+  const list = busy
+    ? CORE.FACE_META.filter((mood) => mood.group === 'agent' && mood.id !== 'waiting').map((mood) => mood.id)
+    : [
+        member?.face,
+        ...CORE.FACE_META
+          .filter((mood) => mood.group !== 'agent' && !['idle', 'sleeping', 'powering-down', 'spawning'].includes(mood.id))
+          .map((mood) => mood.id),
+      ].filter(Boolean);
+  return [...new Set(list)].filter((state) => state !== 'idle' && state !== baseState);
+}
+
+function nextMood() {
+  if (!moodBag.length) {
+    moodBag = moodPool();
+    for (let i = moodBag.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [moodBag[i], moodBag[j]] = [moodBag[j], moodBag[i]];
+    }
+  }
+  return moodBag.pop();
+}
+
+/** A mood only makes sense while at least one surface is actually on screen. */
+function faceSurfaceVisible() {
+  const ballVisible = Boolean(win && !win.isDestroyed() && win.isVisible());
+  return ballVisible || island.isVisible();
+}
+
+function scheduleMood() {
+  clearTimeout(moodTimer);
+  moodTimer = setTimeout(() => {
+    moodTimer = null;
+    // Mid-drag the user is holding the pet; a new expression reads as a glitch.
+    if (faceSurfaceVisible() && !dragTimer) {
+      const mood = nextMood();
+      if (mood) {
+        const token = ++moodToken;
+        const member = typeof CORE?.castMember === 'function' ? CORE.castMember(castId) : null;
+        const motion = Math.random() < 0.7 ? member?.motion ?? 'bounce' : null;
+        faceBus.set(mood, 'mood', motion ? { motion } : null);
+        clearTimeout(moodHoldTimer);
+        moodHoldTimer = setTimeout(() => {
+          moodHoldTimer = null;
+          if (token !== moodToken) return;
+          faceBus.set(baseState, 'state');
+        }, 1800 + Math.random() * 2600);
+      }
+    }
+    scheduleMood();
+  }, 7000 + Math.random() * 9000);
+  moodTimer.unref?.();
+}
 
 /* -------------------------------------------------------------- services */
 
@@ -1467,7 +1571,7 @@ function startServices() {
       else if (action === 'resetWater') health.resetWater();
       else if (action === 'resetStand') health.resetStand();
     } else if (service === 'todo') {
-      if (action === 'add') todo.add(data?.text, data?.due, data?.repeat);
+      if (action === 'add') todo.add(data?.text, data?.due, data?.repeat, data?.priority);
       else if (action === 'toggle') todo.toggle(data?.id);
       else if (action === 'remove') todo.remove(data?.id);
       else if (action === 'update') todo.update(data?.id, data ?? {});
@@ -1478,6 +1582,7 @@ function startServices() {
       else if (action === 'open') await shelf.open(data?.name);
       else if (action === 'reveal') shelf.reveal(data?.name);
       else if (action === 'remove') shelf.remove(data?.name);
+      else if (action === 'setGroup') shelf.setGroup(data?.name, data?.group);
     } else if (service === 'clipboard') {
       if (action === 'copy') clipboardHistory.copy(data?.id);
       else if (action === 'togglePin') clipboardHistory.togglePin(data?.id);
@@ -1648,7 +1753,13 @@ if (!gotTheLock) {
     castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'tot';
     displayMode = stored.displayMode;
     createWindow();
-    if (win) win.webContents.on('did-finish-load', () => safeSend(win, 'cast:changed', castId));
+    if (win) {
+      win.webContents.on('did-finish-load', () => {
+        safeSend(win, 'cast:changed', castId);
+        // A reloaded page missed every face broadcast while it was away.
+        faceBus.resend();
+      });
+    }
     settings.registerIpc();
     island.registerIpc();
     // The island page cannot hold data that was pushed before it listened.
@@ -1656,6 +1767,8 @@ if (!gotTheLock) {
       if (runningServices.has('battery')) pushBattery();
       if (runningServices.has('weather')) refreshWeather();
       island.send('settings:changed', readPrefs());
+      // The island is created lazily, long after the first face was chosen.
+      faceBus.resend();
       pushAvoid();
     });
     createTray();
@@ -1666,6 +1779,8 @@ if (!gotTheLock) {
     startPointerWatch();
     startAgentWatch(stored);
     startServices();
+    // One clock for idle moods, in the process that owns the face.
+    scheduleMood();
     applyForm();
     applyMainPrefs();
     // Any window may change prefs; the tray and the visible form follow.

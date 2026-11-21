@@ -544,6 +544,22 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
   transform-origin: top center;
 }
 
+/*
+ * The fold's content layer (see paintMorph in island.js).
+ *
+ * The panel is scaled to the animated box, so without this layer the page is
+ * scaled with it: over 240ms the weather page squashes into a 60px band and its
+ * text stays painted all the way down — the second layer of text the fold
+ * showed. This layer takes the inverse of the panel's scale, so the page keeps
+ * its natural size and the card's own overflow:hidden, with its radius
+ * animated with the box, is the window that closes over it: content is cut at
+ * the current size instead of squashed into it.
+ *
+ * transform-origin matches the panel's (top centre), so the content stays on
+ * the same centre line while the card narrows.
+ */
+.panel-body { transform-origin: top center; }
+
 .topbar {
   display: flex;
   align-items: center;
@@ -884,6 +900,15 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   color: var(--faint);
 }
 .cover svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+
+/*
+ * The placeholder for a broadcast with no artwork: the skin accent tinted
+ * into the cover block, so the page shows a cover rather than a hole.
+ */
+.cover.cover-live {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 58%, var(--surface-2)), color-mix(in srgb, var(--accent) 18%, var(--surface-1)));
+  color: color-mix(in srgb, var(--accent) 82%, var(--ink));
+}
 /* The cover is the anchor of the page; the text column beside it owns the
    ellipsis and the one-line lyric window. */
 .music-cover {
@@ -898,25 +923,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .music-cover .cover-img,
 .music-cover .cover { width: 100%; height: 100%; border-radius: 12px; }
 .music-cover .cover svg { width: 22px; height: 22px; }
-/*
- * The output badge sits in the cover's top-right corner: the device the sound
- * leaves through, not a key. 18px is a label, not a target — nothing here is
- * clickable — and the title attribute carries the full device name, which a
- * 96px cover has no room to print.
- */
-.music-out {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  border-radius: 6px;
-  background: rgba(10, 10, 12, 0.62);
-  color: var(--ink);
-}
-.music-out svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
 .music-meta { min-width: 0; display: flex; flex-direction: column; flex: 1; justify-content: center; gap: 0; }
 .music-meta b { font-size: 14.5px; line-height: 1.3; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .music-meta > span { margin-top: 2px; font-size: 11.5px; line-height: 1.35; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1119,16 +1126,41 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 /*
  * A widget, not a card: the temperature is the only display-size element, the
  * four stats are 10.5px labels over 12.5px values, and six forecast chips sit
- * under them at thumbnail size. The page lands at ~198px of the 205px box, so
- * the panel ends under the content with no band of empty card, and every gap
- * is on the 4/6/8/10 scale.
+ * under them at thumbnail size. The page fits the 200px a pager child is given
+ * (see .pages > *), so the panel ends under the content with no band of empty
+ * card, and every gap is on the 4/6/8/10 scale.
+ *
+ * The gaps are 4, not 6: at 6 the page measured 206px, six over the budget, so
+ * the flex column squeezed its last line — the source note — into a 5.6px box
+ * and the note's own overflow:hidden cut the glyphs in half across the pager
+ * row. Six pixels is exactly the three 6→4 gaps, so the budget is met by
+ * spacing alone and no row has to give up its padding.
  */
-.wx { display: flex; flex-direction: column; gap: 6px; margin-top: -8px; }
-.wx-now { display: flex; align-items: center; gap: 10px; min-height: 42px; }
-.wx-where { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
-.wx-where b { font-size: 12.5px; font-weight: 550; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wx-where em { font-style: normal; font-size: 10.5px; line-height: 1.3; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wx-temp { flex: none; font-size: 30px; font-weight: 300; letter-spacing: -0.03em; line-height: 1.3; font-variant-numeric: tabular-nums; animation: temp-in var(--slow) var(--spring); }
+.wx { position: relative; display: flex; flex-direction: column; gap: 4px; margin-top: -8px; }
+.wx-now { position: relative; z-index: 6; display: flex; align-items: center; gap: 10px; min-height: 40px; }
+/* The city name is the page's one control: a 32px box for a 16px word, so the
+   target clears the 28px floor without moving the reading. */
+.wx-city {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.wx-city-name { display: flex; align-items: center; gap: 2px; max-width: 100%; min-width: 0; }
+.wx-city-name b { font-size: 12.5px; font-weight: 550; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-caret { flex: none; width: 9px; height: 9px; fill: none; stroke: var(--dim); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.wx-city em { max-width: 100%; font-style: normal; font-size: 10.5px; line-height: 1.3; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-temp { flex: none; font-size: 30px; font-weight: 300; letter-spacing: -0.03em; line-height: 1.2; font-variant-numeric: tabular-nums; animation: temp-in var(--slow) var(--spring); }
 @keyframes temp-in {
   from { opacity: 0; transform: translateY(6px) scale(0.96); }
   to { opacity: 1; transform: none; }
@@ -1136,19 +1168,83 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .wx-temp sup { font-size: 14.5px; vertical-align: super; color: var(--dim); }
 .wx-icon { flex: none; display: grid; place-items: center; color: var(--ink); opacity: 0.9; }
 .wx-icon svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+/*
+ * Twelve columns in 350px is 28.25px each: 9px time, 11px glyph, 11px number
+ * stacked in 39px. The columns are a grid, not a scroller — a horizontal
+ * scroller inside a 217px card would hide half the strip behind a gesture the
+ * island has nowhere to teach.
+ */
+.wx-hours { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1px; }
+.wx-hour { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; }
+.wx-hour em { font-style: normal; font-size: 9px; line-height: 1.3; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wx-hour svg { width: 11px; height: 11px; fill: none; stroke: var(--dim); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.wx-hour b { font-size: 11px; font-weight: 500; line-height: 1.3; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Label left, number right on one 22px line: half the height of the old
+   stacked cell, and easier to compare down a column. */
 .wx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
-.wx-cell { display: flex; flex-direction: column; gap: 1px; padding: 4px 8px; border-radius: 8px; background: var(--surface-1); min-width: 0; }
-.wx-cell em { font-style: normal; font-size: 10.5px; line-height: 1.3; color: var(--dim); }
-.wx-cell b { font-size: 12.5px; font-weight: 500; line-height: 1.3; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-cell { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; padding: 3px 8px; border-radius: 8px; background: var(--surface-1); min-width: 0; }
+.wx-cell em { flex: none; font-style: normal; font-size: 10.5px; line-height: 1.3; color: var(--dim); }
+.wx-cell b { min-width: 0; font-size: 12px; font-weight: 500; line-height: 1.3; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wx-cell b small { margin-left: 2px; font-size: 10.5px; font-weight: 400; color: var(--dim); }
-.wx-days { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
-.wx-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; border-radius: 8px; background: var(--surface-1); min-width: 0; }
+.wx-days { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; }
+.wx-day { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 2px 0; border-radius: 8px; background: var(--surface-1); min-width: 0; }
 .wx-day em { font-style: normal; font-size: 9px; line-height: 1.3; color: var(--dim); }
-.wx-day svg { width: 14px; height: 14px; fill: none; stroke: var(--dim); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.wx-day svg { width: 12px; height: 12px; fill: none; stroke: var(--dim); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .wx-range { display: flex; align-items: baseline; gap: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.wx-day b { font-size: 11.5px; font-weight: 550; line-height: 1.3; }
-.wx-day i { font-style: normal; font-size: 11.5px; line-height: 1.3; color: var(--dim); }
-.wx-src { margin: 0; font-size: 9px; line-height: 1.3; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-day b { font-size: 11px; font-weight: 550; line-height: 1.3; }
+.wx-day i { font-style: normal; font-size: 11px; line-height: 1.3; color: var(--dim); }
+.wx-src { flex: none; margin: 0; font-size: 8.5px; line-height: 1.25; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/*
+ * The city menu floats over the readings, never in the layout: an inline
+ * expansion would push the six-day strip out of a page that has no room left.
+ * The scrim is the menu's own dismiss target, so no document-level click
+ * handler has to reason about which page is open.
+ */
+.wx-scrim { position: absolute; inset: -4px -2px 0; z-index: 5; border-radius: 8px; background: rgba(0, 0, 0, 0.18); }
+.wx-cities {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 152px;
+  max-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card-solid);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.wx-city-opt,
+.wx-city-manage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.wx-city-opt span { overflow: hidden; text-overflow: ellipsis; }
+.wx-city-opt:hover,
+.wx-city-opt:focus-visible { background: var(--surface-2); }
+.wx-city-opt[aria-checked="true"] { color: var(--accent); }
+.wx-city-check { flex: none; width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.wx-city-manage { margin-top: 1px; border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; color: var(--dim); font-size: 10.5px; }
+.wx-city-manage:hover,
+.wx-city-manage:focus-visible { background: var(--surface-1); color: var(--ink); }
 /*
  * Loading state: one line, no action, at the top of the box. Centring it in
  * 205px read as a page that failed to load rather than a first reading on its
@@ -1191,6 +1287,8 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 }
 #page-sub[data-muted="true"] { opacity: 0.5; }
 
+.cal-head-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.cal-head-row .cal-day-title { flex: 1; min-width: 0; }
 .cal-day-title { font-size: 11.5px; font-weight: 550; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-festival { font-style: normal; font-size: 10.5px; line-height: 1.3; font-weight: 400; color: var(--warn); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Both actions share one pill shape: the acknowledge and the clear used to be
@@ -1282,10 +1380,51 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
    accent one below the number, so the two never overwrite each other. */
 .cal-ev-dot { position: absolute; top: 5px; right: 3px; width: 2.5px; height: 2.5px; border-radius: 50%; background: var(--faint); }
 .cal-events { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.cal-event { display: flex; align-items: baseline; gap: 8px; height: 20px; padding: 0 1px; min-width: 0; animation: row-in var(--base) var(--ease); }
+/* The row is a button now — pressing a meeting opens it — so it carries the
+   28px target the rest of the page uses instead of the 20px reading row. */
+.cal-event {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 28px;
+  padding: 0 4px; min-width: 0;
+  border: 0; border-radius: 8px; background: transparent; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+  animation: row-in var(--base) var(--ease);
+}
+.cal-event:hover { background: var(--surface-1); }
 .cal-time { font-size: 10.5px; line-height: 1.3; color: var(--dim); font-variant-numeric: tabular-nums; flex: none; }
 .cal-event b { font-size: 11.5px; font-weight: 500; line-height: 1.3; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cal-empty { margin: 0; font-size: 11.5px; color: var(--dim); }
+/* "还有 N 件": the third row the column cannot draw, as a count. */
+.cal-more { font-style: normal; font-size: 10.5px; line-height: 1.3; color: var(--faint); padding: 0 4px; font-variant-numeric: tabular-nums; }
+/*
+ * The editor is one field per row at the same 28px height as every other
+ * target on the page, and it is the empty state as well: a blank day opens the
+ * fields instead of drawing a caption beside a key that has nothing to do.
+ */
+.cal-form { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cal-form-row { display: flex; gap: 6px; min-width: 0; }
+/* Editing puts 删除 and 保存 on a row of their own: sharing the row with the
+   clock left the 117px column 17px for the time, which showed nothing. */
+.cal-form-acts .cal-key { flex: 1; }
+.cal-input {
+  width: 100%; min-width: 0; height: 28px; padding: 0 8px;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface-1); color: var(--ink);
+  font: inherit; font-size: 11.5px;
+}
+.cal-input::placeholder { color: var(--faint); }
+.cal-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cal-input[aria-invalid="true"] { border-color: var(--bad); }
+.cal-input-time { flex: 1; font-variant-numeric: tabular-nums; }
+.cal-key {
+  flex: none; height: 28px; min-width: 28px; padding: 0 10px;
+  border-radius: 999px; border: 1px solid var(--line);
+  background: var(--card-solid); color: var(--ink);
+  font: inherit; font-size: 11.5px; line-height: 1.3; white-space: nowrap;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.cal-key:hover { background: var(--surface-2); }
+.cal-key.on { border-color: color-mix(in srgb, var(--accent) 46%, var(--line)); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.cal-key-icon { padding: 0; }
+.cal-key-icon svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .cal-error { margin: 2px 0 0; font-size: 9px; line-height: 1.3; color: var(--warn); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* focus */
@@ -1295,7 +1434,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  * page's one focus and everything starts at the top of the 205px box — the
  * old centred column floated 20px down and left a band above it.
  */
-.focus { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 0; margin-top: -8px; }
+.focus { display: flex; flex-direction: column; gap: 10px; padding: 0; margin-top: -8px; }
 .focus-main { display: flex; align-items: center; justify-content: center; gap: 10px; padding-right: 10px; flex: none; }
 .focus-ring {
   width: 96px;
@@ -1333,7 +1472,31 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .focus-key:hover:not(:disabled) { background: var(--surface-2); }
 .focus-key.on { border-color: color-mix(in srgb, var(--accent) 46%, var(--line)); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .focus-key:disabled { opacity: 0.35; cursor: default; }
-.focus-note { margin: 0; font-size: 11.5px; color: var(--dim); text-align: center; }
+/*
+ * Two rows, one per window, sharing one grid so the numbers line up: label,
+ * pomodoros, minutes. The figures are tabular and each column is sized by its
+ * own two values, which is what makes 2 and 150 sit on the same right edge.
+ */
+.focus-stats {
+  display: grid;
+  grid-template-columns: 1fr max-content max-content;
+  align-items: baseline;
+  column-gap: 8px;
+  row-gap: 4px;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.focus-stats b {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.focus-stats b i { font-style: normal; font-size: 10.5px; font-weight: 400; color: var(--dim); margin-left: 2px; }
 .focus-empty { gap: 10px; padding-top: 2px; align-items: flex-start; }
 .focus-empty p { margin: 0; font-size: 11.5px; color: var(--dim); }
 
@@ -1366,6 +1529,31 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .health-bar i[data-due="true"] { background: var(--warn); }
 .health-num { flex: none; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--dim); }
 .health-num i { font-style: normal; color: var(--faint); }
+/*
+ * The seven-day strip: seven 3px bars per counter, today last.
+ *
+ * The 1px rule and the 4px above the bars are what keep it from reading as a
+ * third counter row — it is history, not another thing to press. The label
+ * repeats the counter's name at 9.5px in the same 28px column, so each chart
+ * sits directly under the row it belongs to.
+ */
+.health-trend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 8px 0;
+  border-top: 1px solid var(--line);
+}
+.health-trend-row { display: flex; align-items: flex-end; gap: 10px; height: 18px; }
+.health-trend-key { flex: none; min-width: 28px; font-size: 9.5px; line-height: 18px; color: var(--dim); }
+.health-trend-bars { position: relative; flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 4px; height: 18px; }
+/* The 1px baseline is what turns seven ticks into a chart: bars grow out of it. */
+.health-trend-bars::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--line); }
+.health-trend-col { flex: 1 1 0; display: flex; align-items: flex-end; justify-content: center; height: 18px; }
+.health-trend-col i { display: block; position: relative; z-index: 1; width: 3px; border-radius: 1.5px; background: var(--dim); }
+.health-trend-col i[data-count="0"] { background: var(--faint); }
+.health-trend-col i[data-today="true"] { background: var(--accent); }
+.health-trend-num { flex: none; min-width: 28px; text-align: right; font-size: 11.5px; line-height: 18px; font-variant-numeric: tabular-nums; color: var(--dim); }
 .health-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px; }
 .health-foot span { font-size: 11.5px; color: var(--dim); }
 .health-clear { height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--dim); font: inherit; font-size: 11.5px; line-height: 1.3; cursor: pointer; }
@@ -1379,6 +1567,15 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 /* 8px lift: the first todo row sits 4px under the panel's top edge; the box
    gives the 8px back at the bottom. */
 .todo { display: flex; flex-direction: column; gap: 8px; height: 100%; margin-top: -8px; }
+/* The page's one number: tabular figures so it does not jitter as tasks are
+   ticked, and a 4px bar that answers "how far through" without reading. */
+.todo-progress { display: flex; align-items: center; gap: 8px; min-height: 16px; padding: 0 4px; }
+.todo-count { flex: none; font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.todo-count b { font-weight: 550; color: var(--ink); }
+.todo-count i { font-style: normal; color: var(--faint); padding: 0 1px; }
+.todo-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.todo-bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width 220ms var(--ease); }
+.todo-bar i[data-done="true"] { background: var(--good); }
 .todo-add { display: flex; gap: 6px; align-items: center; }
 .todo-add input[type="text"] {
   flex: 1; min-width: 0; height: 30px; padding: 0 10px;
@@ -1396,14 +1593,33 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .todo-due-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .todo-list { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 1px; overflow-y: auto; scrollbar-width: none; }
 .todo-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
-.todo-item { display: flex; align-items: center; gap: 8px; padding: 6px 6px; border-radius: 7px; animation: row-in var(--base) var(--ease); }
+/* A row is 32px: the 28px tap target plus 2px of air, so three rows fit the
+   list window and every control on the row is thumb-sized. */
+.todo-item { position: relative; display: flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: 7px; animation: row-in var(--base) var(--ease); }
 .todo-item:hover { background: rgba(255, 255, 255, 0.04); }
+/* Priority is a 3px stripe on the leading edge: the only colour cue in the
+   list, so a 高 row is found without reading a word. */
+.todo-item::after {
+  content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px;
+  border-radius: 2px; background: var(--todo-prio, transparent);
+}
+.todo-item[data-priority="high"] { --todo-prio: var(--bad); }
+.todo-item[data-priority="mid"] { --todo-prio: var(--warn); }
+.todo-item[data-priority="low"] { --todo-prio: var(--dim); }
+.todo-item.done::after { opacity: 0.4; }
+/* The button is the 28px target; the square the eye checks is drawn inside it. */
 .todo-check {
-  width: 16px; height: 16px; border-radius: 5px; padding: 0;
-  border: 1px solid var(--surface-3); background: transparent;
+  position: relative; width: 28px; height: 28px; border-radius: 9px; padding: 0;
+  border: 0; background: transparent;
   display: grid; place-items: center; cursor: pointer; flex: none;
 }
+.todo-check::before {
+  content: ''; position: absolute; inset: 6px; border-radius: 5px;
+  border: 1px solid var(--surface-3); background: transparent;
+  transition: background var(--base) var(--ease), border-color var(--base) var(--ease);
+}
 .todo-check svg {
+  position: relative;
   width: 10px;
   height: 10px;
   fill: none;
@@ -1447,7 +1663,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 /* shelf */
 /* 8px lift, same as the other pages: the shelf's first row starts 4px from
    the panel's top edge. */
-.shelf { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; margin-top: -8px; }
+.shelf { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; margin-top: -8px; }
 /*
  * An empty shelf is one small drop target at the top, not a page.
  *
@@ -1469,7 +1685,27 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .shelf-empty .shelf-hint span { font-size: 11.5px; color: var(--faint); }
 /* The clipboard keeps its own height instead of eating the rest of the page. */
 .shelf-empty .clip { flex: 0 0 auto; }
-/* A 28px drop row when there are files; the empty state above keeps its 96px. */
+/*
+ * One 28px search row, and the drop hint shares it.
+ *
+ * Four bands (hint, search, list, clipboard) did not fit 205px, and a second
+ * hint row only repeated what the page already promised. The whole page is the
+ * drop target; the note is where the promise is written down, so the row
+ * carries both jobs.
+ */
+.shelf-search { display: flex; align-items: center; gap: 8px; flex: none; height: 28px; }
+.shelf-q {
+  flex: 1; min-width: 0; height: 28px; padding: 0 8px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface-1); color: var(--ink);
+  font: inherit; font-size: 11.5px;
+}
+.shelf-q::placeholder { color: var(--faint); }
+.shelf-q:focus { border-color: var(--surface-3); outline: none; }
+.shelf-drop-note { flex: none; font-size: 10.5px; color: var(--faint); }
+.shelf.dragover .shelf-q { border-color: var(--accent); background: rgba(143, 123, 255, 0.1); }
+.shelf.dragover .shelf-drop-note { color: var(--ink); }
+/* The empty state's 96px drop target (files use the search row for the hint). */
 .shelf-hint {
   padding: 6px 8px; border: 1px dashed var(--surface-3); border-radius: 9px;
   font-size: 11.5px; line-height: 1.3; color: var(--faint); text-align: center;
@@ -1494,24 +1730,32 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   to { transform: translateX(320%); }
 }
 
-/* Battery and paired devices: the charge answers first, the list explains. */
+/*
+ * Battery and devices: the charge answers first, the list explains.
+ *
+ * The block above the list is a 64px budget — 26px figure, one 11px caption,
+ * a 4px bar — because the height it gives up is the height the list gets. It
+ * was 30/11.5/4 over a taller gap, and the five-row list is what that trade
+ * bought: the same page now shows two more devices without scrolling.
+ */
 .dev { display: flex; flex-direction: column; margin-top: -8px; }
 /*
- * 30px is the page's one big number; tabular figures keep it from shifting when
- * the level ticks over. The unit rides small so the digits stay the subject,
- * and the charge state is one quiet caption under it — a fact, not a headline.
+ * The block is also the page's toolbar: the Bluetooth footer rides at its top
+ * right instead of under the list, where it cost a whole 28px row that five
+ * device rows cannot spare. Absolute, so it adds no height; right-aligned, so
+ * it sits over the empty half of a line that only holds two digits and a word.
  */
-.dev-hero { display: flex; flex-direction: column; gap: 4px; }
+.dev-hero { position: relative; display: flex; flex-direction: column; gap: 4px; }
 .dev-level {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 300;
-  line-height: 1.3;
+  line-height: 1.35;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
-.dev-level span { font-size: 14.5px; color: var(--dim); }
-.dev-charge { font-size: 11.5px; line-height: 1.3; color: var(--dim); }
+.dev-level span { font-size: 13px; color: var(--dim); }
+.dev-charge { font-size: 11px; line-height: 1.35; color: var(--dim); }
 /*
  * 4px, not 6: the bar is a scale, not a card. Three bands answer "will this last
  * the afternoon" before the number is read — red under 20, amber under 50, the
@@ -1521,9 +1765,9 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .dev-power i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
 .dev-power.bad i { background: var(--bad); }
 .dev-power.warn i { background: var(--warn); }
-/* 28px a row: 20px glyph, 12.5px name, a 60x3 bar, an 11.5px number. */
+/* 26px a row: 20px glyph, 12.5px name, a 60x3 bar, an 11.5px number, one star. */
 .dev-list { display: flex; flex-direction: column; margin-top: 8px; }
-.dev-item { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 2px; font-size: 12.5px; }
+.dev-item { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 2px; font-size: 12.5px; }
 .dev-icon { display: flex; width: 20px; height: 20px; color: var(--dim); flex: none; }
 .dev-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .dev-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
@@ -1533,12 +1777,52 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .dev-meter.warn i { background: var(--warn); }
 .dev-bat { width: 32px; text-align: right; color: var(--ink); font-size: 11.5px; font-variant-numeric: tabular-nums; flex: none; }
 .dev-bat.bad { color: var(--bad); }
-.dev-more { margin-top: 4px; padding: 0 2px; font-size: 10.5px; line-height: 1.3; color: var(--faint); }
+/*
+ * The row without a level: one word where the meter and the number were. The
+ * switch that hides them is for people who want "what is connected", not "how
+ * much is left", so the row still answers the first question.
+ */
+.dev-conn { flex: none; font-size: 11px; color: var(--dim); }
+/*
+ * Pinned rows lead the list and keep a filled star ahead of the name. The mark
+ * is decoration; the control is the star at the row's end, and both are the
+ * same glyph so "pinned" and "pin this" never read as two different states.
+ */
+.dev-item.pinned .dev-icon { color: var(--accent); }
+.dev-pin-mark { display: inline-flex; width: 9px; height: 9px; margin-right: 4px; vertical-align: -1px; color: var(--accent); }
+.dev-pin-mark svg { width: 9px; height: 9px; fill: currentColor; stroke: none; }
+/*
+ * The pin control: 20px so it is still a target at this row height, quiet
+ * until the row is hovered or the device is pinned. Disabled means the three
+ * pins are taken — the title says so rather than the click silently doing
+ * nothing.
+ */
+.dev-pin {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0; flex: none;
+  border: 0; border-radius: 5px; background: transparent;
+  color: var(--faint); cursor: pointer; opacity: 0.4;
+}
+.dev-pin svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
+.dev-pin.on { color: var(--accent); opacity: 1; }
+.dev-pin.on svg { fill: currentColor; }
+.dev-pin:hover:not(:disabled) { opacity: 1; background: var(--surface-2); }
+.dev-pin:disabled { cursor: default; opacity: 0.16; }
+.dev-item:hover .dev-pin:not(:disabled) { opacity: 0.85; }
+/* The count line sits under five rows, so it is given no more than two lines' worth. */
+.dev-more { margin-top: 2px; padding: 0 2px; font-size: 10.5px; line-height: 1.2; color: var(--faint); }
 /* Empty: one line and one action, 70px from the page top, never a centred page. */
 .dev-empty { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .dev-empty-line { margin: 0; font-size: 12.5px; color: var(--dim); }
 /* Bluetooth is a state, not a switch; with no settings sheet wired, no action. */
-.dev-foot { display: flex; align-items: center; height: 28px; margin-top: 4px; font-size: 11.5px; color: var(--dim); }
+.dev-foot { display: flex; align-items: center; height: 20px; margin-top: 0; font-size: 11px; color: var(--dim); }
+/*
+ * In the hero the footer is absolutely placed at the top right: the block only
+ * draws two digits and a word, and the rest of the line is where a fifth device
+ * row comes from. Height stays 20px so it remains a real target.
+ */
+.dev-hero .dev-foot { position: absolute; top: 0; right: 0; }
+.dev-hero .dev-foot[data-open-system] { width: auto; height: 20px; }
 /*
  * The footer is a button since the Bluetooth row opens the system settings.
  * It has to look like the status line it replaces: no chrome, inherited type,
@@ -1557,7 +1841,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 }
 .dev-foot[data-open-system]:hover:not(:disabled) { color: var(--ink); }
 .dev-foot[data-open-system]:disabled { cursor: default; color: var(--faint); }
-.dev-foot-note { margin-left: 6px; font-size: 10.5px; color: var(--faint); }
+.dev-foot-note { margin-left: 5px; font-size: 10.5px; color: var(--faint); }
 .dev-foot[data-open-system]:disabled .dev-foot-note { color: var(--warn); }
 .dev-bt { display: inline-flex; align-items: center; gap: 6px; }
 .dev-bt i { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
@@ -1572,6 +1856,37 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   border-radius: 5px;
   padding: 2px 6px;
   flex: none;
+}
+
+/* The priority picker wears the same 3px stripe the added task will get, so
+   the colour language is taught before the first row exists. The stripe is a
+   floating bar, not a border: a border would follow the radius and read as a
+   focus ring. */
+.todo-prio-pick { position: relative; display: inline-flex; }
+.todo-prio-pick::before {
+  content: ''; position: absolute; left: 1px; top: 6px; bottom: 6px; width: 3px;
+  border-radius: 2px; background: var(--todo-prio, transparent); pointer-events: none;
+}
+.todo-prio-pick:has(select[data-priority="high"]) { --todo-prio: var(--bad); }
+.todo-prio-pick:has(select[data-priority="mid"]) { --todo-prio: var(--warn); }
+.todo-prio-pick:has(select[data-priority="low"]) { --todo-prio: var(--dim); }
+
+.todo-prio-pick select {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 0 6px 0 10px;
+  height: 28px;
+  min-height: 28px;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.todo-prio-pick select option {
+  background: var(--card-solid);
+  color: var(--ink);
 }
 
 .todo-repeat-pick select {
@@ -1721,6 +2036,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  * is the focus and the page stays inside its 205px box. On an empty shelf the
  * 96px prompt goes too — a 120px list under it would not fit.
  */
+.shelf-clip-open .shelf-search { display: none; }
 .shelf-clip-open .shelf-list { display: none; }
 .shelf-empty.shelf-clip-open .shelf-hint { display: none; }
 /*
@@ -1809,38 +2125,86 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .clip-pin.on { color: var(--warn); }
 
 /*
- * Four 24px rows: the fifth file is one wheel away, not a taller page. The
- * list owns its height so the hint above and the clipboard entry below stay
- * exactly where they were whatever is on the shelf.
+ * The list owns the space between the search row and the clipboard entry and
+ * scrolls inside it: the fifth file is one wheel away, never a taller page.
  */
 .shelf-list {
   display: flex;
   flex-direction: column;
   gap: 0;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  /* Whole 28px bands only: 112px with the clipboard row (a head plus three
+     rows), 140px without it (see .shelf-no-clip). The list never ends on a
+     half-drawn row, so the fold at the bottom is always a clean one. */
+  max-height: 112px;
   min-height: 0;
-  max-height: 96px;
   overflow-y: auto;
   scrollbar-width: none;
 }
 .shelf-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
-/* A row is the 24px list rhythm: 16px glyph, one line of name, 16px delete. */
-.shelf-item { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 4px; border-radius: 6px; }
+/* With no clipboard row the list owns the page: five 28px bands. */
+.shelf.shelf-no-clip .shelf-list { max-height: 140px; }
+/*
+ * A group head is one 28px fold key: caret, title, count. Only groups with
+ * files are drawn, and folding is a view state — nothing is written to prefs.
+ */
+.shelf-group { flex: none; }
+.shelf-group-head {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; height: 28px; padding: 0 4px;
+  border: 0; border-radius: 7px; background: transparent;
+  color: var(--faint); font: inherit; font-size: 11px;
+  text-align: left; cursor: pointer;
+}
+.shelf-group-head:hover { background: var(--surface-1); color: var(--dim); }
+.shelf-group-name { font-weight: 550; color: var(--dim); }
+.shelf-group-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.shelf-caret {
+  width: 12px; height: 12px; display: grid; place-items: center;
+  transition: transform var(--base) var(--ease);
+}
+.shelf-caret svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.shelf-caret.on { transform: rotate(90deg); }
+.shelf-group[data-folded="true"] .shelf-group-body { display: none; }
+/* A row is 28px: 16px glyph, one line of name, the group chip, 28px delete. */
+.shelf-item { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px; border-radius: 6px; }
 .shelf-item:hover { background: rgba(255, 255, 255, 0.04); }
 .shelf-icon { display: grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--faint); }
 .shelf-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .shelf-open {
-  flex: 1; min-width: 0; height: 24px; border: 0; background: transparent; padding: 0; color: var(--ink);
+  flex: 1; min-width: 0; height: 28px; border: 0; background: transparent; padding: 0; color: var(--ink);
   font: inherit; font-size: 12.5px; line-height: 1.3; text-align: left; cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/*
+ * The group chip is the assignment control: one target, five states, each press
+ * moves the file one group forward and wraps back to 未分组. It is 28px tall so
+ * the whole row is reachable, and the title says what the next press does.
+ */
+.shelf-group-pick {
+  flex: none; height: 28px; padding: 0 6px;
+  border: 0; border-radius: 6px; background: transparent;
+  color: var(--faint); font: inherit; font-size: 10.5px;
+  cursor: pointer; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.shelf-group-pick:hover { background: var(--surface-2); color: var(--dim); }
 .shelf-del {
-  width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px;
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px;
   background: transparent; color: var(--faint); cursor: pointer;
   display: grid; place-items: center; flex: none;
 }
 .shelf-del svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
 .shelf-del:hover { color: var(--bad); }
+/* The search's no-result state: one line, no icon and no action of its own. */
+.shelf-noresult {
+  display: flex; align-items: center; height: 28px; margin: 0; padding: 0 4px;
+  font-size: 11.5px; color: var(--faint);
+}
 
 /* quota */
 /*
@@ -2562,6 +2926,13 @@ body[data-skin="console"] .health-label {
   color: var(--accent);
 }
 body[data-skin="console"] .health-num {
+  font-family: var(--console-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+/* The week's figure sits in the same column as the counter's, so the skin's
+   instrument type has to reach it too: two fonts in one column reads as a bug. */
+body[data-skin="console"] .health-trend-num {
   font-family: var(--console-mono);
   font-size: 10.5px;
   letter-spacing: 0.02em;

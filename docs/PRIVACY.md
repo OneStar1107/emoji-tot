@@ -4,7 +4,7 @@
 
 ## 一句话
 
-**没有账号，没有遥测，没有云同步。** 应用只访问三类外部服务：天气（Open-Meteo）、歌词（LRCLIB）、你自己配置的邮箱与日历订阅。除此之外不发出任何请求。
+**没有账号，没有遥测，没有云同步。** 除了天气（Open-Meteo；开启自动定位时还会问一次 Windows 定位或 IP 归属地）、歌词（LRCLIB）、你自己配置的邮箱与日历订阅，应用不发出任何请求。
 
 ## 存在哪
 
@@ -17,6 +17,7 @@
 | secrets.bin | 邮箱授权码、AI API Key | **是**（safeStorage） | 直到你删除账号 |
 | cache-calendar.json | 日程事件与订阅列表 | 事件否；**订阅 URL 是** | 30 分钟刷新一轮，持续覆盖 |
 | cache-weather.json | 天气读数与城市 | 否 | 持续覆盖 |
+| cache-weather-locate.json | 自动定位结果（城市、经纬度、来源） | 否 | 30 分钟刷新一轮，持续覆盖 |
 | cache-health.json / focus.json / todos.json | 计时与待办 | 否 | 直到你删除条目 |
 | clipboard.json | 剪贴板历史（**默认关闭**） | 否 | 7 天，最多 60 条 |
 | shelf/ | 你拖进置物架的文件副本 | 否 | 直到你删除 |
@@ -71,10 +72,12 @@ secrets.bin 里每条都带前缀：v1: 是 safeStorage 加密后的结果，pla
 
 | 目标 | 何时 | 送出去的东西 |
 | --- | --- | --- |
-| api.open-meteo.com | 天气刷新（默认 15 分钟） | 城市名或 IP 位置、单位 |
-| geocoding-api.open-meteo.com | 城市名解析 | 城市名 |
+| api.open-meteo.com | 天气刷新（默认 15 分钟） | 城市名或经纬度、单位 |
+| geocoding-api.open-meteo.com | 城市名解析；系统定位成功后用它反查城市名 | 城市名或经纬度 |
+| Windows 定位（Windows.Devices.Geolocation） | 开启自动定位、且 30 分钟内还没定位过 | 不发送；由 Windows 决定是否授权，应用只拿到经纬度 |
+| api.bigdatacloud.net | 系统定位成功后反查城市名 | 经纬度 |
 | lrclib.net | 换歌时 | 歌名、艺人、时长 |
-| ipapi.co / ipinfo.io | 开启自动定位时 | 你的出口 IP |
+| ipinfo.io / myip.ipip.net / ipapi.co | 系统定位不可用时的 IP 回退（30 分钟内只问一次） | 你的出口 IP |
 | 你的 IMAP 服务器 | 每 5 分钟 | 登录凭证（走系统钥匙串） |
 | 你的 AI 服务商 | 刷新余额时 | API Key |
 | 你的日历订阅链接 | 每 30 分钟 | —（URL 本身含 token） |

@@ -19,10 +19,14 @@
 
     <!-- Expanded: header, one page, dots. -->
     <section class="panel" id="panel" hidden aria-label="EmojiTot 面板">
+      <!-- The page and its chrome, as one layer the fold clips against the
+           card's animated box (see paintMorph in island.js). The paging
+           arrows stay outside: they are chrome that scales with the surface. -->
+      <div class="panel-body" id="panel-body">
       <header class="topbar">
         <span class="top-face-col">
           <span class="top-face"><emojitot-ball cast="tot" size="30" state="idle"></emojitot-ball></span>
-          <em class="top-page-name" id="page-name">音乐</em>
+          <em class="top-page-name" id="page-name">媒体</em>
         </span>
         <span class="top-titles">
           <strong id="page-title"><span></span></strong>
@@ -44,6 +48,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
       </button>
       <nav class="dots" id="dots" aria-label="切换页面"></nav>
+      </div>
     </section>
     <!-- Auto-avoid: the pill collapses to this strip while a listed app covers it. -->
     <div id="avoid-strip" aria-hidden="true"></div>

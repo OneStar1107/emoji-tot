@@ -73,7 +73,7 @@ describe('createArbiter', () => {
 
   it('queues a less urgent event that arrives during a dwell', () => {
     const { arbiter, advance, applied } = harness();
-    arbiter.update({ sessionId: 'a', emotionId: '33' }); // celebrate (60)
+    arbiter.update({ sessionId: 'a', emotionId: '33' }); // done (60)
     arbiter.update({ sessionId: 'b', emotionId: '50' }); // notifying (48)
     expect(applied).toEqual(['33']);
     advance(100);

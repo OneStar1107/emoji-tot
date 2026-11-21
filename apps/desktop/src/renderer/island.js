@@ -18,6 +18,9 @@ const frameEl = document.getElementById('frame');
 const pillEl = document.getElementById('pill');
 const pillStatus = document.getElementById('pill-status');
 const panelEl = document.getElementById('panel');
+/* The page + header + dots, the layer the fold keeps at its natural size while
+   the panel's box (and its rounded clip) does the folding. */
+const panelBodyEl = document.getElementById('panel-body');
 const pagesEl = document.getElementById('pages');
 const dotsEl = document.getElementById('dots');
 const titleEl = document.getElementById('page-title');
@@ -77,7 +80,9 @@ function batterySvg(level, charging) {
 let prefs = {};
 let battery = null;
 let weather = null;
-let media = { active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '' };
+let media = { active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '', liveSince: 0 };
+/** Wall time the live clock froze at while the stream was paused, or 0 when it runs. */
+let liveFrozenAt = 0;
 let lyrics = null;
 /*
  * The music page's second state: the words own the page. This is a view flag,
@@ -86,9 +91,16 @@ let lyrics = null;
  */
 let musicLyricsMode = false;
 let focusState = { phase: 'idle', running: false, remaining: 0, total: 0, cycles: 0 };
-let healthState = { enabled: false, waterMin: 45, standMin: 60, sinceWater: 0, sinceStand: 0, waterDue: false, standDue: false, waterCount: 0, standCount: 0 };
+let healthState = { enabled: false, waterMin: 45, standMin: 60, sinceWater: 0, sinceStand: 0, waterDue: false, standDue: false, waterCount: 0, standCount: 0, trend: [] };
 let todos = [];
 let shelfFiles = [];
+/*
+ * The shelf's two pieces of view state: the search box and the folded groups.
+ * Neither is a preference — the page is rebuilt from them every render, and a
+ * restart opens with everything listed under its group.
+ */
+let shelfQuery = '';
+const shelfFolded = new Set();
 let clipboardItems = [];
 let messengerState = { apps: [], unread: 0 };
 let devicesState = { devices: [] };
@@ -99,6 +111,15 @@ let quotaState = { accounts: [], current: null, last: null };
 let agentsState = null;
 let mailState = { accounts: [], messages: [], syncing: false, error: '', lastSync: 0 };
 let calendarState = { events: [], upcoming: [] };
+/*
+ * The day column's editor. `null` means no editor was opened by hand, which is
+ * not the same as "no editor on screen": an empty day draws the fields by
+ * itself (that is the add gesture), and `{ id: '' }` is the same editor opened
+ * from the ＋ key on a day that already has rows.
+ */
+let calendarDraft = null;
+/** Why the last save or delete failed, or '' while nothing has. */
+let calendarError = '';
 const today = new Date();
 let calendarView = { year: today.getFullYear(), month: today.getMonth(), selected: today.getDate() };
 let open = false;
@@ -434,6 +455,29 @@ function isBrowserMedia() {
 /** Live streams and video tabs often report no duration at all. */
 const isLiveMedia = () => !media.duration;
 
+/**
+ * How long the broadcast has been on: wall time since the main process saw it.
+ *
+ * A pause does not end the broadcast, but it does stop the clock on screen:
+ * the page freezes it at the second the pause arrived and only runs again
+ * when playback resumes from the same liveSince. Without the freeze a paused
+ * stream kept counting, so "paused for a minute" read as "on air for one more
+ * minute", and resuming looked like it had lost the elapsed time.
+ */
+function liveElapsed() {
+  const since = Number(media.liveSince) || 0;
+  if (!since) return 0;
+  if (liveFrozenAt) return Math.max(0, (liveFrozenAt - since) / 1000);
+  return Math.max(0, (Date.now() - since) / 1000);
+}
+
+/** HH:MM:SS for the live clock; the row's tabular digits keep it from jittering. */
+const liveClock = (seconds) => {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const pad = (value) => String(value).padStart(2, '0');
+  return pad(Math.floor(total / 3600)) + ':' + pad(Math.floor((total % 3600) / 60)) + ':' + pad(total % 60);
+};
+
 function musicPage() {
   if (!media.active) {
     return empty(
@@ -447,18 +491,21 @@ function musicPage() {
   const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
   const live = isLiveMedia();
   const browser = isBrowserMedia();
+  /*
+   * A broadcast with no artwork still gets a cover-shaped block in the skin
+   * colour: an empty rectangle reads as "the picture failed", a tinted one
+   * reads as "this stream has no cover".
+   */
   const art = media.art
     ? `<img class="cover-img" src="${media.art}" alt="" />`
-    : `<div class="cover">${svg(ICON.music)}</div>`;
+    : `<div class="cover${live ? ' cover-live' : ''}">${svg(ICON.music)}</div>`;
   /*
    * The output badge names the device the sound leaves through. Only some
    * Windows media sessions report an endpoint, so it is drawn when the frame
    * actually carries an output field: a placeholder would claim a route we
    * have not been told about. It is a badge, not a key — nothing to press.
    */
-  const output = media.output
-    ? `<span class="music-out" title="输出设备：${escapeHtml(media.output)}" aria-label="输出设备：${escapeHtml(media.output)}">${svg(ICON.volume)}</span>`
-    : '';
+  /* The bottom bar already owns volume; a second badge here only added noise. */
   /*
    * Lyrics mode is entered from the lyric window itself, and only when there
    * are synced lines to fill the page with. With the lyric window switched off
@@ -476,7 +523,7 @@ function musicPage() {
    */
   return `<div class="music" data-music="${lyricMode ? 'lyrics' : 'default'}">
     <div class="music-row">
-      <div class="music-cover">${art}${output}</div>
+      <div class="music-cover">${art}</div>
       <div class="music-meta">
         <b>${escapeHtml(media.title || '未命名')}</b>
         <span>${escapeHtml(media.artist || media.album || (browser ? '媒体 · ' + (media.source || '浏览器') : media.source || ''))}</span>
@@ -486,7 +533,7 @@ function musicPage() {
       ? ''
       : `<div class="lyric-box" data-lyric-box${canLyrics ? ` role="button" tabindex="0" data-lyric-toggle="1" aria-pressed="${lyricMode}" aria-label="${lyricMode ? '收起歌词' : '展开歌词'}"` : ''}>${lyricSliceHtml(lyricAt(media.position), lyricMode ? 5 : 3)}</div>`}
     ${live
-      ? '<div class="music-bar live"><i></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span>直播</span></div>'
+      ? '<div class="music-bar live"><i></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-live title="直播时长">' + liveClock(liveElapsed()) + '</span></div>'
       : '<div class="music-bar"><i data-progress style="width:' + pct.toFixed(1) + '%"></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-dur>' + clock(media.duration) + '</span></div>'}
     <div class="music-controls">
       <button type="button" data-media="prev" aria-label="上一首">${svg(ICON.prev)}</button>
@@ -655,6 +702,10 @@ let lastLyricIndex = -2;
 function updateMusicLive() {
   const page = enabledPages()[pageIndex];
   if (!page || page.key !== 'music') return;
+  /* The live clock is wall time, and the bar it sits beside does not exist on a
+     live page — update it before the progress branch gives up. */
+  const live = pagesEl.querySelector('[data-live]');
+  if (live) live.textContent = liveClock(liveElapsed());
   const bar = pagesEl.querySelector('[data-progress]');
   if (!bar) return;
   const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
@@ -735,6 +786,46 @@ const COUNTRY_ZH = {
 
 const countryZh = (code) => COUNTRY_ZH[String(code || '').toUpperCase()] ?? code;
 
+/*
+ * The weather page's city switch is a flyout, not a fifth page: the list is at
+ * most four rows and the 205px budget is already spent on readings. A scrim
+ * under it closes the menu on any click, which is why there is no document
+ * level listener to leak into the island's other pages.
+ */
+let cityMenuOpen = false;
+
+/** Cities the menu offers: the list from settings, with the active one kept. */
+function cityChoices() {
+  const saved = Array.isArray(prefs.weather?.cities) ? prefs.weather.cities : [];
+  const current = String(prefs.weather?.city ?? '').trim();
+  const listed = saved.map((city) => String(city ?? '').trim()).filter(Boolean);
+  const ordered = current && !listed.includes(current) ? [current, ...listed] : listed;
+  const out = [];
+  for (const name of ordered) {
+    const city = name.slice(0, 32);
+    if (!city || out.includes(city)) continue;
+    out.push(city);
+    if (out.length === 4) break;
+  }
+  return out;
+}
+
+/**
+ * Pick a city for good: one preference write, and the main process takes the
+ * refresh (serviceChanges sees weather.city change). Picking an explicit city
+ * also wins over the IP guess, otherwise the locator would immediately put the
+ * page back where it was.
+ */
+function selectCity(value) {
+  cityMenuOpen = false;
+  renderPage();
+  const city = String(value ?? '').trim().slice(0, 32);
+  const currentCity = String(prefs.weather?.city ?? '').trim();
+  if (!city || (city === currentCity && prefs.weather?.autoLocate !== true)) return;
+  if (typeof api.patchPrefs !== 'function') return;
+  api.patchPrefs({ weather: { ...(prefs.weather ?? {}), city, autoLocate: false } }).catch(() => {});
+}
+
 function weatherPage() {
   if (!weather) {
     /*
@@ -763,17 +854,56 @@ function weatherPage() {
       </div>`;
     })
     .join('');
+  /*
+   * The next twelve whole hours. Open-Meteo also returns the hour already on
+   * the clock, and that hour is the big number above; dropping it keeps the
+   * strip strictly "what comes next".
+   */
+  const hours = (weather.hourly ?? []).slice(0, 12);
+  const hourCells = hours
+    .map((hour) => {
+      const hourOfDay = String(Number(String(hour.time ?? '').slice(11, 13)));
+      return `<div class="wx-hour" role="listitem">
+        <em>${hourOfDay}时</em>
+        ${svg(WEATHER_ICON[hour.icon] ?? WEATHER_ICON.cloud)}
+        <b>${show(hour.temp)}°</b>
+      </div>`;
+    })
+    .join('');
   const place = escapeHtml(placeZh(weather.place.name) || '当前位置');
   const country = weather.place.country ? ' · ' + escapeHtml(countryZh(weather.place.country)) : '';
   const sunrise = (now.sunrise || '').slice(11, 16) || '--:--';
   const sunset = (now.sunset || '').slice(11, 16) || '--:--';
   const updated = weather.fetchedAt ? ' · ' + timeOf(weather.fetchedAt) + ' 更新' : '';
+  /*
+   * With auto-locate on the reading belongs to the IP's city, not to the city
+   * preference, so no menu row is "current" then; picking one turns the locator
+   * off (see selectCity).
+   */
+  const autoLocate = prefs.weather?.autoLocate === true;
+  const activeCity = autoLocate ? '' : String(prefs.weather?.city ?? '').trim();
+  const cityRows = cityChoices()
+    .map((city) => `<button type="button" class="wx-city-opt" role="menuitemradio" aria-checked="${city === activeCity}" data-city-pick="${escapeHtml(city)}">
+      <span>${escapeHtml(city)}</span>
+      ${city === activeCity ? svg(ICON.check, 'wx-city-check') : ''}
+    </button>`)
+    .join('');
+  const cityMenu = cityMenuOpen
+    ? `<div class="wx-cities" role="menu" aria-label="切换城市">
+        ${cityRows}
+        <button type="button" class="wx-city-manage" role="menuitem" data-action="settings:weather">管理城市</button>
+      </div>`
+    : '';
   return `<div class="wx">
     <div class="wx-now">
-      <div class="wx-where"><b>${place}</b><em>${escapeHtml(now.text)}${country}</em></div>
+      <button type="button" class="wx-city" data-city-menu aria-expanded="${cityMenuOpen}" aria-haspopup="menu" title="切换城市">
+        <span class="wx-city-name"><b>${place}</b>${svg('<path d="m7 10 5 5 5-5"/>', 'wx-caret')}</span>
+        <em>${escapeHtml(now.text)}${country}</em>
+      </button>
       <div class="wx-temp">${show(now.temp)}<sup>°</sup></div>
       <span class="wx-icon">${svg(WEATHER_ICON[now.icon] ?? WEATHER_ICON.cloud)}</span>
     </div>
+    ${hours.length ? `<div class="wx-hours" role="list" aria-label="未来 12 小时">${hourCells}</div>` : ''}
     <div class="wx-grid">
       <div class="wx-cell"><em>体感</em><b>${show(now.feels)}°</b></div>
       <div class="wx-cell"><em>湿度</em><b>${Number(now.humidity) || 0}%</b></div>
@@ -782,9 +912,10 @@ function weatherPage() {
     </div>
     <div class="wx-days">${dayCells}</div>
     <p class="wx-src">Open-Meteo${updated}</p>
+    ${cityMenuOpen ? '<div class="wx-scrim" data-city-close aria-hidden="true"></div>' : ''}
+    ${cityMenu}
   </div>`;
 }
-
 const timeOf = (ms) => {
   const date = new Date(Number(ms) || Date.now());
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
@@ -1186,6 +1317,21 @@ function mailPage() {
 const WEEK_ZH = ['日', '一', '二', '三', '四', '五', '六'];
 const dayKey = (date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 
+/** 21:30 — the clock shape the day list and the editor both use. */
+const clockText = (start) => {
+  const date = new Date(start);
+  return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+};
+
+/** 09:00 on another day; the next whole hour on today, which is what a new
+event is usually set to. */
+function nextSlotText() {
+  const now = new Date();
+  const pickingToday = dayKey(now) === dayKey(new Date(calendarView.year, calendarView.month, calendarView.selected));
+  if (!pickingToday) return '09:00';
+  return String(Math.min(23, now.getHours() + 1)).padStart(2, '0') + ':00';
+}
+
 const FESTIVALS = {
   '1-1': '元旦', '2-14': '情人节', '3-8': '妇女节', '3-12': '植树节',
   '4-1': '愚人节', '5-1': '劳动节', '5-4': '青年节', '6-1': '儿童节',
@@ -1224,7 +1370,13 @@ function calendarPage() {
   const todayKey = dayKey(now);
   const selectedKey = dayKey(new Date(calendarView.year, calendarView.month, calendarView.selected));
   const selectedEvents = byDay.get(selectedKey) ?? [];
+  /*
+   * Two rows is the whole budget: 28px each plus the count line is what the
+   * column can read at 11.5px without growing the panel. A busier day says how
+   * much it is not showing instead of scrolling inside a 117px column.
+   */
   const visibleEvents = selectedEvents.slice(0, 2);
+  const hiddenEvents = selectedEvents.length - visibleEvents.length;
 
   const grid = shown
     .map((day) => {
@@ -1245,13 +1397,47 @@ function calendarPage() {
   const title = isToday
     ? `今天 · ${selectedEvents.length} 件事`
     : `${calendarView.month + 1} 月 ${calendarView.selected} 日 · ${selectedEvents.length} 件事`;
+  const editingEvent = calendarDraft ? events.find((event) => event.id === calendarDraft.id) : null;
+  /*
+   * The editor is also the empty state: a blank day IS the add gesture, so its
+   * fields are already open when you land on it. The ＋ key opens the same
+   * editor on a day that already has rows, and clicking one of those rows
+   * opens it with that event loaded.
+   */
+  const showForm = Boolean(calendarDraft) || selectedEvents.length === 0;
+  const form = showForm
+    ? `<div class="cal-form">
+        <input type="text" class="cal-input" data-cal-input="title" maxlength="160" placeholder="标题" aria-label="日程标题" value="${escapeHtml(editingEvent ? editingEvent.title : '')}" />
+        ${editingEvent
+          ? `<input type="text" class="cal-input cal-input-time" data-cal-input="time" maxlength="5" inputmode="numeric" aria-label="时间，例如 21:30" value="${clockText(editingEvent.start)}" />
+        <div class="cal-form-row cal-form-acts">
+          <button type="button" class="cal-key" data-cal-act="delete">删除</button>
+          <button type="button" class="cal-key on" data-cal-act="save">保存</button>
+        </div>`
+          : `<div class="cal-form-row">
+          <input type="text" class="cal-input cal-input-time" data-cal-input="time" maxlength="5" inputmode="numeric" aria-label="时间，例如 21:30" value="${nextSlotText()}" />
+          <button type="button" class="cal-key on" data-cal-act="save">保存</button>
+        </div>`}
+      </div>`
+    : '';
   const rows = visibleEvents
-    .map((event) => {
-      const start = new Date(event.start);
-      const time = String(start.getHours()).padStart(2, '0') + ':' + String(start.getMinutes()).padStart(2, '0');
-      return `<div class="cal-event"><span class="cal-time">${time}</span><b>${escapeHtml(event.title)}</b></div>`;
-    })
+    .map((event) => `<button type="button" class="cal-event" data-cal-event="${escapeHtml(event.id)}" aria-label="编辑 ${clockText(event.start)} ${escapeHtml(event.title)}">
+        <span class="cal-time">${clockText(event.start)}</span><b>${escapeHtml(event.title)}</b>
+      </button>`)
     .join('');
+  const list = !showForm && visibleEvents.length
+    ? `<div class="cal-events">${rows}</div>${hiddenEvents ? `<em class="cal-more">还有 ${hiddenEvents} 件</em>` : ''}`
+    : '';
+  /*
+   * One control in the title row: ＋ adds to a day that already has rows, ×
+   * drops the editor. A day with nothing on it already shows the fields, so it
+   * needs neither.
+   */
+  const headKey = calendarDraft
+    ? `<button type="button" class="cal-key cal-key-icon" data-cal-act="cancel" aria-label="取消编辑">${svg('<path d="M18 6 6 18M6 6l12 12"/>')}</button>`
+    : visibleEvents.length
+      ? `<button type="button" class="cal-key cal-key-icon" data-cal-act="new" aria-label="新建日程">${svg('<path d="M12 5v14M5 12h14"/>')}</button>`
+      : '';
   const festival = FESTIVALS[calendarView.month + 1 + '-' + calendarView.selected];
 
   return `<div class="calendar">
@@ -1265,14 +1451,103 @@ function calendarPage() {
       <div class="cal-grid">${grid}</div>
     </div>
     <div class="cal-right">
-      <div class="cal-day-title">${title}</div>
-      ${festival ? `<em class="cal-festival">${festival}</em>` : ''}
-      ${visibleEvents.length
-        ? `<div class="cal-events">${rows}</div>`
-        : '<p class="cal-empty">没有安排</p>'}
+      <div class="cal-head-row">
+        <div class="cal-day-title">${title}</div>${headKey}
+      </div>
+      ${!showForm && festival ? `<em class="cal-festival">${festival}</em>` : ''}
+      ${form}${list}
+      ${calendarError ? `<p class="cal-error" title="${escapeHtml(calendarError)}">${escapeHtml(calendarError)}</p>` : ''}
       ${subError ? `<p class="cal-error" title="${escapeHtml(subError)}">${escapeHtml(subError)}</p>` : ''}
     </div>
   </div>`;
+}
+
+/* ------------------------------------------------------- calendar editing */
+
+/** Put the cursor in the title field of an editor that is on screen. */
+function focusCalendarInput() {
+  const input = panelEl.querySelector('[data-cal-input="title"]');
+  if (!input) return;
+  input.focus();
+  input.select();
+}
+
+/**
+ * Read the two fields.
+ *
+ * A time that cannot be parsed marks its field instead of being silently
+ * dropped: the editor stays exactly as the user typed it, so the fix is one
+ * keystroke and not a second attempt from scratch.
+ */
+function calendarFormValues() {
+  const titleEl = panelEl.querySelector('[data-cal-input="title"]');
+  const timeEl = panelEl.querySelector('[data-cal-input="time"]');
+  const title = String(titleEl?.value ?? '').trim();
+  const match = /^(\d{1,2})[:：](\d{2})$/.exec(String(timeEl?.value ?? '').trim());
+  const hours = match ? Number(match[1]) : NaN;
+  const minutes = match ? Number(match[2]) : NaN;
+  const timeOk = Number.isInteger(hours) && Number.isInteger(minutes) && hours < 24 && minutes < 60;
+  return { titleEl, timeEl, title, hours, minutes, timeOk };
+}
+
+function markCalendarField(input, invalid) {
+  if (!input) return;
+  if (invalid) input.setAttribute('aria-invalid', 'true');
+  else input.removeAttribute('aria-invalid');
+}
+
+/** Add when the editor carries no id, update when it does. */
+function saveCalendarDraft() {
+  const { titleEl, timeEl, title, hours, minutes, timeOk } = calendarFormValues();
+  markCalendarField(titleEl, !title);
+  markCalendarField(timeEl, !timeOk);
+  if (!title || !timeOk) {
+    (title ? timeEl : titleEl)?.focus();
+    return;
+  }
+  const start = new Date(calendarView.year, calendarView.month, calendarView.selected, hours, minutes).getTime();
+  const id = calendarDraft?.id ?? '';
+  api
+    .calendarDo(id ? 'update' : 'add', id ? { id, title, start } : { title, start })
+    .then((snapshot) => {
+      /* A refused payload answers null: nothing was written, so the editor
+         stays open and says so instead of closing on a failed save. */
+      if (!snapshot) {
+        calendarError = '保存失败';
+        if (open) renderPage();
+        return;
+      }
+      calendarState = { ...calendarState, ...snapshot };
+      calendarError = snapshot.actionResult?.ok === false ? (snapshot.actionResult.error || '保存失败') : '';
+      if (!calendarError) calendarDraft = null;
+      if (open) renderPage();
+    })
+    .catch(() => {
+      calendarError = '保存失败';
+      if (open) renderPage();
+    });
+}
+
+function deleteCalendarDraft() {
+  const id = calendarDraft?.id;
+  if (!id) return;
+  api
+    .calendarDo('remove', { id })
+    .then((snapshot) => {
+      if (!snapshot) {
+        calendarError = '删除失败';
+        if (open) renderPage();
+        return;
+      }
+      calendarState = { ...calendarState, ...snapshot };
+      calendarDraft = null;
+      calendarError = '';
+      if (open) renderPage();
+    })
+    .catch(() => {
+      calendarError = '删除失败';
+      if (open) renderPage();
+    });
 }
 
 function fallbackPage(page) {
@@ -1318,7 +1593,8 @@ function focusPage() {
      stopwatch waiting to start, and the number is its face. */
   const seconds = idle ? workMin * 60 : state.remaining;
   const pct = state.total ? Math.min(100, ((state.total - state.remaining) / state.total) * 100) : 0;
-  const phaseText = idle ? '准备开始' : rest ? (running ? '休息中' : '休息暂停') : running ? '专注中' : '已暂停';
+  /* A long rest names itself: 15 minutes is the one rest the page has to explain. */
+  const phaseText = idle ? '准备开始' : rest ? (state.longRest ? '长休息' : running ? '休息中' : '休息暂停') : running ? '专注中' : '已暂停';
   /*
    * Three keys, three real actions from the main process: 专注 starts or
    * resumes work, 休息 skips into (or out of) the rest phase, 播放 is the
@@ -1334,13 +1610,17 @@ function focusPage() {
   const playKey = running
     ? '<button type="button" class="focus-key on" data-local="focus:pause">暂停</button>'
     : `<button type="button" class="focus-key" data-local="focus:${idle ? 'start' : 'resume'}">${idle ? '播放' : '继续'}</button>`;
+  /* Two rows, one per window: today and this week, each with its pomodoro count
+     and the minutes that count stands for. The figures are tabular and right
+     aligned, so the two rows read as one column rather than four numbers. */
+  const statRow = (label, value) => `<span>${label}</span><b>${value?.count ?? 0}<i>个</i></b><b>${value?.minutes ?? 0}<i>分钟</i></b>`;
   return `<div class="focus">
     <div class="focus-main">
       <div class="focus-ring" style="--pct:${pct.toFixed(1)}"><span class="focus-phase">${phaseText}</span></div>
       <b class="focus-time">${clock(seconds)}</b>
     </div>
     <div class="focus-keys">${focusKey}${restKey}${playKey}</div>
-    <p class="focus-note">已完成 ${state.cycles} 轮专注</p>
+    <div class="focus-stats">${statRow('今日', state.stats?.today)}${statRow('本周', state.stats?.week)}</div>
   </div>`;
 }
 
@@ -1366,9 +1646,46 @@ function healthPage() {
       <span class="health-bar"><i style="width:${pct.toFixed(0)}%" data-due="${due}"></i></span>
       <span class="health-num">${since}<i>/${every}</i></span>
     </button>`;
+  /*
+   * The week under the two counters: seven 3px bars per counter, today last
+   * and in the accent colour.
+   *
+   * The rows above answer "how long since the last one"; this answers "how
+   * many, over the week". Height carries the count, scaled to the busiest day
+   * in the window, so a quiet week and a busy one both read. A day with
+   * nothing recorded keeps a 2px stub instead of disappearing: the column is
+   * still a day, the count is just zero.
+   */
+  const week = Array.isArray(state.trend) ? state.trend : [];
+  const todayBucket = week[week.length - 1] ?? null;
+  const bars = (field) => {
+    const max = Math.max(1, ...week.map((day) => Number(day[field]) || 0));
+    return week
+      .map((day) => {
+        const count = Number(day[field]) || 0;
+        const height = 2 + Math.round((14 * count) / max);
+        return `<span class="health-trend-col" title="${escapeHtml(day.key)}：${count} 次"><i style="height:${height}px" data-count="${count}"${day.today ? ' data-today="true"' : ''}></i></span>`;
+      })
+      .join('');
+  };
+  const weekRow = (label, field) => `<div class="health-trend-row">
+      <span class="health-trend-key">${label}</span>
+      <span class="health-trend-bars">${bars(field)}</span>
+      <span class="health-trend-num">${todayBucket ? Number(todayBucket[field]) || 0 : 0}</span>
+    </div>`;
+  const weekLabel = (name, field) => '最近 7 天' + name + ' ' + week.map((day) => Number(day[field]) || 0).join('、');
+  /* One aria-label for the strip: seven bars are a picture, not seven controls,
+     so a screen reader hears the week instead of forty numbers. */
+  const weekHtml = week.length
+    ? `<div class="health-trend" role="img" aria-label="${weekLabel('喝水', 'water')}；${weekLabel('站立', 'stand')}">
+      ${weekRow('喝水', 'water')}
+      ${weekRow('站立', 'stand')}
+    </div>`
+    : '';
   return `<div class="health">
     ${row('喝水', 'drink', state.sinceWater, state.waterMin, waterPct, state.waterDue, '记录一次喝水')}
     ${row('站立', 'stand', state.sinceStand, state.standMin, standPct, state.standDue, '记录一次站立')}
+    ${weekHtml}
     <div class="health-foot">
       <span>今日已记录 ${total} 次</span>
       <button type="button" class="health-clear" data-local="health:reset">清空</button>
@@ -1386,6 +1703,9 @@ function dueLabel(due) {
   return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
 }
 
+/** The three repeat rules, in the order the picker offers them. */
+const REPEAT_LABEL = { daily: '每天', weekly: '每周', workday: '工作日' };
+
 function todoPage() {
   if (prefs.todo?.enabled === false) {
     /* The disabled state is another empty page, so it follows the same rule:
@@ -1401,15 +1721,23 @@ function todoPage() {
   const done = doneItems.length;
   const addRow = `<div class="todo-add">
       <input type="text" placeholder="加一个，回车保存" data-todo-input maxlength="200" />
+      <label class="todo-prio-pick" title="优先级">
+        <select data-todo-priority aria-label="优先级" data-priority="mid">
+          <option value="high">高</option>
+          <option value="mid" selected>中</option>
+          <option value="low">低</option>
+        </select>
+      </label>
       <label class="todo-due-pick" title="设到期时间">
         <input type="datetime-local" data-todo-due />
         <span>到期</span>
       </label>
       <label class="todo-repeat-pick" title="重复">
-        <select data-todo-repeat>
+        <select data-todo-repeat aria-label="重复">
           <option value="none">不重复</option>
           <option value="daily">每天</option>
           <option value="weekly">每周</option>
+          <option value="workday">工作日</option>
         </select>
       </label>
     </div>`;
@@ -1424,10 +1752,10 @@ function todoPage() {
       ${addRow}
     </div>`;
   }
-  const itemHtml = (item) => `<div class="todo-item${item.done ? ' done' : ''}" data-id="${item.id}">
+  const itemHtml = (item) => `<div class="todo-item${item.done ? ' done' : ''}" data-id="${item.id}" data-priority="${item.priority || 'mid'}">
       <button type="button" class="todo-check" data-local="todo:toggle" data-id="${item.id}" aria-label="完成">${item.done ? '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>' : ''}</button>
       <span class="todo-text">${escapeHtml(item.text)}</span>
-      ${item.repeat ? `<em class="todo-repeat">${item.repeat === 'daily' ? '每天' : '每周'}</em>` : ''}
+      ${item.repeat ? `<em class="todo-repeat">${REPEAT_LABEL[item.repeat] ?? ''}</em>` : ''}
       ${item.due ? `<em class="todo-due${item.due < Date.now() && !item.done ? ' late' : ''}">${item.done && item.nextDue ? '下次 ' + dueLabel(item.nextDue) : dueLabel(item.due)}</em>` : ''}
       <button type="button" class="todo-del" data-local="todo:remove" data-id="${item.id}" aria-label="删除">×</button>
     </div>`;
@@ -1458,36 +1786,79 @@ const sizeLabel = (bytes) => {
 /** The clipboard stays one row until the user opens it; this is UI state only. */
 let clipboardExpanded = false;
 
+const SHELF_GROUPS = ['未分组', '组 1', '组 2', '组 3', '组 4'];
+const SHELF_CARET = svg('<path d="m9 6 6 6-6 6"/>');
+
+/** A file's group index; anything unknown falls back to "未分组". */
+function shelfGroupOf(file) {
+  const value = Number(file?.group);
+  return Number.isInteger(value) && value > 0 && value < SHELF_GROUPS.length ? value : 0;
+}
+
+function shelfFilesMatching() {
+  const needle = shelfQuery.trim().toLowerCase();
+  return needle ? shelfFiles.filter((file) => file.name.toLowerCase().includes(needle)) : shelfFiles;
+}
+
+/**
+ * The scrolling half of the shelf: group heads plus file rows.
+ *
+ * Split out from shelfPage() so typing in the search box can replace just this
+ * block. Re-rendering the page would destroy the input the user is typing in —
+ * taking the caret, the IME candidate window and the focus with it.
+ *
+ * With a query the list is flat: every row already carries its group on the
+ * chip, and a folded group would otherwise hide a match the search promised.
+ */
+function shelfListHtml() {
+  const matches = shelfFilesMatching();
+  const fileIcon = svg('<path d="M6 2.5h7l5 5V21a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 21V3a.5.5 0 0 1 .5-.5z"/><path d="M13 2.5V8h5"/>');
+  const closeIcon = svg('<path d="m6 6 12 12M18 6 6 18"/>');
+  /*
+   * One row is 28px: a 16px file glyph, the name at reading size with an
+   * ellipsis, the group chip and a 28px delete key. The size label lives in the
+   * open key's tooltip — a third column did not fit.
+   */
+  const row = (file) => {
+    const group = shelfGroupOf(file);
+    const label = SHELF_GROUPS[group];
+    return `<div class="shelf-item" data-id="${escapeHtml(file.name)}">
+            <span class="shelf-icon">${fileIcon}</span>
+            <button type="button" class="shelf-open" data-local="shelf:open" data-name="${escapeHtml(file.name)}" title="打开 · ${sizeLabel(file.size)}">${escapeHtml(file.name)}</button>
+            <button type="button" class="shelf-group-pick" data-local="shelf:setGroup" data-name="${escapeHtml(file.name)}" data-group="${group}" title="${label} · 点按移到下一组" aria-label="分组：${label}，点按移到下一组">${label}</button>
+            <button type="button" class="shelf-del" data-local="shelf:remove" data-name="${escapeHtml(file.name)}" aria-label="删除">${closeIcon}</button>
+          </div>`;
+  };
+  if (shelfQuery.trim()) {
+    return matches.length
+      ? matches.map(row).join('')
+      : `<p class="shelf-noresult">没有匹配「${escapeHtml(shelfQuery.trim())}」的文件</p>`;
+  }
+  /*
+   * Only groups that hold something are drawn: an empty "组 3" head is a label
+   * for nothing. A head is a 28px fold key that hides its rows, and the count
+   * is the number behind it.
+   */
+  return SHELF_GROUPS.map((title, index) => {
+    const items = matches.filter((file) => shelfGroupOf(file) === index);
+    if (!items.length) return '';
+    const folded = shelfFolded.has(index);
+    return `<div class="shelf-group"${folded ? ' data-folded="true"' : ''}>
+          <button type="button" class="shelf-group-head" data-fold-group="${index}" aria-expanded="${!folded}" aria-label="${title}，${items.length} 个文件">
+            <span class="shelf-caret${folded ? '' : ' on'}">${SHELF_CARET}</span>
+            <span class="shelf-group-name">${title}</span>
+            <b class="shelf-group-count">${items.length}</b>
+          </button>
+          <div class="shelf-group-body">${items.map(row).join('')}</div>
+        </div>`;
+  }).join('');
+}
+
 function shelfPage() {
   if (prefs.shelf?.enabled === false) {
     return empty(ICON.tray, '置物架已关闭', '打开后可以把文件拖到岛上暂存。', '去打开', 'settings:todo');
   }
-  /*
-   * An empty shelf is a small drop target pinned to the top, not a page.
-   *
-   * The page used to be a full-height column: the hint at the top, a centred
-   * "置物架是空的" paragraph, and the clipboard panel stretching into whatever
-   * was left. That reads as three blocks floating in 205px. With no files there
-   * is one 96px prompt, and the clipboard keeps its own row below.
-   */
   const emptyShelf = shelfFiles.length === 0;
-  /*
-   * One row is 24px: a 16px file glyph, the name at reading size with an
-   * ellipsis and a 16px delete key. The size label is gone — it was the third
-   * column in a 24px row and the only thing that did not fit; the open key's
-   * tooltip still carries it. The list shows four rows and scrolls, so a busy
-   * shelf cannot push the clipboard entry off the page.
-   */
-  const fileIcon = svg('<path d="M6 2.5h7l5 5V21a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 21V3a.5.5 0 0 1 .5-.5z"/><path d="M13 2.5V8h5"/>');
-  const closeIcon = svg('<path d="m6 6 12 12M18 6 6 18"/>');
-  const caretIcon = svg('<path d="m9 6 6 6-6 6"/>');
-  const rows = shelfFiles
-    .map((file) => `<div class="shelf-item" data-id="${escapeHtml(file.name)}">
-            <span class="shelf-icon">${fileIcon}</span>
-            <button type="button" class="shelf-open" data-local="shelf:open" data-name="${escapeHtml(file.name)}" title="打开 · ${sizeLabel(file.size)}">${escapeHtml(file.name)}</button>
-            <button type="button" class="shelf-del" data-local="shelf:remove" data-name="${escapeHtml(file.name)}" aria-label="删除">${closeIcon}</button>
-          </div>`)
-    .join('');
   const clips = clipboardItems.map((item) => `<div class="clip-item">
       <button type="button" class="clip-text" data-local="clipboard:copy" data-id="${escapeHtml(item.id)}" title="点击复制">${escapeHtml(clipLabel(item.text))}</button>
       <button type="button" class="clip-pin${item.pinned ? ' on' : ''}" data-local="clipboard:togglePin" data-id="${escapeHtml(item.id)}" aria-label="固定">★</button>
@@ -1498,20 +1869,45 @@ function shelfPage() {
    * place and caps itself so a long history never becomes the page.
    */
   const clipOpen = clipboardExpanded && clipboardItems.length > 0;
+  /*
+   * The clipboard band only exists when the feature does.
+   *
+   * With history switched off (the default) the row only ever said "复制文字
+   * 后会出现在这里" while nothing could ever appear — a promise with no
+   * backend, and 35px of the page that the grouped file list needed.
+   */
+  const showClip = clipboardItems.length > 0 || prefs.shelf?.clipboard !== false;
   const clipBlock = `<div class="clip${clipOpen ? ' clip-open' : ''}">
     <div class="clip-head">${clipboardItems.length
-      ? `<button type="button" class="clip-fold" data-clipfold aria-expanded="${clipOpen}"><span>剪贴板</span><b>${clipboardItems.length} 条</b><span class="clip-caret${clipOpen ? ' on' : ''}">${caretIcon}</span></button>`
+      ? `<button type="button" class="clip-fold" data-clipfold aria-expanded="${clipOpen}"><span>剪贴板</span><b>${clipboardItems.length} 条</b><span class="clip-caret${clipOpen ? ' on' : ''}">${SHELF_CARET}</span></button>`
       : '<p class="clip-fold-empty">剪贴板 · 复制文字后会出现在这里。</p>'}
       ${clipOpen ? '<button type="button" class="ghost" data-local="clipboard:clear">清空</button>' : ''}
     </div>
     ${clipOpen ? `<div class="clip-list">${clips}</div>` : ''}
   </div>`;
-  return `<div class="shelf${emptyShelf ? ' shelf-empty' : ''}${clipOpen ? ' shelf-clip-open' : ''}" data-shelf-drop>
-    <div class="shelf-hint">${emptyShelf
-      ? '<b>置物架是空的</b><span>把文件拖到这里 · 复制到 <code>shelf</code> 文件夹</span>'
-      : '把文件拖到这里 · 复制到 <code>shelf</code> 文件夹'}</div>
-    ${emptyShelf ? '' : `<div class="shelf-list">${rows}</div>`}
-    ${clipBlock}
+  /*
+   * An empty shelf is one 96px drop target pinned to the top, not a page. The
+   * search row is not drawn either: there is nothing to filter, and a box that
+   * always answers "没有匹配" is a dead control.
+   */
+  if (emptyShelf) {
+    return `<div class="shelf shelf-empty${clipOpen ? ' shelf-clip-open' : ''}${showClip ? '' : ' shelf-no-clip'}" data-shelf-drop>
+    <div class="shelf-hint"><b>置物架是空的</b><span>把文件拖到这里 · 复制到 <code>shelf</code> 文件夹</span></div>
+    ${showClip ? clipBlock : ''}
+  </div>`;
+  }
+  /*
+   * The search row is 28px and carries the drop hint on its right, so the page
+   * keeps the two bands it needs — search, list — plus the clipboard entry, and
+   * the flock of files scrolls inside the list instead of growing the page.
+   */
+  return `<div class="shelf${clipOpen ? ' shelf-clip-open' : ''}${showClip ? '' : ' shelf-no-clip'}" data-shelf-drop>
+    <div class="shelf-search">
+      <input type="text" class="shelf-q" data-shelf-query value="${escapeHtml(shelfQuery)}" placeholder="搜索文件名" aria-label="搜索文件名" spellcheck="false" />
+      <span class="shelf-drop-note">拖入文件</span>
+    </div>
+    <div class="shelf-list">${shelfListHtml()}</div>
+    ${showClip ? clipBlock : ''}
   </div>`;
 }
 
@@ -1521,24 +1917,76 @@ function clipLabel(text) {
   return flat.length > 42 ? flat.slice(0, 42) + '…' : flat;
 }
 
+/**
+ * Toggle one device's pin, then repaint from the prefs the main process returned.
+ *
+ * The reply is the whole preference object rather than a boolean: the cap and
+ * the stored order live in one place, and rendering the answer it gives is what
+ * keeps a fourth pin from appearing between the click and the next push.
+ */
+function pinDevice(name) {
+  if (typeof api.pinDevice !== 'function' || !name) return;
+  api.pinDevice(name).then((next) => {
+    if (!next) return;
+    prefs = next;
+    applyPrefs();
+    if (open) renderPage();
+  }).catch(() => {});
+}
+
 /* The Bluetooth mark, drawn at 20px on every device row. */
 const DEVICE_ICON = '<path d="m7 7 10 10-5 5V2l5 5L7 17"/>';
+/*
+ * One star for both states: an outline when the row is free, filled when it is
+ * pinned. Using the same glyph for the marker and the control keeps "this
+ * device is pinned" and "pin this device" the same object — two shapes would
+ * have to be told apart, and the row is 26px tall.
+ */
+const STAR_ICON = '<path d="m12 3.4 2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8z"/>';
+
+/*
+ * Where a row's level came from, in words.
+ *
+ * The probe names the source because the level is not one property: Bluetooth
+ * publishes it through DEVPKEY_Bluetooth_Battery, a 2.4G receiver usually has
+ * no battery property at all, and that difference is exactly what makes a row
+ * show a number or an em dash. Printing it in the row's title answers "why is
+ * this one —" without adding a column.
+ */
+const DEVICE_SOURCE_LABEL = {
+  bluetooth: '蓝牙',
+  'hid-wireless': '2.4G 接收器（HID）',
+  hid: 'USB / HID',
+  wmi: 'WMI',
+};
+
+/** Five rows is the page's capacity; the count line carries the rest. */
+const DEVICE_ROWS = 5;
+/** Three pins fit above the unpinned rows without pushing the fifth row out. */
+const DEVICE_PINS = 3;
 
 /**
- * Battery first, paired devices second.
+ * Battery first, devices second.
  *
- * The level is the page's answer, so it owns the first line at 30px in tabular
- * figures; charging is one quiet caption under it. The 4px bar below only gives
- * the number a shape, and it changes colour in three bands — red under 20,
- * amber under 50, the accent from there up — so the state is legible before the
- * digits are read.
+ * The level is the page's answer, so it owns the first line at 26px in tabular
+ * figures; charging is one quiet caption under it, and the 4px bar closes the
+ * block at about 64px. It used to be 30px over a taller gap, and that height
+ * came straight out of the list: the block was the only part of the page that
+ * could shrink, so it did, and the two rows it gave back are the rows the list
+ * now shows.
  *
- * A device row is 28px: 20px glyph, name at 12.5 with an ellipsis, a 60x3 bar
+ * A device row is 26px: 20px glyph, name at 12.5 with an ellipsis, a 60x3 bar
  * and the number at 11 in tabular figures. A device with no battery property
  * still gets a row — "the headset is connected" is half the answer — with an
- * em dash where the number would be. Three rows is the density the page
- * promises; the count line carries the rest rather than a scrolling list that
- * would hide the levels below the fold.
+ * em dash where the number would be. Five rows is the capacity; the count line
+ * carries the rest rather than a scrolling list that would hide the levels
+ * below the fold.
+ *
+ * Two preferences shape the list. `devices.showBattery` swaps the meter and the
+ * number for one connection word — the row still answers "is it connected",
+ * which is the other half. `devices.pinned` lifts up to three devices to the
+ * top in the order they were pinned and marks them with a star; the star is
+ * also the control, so the marker and the action cannot disagree.
  *
  * The footer dot is a status, not a switch: the island cannot toggle the radio,
  * and a switch that only looks interactive is a false affordance. The row is
@@ -1548,6 +1996,8 @@ const DEVICE_ICON = '<path d="m7 7 10 10-5 5V2l5 5L7 17"/>';
  */
 function devicesPage() {
   const list = devicesState?.devices ?? [];
+  const showBattery = prefs.devices?.showBattery !== false;
+  const pinned = Array.isArray(prefs.devices?.pinned) ? prefs.devices.pinned : [];
   /* One source for both the number and the bar: a missing battery is "-", not 0. */
   const knownLevel = (value) => {
     if (value === null || value === undefined || value === '') return null;
@@ -1557,20 +2007,22 @@ function devicesPage() {
   };
   const toneOf = (level) => (level === null ? '' : level < 20 ? ' bad' : level < 50 ? ' warn' : '');
   const level = knownLevel(battery?.level);
-  const hero = `<div class="dev-hero">
-      <b class="dev-level">${level === null ? '—' : `${level}<span>%</span>`}</b>
-      <span class="dev-charge">${level === null ? '未检测到电池' : battery?.charging ? '充电中' : '使用电池'}</span>
-    </div>
-    <div class="dev-power${toneOf(level)}" aria-hidden="true"><i style="width:${level === null ? 0 : level}%"></i></div>`;
   /*
-   * The footer is a button now, and it is rendered from the same state as the
-   * rest of the page: a failed open sets systemOpenError, the next render puts
-   * the row in its disabled form, and a reload cannot silently re-enable it.
+   * The footer rides at the top right of the hero instead of under the list.
+   * Five rows plus a footer do not fit the 217px page, and dropping the row
+   * that opens the system Bluetooth sheet to make room for a fifth device was
+   * the wrong trade: the level block is already 64px of mostly empty width.
    */
   const bluetoothOn = list.length ? ' on' : '';
   const footer = systemOpenError
     ? '<button type="button" class="dev-foot" data-open-system="bluetooth" disabled><span class="dev-bt"><i class="' + bluetoothOn + '"></i>蓝牙</span><span class="dev-foot-note">' + escapeHtml(systemOpenError) + '</span></button>'
     : '<button type="button" class="dev-foot" data-open-system="bluetooth" title="打开系统蓝牙设置"><span class="dev-bt"><i class="' + bluetoothOn + '"></i>蓝牙</span><span class="dev-foot-note">系统设置</span></button>';
+  const hero = `<div class="dev-hero">
+      <b class="dev-level">${level === null ? '—' : `${level}<span>%</span>`}</b>
+      <span class="dev-charge">${level === null ? '未检测到电池' : battery?.charging ? '充电中' : '使用电池'}</span>
+      ${footer}
+    </div>
+    <div class="dev-power${toneOf(level)}" aria-hidden="true"><i style="width:${level === null ? 0 : level}%"></i></div>`;
   if (!list.length) {
     return `<div class="dev">
       ${hero}
@@ -1578,19 +2030,44 @@ function devicesPage() {
         <p class="dev-empty-line">没有已连接的蓝牙设备</p>
         <button type="button" class="ghost" data-action="settings:general">去设置</button>
       </div>
-      ${footer}
     </div>`;
   }
-  const shown = list.slice(0, 3);
-  const rest = list.length - shown.length;
+  /*
+   * Pinned rows first, in the order they were pinned; the rest keep the order
+   * the probe reported, so a device does not jump between sweeps.
+   */
+  const ordered = pinned
+    .map((name) => list.find((device) => device.name === name))
+    .filter(Boolean)
+    .concat(list.filter((device) => !pinned.includes(device.name)));
+  const shown = ordered.slice(0, DEVICE_ROWS);
+  const rest = ordered.length - shown.length;
+  const full = pinned.length >= DEVICE_PINS;
   const rows = shown
     .map((device) => {
-      const level = knownLevel(device.battery);
-      return `<div class="dev-item">
+      const isPinned = pinned.includes(device.name);
+      const deviceLevel = knownLevel(device.battery);
+      const source = DEVICE_SOURCE_LABEL[device.source] || '';
+      /*
+       * The title carries the three facts a 26px row cannot: connection state,
+       * whether a level exists at all, and where that level was read from.
+       */
+      const title = [
+        device.name,
+        device.status === 'OK' ? '已连接' : device.status || '已连接',
+        showBattery ? (deviceLevel === null ? '电量不可读，显示为 —' : `电量 ${deviceLevel}%`) : '电量已隐藏',
+        source ? `来源：${source}` : '',
+      ].filter(Boolean).join(' · ');
+      const right = showBattery
+        ? `<span class="dev-meter${toneOf(deviceLevel)}" aria-hidden="true"><i style="width:${deviceLevel === null ? 0 : deviceLevel}%"></i></span>
+        <span class="dev-bat${toneOf(deviceLevel)}">${deviceLevel === null ? '—' : deviceLevel + '%'}</span>`
+        : `<span class="dev-conn">${device.status === 'OK' ? '已连接' : escapeHtml(device.status || '已连接')}</span>`;
+      const pinTitle = isPinned ? '取消置顶' : full ? `已置顶 ${DEVICE_PINS} 台，先取消一台` : '置顶（最多 3 台）';
+      return `<div class="dev-item${isPinned ? ' pinned' : ''}" title="${escapeHtml(title)}">
         <span class="dev-icon">${svg(DEVICE_ICON)}</span>
-        <span class="dev-name">${escapeHtml(device.name)}</span>
-        <span class="dev-meter${toneOf(level)}" aria-hidden="true"><i style="width:${level === null ? 0 : level}%"></i></span>
-        <span class="dev-bat${toneOf(level)}">${level === null ? '—' : level + '%'}</span>
+        <span class="dev-name">${isPinned ? `<span class="dev-pin-mark" aria-hidden="true">${svg(STAR_ICON)}</span>` : ''}${escapeHtml(device.name)}</span>
+        ${right}
+        <button type="button" class="dev-pin${isPinned ? ' on' : ''}" data-pin="${escapeHtml(device.name)}" aria-pressed="${isPinned}" aria-label="${isPinned ? '取消置顶' : '置顶'} ${escapeHtml(device.name)}" title="${pinTitle}"${!isPinned && full ? ' disabled' : ''}>${svg(STAR_ICON)}</button>
       </div>`;
     })
     .join('');
@@ -1598,7 +2075,6 @@ function devicesPage() {
     ${hero}
     <div class="dev-list">${rows}</div>
     ${rest > 0 ? `<div class="dev-more">还有 ${rest} 台</div>` : ''}
-    ${footer}
   </div>`;
 }
 
@@ -1705,7 +2181,11 @@ function applyLocal(snapshot) {
   if (snapshot.focus) focusState = snapshot.focus;
   if (snapshot.health) healthState = snapshot.health;
   if (Array.isArray(snapshot.todos)) todos = snapshot.todos;
-  if (Array.isArray(snapshot.shelf)) shelfFiles = snapshot.shelf;
+  if (Array.isArray(snapshot.shelf)) {
+    shelfFiles = snapshot.shelf;
+    /* The search box only exists while something can be filtered. */
+    if (!shelfFiles.length) shelfQuery = '';
+  }
   if (Array.isArray(snapshot.clipboard)) clipboardItems = snapshot.clipboard;
   if (snapshot.messenger) messengerState = snapshot.messenger;
   if (snapshot.devices) devicesState = snapshot.devices;
@@ -1766,6 +2246,8 @@ function renderPage(animate = false) {
   // One page means the paging arrows would be dead controls.
   document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
+  /* The menu belongs to the weather page; paging away drops it. */
+  if (page.key !== 'weather') cityMenuOpen = false;
   const nameEl = document.getElementById('page-name');
   if (nameEl) nameEl.textContent = page.title;
   renderHeader();
@@ -1805,6 +2287,12 @@ function renderPage(animate = false) {
 document.addEventListener(
   'wheel',
   (event) => {
+    /* A city menu is a modal choice: paging away under it would close the menu
+       and land somewhere else in one wheel tick. */
+    if (cityMenuOpen) {
+      event.stopPropagation();
+      return;
+    }
     const list =
       event.target instanceof Element
         ? event.target.closest('.clip-list, .shelf-list, .todo-list, .mail-page, .mail')
@@ -1894,6 +2382,10 @@ function stopMorph() {
   panelEl.style.transform = '';
   panelEl.style.opacity = '';
   panelEl.style.borderRadius = '';
+  if (panelBodyEl) {
+    panelBodyEl.style.transform = '';
+    panelBodyEl.style.opacity = '';
+  }
   pillEl.style.opacity = '';
 }
 
@@ -1920,9 +2412,34 @@ function paintMorph(w, h, elapsed) {
   m.opacity = m.fadeFrom + (m.fadeTo - m.fadeFrom) * smoothstep(fadeAt);
   /* Transform origin is top centre (island.css), so this box is pinned to the
      pill's top edge and grows outwards without a second position animation. */
-  panelEl.style.transform = `scale(${Math.min(1, w / m.panelW)}, ${Math.min(1, h / m.panelH)})`;
+  const scaleX = Math.min(1, w / m.panelW);
+  const scaleY = Math.min(1, h / m.panelH);
+  panelEl.style.transform = `scale(${scaleX}, ${scaleY})`;
   panelEl.style.opacity = String(m.opacity);
   panelEl.style.borderRadius = `${Math.round(999 + (m.radius - 999) * m.corner)}px`;
+  /*
+   * The page is not scaled with the card.
+   *
+   * The inverse of the panel's scale puts the content back at its natural size
+   * inside the scaled panel: the card's overflow:hidden (with its radius on the
+   * same clock) then cuts the page at the box it is shrinking to, instead of
+   * squashing 217px of page into a 60px band. That squash was the second layer
+   * of text on screen during the fold — unreadable, but painted for all 240ms.
+   */
+  if (panelBodyEl) {
+    panelBodyEl.style.transform = `scale(${1 / scaleX}, ${1 / scaleY})`;
+    /*
+     * Text leaves before the pill's text arrives: this layer is opaque for the
+     * first 45% of the close (108ms of 240) and gone by then, while the pill's
+     * own text starts at 55% (132ms). Two layers of text are never on screen in
+     * the same frame, and the surface alone carries the hand-over.
+     */
+    const bodyMs = m.open ? 180 : MORPH_CLOSE.total * 0.45;
+    const bodyTo = m.open ? 1 : 0;
+    const bodyAt = clamp01(elapsed / bodyMs);
+    m.bodyOpacity = m.bodyFrom + (bodyTo - m.bodyFrom) * smoothstep(bodyAt);
+    panelBodyEl.style.opacity = String(m.bodyOpacity);
+  }
   if (!m.open) {
     /* The pill comes back over the last stretch, once the card is nearly the
        pill's own box: one silhouette dissolving into the other. */
@@ -1948,6 +2465,9 @@ function startMorph(open, from, fold) {
      morph does not snap either back to an end state. */
   const carriedCorner = morph ? morph.corner : open ? 0 : 1;
   const carriedFade = morph ? morph.opacity : open ? 0 : 1;
+  /* A press during the fold takes the card back while its text may already be
+     gone; the layer resumes from that value instead of snapping to 1. */
+  const carriedBody = morph && Number.isFinite(morph.bodyOpacity) ? morph.bodyOpacity : 1;
   stopMorph();
   const clock = open ? MORPH_OPEN : MORPH_CLOSE;
   morph = {
@@ -1970,6 +2490,8 @@ function startMorph(open, from, fold) {
     fadeTo: open ? 1 : 0,
     fadeMs: 160,
     fadeDelay: open ? 0 : 80,
+    bodyOpacity: carriedBody,
+    bodyFrom: carriedBody,
     startedAt: performance.now(),
   };
   /* The CSS transition is the fallback clock for non-morph size changes; while
@@ -2001,6 +2523,10 @@ function settleMorph() {
   panelEl.style.transform = '';
   panelEl.style.opacity = '';
   panelEl.style.borderRadius = '';
+  if (panelBodyEl) {
+    panelBodyEl.style.transform = '';
+    panelBodyEl.style.opacity = '';
+  }
   pillEl.style.opacity = '';
   if (wasOpen) {
     syncSize();
@@ -2082,6 +2608,8 @@ function setOpen(next) {
    * measurement below describes the surface the user ends up with.
    */
   const animated = document.body.dataset.motion !== 'off';
+  /* A folded island has no menu: reopening starts from the reading. */
+  if (folding) cityMenuOpen = false;
   open = next;
   islandEl.dataset.open = String(open);
   pillEl.setAttribute('aria-expanded', String(open));
@@ -2238,6 +2766,29 @@ panelEl.addEventListener('pointerdown', (event) => {
 });
 
 panelEl.addEventListener('click', (event) => {
+  /*
+   * The city menu owns the first three clicks it can receive. The scrim is a
+   * layer inside the page, so "click outside" never needs a document listener
+   * that would also see clicks on other pages.
+   */
+  if (event.target.closest('[data-city-menu]')) {
+    cityMenuOpen = !cityMenuOpen;
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
+  if (event.target.closest('[data-city-close]')) {
+    cityMenuOpen = false;
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
+  const cityPick = event.target.closest('[data-city-pick]');
+  if (cityPick) {
+    selectCity(cityPick.dataset.cityPick);
+    event.stopPropagation();
+    return;
+  }
   const volumeControl = event.target.closest('[data-volume]');
   if (volumeControl) {
     if (volumeControl.dataset.volume === 'toggle') toggleVolumePanel();
@@ -2262,10 +2813,49 @@ panelEl.addEventListener('click', (event) => {
     event.stopPropagation();
     return;
   }
+  /*
+   * The day column's own controls: save, delete, drop the editor, open it for a
+   * new event, or open it on an existing row. Every write goes through
+   * calendar:do, so the redraw below is the service snapshot, not an optimistic
+   * guess.
+   */
+  const calAct = event.target.closest('[data-cal-act]');
+  if (calAct) {
+    const act = calAct.dataset.calAct;
+    if (act === 'save') saveCalendarDraft();
+    else if (act === 'delete') deleteCalendarDraft();
+    else if (act === 'new') {
+      calendarDraft = { id: '' };
+      calendarError = '';
+      renderPage();
+      focusCalendarInput();
+    } else if (act === 'cancel') {
+      calendarDraft = null;
+      calendarError = '';
+      renderPage();
+    }
+    event.stopPropagation();
+    return;
+  }
+  const calEvent = event.target.closest('[data-cal-event]');
+  if (calEvent) {
+    calendarDraft = { id: calEvent.dataset.calEvent };
+    calendarError = '';
+    renderPage();
+    focusCalendarInput();
+    event.stopPropagation();
+    return;
+  }
   const calDay = event.target.closest('[data-cal-day]');
   if (calDay) {
     calendarView.selected = Number(calDay.dataset.calDay);
+    /* A day picked elsewhere drops an editor left open on the old one. */
+    calendarDraft = null;
+    calendarError = '';
     renderPage();
+    /* The blank day's fields are the add gesture; put the cursor in the first
+       one so the press that picked the day is also the press that starts it. */
+    focusCalendarInput();
     event.stopPropagation();
     return;
   }
@@ -2280,6 +2870,8 @@ panelEl.addEventListener('click', (event) => {
       calendarView.year += 1;
     }
     calendarView.selected = 1;
+    calendarDraft = null;
+    calendarError = '';
     renderPage();
     event.stopPropagation();
     return;
@@ -2339,6 +2931,17 @@ panelEl.addEventListener('click', (event) => {
     event.stopPropagation();
     return;
   }
+  /* A group head is a fold key: the list, the counts and the caret all come
+     back from the next render, so there is no second source of truth. */
+  const foldButton = event.target.closest('[data-fold-group]');
+  if (foldButton) {
+    const group = Number(foldButton.dataset.foldGroup);
+    if (shelfFolded.has(group)) shelfFolded.delete(group);
+    else shelfFolded.add(group);
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
   const localButton = event.target.closest('[data-local]');
   if (localButton) {
     const [service, action] = localButton.dataset.local.split(':');
@@ -2357,6 +2960,11 @@ panelEl.addEventListener('click', (event) => {
       return;
     }
     const data = { id: localButton.dataset.id, name: localButton.dataset.name };
+    if (service === 'shelf' && action === 'setGroup') {
+      /* The chip is one target with five states: 未分组 → 组 1 … 组 4 → 未分组.
+         The group it was drawn with is the state before this click. */
+      data.group = (Number(localButton.dataset.group) + 1) % SHELF_GROUPS.length;
+    }
     api
       .localDo(service, action, data)
       .then((snapshot) => {
@@ -2395,6 +3003,17 @@ panelEl.addEventListener('click', (event) => {
     } else {
       api.openSystem(target).then((result) => { if (!result?.ok) fail(); }).catch(fail);
     }
+    event.stopPropagation();
+    return;
+  }
+  /*
+   * A pinned device is a display preference, not a service action. The star
+   * writes through one narrow channel: main owns the three-pin cap, so the
+   * renderer cannot invent a fourth pin or write an arbitrary preference.
+   */
+  const pinButton = event.target.closest('[data-pin]');
+  if (pinButton && !pinButton.disabled) {
+    pinDevice(pinButton.dataset.pin);
     event.stopPropagation();
     return;
   }
@@ -2437,17 +3056,55 @@ panelEl.addEventListener('change', (event) => {
   if (picker) {
     mailFilter.account = String(picker.value || 'all');
     renderPage();
+    return;
   }
+  /*
+   * The priority picker carries its own colour bar, so the closed control
+   * already shows which left-edge stripe the next task will get.
+   */
+  const priority = event.target.closest('[data-todo-priority]');
+  if (priority) priority.dataset.priority = priority.value;
 });
 
 panelEl.addEventListener('input', (event) => {
   const range = event.target.closest('[data-volume-range]');
-  if (!range) return;
-  setVolume(Number(range.value));
+  if (range) {
+    setVolume(Number(range.value));
+    event.stopPropagation();
+    return;
+  }
+  /*
+   * The shelf's search box filters on every keystroke. Only the list is
+   * replaced: re-rendering the page would take the input — and with it the
+   * caret and any IME candidate window — away from the person typing.
+   */
+  const shelfQueryInput = event.target.closest('[data-shelf-query]');
+  if (!shelfQueryInput) return;
+  shelfQuery = shelfQueryInput.value;
+  const shelfList = pagesEl.querySelector('.shelf-list');
+  if (shelfList) shelfList.innerHTML = shelfListHtml();
   event.stopPropagation();
 });
 
 panelEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && cityMenuOpen) {
+    cityMenuOpen = false;
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
+  /* First Escape clears the search, the next one closes the island: clearing a
+     field should not also dismiss the page it belongs to. */
+  const queryInput = event.target.closest('[data-shelf-query]');
+  if (event.key === 'Escape' && queryInput && shelfQuery) {
+    shelfQuery = '';
+    queryInput.value = '';
+    const shelfList = pagesEl.querySelector('.shelf-list');
+    if (shelfList) shelfList.innerHTML = shelfListHtml();
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   if (event.key === 'Escape' && volumePanelOpen) {
     closeVolumePanel();
     event.stopPropagation();
@@ -2463,7 +3120,23 @@ panelEl.addEventListener('keydown', (event) => {
     return;
   }
 
+  /* The calendar's inline editor answers the keyboard: Enter saves from either
+     field, Escape drops a draft that was opened on purpose. */
+  if (event.key === 'Escape' && calendarDraft) {
+    calendarDraft = null;
+    calendarError = '';
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
+
   if (event.key !== 'Enter') return;
+  if (event.target.closest('[data-cal-input]')) {
+    saveCalendarDraft();
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   const input = event.target.closest('[data-todo-input]');
   if (!input) return;
   const text = input.value.trim();
@@ -2471,8 +3144,9 @@ panelEl.addEventListener('keydown', (event) => {
   const dueInput = panelEl.querySelector('[data-todo-due]');
   const due = dueInput?.value ? new Date(dueInput.value).getTime() : null;
   const repeat = panelEl.querySelector('[data-todo-repeat]')?.value ?? 'none';
+  const priority = panelEl.querySelector('[data-todo-priority]')?.value ?? 'mid';
   api
-    .localDo('todo', 'add', { text, due, repeat })
+    .localDo('todo', 'add', { text, due, repeat, priority })
     .then((snapshot) => {
       applyLocal(snapshot);
       if (open) renderPage();
@@ -2741,12 +3415,26 @@ api.onMedia((value) => {
   if (!value) return;
   const trackChanged = value.title !== media.title || value.active !== media.active;
   const playingChanged = value.playing !== media.playing;
+  /* A stream that gains or loses a duration is a different row: a live clock
+     on one side, a total length on the other. */
+  const liveChanged = !value.duration !== !media.duration;
+  /* A cover that arrives a beat after its frame (the Bilibili lookup) is a repaint. */
+  const artChanged = value.art !== media.art;
+  /*
+   * Freeze the live clock while the broadcast is paused. The main process
+   * keeps liveSince across a pause, so unfreezing on the next playing frame
+   * continues from the real start rather than from the pause or from zero.
+   */
+  const liveFrame = Boolean(value.active) && !value.duration;
+  if (!liveFrame || Number(value.liveSince) !== Number(media.liveSince)) liveFrozenAt = 0;
+  else if (!value.playing) liveFrozenAt = liveFrozenAt || Date.now();
+  else liveFrozenAt = 0;
   media = value;
   renderPillStatus();
   renderSub();
   renderHeader();
   if (open && enabledPages()[pageIndex]?.key === 'music') {
-    if (trackChanged || playingChanged) {
+    if (trackChanged || playingChanged || liveChanged || artChanged) {
       lastLyricIndex = -2;
       renderPage();
     } else {
@@ -2804,10 +3492,6 @@ api.onMessenger((value) => {
   if (open && (current === 'messenger' || current === 'mail')) renderPage();
 });
 
-/*
- * Both faces follow the protocol state — the pill's and the header's. Without
- * this the island always showed the idle face while the ball reacted.
- */
 /* Switching character updates every face on the island, not only the ball. */
 api.onCast((cast) => {
   if (!cast) return;
@@ -2816,20 +3500,16 @@ api.onCast((cast) => {
   }
 });
 
-api.onState((message) => {
-  const state = message && message.state;
-  if (!state) return;
-  for (const face of document.querySelectorAll('emojitot-ball')) {
-    face.setAttribute('state', String(state));
-  }
-});
-
 /*
- * The ball owns the idle moods; the island wears whatever it is wearing. Both
- * windows report their face to the main process, which relays it to the other,
- * so the two characters can never drift apart within one cycle.
+ * The island wears the face the main process owns.
+ *
+ * Both the pill's face and the panel header's face get the same state, and the
+ * state only ever arrives on this event — no local mood timer, no second
+ * interpretation of the protocol. The main process also resends the current
+ * value when this page (re)loads, so a reconnect starts from the same face.
  */
-api.onFace((state) => {
+api.onFace((payload) => {
+  const state = payload && typeof payload === 'object' ? payload.state : '';
   if (!state) return;
   for (const face of document.querySelectorAll('emojitot-ball')) {
     face.setAttribute('state', String(state));
@@ -2888,6 +3568,8 @@ if (boot?.cast) {
 battery = boot?.battery ?? null;
 weather = boot?.weather ?? null;
 media = boot?.media ?? media;
+// Opening the panel mid-pause must not restart the clock; freeze it at boot too.
+if (!media.duration && media.active && !media.playing && media.liveSince) liveFrozenAt = Date.now();
 lyrics = boot?.lyrics ?? null;
 applyLocal(boot);
 quotaState = boot?.quotaAgent?.quota ?? quotaState;
@@ -2908,5 +3590,13 @@ const preferred = bootPages.findIndex((page) => page.key === prefs.defaultPage);
 pageIndex = preferred >= 0 ? preferred : 0;
 setOpen(false);
 setInterval(renderPillStatus, 20000);
+/*
+ * A live stream's frames are identical from one second to the next (there is no
+ * position to advance), so the page cannot lean on them for its second hand.
+ */
+setInterval(() => {
+  if (!open || enabledPages()[pageIndex]?.key !== 'music' || !isLiveMedia()) return;
+  updateMusicLive();
+}, 1000);
 reportHit();
 measure();

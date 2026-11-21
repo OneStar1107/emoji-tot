@@ -1,7 +1,7 @@
 /**
  * The renderer's only door to the main process.
  *
- * Nothing here exposes Node: the page gets four calls and three events, which
+ * Nothing here exposes Node: the page gets a handful of calls and events, which
  * is everything a ball needs to be dragged, clicked and told what to feel.
  */
 const { contextBridge, ipcRenderer } = require('electron');
@@ -16,23 +16,16 @@ contextBridge.exposeInMainWorld('petAPI', {
   poke: () => ipcRenderer.send('pet:action'),
 
   /*
-   * The face the ball is showing right now, so the island can wear it too.
-   * Idle moods are invented here, one window or the other has to say them out
-   * loud for the two characters to stay the same.
+   * The face the main process says both windows are wearing right now.
+   *
+   * One-way on purpose: the renderer paints what it is handed and has no call
+   * to report an expression back. Two producers is exactly how the ball and
+   * the island drifted apart.
    */
-  reportFace: (state) => ipcRenderer.send('face:report', state),
-  /** What the other window is wearing. */
   onFace: (listener) => {
-    const handler = (_event, state) => listener(state);
+    const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('face:apply', handler);
     return () => ipcRenderer.removeListener('face:apply', handler);
-  },
-
-  /** Every message the host wants the character to play. */
-  onState: (listener) => {
-    const handler = (_event, payload) => listener(payload);
-    ipcRenderer.on('state:apply', handler);
-    return () => ipcRenderer.removeListener('state:apply', handler);
   },
   /** bounce | spin | burst */
   onAction: (listener) => {

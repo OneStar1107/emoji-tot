@@ -559,11 +559,22 @@ function pagePages() {
     .map((key) => STATUS_TABLE.find((item) => item.key === key))
     .filter(Boolean);
 
+  const pinned = Array.isArray(prefs.devices?.pinned) ? prefs.devices.pinned : [];
   const defaultOptions = pageItems.map((item) => [item.key, item.label]);
   return head('页面管理', '决定岛上有哪些页，以及它们出现的顺序') +
     group('状态组件 · 常驻胶囊', '<div class="card">' +
       orderList('status', statusItems, (key) => prefs.statusItems.includes(key), 'toggle-status') + '</div>') +
     group('功能页面 · 展开后左右翻', '<div class="card">' + orderList('pages', pageItems, (key) => prefs.pages[key] !== false) + '</div>') +
+    group('设备页', card([
+      rowToggle('显示电量', '关掉后只显示名称与连接状态', 'devices.showBattery'),
+      row('置顶设备',
+        pinned.length
+          ? '已置顶 ' + pinned.length + ' 台 · 最多 3 台，在设备页点行尾星标切换'
+          : '在设备页点行尾的星标置顶，最多 3 台',
+        pinned.length
+          ? '<button type="button" class="btn" data-act="button" data-key="devices-unpin">全部取消</button>'
+          : ''),
+    ])) +
     group('打开时', card([
       rowSelect('默认页', '每次打开面板先停在这一页', 'defaultPage', defaultOptions, prefs.defaultPage),
     ])) +
@@ -571,7 +582,7 @@ function pagePages() {
 }
 
 function pageMusic() {
-  return head('音乐与歌词', '跟随系统正在播放的媒体') +
+  return head('媒体与歌词', '跟随系统正在播放的媒体') +
     group('歌词', card([
       rowToggle('展开时显示歌词', '在播放器右侧同步滚动显示', 'music.lyrics'),
       rowToggle('岛上歌词', '收起时显示当前句', 'music.islandLyrics'),
@@ -757,15 +768,16 @@ function emptyCardRow() {
 function pageWeather() {
   return head('天气', '城市、单位与刷新') +
     group('位置', card([
-      rowToggle('自动定位', '按网络位置识别城市，比手填更接近你所在的地方', 'weather.autoLocate'),
-      rowInput('城市', '关掉自动定位时使用；中文或英文都行', 'weather.city', prefs.weather.city, '香港'),
+      rowToggle('自动定位', '优先用系统定位，未授权时按 IP 归属地识别', 'weather.autoLocate'),
+      rowInput('城市', '手动填写会关掉自动定位；中文或英文都行', 'weather.city', prefs.weather.city, '香港'),
       rowSeg('单位', '', 'weather.unit', [['c', '摄氏'], ['f', '华氏']]),
     ])) +
+    '<p class="note">定位只用来决定天气城市；不上传位置、不记录轨迹、不写入任何服务器。</p>' +
     group('数据', card([
       rowRange('刷新间隔', 'Open-Meteo 免费额度足够', 'weather.intervalMin', 5, 60, 5, ' 分钟'),
       row('立即刷新', '重新拉一次当前城市', '<button type="button" class="btn" data-act="button" data-key="refresh-weather">刷新</button>'),
     ])) +
-    '<p class="note">无需 API Key。自动定位走 IP 归属地（ipapi / ipinfo），失败时回落到手填城市；城市解析用 Open-Meteo geocoding，两者都失败时保留上一次结果。</p>';
+    '<p class="note">无需 API Key。自动定位先问 Windows 定位，未授权时依次尝试 ipinfo、ipip、ipapi；城市解析用 Open-Meteo geocoding，失败时保留上一次结果。</p>';
 }
 
 function pagePlugins() {
@@ -825,7 +837,10 @@ function pageCast() {
     : '';
   return head('角色与表情', '点一个就换，表情会直接播放') +
     group('角色', castGrid) +
-    group('表情', faceGrid);
+    group('表情', faceGrid) +
+    group('自动表情', card([
+      rowToggle('媒体情绪', '播放、直播、游戏、暂停与媒体出错时自动换表情', 'mediaEmotion'),
+    ]));
 }
 
 const RENDERERS = {
@@ -1170,6 +1185,10 @@ content.addEventListener('click', async (event) => {
       setTimeout(() => { target.textContent = '清除'; }, 1600);
       return;
     }
+    if (key === 'devices-unpin') {
+      await patch({ devices: { ...(prefs.devices || {}), pinned: [] } });
+      return;
+    }
     if (key === 'open-data') { await api.openData?.(); return; }
     if (key === 'open-state') { await api.openState?.(); return; }
     if (key === 'cal-subscribe') {
@@ -1293,6 +1312,12 @@ content.addEventListener('change', async (event) => {
   if (target.type === 'range') value = Number(value);
   else if (target.type === 'number') value = Number(value);
   else if (key === 'displayId') value = target.value === 'null' ? null : target.value;
+  /* A typed city is a manual choice, and a manual choice outranks the locator:
+     leaving auto-locate on here would silently ignore what was just typed. */
+  if (key === 'weather.city') {
+    await patch({ weather: { ...(prefs.weather ?? {}), city: String(value).trim(), autoLocate: false } });
+    return;
+  }
   await patch(setPath(key, value));
 });
 

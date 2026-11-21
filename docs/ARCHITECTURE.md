@@ -61,7 +61,7 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 | `body` | `core/src/body.ts` 里手写的闭合轮廓（梨有腰和梗叶，星星有五真角） | <!--facts:bodies-->15<!--/facts--> |
 | `color` | `core/src/palette.ts` 的实色 | <!--facts:colors-->12<!--/facts--> |
 | `traits` | `core/src/traits.ts`，**每个角色最多一个** | <!--facts:traits-->26<!--/facts--> |
-| `state` | `core/src/face.ts` 的眼型 × 嘴型词汇 | <!--facts:faceStates-->44<!--/facts--> |
+| `state` | `core/src/face.ts` 的眼型 × 嘴型词汇 | <!--facts:faceStates-->61<!--/facts--> |
 
 `core/src/cast.ts` 把 <!--facts:cast-->15<!--/facts--> 个组合钉成有名有姓的成员（每种身体一个代表），每个还带一个招牌表情（`face`）和一个招牌动作（`motion`）。`breed(a, b, seed)` 能交叉两个基因组，用于演示「阵容不是枚举出来的」。
 

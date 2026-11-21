@@ -2,16 +2,16 @@
 
 # EmojiTot
 
-**面向桌面与 Web 的角色引擎 —— <!--facts:bodies-->15<!--/facts--> 个手绘轮廓的角色、<!--facts:faceStates-->44<!--/facts--> 个带分组与中文名的表情、模切白边画风；网页里看得见，桌面上养得起 —— 现在既是桌面上的球，也是屏幕顶部的一条岛。**
+**面向桌面与 Web 的角色引擎 —— <!--facts:bodies-->15<!--/facts--> 个手绘轮廓的角色、<!--facts:faceStates-->61<!--/facts--> 个带分组与中文名的表情、模切白边画风；网页里看得见，桌面上养得起 —— 现在既是桌面上的球，也是屏幕顶部的一条岛。**
 
 [控制台](https://onestar1107.github.io/emoji-tot/#/console) · [表情馆](https://onestar1107.github.io/emoji-tot/#/gallery) · [场景](https://onestar1107.github.io/emoji-tot/#/scene) · [文档](https://onestar1107.github.io/emoji-tot/#/docs) · [English](README.en.md)
 
 ![全家福](docs/screenshots/hero.png)
 
 > **关于 / About**
-> 一个用 SVG 画出来的角色引擎：<!--facts:cast-->15<!--/facts--> 个角色各有自己手写的闭合轮廓，<!--facts:faceStates-->44<!--/facts--> 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
+> 一个用 SVG 画出来的角色引擎：<!--facts:cast-->15<!--/facts--> 个角色各有自己手写的闭合轮廓，<!--facts:faceStates-->61<!--/facts--> 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
 >
-> A character engine drawn in SVG: <!--facts:cast-->15<!--/facts--> characters, each with its own hand-written closed outline; <!--facts:faceStates-->44<!--/facts--> expressions grouped into lifecycle, emotions and agent states, in a die-cut sticker finish by default. The desktop pet, the console and the site share one engine, with zero image assets.
+> A character engine drawn in SVG: <!--facts:cast-->15<!--/facts--> characters, each with its own hand-written closed outline; <!--facts:faceStates-->61<!--/facts--> expressions grouped into lifecycle, emotions and agent states, in a die-cut sticker finish by default. The desktop pet, the console and the site share one engine, with zero image assets.
 
 </div>
 
@@ -22,15 +22,15 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.0.6.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.2/EmojiTot.Setup.0.6.2.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.0.6.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.2/EmojiTot.0.6.2.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.0.6.3.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.3/EmojiTot.Setup.0.6.3.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.0.6.3.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.3/EmojiTot.0.6.3.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
 Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases)
 
 > 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护。如果它指向的版本还没打标签，链接会 404 —— 那种情况下从上面「全部版本」里取当前已发布的那一版。
 
-> **<!--facts:version-->0.6.2<!--/facts-->**：双形态（灵动岛 + 桌面球）、十个功能页、设置中心 <!--facts:settingsPages-->14<!--/facts--> 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
+> **<!--facts:version-->0.6.3<!--/facts-->**：双形态（灵动岛 + 桌面球）、十个功能页、设置中心 <!--facts:settingsPages-->14<!--/facts--> 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
 
 ## 这是什么
 
@@ -39,7 +39,7 @@ Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行�
 | 维度 | 数量 | 说明 |
 | --- | --- | --- |
 | 身体 | <!--facts:bodies-->15<!--/facts--> | 每个形态按它本来的样子手写：梨有腰和梗叶、面包有拱顶平底、星星有五个真角、樱花是五片心形瓣 |
-| 表情 | <!--facts:faceStates-->44<!--/facts--> | <!--facts:eyeStyles-->9<!--/facts--> 种眼型 × <!--facts:mouthStyles-->10<!--/facts--> 种嘴型 + 偏移；带分组元数据（中文名、英文 id、一句话行为描述） |
+| 表情 | <!--facts:faceStates-->61<!--/facts--> | <!--facts:eyeStyles-->10<!--/facts--> 种眼型 × <!--facts:mouthStyles-->12<!--/facts--> 种嘴型 + 偏移；带分组元数据（中文名、英文 id、一句话行为描述） |
 | 画风 | 2 | 模切白边（默认，深色身体自动换深边）与纯平涂，同一份轮廓切换 |
 | 角色 | <!--facts:cast-->15<!--/facts--> | 每种身体一个代表，各有招牌表情与招牌动作 |
 | 后代 | 无限 | `breed(a, b, seed)` 交叉两个角色的基因，不落库 |
@@ -75,8 +75,8 @@ feed('thinking');              // 也可以直接给状态名
 
 | 页面 | 内容 |
 | --- | --- |
-| **控制台** | <!--facts:cast-->15<!--/facts--> 个角色任选，<!--facts:bodies-->15<!--/facts--> 身体 · <!--facts:colors-->12<!--/facts--> 色 · <!--facts:faceStates-->44<!--/facts--> 表情逐项可调；组件片段与 JSON 基因组随选择实时生成 |
-| **表情馆** | 两个墙：<!--facts:cast-->15<!--/facts--> 个角色的阵容墙（按族筛选），和 <!--facts:faceStates-->44<!--/facts--> 个表情的表情墙；点角色跳去控制台，点表情带着状态过去 |
+| **控制台** | <!--facts:cast-->15<!--/facts--> 个角色任选，<!--facts:bodies-->15<!--/facts--> 身体 · <!--facts:colors-->12<!--/facts--> 色 · <!--facts:faceStates-->61<!--/facts--> 表情逐项可调；组件片段与 JSON 基因组随选择实时生成 |
+| **表情馆** | 两个墙：<!--facts:cast-->15<!--/facts--> 个角色的阵容墙（按族筛选），和 <!--facts:faceStates-->61<!--/facts--> 个表情的表情墙；点角色跳去控制台，点表情带着状态过去 |
 | **场景** | <!--facts:sceneHerd-->12<!--/facts--> 个角色同台，各自按自己的节奏换表情；点它会回应你，还有"全体开心 / 全体入睡 / 换一批" |
 | **文档** | 引擎怎么画、基因组怎么组、协议每一位什么意思、怎么调用，全部由代码生成，不会过时 |
 
@@ -215,7 +215,7 @@ pnpm scan
 
 ```
 packages/protocol    零运行时依赖：<!--facts:protocolIds-->51<!--/facts--> 个 id、解析、多会话仲裁、事件桥（ESM + CJS）
-packages/core        角色引擎：<!--facts:bodies-->15<!--/facts--> 条轮廓、<!--facts:faceStates-->44<!--/facts--> 个表情、渲染成 SVG
+packages/core        角色引擎：<!--facts:bodies-->15<!--/facts--> 条轮廓、<!--facts:faceStates-->61<!--/facts--> 个表情、渲染成 SVG
 apps/gallery         站点：控制台 / 表情馆 / 场景 / 文档
 apps/desktop         Electron 桌面端
   src/main.js         球窗口、托盘（三项）、Agent 联动、启动装配
@@ -235,9 +235,9 @@ docs/                架构、协议、岛规格、设置规格、调研结论
 | 检查 | 证据 |
 | --- | --- |
 | 协议表 | 33 个协议测试、18 个引擎测试、143 个桌面测试，覆盖 id 合法性、状态映射、事件标记与段边界 |
-| <!--facts:protocolIds-->51<!--/facts--> 个协议 id 渲染 | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> 个 id → <!--facts:faceStates-->44<!--/facts--> 个脸部状态，51/51 与 44/44 全通过，0 failures（Node 里跑，无浏览器） |
+| <!--facts:protocolIds-->51<!--/facts--> 个协议 id 渲染 | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> 个 id → <!--facts:faceStates-->61<!--/facts--> 个脸部状态，51/51 与 61/61 全通过，0 failures（Node 里跑，无浏览器） |
 | 桌面端窗口行为 | `pnpm smoke:desktop` — 独立用户目录启动开发版或打包版，7/7（沙箱、preload、窗口尺寸、置物架布局、分页热区）；原生拖拽检查可用 `ui-check.mjs` |
-| 桌面端协议驱动 | 写 `34` → `alerting`，写 `33` → `celebrate`，写坏 JSON → 保持当前表情 |
+| 桌面端协议驱动 | 写 `34` → `error`，写 `33` → `done`，写坏 JSON → 保持当前表情 |
 | 灵动岛窗口 | 截图 + CDP 实测：收起 84×34、展开 420×272；窗口在 1707 宽的工作区里 x=628（居中）、y=0（贴顶） |
 | 灵动岛数据 | 收起态显示 `97% 21:10 19°`；天气缓存写入 `cache-weather.json`（香港 19°，7 天） |
 | 设置中心 | 14 个导航项、常规页 9 行、页面管理 14 个可拖拽项；开关改动即写 `prefs.json` |

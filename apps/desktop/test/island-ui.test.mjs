@@ -80,3 +80,30 @@ describe('island mailbox page fits its 205px budget', () => {
     assert.match(wheel, /closest\('\.clip-list, \.shelf-list, \.todo-list, \.mail-page, \.mail'\)/, 'the wheel over the mailbox belongs to the mailbox: ' + wheel);
   });
 });
+
+/*
+ * The focus page keeps its 96px ring, the clock and the three keys, and adds
+ * two rows: today and this week. Both rows share one grid so the figures line
+ * up, and the long rest names itself in the ring instead of appearing as a
+ * 15:00 nobody announced.
+ */
+describe('island focus page reports both windows', () => {
+  it('prints today and this week as two tabular rows', () => {
+    const block = islandJs.slice(islandJs.indexOf('function focusPage'), islandJs.indexOf('function healthPage'));
+    assert.match(block, /focus-stats/, 'the two-row statistics block must be rendered');
+    assert.match(block, /statRow\('今日'/, 'today has its own row');
+    assert.match(block, /statRow\('本周'/, 'the week has its own row');
+    assert.match(block, /focus-ring/, 'the 96px ring is kept');
+    assert.match(block, /focus-time/, 'the clock beside the ring is kept');
+    assert.match(block, /focus-key/, 'the three keys are kept');
+    assert.match(block, /长休息/, 'a long rest names itself in the ring');
+    assert.doesNotMatch(block, /focus-note/, 'the single note line was replaced by the two rows');
+  });
+
+  it('gives both rows one grid and tabular figures', () => {
+    const css = islandCss.slice(islandCss.indexOf('.focus-stats {'), islandCss.indexOf('.focus-empty'));
+    assert.match(css, /grid-template-columns:\s*1fr max-content max-content/, 'both rows share the column widths');
+    assert.match(css, /font-variant-numeric:\s*tabular-nums/, 'the figures are tabular');
+    assert.match(css, /text-align:\s*right/, 'the numbers are right-aligned');
+  });
+});

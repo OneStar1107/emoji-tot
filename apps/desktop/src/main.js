@@ -26,6 +26,8 @@ const { mailAction, quotaAction, calendarAction } = require('./main/data-actions
 const battery = require('./main/services/battery');
 const weather = require('./main/services/weather');
 const media = require('./main/services/media');
+const games = require('./main/services/games');
+const mediaEmotion = require('./main/media-emotion');
 const volume = require('./main/services/volume');
 const lyrics = require('./main/services/lyrics');
 const focus = require('./main/services/focus');
@@ -48,6 +50,9 @@ const { nextAgentMtime } = require('./main/agent-file');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
+
+/** Mirrors DEFAULTS.devices.pinned's documented cap (see shared/schema.js). */
+const DEVICE_PIN_LIMIT = 3;
 const SIZE_ORDER = Object.keys(SIZES);
 
 /** Room above the ball for the speech bubble; the window is taller than the ball. */
@@ -96,7 +101,9 @@ const AGENT_SOURCES = [
       if (!raw || typeof raw !== 'object') return null;
       if (raw.status === 'blocked') return '34';
       if (raw.status === 'done') return '33';
-      if (raw.status === 'running') return raw.pct >= 100 ? '33' : '32';
+      // Running is Thinking, not Busy: the protocol has a face for "working
+      // on it" and an agent that has started is doing exactly that.
+      if (raw.status === 'running') return raw.pct >= 100 ? '33' : '30';
       return null;
     },
   },
@@ -148,16 +155,87 @@ let agentWatch = {};
  * scene page arbitrates a dozen sessions.
  */
 let agentArbiter = null;
+/**
+ * The four-way priority gate: manual preview > agent > media > idle.
+ *
+ * The protocol arbiter still decides *which* agent wins between several agent
+ * sessions; this sits one level up and decides whether the agent should be on
+ * screen at all. Every emotion that reaches a character goes through here, so
+ * "one emotion holds for at least 2000ms" is enforced in one place rather
+ * than four.
+ */
+let emotionDirector = null;
+/** The preview that is currently sitting above the agent/media states. */
+let manualEmotionTimer = null;
+/** Is the foreground-game watcher running? It costs a PowerShell child. */
+let gamesRunning = false;
+
+function emotions() {
+  if (!emotionDirector) {
+    emotionDirector = mediaEmotion.createEmotionDirector({
+      minDisplayMs: 2000,
+      onApply: (result) => {
+        emitState({
+          emotionId: result.emotionId,
+          ...(result.tips ? { tips: result.tips } : {}),
+        });
+      },
+    });
+  }
+  return emotionDirector;
+}
+
+/**
+ * Recompute the media source from the three signals it is made of.
+ *
+ * Level-triggered on purpose: a track change, a pause, a new foreground game
+ * and the setting being switched off all call this and it publishes whatever
+ * the current truth is. The director drops duplicates.
+ */
+function applyMediaEmotion() {
+  const prefs = readPrefs();
+  const gate = emotions();
+  if (prefs.mediaEmotion === false) {
+    gate.clear('media');
+    return;
+  }
+  const snapshot = media.current();
+  const foreground = games.current();
+  const emotionId = mediaEmotion.mediaEmotion({
+    active: snapshot.active,
+    playing: snapshot.playing,
+    duration: snapshot.duration,
+    error: snapshot.error,
+    game: games.isGame(foreground) ? foreground : '',
+  });
+  if (emotionId) gate.set('media', emotionId);
+  else gate.clear('media');
+}
+
+/** Start or stop the foreground watcher as the setting allows. */
+function applyEmotionWatch() {
+  const wanted = readPrefs().mediaEmotion !== false && platform.supports('media');
+  if (wanted && !gamesRunning) {
+    try {
+      games.start(() => applyMediaEmotion());
+      gamesRunning = true;
+    } catch {
+      // No shell available: the media emotion has two other signals still.
+      gamesRunning = false;
+    }
+  } else if (!wanted && gamesRunning) {
+    games.stop();
+    gamesRunning = false;
+  }
+  applyMediaEmotion();
+}
 
 function agentsArbiter() {
   if (!agentArbiter) {
     agentArbiter = createArbiter({
       minDisplayMs: 900,
       onApply: (result) => {
-        emitState({
-          emotionId: result.emotionId,
-          ...(result.tips ? { tips: result.tips } : {}),
-        });
+        emotions().set('agent', result.emotionId, result.tips ?? '');
       },
     });
   }
@@ -923,7 +1001,15 @@ function handleSettingsAction({ kind, value } = {}) {
       return { ok: true, side: dockSide };
     }
     case 'demo': {
-      emitState({ emotionId: String(value) });
+      /*
+       * A preview is the strongest source, but not a permanent one: four
+       * seconds is long enough to read the face and short enough that the
+       * pet goes back to what it was actually doing on its own.
+       */
+      const gate = emotions();
+      gate.set('manual', String(value));
+      clearTimeout(manualEmotionTimer);
+      manualEmotionTimer = setTimeout(() => gate.clear('manual'), 4000);
       return { ok: true };
     }
     case 'cast': {
@@ -1099,6 +1185,7 @@ function applyMainPrefs() {
   applyHotkey();
   applyFullscreenWatch();
   applyAvoidanceWatch();
+  applyEmotionWatch();
   applyWindowFlags();
   applyDisplayPreference();
   island.refreshPrefs?.();
@@ -1386,6 +1473,7 @@ function startServices() {
    * Listeners are registered once and outlive any single worker: a service
    * switched off and back on must not stack a second copy of its listener.
    */
+  media.onChange(() => applyMediaEmotion());
   media.onChange((state) => {
     island.send('island:media', state);
     const key = state.active ? state.title + '|' + state.artist : '';
@@ -1529,6 +1617,26 @@ function startServices() {
     cast: readPrefs().cast || castId,
     prefs: readPrefs(),
   }));
+
+  /*
+   * The devices page's star: one device name in, the merged prefs out.
+   *
+   * The cap is enforced here, not in the renderer: a page that could write
+   * devices.pinned directly could also pin ten rows, or a name that is not a
+   * device. Reading current prefs and rebuilding the group also keeps the
+   * other members of the group (showBattery) from being dropped by the write.
+   */
+  guard.guardedHandle('island:devices-pin', ['island'], (name) => {
+    const current = readPrefs().devices ?? {};
+    const pinned = Array.isArray(current.pinned) ? current.pinned : [];
+    const nextPinned = pinned.includes(name)
+      ? pinned.filter((item) => item !== name)
+      : pinned.length >= DEVICE_PIN_LIMIT ? pinned : pinned.concat(name);
+    return settings.applyPatch({ devices: { ...current, pinned: nextPinned } });
+  }, {
+    check: (name) => (typeof name === 'string' && name.length > 0 && name.length <= 120 ? name : undefined),
+    maxBytes: 512,
+  });
 
   guard.guardedHandle('media:control', ['island'], (payload) => {
     media.command(payload.kind, Number(payload.arg) || 0);
@@ -1713,6 +1821,7 @@ if (!gotTheLock) {
     }
     fullscreen.stop();
     volume.stop();
+    games.stop();
     // Anything a service spawned but did not stop (a watcher whose kill raced the
     // quit) must not survive us: an orphan PowerShell keeps polling with a console
     // of its own and nothing on screen says where it came from.

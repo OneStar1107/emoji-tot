@@ -11,6 +11,7 @@ export { BODIES, BODY_IDS, BODY_ZH, getBody, bodyPreview } from './body.js';
 export { TRAITS, TRAIT_IDS, TRAIT_ZH, EAR_IDS, TOP_IDS, SIDE_IDS, SURFACE_IDS, PAIRED, renderTraits } from './traits.js';
 export { CAST, CAST_IDS, FAMILIES, MOTIONS, MOTION_ZH, DEFAULT_CAST, castMember, castByFamily, breed } from './cast.js';
 export { FACES, FACE_IDS, faceFor, FACE_META, faceMeta, facesInGroup } from './face.js';
+export { LEXICON, lexiconEntry } from './lexicon.js';
 export { COLORS, COLOR_IDS, COLOR_ZH, colorHex } from './palette.js';
 export { renderCharacter, renderCast, renderFace, renderDataUrl, inkFor } from './render.js';
 /* The old hand-drawn shapes remain exported for stored preferences. */

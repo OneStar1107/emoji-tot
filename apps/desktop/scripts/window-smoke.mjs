@@ -160,7 +160,11 @@ try {
     })()
   `);
   console.log('  INFO  shelf metrics: ' + metrics);
-  ok('shelf metrics collected', metrics && JSON.parse(metrics).clip > 0, metrics);
+  /* The shelf page drops the clipboard block when clipboard history is off
+     (0.6.3), so -1 is a valid reading there; the page box and the hint are
+     what have to be there. */
+  const shelf = metrics ? JSON.parse(metrics) : {};
+  ok('shelf metrics collected', shelf.pages > 0 && shelf.hint > 0, metrics);
 
   const pagingTargets = JSON.parse(await evaluate(`
     JSON.stringify((() => {

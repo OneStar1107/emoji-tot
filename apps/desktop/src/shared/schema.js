@@ -25,7 +25,7 @@
  * stops them (see enabledServices) unless a pill status item still needs one.
  */
 export const PAGE_MANIFEST = [
-  { key: 'music', title: '音乐', sub: '系统正在播放', icon: 'music', service: 'media' },
+  { key: 'music', title: '媒体', sub: '系统正在播放', icon: 'music', service: 'media' },
   { key: 'weather', title: '天气', sub: '当地与七日', icon: 'sun', service: 'weather' },
   { key: 'quota', title: 'AI 工作台', sub: '余额与 Agent', icon: 'coin', service: 'quota' },
   { key: 'mail', title: '邮箱', sub: '摘要与验证码', icon: 'mail', service: 'mail' },
@@ -76,7 +76,7 @@ export const SETTINGS_NAV = [
     id: 'content',
     title: '内容',
     items: [
-      { key: 'music', label: '音乐与歌词', icon: 'music' },
+      { key: 'music', label: '媒体与歌词', icon: 'music' },
       { key: 'focus', label: '专注与饮水', icon: 'timer' },
       { key: 'todo', label: '待办与置物', icon: 'check' },
       { key: 'comm', label: '通知、邮箱与日程', icon: 'mail' },
@@ -122,7 +122,7 @@ export const PRESET_MANIFEST = [
   {
     key: 'work',
     label: '工作',
-    description: '音乐、余额、待办、专注和日程。',
+    description: '媒体、余额、待办、专注和日程。',
     pages: ['music', 'quota', 'todo', 'focus', 'calendar'],
     statusItems: ['battery', 'clock', 'quota'],
     defaultPage: 'todo',
@@ -213,6 +213,12 @@ export const DEFAULTS = {
   avoidEnabled: true,
   avoidBrowsers: true,
   avoidApps: [],
+  /*
+   * Media drives the face: playing, live, a foreground game, paused, a media
+   * failure. On by default because it is the feature people notice; off is one
+   * switch away, and the switch is on the page where the faces live.
+   */
+  mediaEmotion: true,
   trayIcon: true,
   hotkey: true,
   wheelPaging: true,
@@ -238,6 +244,20 @@ export const DEFAULTS = {
   },
   pageOrder: ['music', 'weather', 'quota', 'mail', 'focus', 'todo', 'health', 'shelf', 'devices', 'calendar', 'messenger'],
   defaultPage: 'music',
+
+  /*
+   * The devices page is a list, and a list needs two decisions the old page
+   * hard-coded: whether a level belongs to the row, and which rows come first.
+   *
+   *   showBattery  on  -> meter + percentage per row
+   *                off -> name and connection state only, so the list reads as
+   *                      "what is plugged in" rather than "how much is left"
+   *   pinned       at most three device names, in the order they were pinned.
+   *                The page shows five rows; pinning more than three would
+   *                push the rest below the fold, so the fourth pin is ignored
+   *                rather than silently reordering the page.
+   */
+  devices: { showBattery: true, pinned: [] },
 
   /* grouped */
   weather: { city: '香港', unit: 'c', intervalMin: 15, autoLocate: false },
@@ -517,6 +537,7 @@ export function pageOfPath(path) {
     shelf: 'todo',
     calendar: 'comm',
     quota: 'quota',
+    devices: 'pages',
     notify: 'comm',
     messenger: 'comm',
     mailProvider: 'comm',
@@ -572,6 +593,7 @@ export const CONSUMERS = {
   avoidEnabled: { scope: 'main', at: 'main.js applyAvoidanceWatch() avoidance.start/stop', live: true },
   avoidBrowsers: { scope: 'main', at: 'main/services/avoidance.js update() → avoidance.ps1 浏览器名单', live: true },
   avoidApps: { scope: 'main', at: 'main/services/avoidance.js update() → avoidance.ps1 owner 链匹配', live: true, note: '按 exe 完整路径匹配' },
+  mediaEmotion: { scope: 'main', at: 'main.js applyEmotionWatch() → main/media-emotion.js', live: true, note: '媒体情绪映射总开关' },
   trayIcon: { scope: 'main', at: 'main.js createTray()', live: true },
   hotkey: { scope: 'main', at: 'main.js applyMainPrefs() globalShortcut', live: true },
   wheelPaging: { scope: 'renderer', at: 'island.js wheel handler', live: true },
@@ -606,6 +628,9 @@ export const CONSUMERS = {
   'shelf.enabled': { scope: 'renderer', at: 'island.js shelf page', live: true },
   'shelf.dir': { scope: 'main', at: 'services/shelf.js dir()', live: true, note: '留空用默认的资料库/shelf' },
   'shelf.clipboard': { scope: 'main', at: 'main.js applyServicePlan() clipboardHistory', live: true, note: '默认关；关闭时清掉未固定条目' },
+
+  'devices.showBattery': { scope: 'renderer', at: 'island.js devicesPage() → 行的电量条与百分比', live: true, note: '关掉后只画名称与连接状态' },
+  'devices.pinned': { scope: 'renderer', at: 'island.js devicesPage() → 置顶排序与星标', live: true, note: '最多 3 台；在设备页行尾星标切换' },
 
   'calendar.leadMin': { scope: 'main', at: 'services/calendar.js lead time', live: true },
   'calendar.fromMail': { scope: 'main', at: 'services/calendar.js ics import', live: true },

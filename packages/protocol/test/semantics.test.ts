@@ -38,8 +38,8 @@ describe('protocol ids are strictly what they claim to be', () => {
     expect(isEmotionId('03')).toBe(true);
     expect(isEmotionId(' 03 ')).toBe(true);
     expect(isEmotionId(3)).toBe(true);
-    expect(stateForEmotion('34')).toBe('alerting');
-    expect(stateForEmotion(34)).toBe('alerting');
+    expect(stateForEmotion('34')).toBe('error');
+    expect(stateForEmotion(34)).toBe('error');
   });
 
   it('keeps every declared id parseable', () => {
@@ -102,19 +102,19 @@ describe('arbiter: event queue', () => {
       onApply: (result) => applied.push(result.state),
     });
 
-    arb.update({ sessionId: 'a', emotionId: '34' }); // alerting 80, an event
-    expect(applied).toEqual(['idle', 'alerting']);
+    arb.update({ sessionId: 'a', emotionId: '34' }); // error 80, an event
+    expect(applied).toEqual(['idle', 'error']);
 
-    // Both arrive during alerting's dwell and are both outranked by it.
+    // Both arrive during error's dwell and are both outranked by it.
     arb.update({ sessionId: 'b', emotionId: '50' }); // notifying 48
     arb.update({ sessionId: 'c', emotionId: '13' }); // surprised 55
-    expect(applied).toEqual(['idle', 'alerting']);
+    expect(applied).toEqual(['idle', 'error']);
 
     clock.advance(100);
-    expect(applied).toEqual(['idle', 'alerting', 'surprised']);
+    expect(applied).toEqual(['idle', 'error', 'surprised']);
 
     clock.advance(100);
-    expect(applied).toEqual(['idle', 'alerting', 'surprised', 'notifying']);
+    expect(applied).toEqual(['idle', 'error', 'surprised', 'notifying']);
 
     arb.dispose();
   });
@@ -132,13 +132,13 @@ describe('arbiter: event queue', () => {
     });
 
     arb.update({ sessionId: 'work', emotionId: '30' }); // thinking 30, continuous
-    arb.update({ sessionId: 'boom', emotionId: '34' }); // alerting 80, urgent
-    expect(applied).toEqual(['idle', 'thinking', 'alerting']);
+    arb.update({ sessionId: 'boom', emotionId: '34' }); // error 80, urgent
+    expect(applied).toEqual(['idle', 'thinking', 'error']);
 
     clock.advance(100);
     clock.advance(100);
     // "done" is a moment, not a mode: the ball returns to what is happening.
-    expect(applied[applied.length - 1]).toBe('alerting');
+    expect(applied[applied.length - 1]).toBe('error');
     arb.remove('boom');
     clock.advance(100);
     expect(applied[applied.length - 1]).toBe('thinking');
@@ -158,14 +158,14 @@ describe('arbiter: event queue', () => {
       onApply: (result) => applied.push(result.state),
     });
 
-    arb.update({ sessionId: 'hold', emotionId: '34' }); // alerting 80 holds the screen
+    arb.update({ sessionId: 'hold', emotionId: '34' }); // error 80 holds the screen
     arb.update({ sessionId: 'first', emotionId: '50' }); // notifying 50
     arb.update({ sessionId: 'second', emotionId: '31' }); // receiving 50
 
     clock.advance(100);
-    expect(applied).toEqual(['idle', 'alerting', 'notifying']);
+    expect(applied).toEqual(['idle', 'error', 'notifying']);
     clock.advance(100);
-    expect(applied).toEqual(['idle', 'alerting', 'notifying', 'receiving']);
+    expect(applied).toEqual(['idle', 'error', 'notifying', 'receiving']);
     arb.dispose();
   });
 });

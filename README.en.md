@@ -2,16 +2,16 @@
 
 # EmojiTot
 
-**A character engine for the desktop and the web — <!--facts:cast-->15<!--/facts--> characters from <!--facts:bodies-->15<!--/facts--> bodies × hand-written outlines × <!--facts:colors-->12<!--/facts--> colours, <!--facts:faceStates-->44<!--/facts--> expressions driven by one two-digit number. Visible in a page, and now both a ball on the desktop and a pill at the top of the screen.**
+**A character engine for the desktop and the web — <!--facts:cast-->15<!--/facts--> characters from <!--facts:bodies-->15<!--/facts--> bodies × hand-written outlines × <!--facts:colors-->12<!--/facts--> colours, <!--facts:faceStates-->61<!--/facts--> expressions driven by one two-digit number. Visible in a page, and now both a ball on the desktop and a pill at the top of the screen.**
 
 [Console](https://onestar1107.github.io/emoji-tot/#/console) · [Faces](https://onestar1107.github.io/emoji-tot/#/gallery) · [Scene](https://onestar1107.github.io/emoji-tot/#/scene) · [Docs](https://onestar1107.github.io/emoji-tot/#/docs) · [中文](README.md)
 
 ![Cast](docs/screenshots/hero.png)
 
 > **About**
-> A character engine drawn from hand-written outlines: <!--facts:cast-->15<!--/facts--> characters from <!--facts:bodies-->15<!--/facts--> bodies × <!--facts:colors-->12<!--/facts--> colours, and <!--facts:faceStates-->44<!--/facts--> expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
+> A character engine drawn from hand-written outlines: <!--facts:cast-->15<!--/facts--> characters from <!--facts:bodies-->15<!--/facts--> bodies × <!--facts:colors-->12<!--/facts--> colours, and <!--facts:faceStates-->61<!--/facts--> expressions driven by one two-digit number. The desktop pet, the console and the site share one engine, with zero image assets.
 >
-> 一个用 SVG 画出来的角色引擎：<!--facts:cast-->15<!--/facts--> 个角色各有自己手写的闭合轮廓，<!--facts:faceStates-->44<!--/facts--> 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
+> 一个用 SVG 画出来的角色引擎：<!--facts:cast-->15<!--/facts--> 个角色各有自己手写的闭合轮廓，<!--facts:faceStates-->61<!--/facts--> 个表情分生命周期 / 情绪 / 代理工作三组，默认模切白边画风。桌宠、控制台、站点共用同一套引擎，零图片资源。
 
 </div>
 
@@ -22,8 +22,8 @@
 <!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot.Setup.0.6.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.2/EmojiTot.Setup.0.6.2.exe) | Installer — starts from the Start menu |
-| [EmojiTot.0.6.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.2/EmojiTot.0.6.2.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.Setup.0.6.3.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.3/EmojiTot.Setup.0.6.3.exe) | Installer — starts from the Start menu |
+| [EmojiTot.0.6.3.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.6.3/EmojiTot.0.6.3.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases)
@@ -53,7 +53,7 @@ The island sizes itself from its content: the page measures its own box with `Re
 | Traits | <!--facts:traits-->26<!--/facts--> | <!--facts:earTraits-->6<!--/facts--> ears, <!--facts:topTraits-->8<!--/facts--> on top, <!--facts:sideTraits-->5<!--/facts--> on the sides, <!--facts:surfaceTraits-->6<!--/facts--> surface markings; each anchors to the body's height and pointiness |
 | Finish | 2 | die-cut sticker (default) and flat, switched on the same outline |
 | Colours | <!--facts:colors-->12<!--/facts--> | flat hexes; the face ink inverts by luminance |
-| Expressions | <!--facts:faceStates-->44<!--/facts--> | <!--facts:eyeStyles-->9<!--/facts--> eye styles × <!--facts:mouthStyles-->10<!--/facts--> mouth styles plus lean, indexed by the protocol's state names |
+| Expressions | <!--facts:faceStates-->61<!--/facts--> | <!--facts:eyeStyles-->10<!--/facts--> eye styles × <!--facts:mouthStyles-->12<!--/facts--> mouth styles plus lean, indexed by the protocol's state names |
 | Characters | <!--facts:cast-->15<!--/facts--> | One per body, each with its own expression and motion |
 | Offspring | unbounded | `breed(a, b, seed)` crosses two genomes; nothing is stored |
 
@@ -89,7 +89,7 @@ feed('thinking');              // a bare state name works too
 | Page | What is there |
 | --- | --- |
 | **Console** | Pick one of <!--facts:cast-->15<!--/facts--> characters, then adjust body, colour, traits and expression; the component snippet and the JSON genome follow every change |
-| **Faces** | Two walls: the <!--facts:cast-->15<!--/facts-->-member cast wall (filter by family) and the <!--facts:faceStates-->44<!--/facts-->-expression wall; clicking a character jumps to the console |
+| **Faces** | Two walls: the <!--facts:cast-->15<!--/facts-->-member cast wall (filter by family) and the <!--facts:faceStates-->61<!--/facts-->-expression wall; clicking a character jumps to the console |
 | **Scene** | <!--facts:sceneHerd-->12<!--/facts--> characters on one stage, each changing expression on its own timer; click one and it answers; party / sleep / reshuffle |
 | **Docs** | How the engine draws, how a genome is composed, what each digit means, how to call it — generated from code, so it cannot go stale |
 
@@ -149,10 +149,10 @@ Not "it should run" — it was run:
 | Check | Evidence |
 | --- | --- |
 | Protocol table | 33 protocol tests, 18 engine tests and 143 desktop tests covering ids, state mapping, event flags and segment bounds |
-| <!--facts:protocolIds-->51<!--/facts--> protocol ids render | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> ids → <!--facts:faceStates-->44<!--/facts--> faces, 51/51 and 44/44 pass, 0 failures, in Node with no browser |
+| <!--facts:protocolIds-->51<!--/facts--> protocol ids render | `pnpm preview` — <!--facts:protocolIds-->51<!--/facts--> ids → <!--facts:faceStates-->61<!--/facts--> faces, 51/51 and 61/61 pass, 0 failures, in Node with no browser |
 | Desktop window behaviour | `node apps/desktop/scripts/ui-check.mjs <port>` — drives the real cursor, 7/7 (dock, open, tuck, click-through) |
 | Desktop window smoke | `pnpm smoke:desktop` — launches the development or packaged app with a temporary profile, 7/7 (sandbox, preload, window size, shelf layout, paging targets) |
-| Desktop protocol | write `34` → `alerting`, `33` → `celebrate`, malformed JSON → keeps the current face |
+| Desktop protocol | write `34` → `error`, `33` → `done`, malformed JSON → keeps the current face |
 | Windows artifacts | `EmojiTot.Setup.0.3.33.exe` (about 116 MiB) and `EmojiTot.0.3.33.exe` (about 106 MiB); the unpacked build passes the same window smoke |
 
 ## Deliberate trade-offs
