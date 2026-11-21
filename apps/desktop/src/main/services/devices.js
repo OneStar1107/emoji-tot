@@ -9,6 +9,7 @@
 const platform = require('../platform');
 const path = require('node:path');
 const { scriptFile } = require('../paths');
+const deviceBattery = require('./device-battery');
 
 const RESPAWN_MS = 30000;
 
@@ -26,8 +27,24 @@ function emit() {
 }
 
 function snapshot() {
+  /*
+   * A receiver's level is not a PnP property, so the row arrives with battery
+   * null. The vendor probe (Logitech HID++, Razer, ASUS ROG) answers by name
+   * for exactly those rows; a brand it does not implement, or a device that is
+   * asleep, simply has no entry and keeps the em dash. The source stays the one
+   * the probe assigned ('hid-wireless' for a receiver), so the title reads the
+   * same as before.
+   */
+  const rows = devices.map((device) => {
+    const row = { ...device };
+    if (row.battery === null) {
+      const vendor = deviceBattery.get(row.name);
+      if (vendor) row.battery = vendor.level;
+    }
+    return row;
+  });
   return {
-    devices: devices.map((device) => ({ ...device })),
+    devices: rows,
     withBattery: devices.filter((device) => Number.isFinite(Number(device.battery))).length,
   };
 }
@@ -76,6 +93,10 @@ function start() {
   if (!stopped) return;
   stopped = false;
   spawnChild();
+  /* The vendor probe has its own clock; repainting when it lands is what
+   * turns a late answer into a number on the page. */
+  deviceBattery.onChange(emit);
+  deviceBattery.start();
 }
 
 function spawnChild() {
@@ -122,6 +143,7 @@ function spawnChild() {
 
 function stop() {
   stopped = true;
+  deviceBattery.stop();
   if (child) {
     try {
       child.kill();
@@ -136,4 +158,9 @@ function onChange(fn) {
   listeners.add(fn);
 }
 
-module.exports = { start, stop, snapshot, onChange };
+/** The devices page came into view (or left it): probe once now, or slow down. */
+function setFocused(active) {
+  deviceBattery.setFocused(active);
+}
+
+module.exports = { start, stop, snapshot, onChange, setFocused };

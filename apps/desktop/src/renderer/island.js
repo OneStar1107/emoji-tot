@@ -1960,7 +1960,12 @@ const DEVICE_SOURCE_LABEL = {
   wmi: 'WMI',
 };
 
-/** Five rows is the page's capacity; the count line carries the rest. */
+/**
+ * Five rows is what the 217px page shows without scrolling. The list renders
+ * every device and the page itself scrolls, so the sixth row is reachable
+ * instead of hidden behind a count line — a ROG mouse that only answers after
+ * its receiver wakes used to be the row that fell off.
+ */
 const DEVICE_ROWS = 5;
 /** Three pins fit above the unpinned rows without pushing the fifth row out. */
 const DEVICE_PINS = 3;
@@ -1994,6 +1999,20 @@ const DEVICE_PINS = 3;
  * where the radio can actually be toggled. If that call fails the row is
  * disabled and says why, rather than staying a button that opens nothing.
  */
+/**
+ * Tell main whether the devices page is on screen.
+ *
+ * The vendor probe is expensive and a sleeping mouse answers all zeros, so it
+ * only runs at its 30-second rate while someone is looking at the rows; the
+ * call also triggers one probe as the page opens.
+ */
+function syncDevicesFocus() {
+  const list = enabledPages();
+  const current = list[pageIndex];
+  const active = open && Boolean(current) && current.key === 'devices';
+  api.devicesFocus?.(active);
+}
+
 function devicesPage() {
   const list = devicesState?.devices ?? [];
   const showBattery = prefs.devices?.showBattery !== false;
@@ -2040,8 +2059,13 @@ function devicesPage() {
     .map((name) => list.find((device) => device.name === name))
     .filter(Boolean)
     .concat(list.filter((device) => !pinned.includes(device.name)));
-  const shown = ordered.slice(0, DEVICE_ROWS);
-  const rest = ordered.length - shown.length;
+  /*
+   * Every row is rendered. The page is the scroll container (see .pages), so
+   * the fifth row is where the viewport ends, not where the list ends: a
+   * device below it stays reachable by scrolling instead of disappearing into
+   * a count line that nothing can open.
+   */
+  const shown = ordered;
   const full = pinned.length >= DEVICE_PINS;
   const rows = shown
     .map((device) => {
@@ -2074,7 +2098,7 @@ function devicesPage() {
   return `<div class="dev">
     ${hero}
     <div class="dev-list">${rows}</div>
-    ${rest > 0 ? `<div class="dev-more">还有 ${rest} 台</div>` : ''}
+    ${ordered.length > DEVICE_ROWS ? `<div class="dev-more">共 ${ordered.length} 台 · 滚动查看</div>` : ''}
   </div>`;
 }
 
@@ -2271,6 +2295,7 @@ function renderPage(animate = false) {
     pagesEl.classList.add(pageDir > 0 ? 'page-in-left' : 'page-in-right');
   }
   measure();
+  syncDevicesFocus();
 }
 
 /*
@@ -2612,6 +2637,8 @@ function setOpen(next) {
   if (folding) cityMenuOpen = false;
   open = next;
   islandEl.dataset.open = String(open);
+  /* Only the devices page needs the vendor probe awake. */
+  syncDevicesFocus();
   pillEl.setAttribute('aria-expanded', String(open));
   if (opening) {
     /*

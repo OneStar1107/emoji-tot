@@ -1766,7 +1766,17 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .dev-power.bad i { background: var(--bad); }
 .dev-power.warn i { background: var(--warn); }
 /* 26px a row: 20px glyph, 12.5px name, a 60x3 bar, an 11.5px number, one star. */
-.dev-list { display: flex; flex-direction: column; margin-top: 8px; }
+/* The list scrolls inside the page instead of growing it: .pages has to stay
+   217px (the audit contract), and a user with seven peripherals was pushing it
+   to 269. Five rows are visible, the rest scroll here. */
+.dev-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+  max-height: 130px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .dev-item { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 2px; font-size: 12.5px; }
 .dev-icon { display: flex; width: 20px; height: 20px; color: var(--dim); flex: none; }
 .dev-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }

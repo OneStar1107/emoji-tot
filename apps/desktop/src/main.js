@@ -1638,6 +1638,13 @@ function startServices() {
     maxBytes: 512,
   });
 
+  /*
+   * The devices page opening is a request for a fresh vendor reading: a mouse
+   * that answers 87% in its own software is asleep when the five-minute timer
+   * fires, so the probe follows the page instead of the clock.
+   */
+  guard.guardedSend('island:devices-focus', ['island'], (active) => devices.setFocused(active === true), { maxBytes: 32 });
+
   guard.guardedHandle('media:control', ['island'], (payload) => {
     media.command(payload.kind, Number(payload.arg) || 0);
     return media.current();

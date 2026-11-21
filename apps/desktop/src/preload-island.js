@@ -45,6 +45,11 @@ contextBridge.exposeInMainWorld('islandAPI', {
   onMessenger: (listener) => on('island:messenger', listener),
   onDevices: (listener) => on('island:devices', listener),
   /**
+   * The devices page opened or closed. Main probes the vendor HID channel once
+   * as it opens and keeps it on a 30s clock while it stays visible.
+   */
+  devicesFocus: (active) => ipcRenderer.send('island:devices-focus', active),
+  /**
    * Pin or unpin one device. Main owns the three-pin cap and replies with the
    * whole preference object, so the page renders the answer instead of
    * predicting it.
