@@ -14,6 +14,11 @@ describe('IPC sender frames', () => {
     );
   });
 
+  it('gives the tray panel its own page', () => {
+    assert.equal(frameMatches('tray', 'file:///C:/app/renderer/tray.html'), true);
+    assert.equal(frameMatches('tray', 'file:///C:/app/renderer/settings.html'), false);
+  });
+
   it('rejects an empty or foreign frame', () => {
     assert.equal(frameMatches('island', ''), false);
     assert.equal(

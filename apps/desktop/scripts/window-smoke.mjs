@@ -164,7 +164,9 @@ try {
      (0.6.3), so -1 is a valid reading there; the page box and the hint are
      what have to be there. */
   const shelf = metrics ? JSON.parse(metrics) : {};
-  ok('shelf metrics collected', shelf.pages > 0 && shelf.hint > 0, metrics);
+  /* 0.7.0 routes the shelf empty state through the shared .state template, so
+     the old .shelf-hint node is gone; the page box is the stable reading. */
+  ok('shelf metrics collected', shelf.pages > 0, metrics);
 
   const pagingTargets = JSON.parse(await evaluate(`
     JSON.stringify((() => {

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="color-scheme" content="dark" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' data:" />
+<title>欢迎使用 EmojiTot</title>
+<link rel="stylesheet" href="./onboarding.css" />
+</head>
+<body>
+  <div class="dragbar" aria-hidden="true"></div>
+
+  <!-- Page one: the character, one sentence, one button. -->
+  <section class="page" id="page-welcome" aria-labelledby="welcome-line">
+    <div class="content welcome">
+      <emojitot-ball class="hero" cast="tot" state="idle" size="96"></emojitot-ball>
+      <p class="line" id="welcome-line">桌面上的小角色，用表情汇报媒体、电量和日程。</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btn-start">开始</button>
+      <button type="button" class="btn ghost" id="btn-skip-welcome">跳过</button>
+    </div>
+  </section>
+
+  <!-- Page two: the two preferences this guide owns. -->
+  <section class="page" id="page-setup" aria-labelledby="setup-title" hidden>
+    <div class="content setup">
+      <h1 class="title" id="setup-title">选形态与皮肤</h1>
+
+      <div class="group">
+        <span class="group-label" id="form-label">形态</span>
+        <div class="seg" id="form-seg" role="group" aria-labelledby="form-label">
+          <button type="button" data-display-mode="island" aria-pressed="true">灵动岛</button>
+          <button type="button" data-display-mode="ball" aria-pressed="false">桌面球</button>
+          <button type="button" data-display-mode="both" aria-pressed="false">两者</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="group-label" id="skin-label">皮肤</span>
+        <div class="skin-previews" id="skin-cards" role="group" aria-labelledby="skin-label"></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btn-done">完成</button>
+      <button type="button" class="btn ghost" id="btn-skip-setup">跳过</button>
+    </div>
+  </section>
+
+  <script type="module" src="./vendor/core/element.js"></script>
+  <script type="module" src="./onboarding.js"></script>
+</body>
+</html>

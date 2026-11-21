@@ -164,6 +164,14 @@ export const PRESET_MANIFEST = [
 export const DEFAULTS = {
   /* display */
   displayMode: 'island',
+  /**
+   * The two-page first-launch guide has been seen.
+   *
+   * Not a control: main/onboarding.js writes it once when the guide is
+   * finished or skipped, and no settings row renders it. A profile that
+   * predates the guide gets it once; skipping counts as seen.
+   */
+  onboardingDone: false,
   launchAtLogin: false,
   cast: 'tot',
   /** Last window position; written by the ball itself, not by a control. */
@@ -219,6 +227,14 @@ export const DEFAULTS = {
    * switch away, and the switch is on the page where the faces live.
    */
   mediaEmotion: true,
+  /*
+   * The idle mood clock: with nothing else happening the pet borrows one
+   * resting expression every 7–16 seconds and gives it back 1.8–4.4 seconds
+   * later. It is the lowest face priority (manual > agent > media > idle), so
+   * this switch only mutes the clock — it can never cancel a face the user or
+   * an agent asked for.
+   */
+  idleMoods: true,
   trayIcon: true,
   hotkey: true,
   wheelPaging: true,
@@ -270,6 +286,12 @@ export const DEFAULTS = {
   quota: { provider: 'deepseek', intervalMin: 15, alert: true, threshold: 5 },
   mailProvider: '163',
   notify: { system: true, body: true },
+  /**
+   * The update card's one piece of state. 「稍后」 stores an epoch-ms deadline
+   * here; until it passes the card stays closed. Not a settings control — the
+   * button is the only writer (main/update-prompt.js).
+   */
+  updatePrompt: { snoozeUntil: 0 },
   messenger: { wechat: true, qq: true, wecom: true, feishu: true, dingtalk: true },
 };
 
@@ -515,6 +537,7 @@ export function pageOfPath(path) {
     oledShift: 'appearance',
     timeFormat: 'appearance',
     hideFullscreen: 'behavior',
+    idleMoods: 'cast',
     avoidEnabled: 'behavior',
     avoidBrowsers: 'behavior',
     avoidApps: 'behavior',
@@ -539,6 +562,7 @@ export function pageOfPath(path) {
     quota: 'quota',
     devices: 'pages',
     notify: 'comm',
+    updatePrompt: 'general',
     messenger: 'comm',
     mailProvider: 'comm',
     mail: 'comm',
@@ -565,6 +589,7 @@ export const CONSUMERS = {
   cast: { scope: 'main', at: 'main.js setCast() · island:cast · cast:changed', live: true, note: '当前角色' },
   position: { scope: 'main', at: 'main.js createWindow() / savePrefs()', live: true, note: '非控件：球拖拽后自动写入' },
   displayMode: { scope: 'main', at: 'main.js applyForm()', live: true, note: '岛 / 球 / 双形态' },
+  onboardingDone: { scope: 'main', at: 'main/onboarding.js maybeShow() · finish()', live: true, note: '非控件：首次启动引导完成或跳过后写入' },
   launchAtLogin: { scope: 'main', at: 'main/settings.js app.setLoginItemSettings', live: true },
 
   theme: { scope: 'renderer', at: 'island.js resolveTheme() · settings.js applyChrome()', live: true },
@@ -594,6 +619,7 @@ export const CONSUMERS = {
   avoidBrowsers: { scope: 'main', at: 'main/services/avoidance.js update() → avoidance.ps1 浏览器名单', live: true },
   avoidApps: { scope: 'main', at: 'main/services/avoidance.js update() → avoidance.ps1 owner 链匹配', live: true, note: '按 exe 完整路径匹配' },
   mediaEmotion: { scope: 'main', at: 'main.js applyEmotionWatch() → main/media-emotion.js', live: true, note: '媒体情绪映射总开关' },
+  idleMoods: { scope: 'main', at: 'main.js createIdleMoods() · main/idle-mood.js', live: true, note: '空闲小动作：待机时借表情的时钟' },
   trayIcon: { scope: 'main', at: 'main.js createTray()', live: true },
   hotkey: { scope: 'main', at: 'main.js applyMainPrefs() globalShortcut', live: true },
   wheelPaging: { scope: 'renderer', at: 'island.js wheel handler', live: true },
@@ -643,6 +669,7 @@ export const CONSUMERS = {
 
   'notify.system': { scope: 'main', at: 'services/notify.js', live: true },
   'notify.body': { scope: 'main', at: 'services/notify.js', live: true },
+  'updatePrompt.snoozeUntil': { scope: 'main', at: 'main/update-prompt.js snoozeUntil() · snooze()', live: true, note: '「稍后」写入：24 小时内不再弹更新卡' },
 
   'messenger.wechat': { scope: 'main', at: 'services/messenger.js', live: true },
   'messenger.qq': { scope: 'main', at: 'services/messenger.js', live: true },

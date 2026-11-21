@@ -12,7 +12,7 @@
  * 3. **Agent linkage.** It can watch a coding agent's status file and react —
  *    the same file-watching contract the protocol already uses.
  */
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, session, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, ipcMain, screen, nativeImage, nativeTheme, shell, session, globalShortcut } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -22,6 +22,8 @@ const { createArbiter, parseAgentMessage, stateForEmotion, EMOTIONS } = require(
 const { userDir, statePath, prefsPath, readJson, writeJson, readPrefs, writePrefs, configureSettingsSchema } = require('./main/paths');
 const island = require('./main/island');
 const settings = require('./main/settings');
+const onboarding = require('./main/onboarding');
+const updatePrompt = require('./main/update-prompt');
 const { mailAction, quotaAction, calendarAction } = require('./main/data-actions');
 const battery = require('./main/services/battery');
 const weather = require('./main/services/weather');
@@ -47,9 +49,13 @@ const { safeSend } = guard;
 const platform = require('./main/platform');
 const { passThroughWhileDragging, sameDisplayId } = require('./main/window-state');
 const { nextAgentMtime } = require('./main/agent-file');
+const trayPanel = require('./main/tray-panel');
 // One face, one owner: the bus is plain state, so the sequence guarantees are
 // testable without Electron (apps/desktop/test/face-sync.test.mjs).
 const { createFaceBus } = require('./main/face-bus');
+// The idle mood clock, moved out of the renderer when 0.6.3 gave the face one
+// owner — and restored here, where that owner lives.
+const { createIdleMoods } = require('./main/idle-mood');
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -921,32 +927,45 @@ function applyForm() {
 /* ---------------------------------------------------------------- menus */
 
 /**
- * The tray menu is deliberately three entries.
+ * The tray menu is deliberately three entries, and the app draws it.
  *
  * Everything that used to live here — form, show/hide, click-through, docking,
  * size, cast, demo expressions, agent hooks, file locations — is a persistent
  * setting now, and persistent settings belong in the settings window. A tray
  * menu that mirrors the whole app is a second UI to keep in sync; this one only
  * carries the things you reach for without opening anything.
+ *
+ * The rows are a real window (main/tray-panel.js) rather than an OS menu, which
+ * is the only way they can carry the app's icons, its theme and keyboard focus.
  */
-function buildMenu() {
-  return Menu.buildFromTemplate([
-    { label: '设置…', click: () => settings.create('general') },
-    { type: 'separator' },
-    {
-      label: '置顶',
-      type: 'checkbox',
-      checked: pinned,
-      click: (item) => {
-        pinned = item.checked;
-        if (win) win.setAlwaysOnTop(pinned, 'floating');
-        savePrefs();
-        refreshMenus();
-      },
-    },
-    { type: 'separator' },
-    { label: '退出', click: () => app.quit() },
-  ]);
+function trayState() {
+  const prefs = readPrefs();
+  const theme = prefs.theme ?? 'dark';
+  // The taste setting wins over the OS, the same way the settings window does.
+  const light = theme === 'light' || (theme === 'system' && !nativeTheme.shouldUseDarkColors);
+  return { version: app.getVersion(), pinned, light };
+}
+
+/** The one place "always on top" flips, whichever surface asked. */
+function togglePinned() {
+  pinned = !pinned;
+  if (win && !win.isDestroyed()) win.setAlwaysOnTop(pinned, 'screen-saver');
+  savePrefs();
+  refreshMenus();
+}
+
+/** One row was run. The panel closes itself first, so this is the whole effect. */
+function runTrayAction(kind) {
+  switch (kind) {
+    case 'settings':
+      settings.create('general');
+      return;
+    case 'pin':
+      togglePinned();
+      return;
+    case 'quit':
+      app.quit();
+  }
 }
 
 /**
@@ -1034,8 +1053,9 @@ function handleSettingsAction({ kind, value } = {}) {
   }
 }
 
+/** Re-push what the panel shows. Harmless while it is closed. */
 function refreshMenus() {
-  if (tray) tray.setContextMenu(buildMenu());
+  trayPanel.refresh();
 }
 
 /**
@@ -1050,6 +1070,7 @@ function applyTrayPreference() {
   const wanted = prefs.trayIcon !== false;
   if (wanted && !tray) createTray();
   else if (!wanted && tray) {
+    trayPanel.hide();
     tray.destroy();
     tray = null;
   }
@@ -1181,10 +1202,14 @@ function handleDisplayChange() {
 
 function applyMainPrefs() {
   applyTrayPreference();
+  // The panel shows "unpinned" for the same tick the setting changes.
+  trayPanel.refresh();
   applyHotkey();
   applyFullscreenWatch();
   applyAvoidanceWatch();
   applyEmotionWatch();
+  // The switch is live: turning it off also hands back a mood already on screen.
+  idleMoods.setEnabled(readPrefs().idleMoods !== false);
   applyWindowFlags();
   applyDisplayPreference();
   island.refreshPrefs?.();
@@ -1202,9 +1227,42 @@ function createTray() {
   const icon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
   tray = new Tray(icon);
   tray.setToolTip('EmojiTot');
-  tray.setContextMenu(buildMenu());
-  // Left click intentionally does nothing: the tray is a menu here, and a
-  // click that silently toggles a window reads as an accident.
+  // Left and right click both open the panel: that is the menu, and a click
+  // that silently toggles a window instead reads as an accident.
+  // The click handlers receive (event, bounds, position); the anchor is read
+  // from the tray itself so both entry points agree on where it is.
+  tray.on('click', () => toggleTrayPanel());
+  tray.on('right-click', () => toggleTrayPanel());
+}
+
+/**
+ * The tray icon's rectangle, or null on a platform that will not report one.
+ *
+ * When it is null the panel goes to the work area's bottom-right corner
+ * (main/tray-menu.js), which is where a menu is always reachable.
+ */
+function trayAnchor() {
+  try {
+    const bounds = tray && typeof tray.getBounds === 'function' ? tray.getBounds() : null;
+    return bounds && bounds.width > 0 ? bounds : null;
+  } catch {
+    return null;
+  }
+}
+
+function toggleTrayPanel(anchor = trayAnchor()) {
+  if (trayPanel.isOpen()) {
+    trayPanel.hide();
+    return;
+  }
+  /*
+   * Clicking the tray icon while the panel is open: the click goes to the
+   * taskbar, the panel loses focus and closes itself, and this handler runs a
+   * moment later. Without the guard that same click would reopen the panel —
+   * a menu you cannot dismiss with the control that opened it.
+   */
+  if (trayPanel.closedJustNow()) return;
+  trayPanel.show(anchor);
 }
 
 /* -------------------------------------------------------------- IPC glue */
@@ -1308,7 +1366,10 @@ guard.guardedSend('drag:start', ['ball'], (point) => {
 guard.guardedSend('drag:end', ['ball'], endDrag, { maxBytes: 64 });
 guard.guardedSend('pet:menu', ['ball'], () => {
   if (!win) return;
-  buildMenu().popup({ window: win });
+  // The ball's right-click opens the same panel the tray icon does — anchored
+  // to the ball instead of to the notification area. There is one menu in the
+  // app, so its contents and its theme cannot drift between two surfaces.
+  toggleTrayPanel(win.getBounds());
 }, { maxBytes: 64 });
 guard.guardedSend('pet:action', ['ball'], () => {
   const actions = ['bounce', 'spin', 'burst'];
@@ -1339,6 +1400,53 @@ faceBus.attach((payload) => settings.sendFace(payload));
 // The settings window is created lazily; a page that has just loaded missed
 // every broadcast while it was away.
 settings.setFaceLoader(() => faceBus.resend());
+
+/**
+ * The idle mood clock: the only source allowed to borrow a resting face.
+ *
+ * `mood` is the lowest priority there is. The clock asks canBorrowIdleMood()
+ * before every borrow, so a manual preview, an agent status, a media emotion,
+ * a dragged ball, a hidden window or an avoided full-screen app all keep the
+ * face. On the way back it only restores idle while the face on the bus is
+ * still its own — a real state that arrived during the hold must not be
+ * undone by a weaker clock.
+ */
+const idleMoods = createIdleMoods({
+  canBorrow: () => canBorrowIdleMood(),
+  onBorrow: (state) => {
+    /*
+     * The expression and its motion are one change. The old renderer played
+     * the cast member's signature motion with about seven moods out of ten;
+     * the ball consumes the same decision from the payload instead of keeping
+     * a second clock of its own.
+     */
+    const member = CORE && typeof CORE.castMember === 'function' ? CORE.castMember(castId) : null;
+    const motion = member && typeof member.motion === 'string' ? member.motion : 'bounce';
+    faceBus.set(state, 'mood', Math.random() < 0.7 ? { motion } : null);
+  },
+  onReturn: () => {
+    if (faceBus.current().source === 'mood') faceBus.set('idle', 'mood');
+  },
+});
+
+/**
+ * May the idle clock borrow the face right now?
+ *
+ * One place for everything that outranks a mood: the settings switch, the
+ * emotion director (it only reads 'idle' when no manual / agent / media source
+ * is on screen), a dragged ball, a hidden or avoided surface, and an app window
+ * nobody can see.
+ */
+function canBorrowIdleMood() {
+  if (readPrefs().idleMoods === false) return false;
+  if (dragTimer) return false;
+  if (avoiding || hiddenByFullscreen) return false;
+  const ballVisible = Boolean(win && !win.isDestroyed() && win.isVisible());
+  const islandVisible = showIsland() && island.isVisible();
+  if (!ballVisible && !islandVisible) return false;
+  const shown = emotions().current();
+  return !shown || shown.source === 'idle';
+}
 /** The renderer saw the pointer on the ball, or leave it. */
 
 
@@ -1372,8 +1480,15 @@ async function refreshWeather() {
     const data = await weather.load(city, autoLocate);
     island.send('island:weather', data);
   } catch (error) {
-    // Offline: the island keeps the last reading rather than an empty card.
-    console.error('[weather] failed', city, error?.message ?? String(error));
+    /*
+     * Offline: the island keeps the last good reading rather than an empty
+     * card. The message still travels, because a page that never had a reading
+     * sat on "正在获取天气…" forever — the one state that is indistinguishable
+     * from a broken app.
+     */
+    const message = error?.message ?? String(error);
+    console.error('[weather] failed', city, message);
+    island.send('island:weather', { error: message, at: Date.now() });
   }
 }
 
@@ -1788,6 +1903,15 @@ if (!gotTheLock) {
     }
     settings.registerIpc();
     island.registerIpc();
+    onboarding.registerIpc();
+    /*
+     * The update card waits for one push (updatePrompt.notifyAvailable); this
+     * build ships no release checker behind it. EMOJITOT_UPDATE_TEST drives
+     * that same push — twice by default if set to 2 — so the real window can
+     * be verified over CDP without adding a network request to the app.
+     */
+    updatePrompt.registerIpc();
+    updatePrompt.startTestInjection();
     // The island page cannot hold data that was pushed before it listened.
     island.onLoaded(() => {
       if (runningServices.has('battery')) pushBattery();
@@ -1797,6 +1921,8 @@ if (!gotTheLock) {
       // The island is created lazily, long after the first face was chosen.
       faceBus.resend();
     });
+    trayPanel.registerIpc();
+    trayPanel.setHooks({ state: trayState, act: runTrayAction });
     createTray();
     screen.on('display-removed', handleDisplayChange);
     screen.on('display-added', handleDisplayChange);
@@ -1830,6 +1956,9 @@ if (!gotTheLock) {
       island.send('settings:changed', next);
       previousPrefs = next;
     });
+    // The guide opens last, over a fully booted app: its 完成 has to be able to
+    // move the island and repaint the skin the moment it is clicked.
+    onboarding.maybeShow();
   });
 
   app.on('window-all-closed', () => {
@@ -1841,6 +1970,7 @@ if (!gotTheLock) {
     // flag that lets them go when the app is really quitting.
     globalThis.__emojitotQuitting = true;
     endDrag();
+    idleMoods.stop();
     stopHoverWatch();
     clearInterval(pointerTimer);
     clearInterval(batteryTimer);

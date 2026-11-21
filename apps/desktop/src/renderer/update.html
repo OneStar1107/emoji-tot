@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="color-scheme" content="dark" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:" />
+<title>EmojiTot 更新</title>
+<link rel="stylesheet" href="./update.css" />
+</head>
+<body>
+  <section class="card" role="dialog" aria-labelledby="update-title">
+    <header class="head">
+      <span class="eyebrow" id="update-title">发现新版本</span>
+      <span class="version" id="update-version"></span>
+    </header>
+    <ul class="notes" id="update-notes" aria-label="更新要点"></ul>
+    <footer class="foot">
+      <button type="button" class="btn ghost" id="later">稍后</button>
+      <button type="button" class="btn primary" id="download">打开下载页</button>
+    </footer>
+  </section>
+  <script src="./update.js"></script>
+</body>
+</html>

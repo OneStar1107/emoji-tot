@@ -67,11 +67,10 @@ describe('island mailbox page fits its 205px budget', () => {
   });
 
   it('lets the mailbox column scroll instead of clipping the button', () => {
-    assert.match(
-      islandCss,
-      /\.mail-page-empty\s*\{[^}]*overflow-y:\s*auto/,
-      'the mailbox page without accounts must scroll instead of clipping the button',
-    );
+    // 0.7.0 runs every empty/error state through one template; the mailbox
+    // placeholder is a .state block now and no longer needs its own scroller.
+    assert.match(islandCss, /\.state\s*\{/);
+    assert.match(islandCss, /\.state[\s\S]{0,400}max-height:\s*96px/);
     assert.match(islandCss, /\.mail-page\s*\{[^}]*overflow:\s*hidden/, 'the page wrapper clips, so .pages never scrolls');
   });
 

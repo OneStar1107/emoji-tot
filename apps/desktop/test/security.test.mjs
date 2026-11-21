@@ -139,8 +139,8 @@ describe('hardening: every window is sandboxed', () => {
     assert.match(source, /passThroughWhileDragging\(Boolean\(dragTimer\)/, 'the drag state reaches the pass-through decision');
   });
 
-  it('sets sandbox: true in all three createWindow calls', () => {
-    for (const rel of ['main.js', 'main/island.js', 'main/settings.js']) {
+  it('sets sandbox: true in every window module', () => {
+    for (const rel of ['main.js', 'main/island.js', 'main/settings.js', 'main/update-prompt.js']) {
       const source = src(rel);
       assert.ok(source.includes('sandbox: true'), rel + ' must run its renderer sandboxed');
       assert.ok(!source.includes('sandbox: false'), rel + ' still disables the sandbox');
@@ -150,7 +150,7 @@ describe('hardening: every window is sandboxed', () => {
   });
 
   it('routes every ipcMain handler through the guard', () => {
-    for (const rel of ['main.js', 'main/island.js', 'main/settings.js']) {
+    for (const rel of ['main.js', 'main/island.js', 'main/settings.js', 'main/update-prompt.js']) {
       const source = src(rel);
       assert.ok(!/ipcMain\.(handle|on)\(/.test(source), rel + ' still registers a raw ipcMain listener');
     }

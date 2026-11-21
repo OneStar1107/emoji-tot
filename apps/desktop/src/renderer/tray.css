@@ -1,0 +1,149 @@
+/**
+ * The tray menu: 200×164, one header row and three 40px rows.
+ *
+ * Same colour tokens as the settings window, so the two surfaces a person
+ * opens side by side cannot disagree about what the app looks like. The window
+ * behind it is transparent, and the panel is its exact size: the 1px line is an
+ * inset shadow rather than a border, because a border would eat two of the
+ * four pixels the height has to spare.
+ */
+:root {
+  --bg: #1b1b20;
+  --line: rgba(255, 255, 255, 0.09);
+  --ink: #f1f1f4;
+  --dim: rgba(241, 241, 244, 0.55);
+  --accent: #8f7bff;
+  --hover: rgba(255, 255, 255, 0.06);
+  --focus: rgba(255, 255, 255, 0.1);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html[data-theme="light"] {
+  --bg: #ffffff;
+  --line: rgba(0, 0, 0, 0.1);
+  --ink: #1a1a1e;
+  --dim: rgba(26, 26, 30, 0.55);
+  --accent: #6c58e8;
+  --hover: rgba(0, 0, 0, 0.05);
+  --focus: rgba(0, 0, 0, 0.08);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+}
+
+body {
+  overflow: hidden;
+  font-family: system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  color: var(--ink);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.panel {
+  width: 200px;
+  height: 164px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header: 32px, name left, version right, nothing that needs a click. */
+.head {
+  height: 32px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 7px;
+}
+
+.mark { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+
+.name {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.version {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The three rows. */
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.item {
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 8px;
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: default;
+  transition: background 120ms var(--ease);
+}
+
+.item > svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.8;
+}
+
+.item .label { flex: 1; }
+
+.item:hover { background: var(--hover); }
+
+/*
+ * The focus ring is 2px and drawn inside the row: the panel is the whole
+ * window, so an outside ring would be clipped and the ring is the only thing
+ * telling a keyboard user which row Enter will run.
+ */
+.item:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--focus);
+}
+
+.item:focus svg { opacity: 1; }
+
+/* The pin row shows its state with the check the settings list already uses. */
+.item .check {
+  width: 13px;
+  height: 13px;
+  opacity: 0;
+  color: var(--accent);
+  stroke-width: 2.2;
+}
+
+.item[aria-checked="true"] .check { opacity: 1; }

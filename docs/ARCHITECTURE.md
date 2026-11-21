@@ -10,15 +10,18 @@ packages/core     组合式角色引擎：身体、特征、表情、渲染（�
 packages/protocol 两位数协议：解析、仲裁、事件桥
 ```
 
-## 桌面端三个窗口
+## 桌面端四个窗口
 
 | 窗口 | 页面 | 主进程 | 职责 |
 | --- | --- | --- | --- |
 | 球 | `src/renderer/index.html` | `src/main.js` | 贴边、穿透、拖拽、Agent 联动 |
 | 灵动岛 | `src/renderer/island.html` | `src/main/island.js` | 顶部居中的胶囊，点开成功能面板 |
 | 设置中心 | `src/renderer/settings.html` | `src/main/settings.js` | <!--facts:settingsPages-->14<!--/facts--> 页，改动即写 `prefs.json` |
+| 更新卡 | `src/renderer/update.html` | `src/main/update-prompt.js` | 320×200 的「发现新版本」小卡：稍后 / 打开下载页 |
 
-三个窗口都提前创建，形态切换只改可见性：重建窗口会重载页面，岛会丢掉当前页，球会丢掉位置。两个 preload（`preload-island.js`、`preload-settings.js`）各自只暴露自己的几个调用。
+球在启动时创建，岛、设置中心与更新卡按需创建：重建窗口会重载页面，岛会丢掉当前页，球会丢掉位置。四个 preload（`preload.js`、`preload-island.js`、`preload-settings.js`、`preload-update.js`）各自只暴露自己的几个调用。
+
+**更新卡只有一个入口**：主进程拿到新版本时调 `updatePrompt.notifyAvailable({ version, notes })`，卡只负责展示，不含检查逻辑。同一次运行只弹一次；「稍后」把 `updatePrompt.snoozeUntil` 写进 `prefs.json`，24 小时内不再弹。`EMOJITOT_UPDATE_TEST=<n>` 用同一个入口注入 n 次事件（默认 1 次），供真机 CDP 验证，不引入网络请求。
 
 **岛的尺寸只有一个来源**：页面用 `ResizeObserver` 量自己，把 `{w,h}` 发给主进程，主进程 `setBounds` 并居中。主进程里没有任何一处硬编码展开宽高 —— 页面长高，窗口就长高。
 

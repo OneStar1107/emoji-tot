@@ -1,10 +1,13 @@
 /**
- * Settings: a dark room with a rail and one page of cards.
+ * Settings: a dark room with a rail, one page of group cards and a preview.
  *
  * Deliberately boring compared with the island: settings are read, not
- * admired. One column, one rhythm, every row the same height.
+ * admired. One rhythm — 248px rail, 48px rows, 14px cards — and a 332px pane on
+ * the right that draws the island from the same tokens, so a visual preference
+ * is judged by looking instead of by reading its number.
  */
 :root {
+  color-scheme: dark;
   --bg: #101013;
   --rail: #17171b;
   --card: #1b1b20;
@@ -14,15 +17,24 @@
   --ink: #f1f1f4;
   --dim: rgba(241, 241, 244, 0.58);
   --faint: rgba(241, 241, 244, 0.5);
-  --accent: #8f7bff;
+  /* One accent, shared with the island: #9683ff. It measures 5.7:1 on the card
+     and 3.0:1 on white, so the focus ring, the primary button and the ON track
+     can wear it in both themes instead of two houses of purple. */
+  --accent: #9683ff;
+  --accent-2: #b9adff;
+  --accent-soft: rgba(150, 131, 255, 0.12);
   --good: #3ddc84;
+  /* The OFF track is a non-text control, so it needs 3:1 against the card under
+     it. --surface-3 (16% white) measured 1.44:1 there; this token measures
+     3.03:1 on #1b1b20 and 3.20:1 on white (see docs/UI-AUDIT.md). */
+  --switch-off: rgba(255, 255, 255, 0.34);
   /* The island's vocabulary, same names and same values. Two windows of one app
      should not have two radius scales, and this file used 6/7/8/9/11/12/14px for
      six sizes that are four ideas: small control, row, card, modal. */
   --r-xs: 6px;
-  --r-sm: 8px;
-  --r-md: 11px;
-  --r-lg: 14px;
+  --r-sm: 9px;
+  --r-md: 14px;
+  --r-lg: 18px;
   --r-full: 999px;
   --fast: 120ms;
   --base: 180ms;
@@ -46,6 +58,7 @@
  * line already reads from these tokens, so one block covers the whole window.
  */
 html[data-theme="light"] {
+  color-scheme: light;
   --bg: #f2f2f4;
   --rail: #eaeaea;
   --card: #ffffff;
@@ -55,8 +68,11 @@ html[data-theme="light"] {
   --ink: #1a1a1e;
   --dim: rgba(26, 26, 30, 0.72);
   --faint: rgba(26, 26, 30, 0.55);
-  --accent: #6c58e8;
+  --accent: #9683ff;
+  --accent-2: #6f5cff;
+  --accent-soft: rgba(150, 131, 255, 0.16);
   --good: #1f9d55;
+  --switch-off: rgba(0, 0, 0, 0.44);
   --hi: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --surface-1: rgba(0, 0, 0, 0.05);
   --surface-2: rgba(0, 0, 0, 0.09);
@@ -75,8 +91,8 @@ html[data-theme="light"] input.ctl { color: var(--ink); }
  */
 html[data-theme="light"] .rail-item { color: rgba(26, 26, 30, 0.8); }
 html[data-theme="light"] .rail-item:hover { background: rgba(0, 0, 0, 0.06); color: #1a1a1e; }
-html[data-theme="light"] .rail-item[aria-current="true"] { background: #1a1a1e; color: #ffffff; }
-html[data-theme="light"] .rail-item .dot { background: #ffffff; }
+html[data-theme="light"] .rail-item[aria-current="true"] { background: var(--accent-soft); color: #1a1a1e; }
+html[data-theme="light"] .rail-item .dot { background: #1a1a1e; }
 
 * { box-sizing: border-box; }
 
@@ -212,9 +228,9 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 .shell { display: flex; flex: 1; min-height: 0; }
 
 .rail {
-  width: 200px;
+  width: 248px;
   flex: none;
-  padding: 12px 8px 18px;
+  padding: 12px 12px 16px;
   background: var(--rail);
   border-right: 1px solid var(--line);
   overflow-y: auto;
@@ -223,26 +239,47 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 /*
  * The rail opens with the live character, not with a search box.
  *
- * 46px is the size 角色与表情 draws the grid at, so the preview is the same
- * renderer at the same scale; the name sits beside it so the circle is not a
- * mystery. When the cast table has no member for the current id, railCast()
- * emits nothing — the page list moves up and there is no hole.
+ * A 64px round portrait: 2px ring, 56px ball inside, name underneath. It is a
+ * button that opens 角色与表情 — the face answers "who is this", the click
+ * answers "where do I change it". The focus ring is drawn on the button with
+ * 2px offset, outside the circle, so the round clip cannot eat it. When the
+ * cast table has no member for the current id, railCast() emits nothing — the
+ * page list moves up and there is no empty circle.
  */
 .rail-cast {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 2px 8px 12px;
-  min-height: 46px;
+  gap: 7px;
+  padding: 4px 0 14px;
 }
-.rail-cast b {
-  min-width: 0;
+.rail-cast-btn {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color var(--fast) var(--ease);
+}
+.rail-cast-btn:hover,
+.rail-cast-btn:focus-visible { border-color: var(--accent); }
+.rail-cast-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rail-cast-name {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12.5px;
   font-weight: 550;
+  line-height: 1.3;
   color: var(--ink);
+  text-align: center;
 }
 
 /* Four groups, four small headings: the rail reads as a list of sections
@@ -250,23 +287,24 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 .rail-group { margin: 0 0 14px; }
 .rail-group:last-child { margin-bottom: 2px; }
 .rail-heading {
-  margin: 0 0 4px;
-  padding: 0 8px;
-  font-size: 10.5px;
-  font-weight: 500;
+  margin: 0 0 6px;
+  padding: 0 10px;
+  font-size: 9.5px;
+  font-weight: 600;
   color: var(--faint);
-  letter-spacing: 0.09em;
+  letter-spacing: 0.15em;
 }
 
 .rail-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  height: 32px;
-  padding: 0 8px;
+  height: 34px;
+  padding: 0 10px;
   border: 0;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--dim);
   font: inherit;
@@ -275,14 +313,60 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
   cursor: pointer;
   transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
 }
+/* The selected page gets the accent twice: a soft fill and a 2px bar, so the
+   position in a fourteen-row list is visible without reading the labels. */
+.rail-item::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 2px;
+  height: 0;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: translateY(-50%);
+  transition: height var(--base) var(--spring);
+}
 .rail-item:hover { background: var(--surface-1); color: var(--ink); }
-.rail-item[aria-current="true"] { background: #2b2b34; color: var(--ink); }
-.rail-item svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+.rail-item[aria-current="true"] { background: var(--accent-soft); color: var(--ink); }
+.rail-item[aria-current="true"]::before { height: 16px; }
+.rail-item svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.78; }
+.rail-item[aria-current="true"] svg { opacity: 1; stroke: var(--accent-2); }
 .rail-item .dot { width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: var(--accent); }
 
 /* ---------------------------------------------------------------- content */
 
-.content { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 28px 32px; }
+/*
+ * Direction B's page is a two-column grid of group cards. The grid lives on the
+ * scroll container itself, so every renderer keeps returning
+ * head(...) + group(...) + ... and no page needs to know it is in a grid; the
+ * head, notes and separators span both columns.
+ *
+ * One column until the content column is wide enough to hold two cards with
+ * the preview pane open; 1460px is that width (1460 - 248 rail - 332 preview =
+ * 880 of content, 400 per card).
+ */
+.content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 26px 32px 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* auto rows sized the cards to their row list and let the card head spill
+     over the next card; max-content is the same intention without that bug. */
+  grid-auto-rows: max-content;
+  align-content: start;
+  align-items: start;
+  gap: 16px;
+}
+@media (min-width: 1460px) {
+  .content { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.content > .page-head,
+.content > .note,
+.content > .group-sep,
+.content > .card { grid-column: 1 / -1; }
 
 /* A page change gets one quiet move; a control change gets none, or every
    toggle would re-animate the panel it just updated. */
@@ -295,35 +379,81 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 .row { transition: background var(--fast) var(--ease); }
 .row:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
 
-.page-head { margin-bottom: 16px; }
-.page-head h1 { margin: 0 0 4px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
-.page-head p { margin: 0; font-size: 11.5px; color: var(--dim); }
+/*
+ * The page head is the one thing above the cards: a 38px icon block, the group
+ * crumb the rail already shows, a 26px title and one line of context. B's
+ * skeleton — the page is the subject, the cards are its sections.
+ */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 0;
+}
+.head-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  flex: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.head-icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.head-text { min-width: 0; flex: 1; }
+.crumb { margin: 0 0 3px; font-size: 10.5px; color: var(--faint); letter-spacing: 0.07em; }
+.page-head h1 { margin: 0; font-size: 26px; line-height: 1.2; font-weight: 600; letter-spacing: -0.015em; }
+.page-head .sub { margin: 6px 0 0; font-size: 12.5px; color: var(--dim); line-height: 1.55; max-width: 62ch; }
 
 /* One page can carry two switch sets; this hairline is the boundary between
    them, so the second heading does not read as another card in the first set. */
-.group-sep { height: 1px; margin: -6px 2px 18px; background: var(--line); }
-.group { margin-bottom: 18px; }
-.group > h2 {
-  margin: 0 0 6px;
-  padding-left: 2px;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--faint);
-  letter-spacing: 0.09em;
-}
+.group-sep { height: 1px; margin: 2px 0; background: var(--line); }
 
 /*
- * A card is a surface, not a frame.
+ * A group is the card now.
  *
- * The 1px border plus the inset highlight made every card read as a box drawn
- * around its content, and two of them stacked was a wall of frames. The rows
- * carry the separation now — one hairline between them, 8px corners on the
- * surface — so the eye groups by fill, not by outline.
+ * It used to be a heading over a card, which meant two levels of chrome for one
+ * idea. The heading moved inside the surface as a card head, the rows sit
+ * directly under it, and the only outline is the fill — one rectangle per
+ * section, 14px corners, no border.
  */
-.card {
-  border: 0;
-  border-radius: 8px;
+.group {
+  min-width: 0;
+  border-radius: var(--r-md);
   background: var(--card);
+  box-shadow: var(--hi);
+  overflow: hidden;
+}
+/* The skin picker is this page's main character; it spans the grid like mock
+   B's wide card so the five thumbnails never get squeezed into half a page. */
+.group:has(.skin-previews) { grid-column: 1 / -1; }
+.group > .ch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 16px 11px;
+}
+.group > .ch h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.01em; color: var(--ink); }
+.group > .ch .cnum { margin-left: 8px; font-size: 10px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.gbody { min-width: 0; }
+
+/* Bodies that are not a row list keep the card's 16px gutter. */
+.gbody > .preset-grid { margin: 2px 16px 14px; }
+.gbody > .note { margin: 0 16px 14px; }
+.gbody > .hint { margin: 0 16px 12px; }
+.gbody > .form-error { margin: 0 16px 12px; }
+.gbody > .cast-grid,
+.gbody > .face-grid { padding: 12px 16px 14px; }
+.gbody > .avoid-empty { padding: 0 16px 12px; }
+.gbody > .avoid-grid { padding: 4px 16px 10px; }
+
+/* A page-level card (the plugins empty state) still draws its own surface. */
+.content > .card {
+  border-radius: var(--r-md);
+  background: var(--card);
+  box-shadow: var(--hi);
   overflow: hidden;
 }
 
@@ -354,15 +484,21 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
   display: flex;
   align-items: center;
   gap: 14px;
-  min-height: 44px;
-  padding: 5px 12px;
-  border-bottom: 1px solid var(--line);
+  min-height: 48px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
 }
-.row:last-child { border-bottom: 0; }
+.row:first-child { border-top: 0; }
 .row-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.row-label b { font-size: 12.5px; font-weight: 520; }
+.row-label b { font-size: 12.5px; font-weight: 520; line-height: 1.35; }
 .row-label span { font-size: 11.5px; color: var(--faint); line-height: 1.4; }
 .row-control { display: flex; align-items: center; gap: 7px; flex: none; }
+
+/* Label on top, control across the card: the skin picker is five cards wide and
+   would otherwise leave the label three lines of two characters. */
+.row.stacked { flex-direction: column; align-items: stretch; gap: 8px; padding: 11px 16px 13px; }
+.row.stacked .row-label { flex: none; }
+.row.stacked .row-control { width: 100%; justify-content: flex-start; }
 
 /* ------------------------------------------------------------------ danger */
 
@@ -387,7 +523,7 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
   padding: 0;
   border: 0;
   border-radius: var(--r-full);
-  background: var(--surface-3);
+  background: var(--switch-off);
   cursor: pointer;
   transition: background var(--base) var(--ease);
   flex: none;
@@ -403,7 +539,7 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
   background: #fff;
   transition: transform var(--base) var(--spring);
 }
-.switch[aria-checked="true"] { background: #3ddc84; }
+.switch[aria-checked="true"] { background: var(--accent); }
 .switch[aria-checked="true"]::after { transform: translateX(16px); }
 
 /* segmented */
@@ -429,17 +565,17 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
  */
 .skin-previews {
   display: grid;
-  grid-template-columns: repeat(5, 76px);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
-  padding: 10px 14px 12px;
-  border-bottom: 1px solid var(--line);
+  width: 100%;
+  padding: 2px 0 0;
 }
 .skin-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: 76px;
+  min-width: 0;
   padding: 7px 6px 6px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
@@ -641,7 +777,7 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 .skin-preview[data-skin-preview="frost"] {
   --card: rgba(21, 21, 25, 0.9);
   --card-solid: #151519;
-  --accent: #8f7bff;
+  --accent: var(--accent);
   --ink: #f2f2f5;
   --line: rgba(255, 255, 255, 0.1);
 }
@@ -649,7 +785,7 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 .skin-preview[data-skin-preview="solid"] {
   --card: #151519;
   --card-solid: #151519;
-  --accent: #8f7bff;
+  --accent: var(--accent);
   --ink: #f2f2f5;
   --line: rgba(255, 255, 255, 0.1);
 }
@@ -658,7 +794,7 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 .skin-preview[data-skin-preview="plain"] {
   --card: #151519;
   --card-solid: #151519;
-  --accent: #8f7bff;
+  --accent: var(--accent);
   --ink: #f2f2f5;
   --line: rgba(255, 255, 255, 0.1);
   --pv-radius: 4px;
@@ -729,6 +865,128 @@ html[data-theme="light"] .skin-preview[data-skin-preview="console"] {
   --line: rgba(11, 76, 140, 0.22);
 }
 
+/* ------------------------------------------------------------ preview pane */
+/*
+ * Mock C's third column, kept permanently: the right pane draws a small island
+ * from the same tokens the real one reads — skin surface, --accent, radius,
+ * width and the skin's rest opacity are written as custom properties by
+ * paintPreview(), so the pane changes in the same repaint as the control.
+ * Below 1280px it folds away; the page grid is single-column there anyway.
+ */
+.preview {
+  width: 332px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 26px 18px 18px;
+  background: var(--rail);
+  border-left: 1px solid var(--line);
+}
+/* 1080 is the window's default width and the point where the pane earns its
+   place. The attribute is written by applyChrome() from innerWidth, because a
+   media query on this display compares against a fractional layout width and
+   folds one pixel early; see the comment there. */
+html[data-preview="off"] .preview { display: none; }
+
+.pv-head { display: flex; align-items: baseline; gap: 8px; }
+.pv-head b { font-size: 12px; font-weight: 600; }
+.pv-head span { font-size: 10px; color: var(--faint); }
+
+.pv-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 232px;
+  margin: 12px 0 0;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background-color: #121216;
+  background-image:
+    radial-gradient(circle at 24% 18%, rgba(150, 131, 255, 0.22), transparent 55%),
+    radial-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: auto, 12px 12px;
+}
+.pv-stage::after {
+  content: "桌面";
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  opacity: 0.7;
+}
+html[data-theme="light"] .pv-stage {
+  background-color: #e7e7ec;
+  background-image:
+    radial-gradient(circle at 24% 18%, rgba(150, 131, 255, 0.18), transparent 55%),
+    radial-gradient(rgba(0, 0, 0, 0.07) 1px, transparent 1px);
+}
+
+.pv-island {
+  --pv-ink: #f1f1f4;
+  --pv-main: rgba(0, 0, 0, 0.16);
+  position: relative;
+  width: var(--pv-w, 248px);
+  padding: 9px;
+  border-radius: var(--pv-radius, 15px);
+  opacity: var(--pv-opacity, 1);
+  overflow: hidden;
+  color: var(--pv-ink);
+  transition: border-radius var(--base) var(--ease), opacity var(--base) var(--ease),
+    width var(--slow) var(--ease), background var(--base) var(--ease), border-color var(--base) var(--ease);
+}
+.pv-island[data-skin="frost"] { background: linear-gradient(160deg, rgba(180, 214, 255, 0.26), rgba(120, 150, 220, 0.14) 60%, rgba(80, 110, 190, 0.1)); border: 1px solid rgba(205, 228, 255, 0.32); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 12px 30px rgba(0, 0, 0, 0.4); backdrop-filter: blur(16px); }
+.pv-island[data-skin="solid"] { background: #191920; border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 30px rgba(0, 0, 0, 0.4); }
+.pv-island[data-skin="plain"] { background: rgba(20, 20, 26, 0.42); border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28); }
+.pv-island[data-skin="magazine"] { background: linear-gradient(165deg, #2a2118, #1c1710); border: 1px solid rgba(214, 178, 120, 0.34); box-shadow: inset 0 1px 0 rgba(255, 240, 210, 0.12), 0 12px 30px rgba(0, 0, 0, 0.45); }
+.pv-island[data-skin="console"] { background: #0d1117; border: 1px solid rgba(120, 180, 255, 0.3); background-image: linear-gradient(rgba(120, 180, 255, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 180, 255, 0.06) 1px, transparent 1px); background-size: 14px 14px; box-shadow: 0 0 0 1px rgba(120, 180, 255, 0.08), 0 12px 30px rgba(0, 0, 0, 0.45); }
+
+/* The light theme turns the island's surfaces too, so the pane would lie if it
+   stayed near-black; these mirror the light values island.css uses. */
+html[data-theme="light"] .pv-island[data-skin="frost"] { --pv-ink: #16202e; --pv-main: rgba(255, 255, 255, 0.42); background: linear-gradient(160deg, rgba(205, 232, 255, 0.95), rgba(155, 200, 250, 0.7) 60%, rgba(120, 170, 225, 0.5)); border-color: rgba(120, 160, 210, 0.5); }
+html[data-theme="light"] .pv-island[data-skin="solid"],
+html[data-theme="light"] .pv-island[data-skin="plain"] { --pv-ink: #1a1a1e; --pv-main: rgba(0, 0, 0, 0.05); background: #ffffff; border-color: rgba(0, 0, 0, 0.12); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.12); }
+html[data-theme="light"] .pv-island[data-skin="magazine"] { --pv-ink: #2a2118; --pv-main: rgba(0, 0, 0, 0.06); background: linear-gradient(165deg, #fbf5e7, #f0e5cd); border-color: rgba(160, 125, 60, 0.35); }
+html[data-theme="light"] .pv-island[data-skin="console"] { --pv-ink: #0b1520; --pv-main: rgba(10, 60, 110, 0.07); background: #eef4fb; border-color: rgba(40, 90, 140, 0.3); }
+
+.pv-pill { display: flex; align-items: center; gap: 5px; width: 64px; height: 16px; padding: 0 6px; border-radius: var(--r-full); background: rgba(0, 0, 0, 0.22); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+html[data-theme="light"] .pv-island[data-skin="frost"] .pv-pill,
+html[data-theme="light"] .pv-island[data-skin="solid"] .pv-pill,
+html[data-theme="light"] .pv-island[data-skin="plain"] .pv-pill { background: rgba(0, 0, 0, 0.07); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08); }
+.pv-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; }
+.pv-line { flex: 1; height: 2px; border-radius: 1px; background: color-mix(in srgb, var(--pv-ink) 32%, transparent); }
+
+.pv-main { margin-top: 10px; padding: 8px 8px 10px; border-radius: 9px; background: var(--pv-main); }
+.pv-row { display: flex; align-items: center; gap: 6px; }
+.pv-ava { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px; background: var(--accent); color: #14121f; font-size: 9px; font-weight: 700; }
+.pv-name { font-size: 10.5px; font-weight: 600; }
+.pv-big { margin: 9px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+.pv-island[data-skin="magazine"] .pv-big { font-family: Georgia, "Songti SC", serif; font-weight: 400; color: #ecd3a4; }
+.pv-island[data-skin="console"] .pv-big { font-family: "JetBrains Mono", Consolas, monospace; font-size: 13px; color: #9fd0ff; }
+html[data-theme="light"] .pv-island[data-skin="magazine"] .pv-big { color: #6b4c1c; }
+html[data-theme="light"] .pv-island[data-skin="console"] .pv-big { color: #0b6fb8; }
+.pv-sub { margin: 3px 0 0; font-size: 10.5px; line-height: 1.4; color: color-mix(in srgb, var(--pv-ink) 62%, transparent); }
+.pv-island[data-skin="console"] .pv-sub { font-family: "JetBrains Mono", Consolas, monospace; font-size: 9.5px; }
+.pv-bars { display: flex; gap: 4px; margin-top: 9px; }
+.pv-bars i { display: block; height: 3px; border-radius: 2px; background: var(--accent); opacity: 0.85; }
+.pv-bars i:nth-child(1) { width: 44%; }
+.pv-bars i:nth-child(2) { width: 24%; opacity: 0.4; }
+.pv-bars i:nth-child(3) { width: 14%; opacity: 0.22; }
+
+.pv-meta { margin: 14px 0 0; display: flex; flex-direction: column; }
+.pv-mrow { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 11px; }
+.pv-mrow:last-child { border-bottom: 0; }
+.pv-mrow dt { flex: 1; margin: 0; color: var(--faint); }
+.pv-mrow dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pv-swatch { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--accent); }
+.pv-note { margin: 12px 0 0; font-size: 10px; color: var(--faint); line-height: 1.5; }
+.pv-note b { color: var(--dim); font-weight: 520; }
+
 /* select */
 select.ctl {
   height: 26px;
@@ -768,7 +1026,7 @@ input.ctl::placeholder { color: var(--faint); }
 .city-fields input { width: 190px; }
 
 /* range */
-input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
+input[type="range"].ctl { width: 150px; accent-color: var(--accent); }
 
 .btn {
   height: 26px;
@@ -783,7 +1041,7 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
 }
 .btn:hover { background: var(--surface-2); }
 .btn.primary { border-color: transparent; background: var(--accent); color: #14121f; font-weight: 550; }
-.btn.primary:hover { background: #a191ff; }
+.btn.primary:hover { background: var(--accent-2); }
 
 /* order list */
 .order { display: flex; flex-direction: column; gap: 4px; padding: 8px; }
@@ -829,13 +1087,13 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
 .badge {
   padding: 1px 7px;
   border-radius: var(--r-full);
-  background: rgba(143, 123, 255, 0.16);
-  color: #b7a9ff;
+  background: var(--accent-soft);
+  color: var(--accent-2);
   font-size: 10.5px;
 }
 
 .note {
-  margin: 10px 2px 0;
+  margin: 0 2px;
   font-size: 11.5px;
   color: var(--faint);
   line-height: 1.4;
@@ -1017,7 +1275,7 @@ input[type="range"].ctl { width: 170px; accent-color: #8f7bff; }
   cursor: pointer;
 }
 .avoid-item:hover { background: var(--surface-1); }
-.avoid-item.is-picked { background: rgba(143, 123, 255, 0.2); }
+.avoid-item.is-picked { background: var(--accent-soft); }
 .avoid-item.is-taken { cursor: default; opacity: 0.55; }
 .avoid-item.is-taken:hover { background: transparent; }
 .avoid-icon {

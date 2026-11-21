@@ -2,6 +2,7 @@ const FRAME = {
   ball: /^file:\/\/.*renderer[\\/]index\.html$/i,
   island: /^file:\/\/.*renderer[\\/]island\.html$/i,
   settings: /^file:\/\/.*renderer[\\/]settings\.html$/i,
+  tray: /^file:\/\/.*renderer[\\/]tray\.html$/i,
 };
 
 function frameMatches(role, frame) {

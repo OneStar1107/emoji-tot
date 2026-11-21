@@ -43,6 +43,7 @@
 | preference path | 默认值 | 设置页 | 消费进程 | 消费位置 | 生效 | 说明 | 覆盖测试 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `displayMode` | `island` | 常规 | 主进程 | `main.js applyForm()` | 即时 | 岛 / 球 / 双形态 | has a SERVICE_PLAN entry · lists every path |
+| `onboardingDone` | `false` | 常规 | 主进程 | `main/onboarding.js maybeShow() · finish()` | 即时 | 非控件：首次启动引导完成或跳过后写入 | has a SERVICE_PLAN entry · lists every path |
 | `launchAtLogin` | `false` | 常规 | 主进程 | `main/settings.js app.setLoginItemSettings` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `cast` | `tot` | 常规 | 主进程 | `main.js setCast() · island:cast · cast:changed` | 即时 | 当前角色 | has a SERVICE_PLAN entry · lists every path |
 | `position` | `null` | 常规 | 主进程 | `main.js createWindow() / savePrefs()` | 即时 | 非控件：球拖拽后自动写入 | has a SERVICE_PLAN entry · lists every path |
@@ -71,6 +72,7 @@
 | `avoidBrowsers` | `true` | 隐藏与交互 | 主进程 | `main/services/avoidance.js update() → avoidance.ps1 浏览器名单` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `avoidApps` | `[]` | 隐藏与交互 | 主进程 | `main/services/avoidance.js update() → avoidance.ps1 owner 链匹配` | 即时 | 按 exe 完整路径匹配 | has a SERVICE_PLAN entry · lists every path |
 | `mediaEmotion` | `true` | 常规 | 主进程 | `main.js applyEmotionWatch() → main/media-emotion.js` | 即时 | 媒体情绪映射总开关 | has a SERVICE_PLAN entry · lists every path |
+| `idleMoods` | `true` | 角色与表情 | 主进程 | `main.js createIdleMoods() · main/idle-mood.js` | 即时 | 空闲小动作：待机时借表情的时钟 | has a SERVICE_PLAN entry · lists every path |
 | `trayIcon` | `true` | 隐藏与交互 | 主进程 | `main.js createTray()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `hotkey` | `true` | 隐藏与交互 | 主进程 | `main.js applyMainPrefs() globalShortcut` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `wheelPaging` | `true` | 隐藏与交互 | 渲染进程 | `island.js wheel handler` | 即时 |  | lists every path · writes dotted keys through setPath |
@@ -111,6 +113,7 @@
 | `mailProvider` | `163` | 通知、邮箱与日程 | 渲染进程 | `settings.js mail add form` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `notify.system` | `true` | 通知、邮箱与日程 | 主进程 | `services/notify.js` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `notify.body` | `true` | 通知、邮箱与日程 | 主进程 | `services/notify.js` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
+| `updatePrompt.snoozeUntil` | `0` | 常规 | 主进程 | `main/update-prompt.js snoozeUntil() · snooze()` | 即时 | 「稍后」写入：24 小时内不再弹更新卡 | has a SERVICE_PLAN entry · lists every path |
 | `messenger.wechat` | `true` | 通知、邮箱与日程 | 主进程 | `services/messenger.js` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `messenger.qq` | `true` | 通知、邮箱与日程 | 主进程 | `services/messenger.js` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `messenger.wecom` | `true` | 通知、邮箱与日程 | 主进程 | `services/messenger.js` | 即时 |  | has a SERVICE_PLAN entry · lists every path |

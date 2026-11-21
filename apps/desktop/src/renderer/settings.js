@@ -68,6 +68,7 @@ let calendarState = { events: [], upcoming: [] };
 
 const rail = document.getElementById('rail');
 const content = document.getElementById('content');
+const preview = document.getElementById('preview');
 
 /* --------------------------------------------------------------- rendering */
 
@@ -78,6 +79,19 @@ const escapeHtml = (value) =>
 
 const row = (label, sub, control) =>
   '<div class="row"><span class="row-label"><b>' + escapeHtml(label) + '</b>' +
+  (sub ? '<span>' + escapeHtml(sub) + '</span>' : '') + '</span>' +
+  '<span class="row-control">' + control + '</span></div>';
+
+/*
+ * The stacked row: label above, control across the card.
+ *
+ * The skin cards are a five-column grid of their own — side by side with the
+ * label they squeezed it into three lines, and in the narrow column the card
+ * had less room than the grid. This is the one row type where the control is
+ * the subject, so it gets the full width.
+ */
+const rowStack = (label, sub, control) =>
+  '<div class="row stacked"><span class="row-label"><b>' + escapeHtml(label) + '</b>' +
   (sub ? '<span>' + escapeHtml(sub) + '</span>' : '') + '</span>' +
   '<span class="row-control">' + control + '</span></div>';
 
@@ -162,10 +176,41 @@ const rowAction = (label, sub, kind, value, text) =>
   row(label, sub, '<button type="button" class="btn" data-act="action" data-kind="' + kind + '" data-value="' +
     escapeHtml(value ?? '') + '">' + escapeHtml(text) + '</button>');
 
-const card = (rows) => '<div class="card">' + rows.filter(Boolean).join('') + '</div>';
-const group = (title, body) => '<section class="group"><h2>' + escapeHtml(title) + '</h2>' + body + '</section>';
-const head = (title, sub) =>
-  '<div class="page-head"><h1>' + escapeHtml(title) + '</h1>' + (sub ? '<p>' + escapeHtml(sub) + '</p>' : '') + '</div>';
+/*
+ * Direction B: a page is a grid of group cards, not one long column.
+ *
+ * card() no longer draws a surface — the group is the card now, so a heading
+ * and its rows share one fill instead of every section repeating the same
+ * rectangle. It survives as a row list because pages still read as
+ * group(title, card([...])) and only the wrapper changes.
+ */
+const card = (rows) => rows.filter(Boolean).join('');
+
+/** Rows in a group body, for the "N 项" count in the card head. */
+const countRows = (body) => (String(body).match(/class="row[" ]/g) ?? []).length;
+
+const group = (title, body) => {
+  const count = countRows(body);
+  return '<section class="group"><header class="ch"><h2>' + escapeHtml(title) + '</h2>' +
+    (count ? '<span class="cnum">' + count + ' 项</span>' : '') + '</header>' +
+    '<div class="gbody">' + body + '</div></section>';
+};
+
+/*
+ * The rail already knows which group and icon a page belongs to; the head reads
+ * it back instead of every renderer carrying the same icon name around.
+ */
+const HEAD_META = new Map();
+NAV.forEach((navGroup) => navGroup.items.forEach((item) => HEAD_META.set(item.key, { icon: item.icon, group: navGroup.title })));
+
+const head = (title, sub) => {
+  const meta = HEAD_META.get(page) ?? { icon: 'gear', group: '' };
+  return '<header class="page-head">' +
+    '<span class="head-icon" aria-hidden="true"><svg viewBox="0 0 24 24">' + (ICON[meta.icon] ?? ICON.gear) + '</svg></span>' +
+    '<div class="head-text"><p class="crumb">' + escapeHtml(meta.group) + ' · ' + escapeHtml(title) + '</p>' +
+    '<h1>' + escapeHtml(title) + '</h1>' +
+    (sub ? '<p class="sub">' + escapeHtml(sub) + '</p>' : '') + '</div></header>';
+};
 
 const emptyCard = (title, text, action, label) =>
   '<div class="card"><div class="empty-card"><b>' + escapeHtml(title) + '</b><span>' + escapeHtml(text) + '</span>' +
@@ -225,7 +270,7 @@ function pageAppearance() {
     group('灵动岛样式', card([
       /* The cards carry the name and the look of every skin; the text segment row
          above them repeated the same five labels, so it is gone. */
-      row('皮肤', '毛玻璃半透明、实色卡片、极简收成一条线、杂志衬线版、控制台仪表', skinPreviewCards()),
+      rowStack('皮肤', '毛玻璃半透明、实色卡片、极简收成一条线、杂志衬线版、控制台仪表', skinPreviewCards()),
       skinPreviewRow(),
       rowToggle('背景模糊', '关掉后是纯色卡片', 'blur'),
       rowRange('圆角', '卡片的圆角半径', 'radius', 12, 30, 1, 'px'),
@@ -840,6 +885,7 @@ function pageCast() {
     group('表情', faceGrid) +
     group('自动表情', card([
       rowToggle('媒体情绪', '播放、直播、游戏、暂停与媒体出错时自动换表情', 'mediaEmotion'),
+      rowToggle('空闲小动作', '静置时每 7–16 秒借一个待机表情，1.8–4.4 秒后还回待机', 'idleMoods'),
     ]));
 }
 
@@ -887,20 +933,32 @@ function railCast() {
   if (!id) return '';
   const member = (meta.casts ?? []).flatMap((family) => family.members).find((item) => item.id === id);
   if (!member) return '';
-  return '<div class="rail-cast" role="img" aria-label="当前角色：' + escapeHtml(member.label) + '" title="' + escapeHtml(member.label) + '">' +
-    '<emojitot-ball cast="' + escapeHtml(id) + '" size="46" state="' + escapeHtml(faceState) + '"></emojitot-ball>' +
-    '<b>' + escapeHtml(member.label) + '</b></div>';
+  /*
+   * The character as a round portrait: a 64px ring with the 56px ball inside
+   * and the name underneath. It is a button, not a picture — clicking it opens
+   * the page where the rest of the cast lives, which is also where a first-time
+   * reader would look for "who is this". The ring and the ball share the same
+   * face payload the island draws (face:apply), so the portrait is never a
+   * still image of some earlier mood.
+   */
+  return '<div class="rail-cast">' +
+    '<button type="button" class="rail-cast-btn" data-nav="cast" aria-label="当前角色：' +
+      escapeHtml(member.label) + '，打开角色与表情">' +
+      '<emojitot-ball cast="' + escapeHtml(id) + '" size="56" state="' + escapeHtml(faceState) + '"></emojitot-ball>' +
+    '</button>' +
+    '<b class="rail-cast-name">' + escapeHtml(member.label) + '</b></div>';
 }
 
 function paintRail() {
   let html = railCast();
-  for (const group of NAV) {
-    for (const item of group.items) {
+  for (const navGroup of NAV) {
+    html += '<div class="rail-group"><p class="rail-heading">' + escapeHtml(navGroup.title) + '</p>';
+    for (const item of navGroup.items) {
       html += '<button type="button" class="rail-item" data-nav="' + item.key + '" aria-current="' +
         (page === item.key) + '">' + '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[item.icon] + '</svg>' +
         '<span>' + escapeHtml(item.label) + '</span></button>';
     }
-    html += '<div class="rail-sep"></div>';
+    html += '</div>';
   }
   rail.innerHTML = html;
 }
@@ -917,6 +975,54 @@ function applyFace(payload) {
   faceState = state;
   const ball = rail.querySelector('.rail-cast emojitot-ball');
   if (ball) ball.setAttribute('state', state);
+}
+
+/* --------------------------------------------------------------- preview */
+
+/**
+ * The right-hand preview: mock C folded into the B skeleton.
+ *
+ * It is not a screenshot — the mini island is drawn from the same tokens the
+ * real one reads. The skin picks the surface, --accent paints the dot, avatar
+ * and bars, --pv-w follows the island width, --pv-radius the radius, and
+ * --pv-opacity is how see-through the chosen skin is at rest (frost and plain
+ * are translucent, the other three are opaque). Nothing here writes a
+ * preference: it only mirrors them, so the pane cannot drift from the window
+ * it describes, and a hidden pane costs nothing.
+ */
+const SKIN_LABELS = Object.fromEntries(SKIN_PREVIEWS.map(([key, label]) => [key, label]));
+
+/** 360–560 px of island maps onto 216–264 px of preview: same proportion, less glass. */
+const previewIslandWidth = () => {
+  const width = Math.min(560, Math.max(360, Number(prefs.islandWidth) || 420));
+  return Math.round(216 + ((width - 360) / 200) * 48);
+};
+
+const previewOpacity = (skin) => (skin === 'frost' || skin === 'plain' ? 0.92 : 1);
+
+function paintPreview() {
+  if (!preview) return;
+  const skin = String(prefs.skin ?? 'frost');
+  const radius = Math.min(32, Math.max(8, Number(prefs.radius) || 22));
+  const opacity = previewOpacity(skin);
+  const accent = (getComputedStyle(document.documentElement).getPropertyValue('--accent') || '').trim() || '#9683ff';
+  preview.innerHTML =
+    '<div class="pv-head"><b>实时预览</b><span>与岛同源</span></div>' +
+    '<div class="pv-stage"><div class="pv-island" data-skin="' + escapeHtml(skin) + '" style="--pv-w:' +
+      previewIslandWidth() + 'px;--pv-radius:' + Math.round(radius * 0.68) + 'px;--pv-opacity:' + opacity + '">' +
+      '<div class="pv-pill"><span class="pv-dot"></span><span class="pv-line"></span></div>' +
+      '<div class="pv-main"><div class="pv-row"><span class="pv-ava">t</span><span class="pv-name">EmojiTot</span></div>' +
+        '<p class="pv-big">设置 · 预览</p><p class="pv-sub">皮肤、圆角、不透明度与岛宽</p>' +
+        '<div class="pv-bars"><i></i><i></i><i></i></div></div>' +
+    '</div></div>' +
+    '<dl class="pv-meta">' +
+      '<div class="pv-mrow"><dt>皮肤</dt><dd>' + escapeHtml(SKIN_LABELS[skin] ?? skin) + '</dd></div>' +
+      '<div class="pv-mrow"><dt>圆角</dt><dd>' + radius + ' px</dd></div>' +
+      '<div class="pv-mrow"><dt title="由当前皮肤决定">不透明度</dt><dd>' + Math.round(opacity * 100) + ' %</dd></div>' +
+      '<div class="pv-mrow"><dt>强调色</dt><dd><i class="pv-swatch"></i>' + escapeHtml(accent.toUpperCase()) + '</dd></div>' +
+      '<div class="pv-mrow"><dt>岛宽</dt><dd>' + (Number(prefs.islandWidth) || 420) + ' px</dd></div>' +
+    '</dl>' +
+    '<p class="pv-note"><b>预览读的是同一套 token</b>：皮肤、圆角、不透明度、强调色与岛宽都写进这里的 CSS 变量，改一项动一帧。</p>';
 }
 
 /*
@@ -944,7 +1050,17 @@ function applyChrome() {
   html.style.setProperty('--ui-weight', String(prefs.weight || 400));
   const scale = Math.min(1.4, Math.max(0.8, (Number(prefs.uiScale) || 100) / 100));
   html.style.zoom = String(scale);
+  /*
+   * The preview pane is the one breakpoint the CSS cannot state exactly: media
+   * queries are evaluated against the fractional layout width a 150% display
+   * reports (1079.99 rounds up to 1280), so the pane would fold one pixel late.
+   * innerWidth is the number the window is actually sized in, and 1280 is the
+   * default width where the pane earns its place.
+   */
+  html.dataset.preview = window.innerWidth >= 1280 ? 'on' : 'off';
 }
+
+window.addEventListener('resize', () => applyChrome());
 
 let paintedPage = '';
 
@@ -965,6 +1081,7 @@ function paint() {
   applyChrome();
   paintRail();
   paintContent();
+  paintPreview();
 }
 
 /* --------------------------------------------------------------- IPC glue */

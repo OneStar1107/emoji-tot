@@ -80,6 +80,15 @@ function batterySvg(level, charging) {
 let prefs = {};
 let battery = null;
 let weather = null;
+/*
+ * Why the last weather lookup failed, or '' while it has not.
+ *
+ * It lives apart from `weather` on purpose: a failed refresh keeps the last good
+ * reading on the page (see the cache in services/weather.js), and only a page
+ * with no reading at all has to say so. A card stuck on "正在获取天气…" forever
+ * was the same lie as a blank one.
+ */
+let weatherError = '';
 let media = { active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '', liveSince: 0 };
 /** Wall time the live clock froze at while the stream was paused, or 0 when it runs. */
 let liveFrozenAt = 0;
@@ -407,12 +416,27 @@ function renderPillStatus() {
 
 /* ------------------------------------------------------------------- pages */
 
-const empty = (icon, title, text, actionLabel, action) => `
-  <div class="empty">
-    ${svg(icon)}
-    <b>${title}</b>
-    <span>${text}</span>
-    ${actionLabel ? `<button type="button" class="ghost" data-action="${action}">${actionLabel}</button>` : ''}
+/**
+ * The one empty/error block every page draws.
+ *
+ * A tone dot, one line of what happened (16 characters at most), an optional
+ * second line saying what to do next, and an optional 28px action. All eleven
+ * pages use it: the states used to invent a block each, so two pages that were
+ * empty for the same reason looked like two different products.
+ *
+ * `line` states what happened — not that something "failed". `hint` is the
+ * next step. `action` is the raw attribute of the button
+ * (`data-action="settings:quota"` or `data-local="quota:refresh"`), because
+ * both dispatch paths already exist and a third one would be a second copy.
+ */
+const stateBlock = (tone, line, hint = '', actionLabel = '', action = '') => `
+  <div class="state" data-tone="${tone}">
+    <i class="state-dot" aria-hidden="true"></i>
+    <div class="state-text">
+      <p class="state-line">${escapeHtml(line)}</p>
+      ${hint ? `<p class="state-hint">${escapeHtml(hint)}</p>` : ''}
+    </div>
+    ${actionLabel ? `<button type="button" class="ghost state-go" ${action}>${escapeHtml(actionLabel)}</button>` : ''}
   </div>`;
 
 /** The line that should read as "now" in the collapsed pill. */
@@ -482,13 +506,7 @@ const liveClock = (seconds) => {
 
 function musicPage() {
   if (!media.active) {
-    return empty(
-      ICON.music,
-      '系统里没有正在播放的媒体',
-      '打开任意播放器后，这里会显示封面、歌名和进度。',
-      '查看设置',
-      'settings:music',
-    );
+    return stateBlock('good', '没有在播放的媒体', '打开播放器后这里会显示', '去设置', 'data-action="settings:music"');
   }
   const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
   const live = isLiveMedia();
@@ -831,10 +849,13 @@ function selectCity(value) {
 function weatherPage() {
   if (!weather) {
     /*
-     * The first reading takes a second or two. Keep the note at the top of the
-     * box instead of centring it in 205px: it is a loading line, not a page.
+     * The first reading takes a second or two, and an offline machine never
+     * finishes it: the loading line and the failure line are two states, and
+     * only the failure one can say what to do next.
      */
-    return `<div class="wx wx-empty">${empty(ICON.sun, '正在获取天气…', '第一次需要几秒钟。')}</div>`;
+    return weatherError
+      ? stateBlock('bad', '天气没连上', '检查网络，五分钟后自动重试', '去设置', 'data-action="settings:weather"')
+      : stateBlock('warn', '正在获取天气', '第一次需要几秒钟');
   }
   const fahrenheit = prefs.weather?.unit === 'f';
   const show = (celsius) => {
@@ -1027,10 +1048,7 @@ function quotaPage() {
      * centres that in 205px: on a page with nothing else to show, that band of
      * air above and below is the one state where the card reads as broken.
      */
-    return `<div class="quota-page quota-page-empty">
-      <p class="quota-blank">还没有连接额度账号</p>
-      <button type="button" class="ghost" data-action="settings:quota">添加账号</button>
-    </div>`;
+    return stateBlock('warn', '还没有连接额度账号', '添加后能看余额和 Agent', '添加账号', 'data-action="settings:quota"');
   }
   const current = state.accounts.find((account) => account.current);
   const last = state.last;
@@ -1048,20 +1066,28 @@ function quotaPage() {
       .join('') + `</span>`
     : '';
   const meta = `<div class="quota-meta">
-      <span class="quota-id"><b>${escapeHtml(provider)}</b>${currency ? `<i>·</i>${escapeHtml(currency)}` : ''}${last && last.available === false ? '<em class="quota-off">不可用</em>' : ''}</span>
+      <span class="quota-id"><b>${escapeHtml(provider)}</b>${currency ? `<i>·</i>${escapeHtml(currency)}` : ''}</span>
       ${dots}
     </div>`;
   const refresh = '<button type="button" class="ghost" data-local="quota:refresh">刷新</button>';
   if (!last || last.error) {
-    return `<div class="quota quota-broken">
-      ${meta}
-      <p class="quota-flag">${escapeHtml(last?.error ?? '正在查询…')}</p>
-      <div class="quota-foot">
-        <span>${last?.at ? '更新于 ' + timeOf(last.at) : '尚未更新'}</span>
-        <span class="spacer"></span>
-        ${refresh}
-      </div>
-    </div>`;
+    /* What failed is the lookup, not the account: the line names the state and
+       the second line carries the provider and the reason the service gave. */
+    return stateBlock(
+      'bad',
+      '额度暂时查不到',
+      `${provider} · ${last?.error ?? '正在查询…'}`,
+      '刷新',
+      'data-local="quota:refresh"',
+    );
+  }
+  /*
+   * A provider can answer "this balance is not available" (expired key, plan
+   * exhausted). That is not a number with a zero in it, so it is not drawn as
+   * one: it is the same failure block, with the one action that retries.
+   */
+  if (last.available === false) {
+    return stateBlock('bad', '额度不可用', `${provider} · 充值后点刷新看看`, '刷新', 'data-local="quota:refresh"');
   }
   /*
    * The balance is the page's one focus: 30px of tabular figures. Below it,
@@ -1126,10 +1152,7 @@ function messengerPage() {
   const apps = messengerState?.apps ?? [];
   if (!apps.length) {
     /* One line and one action, at the top: an empty box reads as a failure. */
-    return `<div class="msg-page msg-page-empty">
-      <p class="msg-empty-line">没有消息应用在运行</p>
-      <button type="button" class="ghost" data-action="settings:comm">去设置</button>
-    </div>`;
+    return stateBlock('good', '没有消息应用在运行', '打开微信或 QQ 后会出现在这里', '去设置', 'data-action="settings:comm"');
   }
   const groups = apps
     .map((app) => {
@@ -1227,12 +1250,7 @@ function mailPage() {
   if (!accounts.length) {
     /* One line and one action at the top of the page: the centred icon, title,
        provider note and button filled 205px with a band of air. */
-    return `<div class="mail-page mail-page-empty">
-      <div class="mail-empty">
-        <p class="mail-empty-line">还没有添加邮箱</p>
-        <button type="button" class="ghost" data-action="settings:comm">添加邮箱</button>
-      </div>
-    </div>`;
+    return stateBlock('warn', '还没有添加邮箱', '添加后能看摘要和验证码', '添加邮箱', 'data-action="settings:comm"');
   }
   const messages = state.messages ?? [];
   const scope = mailScope();
@@ -1273,21 +1291,19 @@ function mailPage() {
   if (!visible.length) {
     /* One line and one action, at the top: the empty, the filtered-empty and
        the failed mailbox are the three states this page can be wrong in. */
-    const hint = state.error
-      ? '拉取失败：' + mailErrorLine(state.error)
+    /*
+     * The three ways an empty list can be right: the account never answered,
+     * it has not answered yet, and it answered with nothing new. Each gets its
+     * own tone and its own next step instead of one sentence for all three.
+     */
+    const block = state.error
+      ? stateBlock('bad', '邮箱没连上', mailErrorLine(state.error), '去设置', 'data-action="settings:comm"')
       : state.syncing
-        ? '正在同步…'
+        ? stateBlock('warn', '正在同步邮箱', '第一次同步要等一会儿')
         : mailFilter.tab === 'unread'
-          ? '没有未读邮件'
-          : '新邮件到达后会出现在这里。';
-    const action = mailFilter.tab === 'unread' && !state.error
-      ? '<button type="button" class="ghost" data-mail-tab-all>看全部</button>'
-      : state.syncing
-        ? ''
-        : '<button type="button" class="ghost" data-action="settings:comm">去设置</button>';
-    return `<div class="mail-page">${head}${stats}<div class="mail mail-empty-inline">
-      <p class="mail-empty-line">${escapeHtml(hint)}</p>${action}
-    </div></div>`;
+          ? stateBlock('good', '没有未读邮件', '', '看全部', 'data-mail-tab-all')
+          : stateBlock('good', '还没有邮件', '新邮件到了会出现在这里', '去设置', 'data-action="settings:comm"');
+    return `<div class="mail-page">${head}${stats}${block}</div>`;
   }
   /* Unread is a 3px accent bar on the left and the row's own two keys on the
      right; the row stays 20px, the keys carry a 28px hit that overhangs it. */
@@ -1407,6 +1423,13 @@ function calendarPage() {
    * opens it with that event loaded.
    */
   const showForm = Boolean(calendarDraft) || selectedEvents.length === 0;
+  /*
+   * A day with nothing on it says so in one line above the editor: the editor
+   * is the next step, not an explanation of why the page looks empty.
+   */
+  const emptyDay = !selectedEvents.length && !calendarDraft
+    ? stateBlock('good', '今天没有安排', '写一件，保存即可')
+    : '';
   const form = showForm
     ? `<div class="cal-form">
         <input type="text" class="cal-input" data-cal-input="title" maxlength="160" placeholder="标题" aria-label="日程标题" value="${escapeHtml(editingEvent ? editingEvent.title : '')}" />
@@ -1457,6 +1480,7 @@ function calendarPage() {
         <div class="cal-day-title">${title}</div>${headKey}
       </div>
       ${!showForm && festival ? `<em class="cal-festival">${festival}</em>` : ''}
+      ${emptyDay}
       ${form}${list}
       ${calendarError ? `<p class="cal-error" title="${escapeHtml(calendarError)}">${escapeHtml(calendarError)}</p>` : ''}
       ${subError ? `<p class="cal-error" title="${escapeHtml(subError)}">${escapeHtml(subError)}</p>` : ''}
@@ -1553,11 +1577,7 @@ function deleteCalendarDraft() {
 }
 
 function fallbackPage(page) {
-  return empty(
-    ICON[page.icon] ?? ICON.check,
-    page.title,
-    `这一页在阶段 ${page.stage} 开放。`,
-  );
+  return stateBlock('warn', `${page.title}还没开放`, `这一页在阶段 ${page.stage} 开放`);
 }
 
 /** Per-second focus update without rebuilding the ring's DOM. */
@@ -1581,10 +1601,7 @@ function focusPage() {
    * top of the box rather than centred in it.
    */
   if (prefs.focus?.enabled !== true) {
-    return `<div class="focus focus-empty">
-      <p>专注还没有打开</p>
-      <button type="button" class="ghost" data-action="settings:focus">去打开</button>
-    </div>`;
+    return stateBlock('warn', '专注还没有打开', '打开后计时和休息在这里', '去打开', 'data-action="settings:focus"');
   }
   const workMin = Math.max(1, Number(prefs.focus?.work) || 25);
   const phase = state.phase;
@@ -1629,10 +1646,7 @@ function focusPage() {
 function healthPage() {
   const state = healthState;
   if (!state.enabled) {
-    return `<div class="health health-empty">
-      <p>健康提醒还没有打开</p>
-      <button type="button" class="ghost" data-action="settings:focus">去打开</button>
-    </div>`;
+    return stateBlock('warn', '健康提醒还没有打开', '打开后记录喝水和站立', '去打开', 'data-action="settings:focus"');
   }
   const waterPct = Math.min(100, (state.sinceWater / state.waterMin) * 100);
   const standPct = Math.min(100, (state.sinceStand / state.standMin) * 100);
@@ -1712,10 +1726,7 @@ function todoPage() {
   if (prefs.todo?.enabled === false) {
     /* The disabled state is another empty page, so it follows the same rule:
        one line, one action, against the top. */
-    return `<div class="todo todo-blank-page">
-      <p class="todo-blank">待办已在设置里关闭</p>
-      <button type="button" class="ghost" data-action="settings:todo">去打开</button>
-    </div>`;
+    return stateBlock('warn', '待办已在设置里关闭', '打开后清单会回到这里', '去打开', 'data-action="settings:todo"');
   }
   const openItems = todos.filter((item) => !item.done);
   const doneItems = todos.filter((item) => item.done);
@@ -1746,11 +1757,11 @@ function todoPage() {
   if (!total) {
     /*
      * One line and the field itself. The input is the page's only action, so
-     * the empty state needs no icon, no second button and no centred block:
-     * the old one sat in the middle of the card with 50px of air around it.
+     * the empty state needs no second button and no centred block: the old one
+     * sat in the middle of the card with 50px of air around it.
      */
     return `<div class="todo todo-blank-page">
-      <p class="todo-blank">还没有待办</p>
+      ${stateBlock('good', '还没有待办', '在下面写一条，回车保存')}
       ${addRow}
     </div>`;
   }
@@ -1858,7 +1869,7 @@ function shelfListHtml() {
 
 function shelfPage() {
   if (prefs.shelf?.enabled === false) {
-    return empty(ICON.tray, '置物架已关闭', '打开后可以把文件拖到岛上暂存。', '去打开', 'settings:todo');
+    return stateBlock('warn', '置物架已关闭', '打开后可以把文件拖上来', '去打开', 'data-action="settings:todo"');
   }
   const emptyShelf = shelfFiles.length === 0;
   const clips = clipboardItems.map((item) => `<div class="clip-item">
@@ -1894,7 +1905,7 @@ function shelfPage() {
    */
   if (emptyShelf) {
     return `<div class="shelf shelf-empty${clipOpen ? ' shelf-clip-open' : ''}${showClip ? '' : ' shelf-no-clip'}" data-shelf-drop>
-    <div class="shelf-hint"><b>置物架是空的</b><span>把文件拖到这里 · 复制到 <code>shelf</code> 文件夹</span></div>
+    ${stateBlock('good', '置物架是空的', '把文件拖进来，或复制到 shelf')}
     ${showClip ? clipBlock : ''}
   </div>`;
   }
@@ -2082,12 +2093,11 @@ function devicesPage() {
     </div>
     <div class="dev-power${toneOf(level)}" aria-hidden="true"><i style="width:${level === null ? 0 : level}%"></i></div>`;
   if (!list.length) {
+    /* The state line goes first, against the top: the battery block below it is
+       this machine's own reading, not a device answer, and it stays. */
     return `<div class="dev">
+      ${stateBlock('good', '没有已连接的蓝牙设备', '在系统蓝牙里配对后会显示', '去设置', 'data-action="settings:general"')}
       ${hero}
-      <div class="dev-empty">
-        <p class="dev-empty-line">没有已连接的蓝牙设备</p>
-        <button type="button" class="ghost" data-action="settings:general">去设置</button>
-      </div>
     </div>`;
   }
   /*
@@ -2274,7 +2284,7 @@ function renderPage(animate = false) {
     if (subText) subText.textContent = '去设置里打开';
     subEl.dataset.muted = 'false';
     subEl.dataset.over = 'false';
-    pagesEl.innerHTML = empty(ICON.check, '页面都是关的', '在设置 → 页面管理里打开至少一个。', '打开设置', 'settings:pages');
+    pagesEl.innerHTML = stateBlock('warn', '页面都是关的', '在设置 → 页面管理里打开', '打开设置', 'data-action="settings:pages"');
     dotsEl.innerHTML = '';
     dotsEl.hidden = true;
     for (const pager of document.querySelectorAll('.pager')) {
@@ -2295,7 +2305,7 @@ function renderPage(animate = false) {
     if (subText) subText.textContent = '去设置里打开';
     subEl.dataset.muted = 'false';
     subEl.dataset.over = 'false';
-    pagesEl.innerHTML = empty(ICON.check, '页面都是关的', '在设置 → 页面管理里打开至少一个。', '打开设置', 'settings:pages');
+    pagesEl.innerHTML = stateBlock('warn', '页面都是关的', '在设置 → 页面管理里打开', '打开设置', 'data-action="settings:pages"');
     dotsEl.innerHTML = '';
     dotsEl.hidden = true;
     for (const pager of document.querySelectorAll('.pager')) {
@@ -3473,6 +3483,17 @@ api.onBattery((value) => {
 
 api.onWeather((value) => {
   if (!value) return;
+  /*
+   * A failed lookup arrives as { error }. It does not overwrite the last good
+   * reading — an offline minute should not blank a card that already has data —
+   * and only a page with nothing to show draws the failure block.
+   */
+  if (value.error) {
+    weatherError = String(value.error);
+    if (!weather && open && enabledPages()[pageIndex]?.key === 'weather') renderPage();
+    return;
+  }
+  weatherError = '';
   weather = value;
   renderPillStatus();
   if (open && enabledPages()[pageIndex]?.key === 'weather') renderPage();

@@ -33,7 +33,7 @@ pnpm audit --registry=https://registry.npmjs.org
 
 ## 2. 渲染进程沙箱
 
-三个窗口（球、岛、设置）全部 `sandbox: true`。三个 preload 只用到 contextBridge、ipcRenderer、webUtils，都是沙箱内可用的 API，所以没有功能损失。
+四个窗口（球、岛、设置、更新卡）全部 `sandbox: true`。四个 preload 只用到 contextBridge、ipcRenderer、webUtils，都是沙箱内可用的 API，所以没有功能损失。
 
 回归保护：`apps/desktop/test/security.test.mjs` 逐文件断言 `sandbox: true`、`contextIsolation: true`、`nodeIntegration: false`，并断言源码里不再出现裸的 `ipcMain.handle/on`。
 

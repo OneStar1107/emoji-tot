@@ -815,22 +815,75 @@ button.ghost:active,
 
 /* ----------------------------------------------------------------- pages */
 
-.empty {
+/* ------------------------------------------------- state (the one template) */
+
+/*
+ * The one empty/error block every page draws.
+ *
+ * A 7px tone dot, one line saying what happened, an optional second line saying
+ * what to do next, and an optional 28px action. All eleven pages use it, and
+ * that is the point: every page used to draw its own line, its own gap and its
+ * own button, so two pages empty for the same reason looked like two products.
+ *
+ * It sits against the top of the page and never grows past 96px: an empty box
+ * that fills the card reads as a page that failed to load, which is the failure
+ * the old centred block was trying to avoid and became instead.
+ */
+.state {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 10px;
-  text-align: center;
+  min-height: 28px;
+  max-height: 96px;
+  padding: 2px;
+  flex: 0 0 auto;
 }
-/*
- * An empty page is the whole page, not a block at the top of it.
- *
- * Quota, mail and health render nothing but this, so it used to sit against the
- * header and leave 47px of dead card below it — the one state where a page looks
- * like it failed to load. It takes the box and centres itself instead.
- */
-.pages > .empty { height: 100%; justify-content: center; }
+/* Directly in the page box: cancel .pages' 12px top padding, so the block starts
+   with the content (4px) instead of floating 8px lower. */
+.pages > .state { margin-top: -8px; }
+.state-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.state[data-tone="good"] .state-dot { background: var(--good); }
+.state[data-tone="warn"] .state-dot { background: var(--warn); }
+.state[data-tone="bad"] .state-dot { background: var(--bad); }
+.state-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+/* One line, 16 characters at most by construction; a longer string is cut with
+   an ellipsis instead of wrapping the block into a second row. */
+.state-line {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1.25;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.state-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The action keeps the 28px ghost height every other island button has. */
+.state-go { flex: 0 0 auto; }
+/* The calendar's right column is narrow: the dot and one line, nothing else. */
+.cal-right .state { gap: 5px; padding: 0; }
+.cal-right .state-line { font-size: 11.5px; }
 /*
  * The mailbox page's 205px is shared by two blocks, so one wrapper owns it.
  *
@@ -847,14 +900,11 @@ button.ghost:active,
 .mail-page { display: flex; flex-direction: column; height: calc(100% + 8px); min-height: 0; margin-top: -8px; overflow: hidden; }
 /* The no-mailbox page keeps its own scroller, so the one action stays reachable
    in a short panel. */
-.mail-page-empty { overflow-y: auto; }
 /* The list is the growing half: it fills what the tab line leaves and scrolls
    there, so a long mailbox never needs a second scroll layer. */
 .mail-page > .mail { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.empty svg { width: 26px; height: 26px; fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.empty b { font-size: 12.5px; font-weight: 550; color: var(--ink); }
-.empty span { font-size: 11.5px; color: var(--dim); line-height: 1.4; max-width: 250px; }
-.empty button { margin-top: 4px; }
+/* The mailbox's state block sits under its two header lines, not at the top. */
+.mail-page > .state { margin-top: 6px; }
 
 button.ghost {
   height: 28px;
@@ -1272,12 +1322,6 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  * 205px read as a page that failed to load rather than a first reading on its
  * way.
  */
-.wx-empty { margin-top: -8px; }
-.wx-empty .empty { align-items: flex-start; gap: 4px; padding: 0; text-align: left; }
-.wx-empty .empty svg { width: 20px; height: 20px; }
-.wx-empty .empty b { font-size: 11.5px; }
-.wx-empty .empty span { max-width: none; font-size: 11.5px; line-height: 1.4; }
-
 /* calendar */
 /*
  * Two columns: a 7x5 month on the left, the picked day on the right. The grid
@@ -1519,9 +1563,6 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   font-variant-numeric: tabular-nums;
 }
 .focus-stats b i { font-style: normal; font-size: 10.5px; font-weight: 400; color: var(--dim); margin-left: 2px; }
-.focus-empty { gap: 10px; padding-top: 2px; align-items: flex-start; }
-.focus-empty p { margin: 0; font-size: 11.5px; color: var(--dim); }
-
 /* health */
 /*
  * Two counters, each one row: 11.5px label, 4px bar, 11.5px tabular figure. The
@@ -1580,9 +1621,6 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .health-foot span { font-size: 11.5px; color: var(--dim); }
 .health-clear { height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--dim); font: inherit; font-size: 11.5px; line-height: 1.3; cursor: pointer; }
 .health-clear:hover { color: var(--ink); background: var(--surface-1); }
-.health-empty { gap: 10px; padding-top: 2px; align-items: flex-start; }
-.health-empty p { margin: 0; font-size: 11.5px; color: var(--dim); }
-
 /* todo */
 /* Fills the page so the list — not the page container — is what scrolls, and
    so an empty list has somewhere to sit instead of collapsing to 73px. */
@@ -1667,10 +1705,8 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 }
 .todo-del:hover { color: var(--bad); background: var(--surface-1); }
 /* The empty page is one line and the input, both against the top. */
+/* The empty list's page: the state line, then the field that is its action. */
 .todo-blank-page { gap: 8px; }
-.todo-blank { margin: 0; padding: 0 4px; font-size: 11.5px; color: var(--dim); }
-/* The empty page's one action keeps its own width instead of stretching. */
-.todo-blank-page .ghost { align-self: flex-start; }
 /* Only the label is clickable, with a full 28px row under the pointer. */
 .todo-clear {
   align-self: flex-start; height: 28px; padding: 0 4px;
@@ -1694,16 +1730,17 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  * to the first row — and the clipboard keeps its natural height under it.
  */
 .shelf.shelf-empty { height: auto; }
-.shelf-empty .shelf-hint {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+/* The empty shelf is its drop target: the same 96px dashed box it always was,
+   now with the shared state line inside it instead of a second hint style. */
+.shelf-empty .state {
   justify-content: center;
-  gap: 4px;
   height: 96px;
+  padding: 6px 10px;
+  border: 1px dashed var(--surface-3);
+  border-radius: 9px;
+  transition: border-color var(--base) var(--ease), background var(--base) var(--ease);
 }
-.shelf-empty .shelf-hint b { font-size: 11.5px; font-weight: 550; color: var(--dim); }
-.shelf-empty .shelf-hint span { font-size: 11.5px; color: var(--faint); }
+.shelf.dragover .state { border-color: var(--accent); background: rgba(143, 123, 255, 0.1); }
 /* The clipboard keeps its own height instead of eating the rest of the page. */
 .shelf-empty .clip { flex: 0 0 auto; }
 /*
@@ -1843,8 +1880,6 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 /* The count line sits under five rows, so it is given no more than two lines' worth. */
 .dev-more { margin-top: 2px; padding: 0 2px; font-size: 10.5px; line-height: 1.2; color: var(--faint); }
 /* Empty: one line and one action, 70px from the page top, never a centred page. */
-.dev-empty { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.dev-empty-line { margin: 0; font-size: 12.5px; color: var(--dim); }
 /* Bluetooth is a state, not a switch; with no settings sheet wired, no action. */
 .dev-foot { display: flex; align-items: center; height: 20px; margin-top: 0; font-size: 11px; color: var(--dim); }
 /*
@@ -1972,8 +2007,6 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   margin-top: -8px;
   min-height: 0;
 }
-.msg-page-empty { align-items: flex-start; gap: 6px; }
-.msg-empty-line { margin: 0; font-size: 12.5px; color: var(--dim); }
 
 /* The number is the page's answer: first in reading order, tabular so a push
    does not shift it, and the only 20px type on the page. */
@@ -2078,7 +2111,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  */
 .shelf-clip-open .shelf-search { display: none; }
 .shelf-clip-open .shelf-list { display: none; }
-.shelf-empty.shelf-clip-open .shelf-hint { display: none; }
+.shelf-empty.shelf-clip-open .state { display: none; }
 /*
  * The fold key: one 28px row that is the clipboard's only entry point. The
  * caret is the whole state (rotated when the list is open), and the count is
@@ -2258,7 +2291,6 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .quota-id { display: inline-flex; align-items: baseline; gap: 6px; font-size: 11.5px; color: var(--dim); }
 .quota-id b { font-weight: 550; color: var(--ink); letter-spacing: 0.01em; }
 .quota-id i { font-style: normal; color: var(--faint); }
-.quota-off { font-style: normal; font-size: 10.5px; color: var(--warn); }
 /* One dot per account: a second account is a switch, not a second card. */
 .quota-accounts { display: flex; gap: 2px; margin-left: auto; }
 .quota-accounts button {
@@ -2360,18 +2392,6 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   font-variant-numeric: tabular-nums; color: var(--dim); white-space: nowrap;
 }
 .quota-agent-none { margin: 0; padding: 0 4px; font-size: 11.5px; line-height: 1.3; color: var(--faint); }
-/* A status line can be long ("invalid api key …"); it truncates, never wraps. */
-.quota-flag { margin: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--warn); }
-/*
- * The empty page is one line and one action against the top, not the shared
- * .empty block centred in 205px: on a page with nothing else to show, that
- * band of air is the one state where the card reads as broken.
- */
-/* The 8px lift: the quota page is a page like any other, so its first row
-   starts 4px under the panel's inner top edge, not 12px. */
-.quota-page { margin-top: -8px; }
-.quota-page-empty { display: flex; align-items: center; gap: 10px; padding: 2px 4px 0; }
-.quota-blank { margin: 0; font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* mail */
 /*
@@ -2472,9 +2492,6 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .mail-row:not(.unread) .mail-from { color: var(--dim); }
 .mail-time { flex: none; font-size: 10.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
 /* The no-account and no-mail states: one line, one action, pinned to the top. */
-.mail-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 2px; }
-.mail-empty-line { margin: 0; font-size: 12.5px; color: var(--dim); }
-.mail-empty-inline { margin-top: 8px; padding-left: 2px; gap: 8px; align-items: flex-start; }
 /*
  * The reduce-motion switch.
  *
