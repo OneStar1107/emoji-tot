@@ -1511,7 +1511,11 @@ body[data-skin="magazine"] .panel {
    * Vertical margin only. The side padding is the pager's lane (34px) and the
    * page box is measured against it, so horizontally nothing moves.
    */
-  padding: 14px 34px 10px;
+  /* 12/8 rather than 14/10: the serif headline already spends 7px more on its
+     line box than the sans title, and 14/10 pushed the panel to 329.4px while
+     every other skin sits at 323.9. Equal panel height means switching skins
+     never changes the island's window height. */
+  padding: 12px 34px 8px;
   background:
     radial-gradient(120% 86% at 50% -18%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 62%),
     var(--card);
@@ -1569,7 +1573,7 @@ body[data-skin="magazine"] .top-page-name {
 /* The one rule: a warm hairline closing the header, on the border that was
    already there, so the header keeps its height. */
 body[data-skin="magazine"] .topbar {
-  padding: 3px 4px 10px;
+  padding: 3px 4px 8px;
   border-bottom-color: color-mix(in srgb, var(--accent) 34%, var(--line));
 }
 

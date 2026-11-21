@@ -8,6 +8,8 @@ pnpm ui:audit -- --stress      # 再加一轮：等宽字体 + 字重 600 + 缩�
 pnpm ui:audit -- --json        # stdout 只有一份 JSON，适合接 CI
 pnpm ui:audit -- --port 9580   # 指定 CDP 端口
 pnpm ui:audit -- --exe <path>  # 指定另一个安装版 exe
+pnpm ui:audit -- --skin solid  # 只跑一套皮肤
+pnpm ui:audit -- --skins all   # 五套皮肤各量 10 个岛页，设置窗只量一次
 ```
 
 脚本只读界面：它不修改 `renderer/` 或 `main/` 的源码，也不碰你正在用的 profile；唯一的写入是 `%TEMP%` 下自己的临时 profile。退出码在发现违规时为 1，可以直接当闸门。
@@ -30,6 +32,44 @@ pnpm ui:audit -- --exe <path>  # 指定另一个安装版 exe
 另有一项对账：页数取自 `src/shared/schema.js` 的 `PAGE_MANIFEST`（10）和 `SETTINGS_NAV`（14），实际页数取自运行中的 DOM（`#dots button`、`#rail .rail-item`）。两边对不上时报告 `page-count`，防止某一页没渲染出来却悄悄少测一页。
 
 测量时临时 profile 会打开全部页面（`devices` 默认是关的），并关掉动画与自动避让，保证量到的是布局而不是过渡帧。
+
+## 皮肤（--skin / --skins all）
+
+岛有五套皮肤：`frost`（毛玻璃）、`solid`（实色）、`plain`（极简）、`magazine`（杂志）、`console`（控制台）。皮肤改变的是填充、字体与装饰，`.pages` 的 217px 盒高不变；但同一页在毛玻璃下守得住，不代表在杂志版下也守得住。所以每套皮肤都要把 10 个岛页重新量一遍。
+
+- `--skin <key>`：把皮肤写进临时 profile 的 `prefs.json`，再启动应用，只测这一套。
+- `--skins all`：按 `frost → solid → plain → magazine → console` 依次起五次应用，每套量 10 个岛页。设置窗 14 页只在第一套（frost）量一次：`skin` 只作用于岛窗口（`island.js applyPrefs() → body[data-skin]`），设置窗不套皮肤、布局完全相同，重新量五遍只会得到五份一样的数字。报告里每个被跳过的设置窗都会注明这一点。
+
+启动后脚本会读 `document.body.dataset.skin`，和预期不一致就把这一轮判失败：未知皮肤值会静默回退到 frost，报告若还挂着 solid 的标题，量到的就是另一套布局。
+
+`--skin` / `--skins` 与 `--stress` 互斥：stress 轮固定用默认皮肤，皮肤轮固定用默认字体与缩放，避免「某套皮肤 + 140%」这种组合把报告撑成二维矩阵。
+
+`--json` 在顶层多一层 `skins`，键是皮肤名。每套皮肤一个对象：
+
+```json
+"skins": {
+  "frost": {
+    "name": "frost",
+    "prefs": { "skin": "frost", "font": "system", "weight": 400, "uiScale": 100 },
+    "island": { "expectedPages": 10, "foundPages": 10, "pages": [], "issues": [] },
+    "settings": { "expectedPages": 14, "foundPages": 14, "pages": [], "issues": [] },
+    "errors": [],
+    "violations": 0,
+    "settingsMeasured": true
+  },
+  "solid": {
+    "name": "solid",
+    "prefs": { "skin": "solid", "font": "system", "weight": 400, "uiScale": 100 },
+    "island": { "expectedPages": 10, "foundPages": 10, "pages": [], "issues": [] },
+    "settings": null,
+    "errors": [],
+    "violations": 0,
+    "settingsMeasured": false
+  }
+}
+```
+
+`skins.<key>.settings` 为 `null`、`settingsMeasured` 为 `false`，表示这一套没有再量设置窗；顶层 `settingsMeasuredOn` 说明设置窗实际量在哪套皮肤上。
 
 ## 阈值从哪来
 
@@ -71,18 +111,27 @@ pnpm ui:audit -- --exe <path>  # 指定另一个安装版 exe
 
 ## 输出
 
-人读模式是一张表：每页的 `scrollHeight`、`used/available`、横向越界、裁字、滚动区、小控件和 `ok/FAIL`，最后是违规清单。`--json` 输出同样内容的机器可读版本：
+人读模式按轮分节。单轮（默认 / `--stress` / `--skin`）是一张岛表（每页的 `scrollHeight`、`used/available`、横向越界、裁字、滚动区、小控件和 `ok/FAIL`）加设置表，最后是违规清单和这一轮的 PASS/FAIL。
+
+`--skins all` 每套皮肤一个小节，五套跑完再打一张总表：
+
+```text
+Skins · island .pages scrollHeight (px) · contract ≤ 217
+  page        frost  solid  plain  magazine  console
+  音乐         205    205    205    205       205
+  ...
+  verdict     ok     ok     ok     FAIL      ok
+```
+
+总表一眼能看出「哪套皮肤、哪一页先撞线」；最后一行是全局 PASS/FAIL，只要有任意一套违规就是 `FAIL`，退出码 1。`--json` 输出同样内容的机器可读版本，除 `passes` 外还有「皮肤」一节描述的 `skins`：
 
 ```json
 {
   "ok": false,
-  "passes": [{
-    "name": "stress",
-    "prefs": { "font": "mono", "weight": 600, "uiScale": 140 },
-    "island": { "expectedPages": 10, "foundPages": 10, "pages": [], "issues": [] },
-    "settings": { "expectedPages": 14, "foundPages": 14, "pages": [], "issues": [] },
-    "errors": []
-  }],
+  "passes": [{ "name": "solid", "prefs": { "skin": "solid", "font": "system", "weight": 400, "uiScale": 100 } }],
+  "skins": { "frost": { "violations": 0 }, "solid": { "violations": 2 } },
+  "settingsMeasuredOn": "frost",
+  "notes": ["settings pages are measured once, on frost: skins restyle the island window only, the settings window keeps one layout"],
   "issues": []
 }
 ```

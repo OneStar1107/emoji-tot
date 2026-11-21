@@ -22,15 +22,15 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.0.3.50.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.50/EmojiTot.Setup.0.3.50.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.0.3.50.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.50/EmojiTot.0.3.50.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.0.3.51.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.51/EmojiTot.Setup.0.3.51.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.0.3.51.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.3.51/EmojiTot.0.3.51.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
 Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases)
 
 > 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护。如果它指向的版本还没打标签，链接会 404 —— 那种情况下从上面「全部版本」里取当前已发布的那一版。
 
-> **<!--facts:version-->0.3.50<!--/facts-->**：双形态（灵动岛 + 桌面球）、十个功能页、设置中心 <!--facts:settingsPages-->14<!--/facts--> 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
+> **<!--facts:version-->0.3.51<!--/facts-->**：双形态（灵动岛 + 桌面球）、十个功能页、设置中心 <!--facts:settingsPages-->14<!--/facts--> 页、浅色主题。这一版把托盘收回三项，并把桌面日常补齐：消息未读、剪贴板历史、四家 AI 余额、重复待办、OLED 防烧屏、蓝牙设备电量、日历 ICS 订阅。安装版会保留你的账号与偏好数据。
 
 ## 这是什么
 
@@ -259,6 +259,7 @@ docs/                架构、协议、岛规格、设置规格、调研结论
 
 ## 变更记录
 
+- **0.3.51** —— 两件收尾。① `pnpm ui:audit` 现在能刷皮肤：`--skin <frost|solid|plain|magazine|console>` 单套、`--skins all` 五套连刷（岛 10 页 × 5 = 50 页 + 设置 14 页），报告带皮肤 × 页 scrollHeight 总表，任何一套违规会点名并 exit 1；设置页只在 frost 量一次，因为皮肤只改岛窗。② 杂志皮肤面板高从 329.4 收到 323.45（与其它皮肤 323.9 齐平，island 盒子都是 324），换皮肤不再让窗口高度跳动。
 - **0.3.50** —— 岛体多出两套皮肤 + 收起也有形变了。① `控制台`：不透明深底、等宽数字、网格底纹，额度页把「充值/赠送」的构成画成比例条，专注环加刻度，健康条加粗；② `杂志`：衬线大标题（Georgia + 宋体，系统栈）、暖金单强调色、纸面卡片、大留白；两套都通吃浅色，设置里 5 段实时切换且重启保留。③ 收起草稿补上闭合形变：面板下坠 + 淡出 240ms，胶囊在落点淡入，接缝无跳变；窗口仍是相机（不逐帧改尺寸），逐帧跟随的是命中框，收起途中白条外依旧把指针还给下层程序。三套皮肤十页 scrollHeight 全 217、无横向溢出，pager 32×32 / dot 24×24 不变。
 - **0.3.49** —— 岛体换成组合方案：折叠态收成「只有脸」（168×64，状态行收起时才隐藏），避让态改成 6px 窄缝（140 宽、opacity .8、留一道色带和两颗眼点），展开收起走液态时序（400ms、宽 240ms / 高 340ms+60ms 延迟、无过冲、可中途反向）；十页版式与命中区不变。同版修：邮箱有账号态溢出（453→217，邮件列表内部滚动）、常驻 PowerShell 泄漏（exit 身份判断 + 父进程看门狗 + 退出统一 kill，一台机器上曾堆到 32 个）、等宽字体下「切过去」按钮 18.7px 的可点高度。新增 `pnpm ui:audit`：一次量完岛 10 页 + 设置 14 页，违规退出码 1。
 - **0.3.48** —— 两件事同一版发布。① 自动避让认得 Chromium 系浏览器了：窗口类 `Chrome_WidgetWin_1` + 安装目录有 `chrome.dll`（先排除 `resources/app.asar`），ego lite 这类不在固定名单里的浏览器终于会触发避让，Electron 应用不会被误判；新增 `-Classify` 探针便于以后核判据。② 岛体邮箱页在「消息应用在跑」时内容溢出 96.7px、添加邮箱按钮被裁：空态改成可伸缩可滚动的一列，消息块最多 3 行 + 「还有 N 个在运行」，滚它不再翻页；音乐页三行歌词 line-height 1.55→1.5、gap 1→0，播放键不再被裁；focus 页间距 12→10 与其它页对齐。

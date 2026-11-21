@@ -35,6 +35,8 @@
  *   pnpm ui:audit -- --json       # machine-readable result on stdout
  *   pnpm ui:audit -- --port 9580  # another CDP port (default 9576)
  *   pnpm ui:audit -- --exe <path> # another installed build
+ *   pnpm ui:audit -- --skin solid # one skin; written to prefs.json before launch
+ *   pnpm ui:audit -- --skins all  # all five skins, 10 island pages each
  *
  * Exit code is 1 as soon as one page violates the contract, so this can be a
  * gate. Every failure carries the page, the metric and the offending element.
@@ -51,6 +53,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const DEFAULT_PORT = 9576;
+/**
+ * The island skins, in shipping order. This list mirrors the 皮肤 row in
+ * renderer/settings.js (rowSeg) and DEFAULTS.skin in shared/schema.js; the
+ * product has no exported SKINS constant to import, so keep the three in step.
+ */
+const SKINS = ['frost', 'solid', 'plain', 'magazine', 'console'];
 /** The smallest control we are willing to call usable. Documented in docs/UI-AUDIT.md. */
 const MIN_CONTROL_HEIGHT = 20;
 /** Layout measurements come back fractional; one pixel of dust is not a bug. */
@@ -96,7 +104,12 @@ function usage() {
     '  --json          print one JSON document on stdout (nothing else on stdout)',
     '  --port <n>      CDP port (default 9576; the default moves to the next free port)',
     '  --exe <path>    installed EmojiTot.exe (default %LOCALAPPDATA%\\Programs\\@emojitotdesktop\\EmojiTot.exe)',
+    '  --skin <key>    one island skin: ' + SKINS.join(', '),
+    '  --skins all     all five island skins; settings pages are measured once',
     '  -h, --help      this text',
+    '',
+    '  --skin/--skins and --stress are mutually exclusive.',
+    '  --skin cannot be combined with --skins.',
   ].join('\n');
 }
 
@@ -108,6 +121,8 @@ function parseArgs(argv) {
     exe: process.env.EMOJITOT_APP_EXE || defaultExe(),
     help: false,
     portExplicit: false,
+    skin: null,
+    skins: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -128,9 +143,23 @@ function parseArgs(argv) {
       options.portExplicit = true;
     } else if (arg === '--exe' || arg.startsWith('--exe=')) {
       options.exe = takeValue('--exe');
+    } else if (arg === '--skin' || arg.startsWith('--skin=')) {
+      const value = takeValue('--skin');
+      if (!SKINS.includes(value)) {
+        throw new Error('--skin must be one of ' + SKINS.join(', ') + ' (got "' + value + '")');
+      }
+      options.skin = value;
+    } else if (arg === '--skins' || arg.startsWith('--skins=')) {
+      const value = takeValue('--skins');
+      if (value !== 'all') throw new Error('--skins only accepts "all" (got "' + value + '")');
+      options.skins = 'all';
     } else {
       throw new Error('unknown argument: ' + arg + '\n\n' + usage());
     }
+  }
+  if (options.skin && options.skins) throw new Error('--skin and --skins are mutually exclusive');
+  if ((options.skin || options.skins) && options.stress) {
+    throw new Error('--skin/--skins and --stress are mutually exclusive: skin passes always run at the default font/scale');
   }
   options.exe = options.exe ? resolve(options.exe) : '';
   return options;
@@ -427,10 +456,13 @@ function pageProbeFactory(minimumControlHeight) {
 
 /* -------------------------------------------------------------- launch */
 
-function seedPrefs(stress) {
+function seedPrefs(stress, skin) {
   const keys = schema.PAGE_MANIFEST.map((page) => page.key);
   const prefs = {
     displayMode: 'island',
+    /* The skin is written before launch, not switched at runtime: a fresh
+       profile then measures exactly what prefs.json asked the build to draw. */
+    skin: skin ?? 'frost',
     pages: Object.fromEntries(keys.map((key) => [key, true])),
     pageOrder: keys,
     defaultPage: 'music',
@@ -523,7 +555,7 @@ async function launchApp(options) {
   }
 
   const profile = mkdtempSync(join(tmpdir(), 'emojitot-ui-audit-'));
-  const prefs = seedPrefs(options.stress);
+  const prefs = seedPrefs(options.stress, options.skin);
   writeFileSync(join(profile, 'prefs.json'), JSON.stringify(prefs, null, 2), 'utf8');
 
   /* The DSH session exports ELECTRON_RUN_AS_NODE=1. Without deleting it,
@@ -757,8 +789,8 @@ async function auditSettings(cdp, sessionId, errors, label) {
   return { expectedPages: expected.length, foundPages: rail.length, pages, issues };
 }
 
-async function runPass(options, name) {
-  const passOptions = { ...options, stress: name === 'stress' };
+async function runPass(options, name, skin, measureSettings) {
+  const passOptions = { ...options, stress: name === 'stress', skin };
   const { child, profile, prefs } = await launchApp(passOptions);
   let browser = null;
   const errors = [];
@@ -779,15 +811,38 @@ async function runPass(options, name) {
     await waitFor(browser, islandSession, "document.readyState === 'complete' && typeof window.islandAPI === 'object' && !!document.getElementById('pill')", 'island ready');
     await sleep(900);
 
+    /*
+     * A skin is only audited once the build has actually applied it. An
+     * unknown value silently falls back to frost, and a report under the
+     * wrong heading is worse than no report: the numbers would describe a
+     * layout nobody asked about.
+     */
+    if (skin) {
+      const applied = await evaluate(browser, islandSession, 'document.body.dataset.skin');
+      if (applied !== skin) {
+        throw new Error('skin "' + skin + '" did not apply: body[data-skin]="' + applied + '" — this build may not ship that skin');
+      }
+    }
+
     const island = await auditIsland(browser, islandSession, errors, name);
-    const settingsSession = await openSettings(browser, islandSession, name);
-    const settings = await auditSettings(browser, settingsSession, errors, name);
-    const allIssues = [...island.issues, ...settings.issues];
+    let settings = null;
+    /*
+     * Skins only restyle the island window; the settings window keeps one
+     * layout. So --skins all measures the 14 settings pages once, on the
+     * first skin, instead of re-reading the same layout five times.
+     */
+    if (measureSettings) {
+      const settingsSession = await openSettings(browser, islandSession, name);
+      settings = await auditSettings(browser, settingsSession, errors, name);
+    }
+    const allIssues = [...island.issues, ...(settings?.issues ?? [])];
     return {
       name,
+      skin: skin ?? prefs.skin ?? 'frost',
       prefs,
       island,
       settings,
+      settingsMeasured: measureSettings,
       errors,
       issues: allIssues,
     };
@@ -812,12 +867,13 @@ const detailOf = (item) => {
   return ' — ' + name + height + text;
 };
 
-function printPass(pass) {
+function printPass(pass, skinsMode, settingsMeasuredOn) {
   const island = pass.island;
   const settings = pass.settings;
   const first = island.pages.find((page) => page.metrics)?.metrics;
   console.log('');
-  console.log('== ' + pass.name + ' · ' + pass.prefs.font + ' / ' + pass.prefs.weight + ' / ' + pass.prefs.uiScale + '%');
+  console.log('== ' + pass.name + (pass.name === pass.skin ? '' : ' · skin ' + pass.skin) +
+    ' · ' + pass.prefs.font + ' / ' + pass.prefs.weight + ' / ' + pass.prefs.uiScale + '%');
   console.log('');
   console.log('Island · ' + island.foundPages + '/' + island.expectedPages + ' pages · .pages ' +
     (first ? first.boxHeight + 'px − ' + first.paddingTop + 'px padding = ' + first.availableHeight + 'px available' : 'n/a'));
@@ -835,22 +891,28 @@ function printPass(pass) {
   }
 
   console.log('');
-  console.log('Settings · ' + settings.foundPages + '/' + settings.expectedPages + ' pages · 1080×760 window');
-  console.log('  ' + pad('#', 3) + pad('page', 18) + pad('key', 12) + pad('content', 12) +
-    pad('h-overflow', 11) + pad('card', 7) + pad('clipped', 9) + pad('small', 7) + 'verdict');
-  for (const page of settings.pages) {
-    const m = page.metrics;
-    console.log('  ' + pad(String(page.index + 1), 3) + pad(page.label, 18) + pad(page.key, 12) +
-      pad(m ? m.contentScrollWidth + '/' + m.contentClientWidth : '-', 12) +
-      pad(m ? m.horizontalOverflow.length : '-', 11) +
-      pad(m ? m.cardOverflow.length : '-', 7) +
-      pad(m ? m.clippedText.length : '-', 9) +
-      pad(m ? m.smallControls.length : '-', 7) + verdict(page));
+  if (settings) {
+    console.log('Settings · ' + settings.foundPages + '/' + settings.expectedPages + ' pages · 1080×760 window');
+    console.log('  ' + pad('#', 3) + pad('page', 18) + pad('key', 12) + pad('content', 12) +
+      pad('h-overflow', 11) + pad('card', 7) + pad('clipped', 9) + pad('small', 7) + 'verdict');
+    for (const page of settings.pages) {
+      const m = page.metrics;
+      console.log('  ' + pad(String(page.index + 1), 3) + pad(page.label, 18) + pad(page.key, 12) +
+        pad(m ? m.contentScrollWidth + '/' + m.contentClientWidth : '-', 12) +
+        pad(m ? m.horizontalOverflow.length : '-', 11) +
+        pad(m ? m.cardOverflow.length : '-', 7) +
+        pad(m ? m.clippedText.length : '-', 9) +
+        pad(m ? m.smallControls.length : '-', 7) + verdict(page));
+    }
+  } else {
+    console.log('Settings · skipped — measured once on ' + (settingsMeasuredOn ?? 'the first skin') +
+      ' (skins restyle the island window only)');
   }
 
+  const settingsIssues = settings?.issues ?? [];
   const surfaceIssues = [
     ...island.issues.filter((item) => item.code === 'page-count' || (item.code === 'page-error' && !island.pages.some((page) => page.issues.includes(item)))),
-    ...settings.issues.filter((item) => item.code === 'page-count' || (item.code === 'page-error' && !settings.pages.some((page) => page.issues.includes(item)))),
+    ...settingsIssues.filter((item) => item.code === 'page-count' || (item.code === 'page-error' && !settings.pages.some((page) => page.issues.includes(item)))),
   ];
   if (pass.issues.length) {
     console.log('');
@@ -861,7 +923,7 @@ function printPass(pass) {
       console.log('  - ' + item.message);
       shown += 1;
     }
-    for (const surface of [island, settings]) {
+    for (const surface of [island, settings].filter(Boolean)) {
       for (const page of surface.pages) {
         for (const item of page.issues) {
           if (shown >= 24) { console.log('  ...'); break; }
@@ -873,7 +935,27 @@ function printPass(pass) {
     }
   }
   console.log('');
-  console.log((pass.issues.length ? 'FAIL  ' : 'PASS  ') + (island.foundPages + settings.foundPages) + ' pages, ' + pass.issues.length + ' violation(s)');
+  const measured = island.foundPages + (settings ? settings.foundPages : 0);
+  console.log((pass.issues.length ? 'FAIL  ' : 'PASS  ') + measured + ' pages, ' + pass.issues.length + ' violation(s)');
+}
+
+/** Skin × page scrollHeight, the one table that makes five passes comparable. */
+function printSkinTable(passes) {
+  const skins = passes.filter((pass) => pass.skin);
+  if (!skins.length) return;
+  const pageCount = Math.max(...skins.map((pass) => pass.island.pages.length));
+  const width = Math.max(4, ...skins.map((pass) => displayWidth(pass.skin))) + 2;
+  console.log('');
+  console.log('Skins · island .pages scrollHeight (px) · contract ≤ 217');
+  console.log('  ' + pad('page', 12) + skins.map((pass) => pad(pass.skin, width)).join(''));
+  for (let index = 0; index < pageCount; index += 1) {
+    const title = skins[0].island.pages[index]?.title ?? '-';
+    console.log('  ' + pad(title, 12) + skins.map((pass) => {
+      const metrics = pass.island.pages[index]?.metrics;
+      return pad(metrics ? String(metrics.scrollHeight) : '-', width);
+    }).join(''));
+  }
+  console.log('  ' + pad('verdict', 12) + skins.map((pass) => pad(pass.issues.length ? 'FAIL' : 'ok', width)).join(''));
 }
 
 /* ---------------------------------------------------------------- main */
@@ -894,7 +976,17 @@ async function main() {
     if (options.port !== requested) console.error('[ui-audit] port ' + requested + ' is busy; using ' + options.port);
   }
   schema = await loadSchema();
+  const skinsMode = Boolean(options.skin || options.skins);
+  const skinPlan = options.skins === 'all' ? SKINS : (options.skin ? [options.skin] : []);
   const passNames = options.stress ? ['default', 'stress'] : ['default'];
+  /*
+   * One skin per launch: the profile is seeded with that skin and the app is
+   * started again for the next one. Measuring a skin from a profile that never
+   * asked for it would make "frost" and "console" the same picture.
+   */
+  const plan = skinsMode
+    ? skinPlan.map((skin, index) => ({ name: skin, skin, measureSettings: index === 0 }))
+    : passNames.map((name) => ({ name, skin: null, measureSettings: true }));
   const report = {
     tool: 'ui-audit',
     generatedAt: new Date().toISOString(),
@@ -904,23 +996,68 @@ async function main() {
     issues: [],
     ok: true,
   };
+  if (skinsMode) report.skins = {};
 
-  for (const name of passNames) {
-    console.error('[ui-audit] ' + name + ' pass: launching ' + options.exe);
-    const pass = await runPass(options, name);
+  const passes = [];
+  for (const item of plan) {
+    console.error('[ui-audit] ' + item.name + ' pass: launching ' + options.exe);
+    let pass;
+    try {
+      pass = await runPass(options, item.name, item.skin, item.measureSettings);
+    } catch (error) {
+      /* One skin that cannot start must not erase the four that already did:
+         the failure becomes a FAIL report for that skin and the run goes on. */
+      console.error('[ui-audit] ' + item.name + ': ' + (error?.stack || error?.message || error));
+      pass = failedPass(item.name, item.skin, error);
+    }
+    passes.push(pass);
     report.passes.push(stripPass(pass));
-    report.issues.push(...pass.issues.map((item) => ({ pass: name, ...item })));
-    if (!options.json) printPass(pass);
+    report.issues.push(...pass.issues.map((entry) => ({ pass: item.name, ...entry })));
+    if (skinsMode) report.skins[pass.skin] = { ...stripPass(pass), settingsMeasured: pass.settingsMeasured };
+    if (!options.json) printPass(pass, skinsMode, plan[0].skin);
+  }
+
+  if (skinsMode) {
+    report.settingsMeasuredOn = passes.find((pass) => pass.settingsMeasured)?.skin ?? null;
+    report.notes = [
+      'settings pages are measured once, on ' + report.settingsMeasuredOn +
+        ': skins restyle the island window only, the settings window keeps one layout',
+    ];
   }
 
   report.ok = report.issues.length === 0;
   if (options.json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
+    if (skinsMode) printSkinTable(passes);
     console.log('');
-    console.log(report.ok ? 'UI audit passed.' : 'UI audit failed: ' + report.issues.length + ' violation(s).');
+    const islandPages = passes.reduce((total, pass) => total + pass.island.foundPages, 0);
+    const settingsPages = passes.reduce((total, pass) => total + (pass.settings ? pass.settings.foundPages : 0), 0);
+    const failedSkins = [...new Set(passes.filter((pass) => pass.issues.length).map((pass) => pass.skin))];
+    const scope = skinsMode
+      ? passes.length + ' skins · ' + islandPages + ' island pages · ' + settingsPages + ' settings pages'
+      : islandPages + settingsPages + ' pages';
+    const blame = skinsMode && failedSkins.length
+      ? ' — ' + failedSkins.join(', ') + (failedSkins.length === 1 ? ' has violations' : ' have violations')
+      : '';
+    console.log((report.ok ? 'PASS  ' : 'FAIL  ') + scope + ', ' + report.issues.length + ' violation(s)' + blame);
   }
   process.exitCode = report.ok ? 0 : 1;
+}
+
+/** A pass that never produced measurements still has to fail the run loudly. */
+function failedPass(name, skin, error) {
+  const failure = issue('pass-error', '本轮未完成：' + (error?.message ?? error));
+  return {
+    name,
+    skin: skin ?? 'frost',
+    prefs: seedPrefs(false, skin),
+    island: { expectedPages: schema.PAGE_MANIFEST.length, foundPages: 0, pages: [], issues: [failure] },
+    settings: null,
+    settingsMeasured: false,
+    errors: [],
+    issues: [failure],
+  };
 }
 
 /** Keep the JSON result bounded: each detail list already carries examples. */
