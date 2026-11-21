@@ -54,10 +54,68 @@ if ($Mode -ne "watch") {
   exit
 }
 
+
+# ------------------------------------------------------------------ output
+#
+# The playback endpoint the sound leaves through. Get-AudioDevice is the
+# clean answer when the AudioDeviceCmdlets module is installed; it usually
+# is not, so the fallback reads the policy record Windows keeps for the
+# default endpoint (HKCU DefaultEndpoint names the interface the user plays
+# through) and maps its GUID to the MMDevices Render FriendlyName. Cached:
+# this is a registry walk on a one-second loop.
+$audioOut = ""
+$audioOutAt = [datetime]::MinValue
+
+function Get-DefaultAudioOutput {
+  $name = ""
+  try {
+    if (Get-Command Get-AudioDevice -ErrorAction Stop) {
+      $dev = Get-AudioDevice -Playback -ErrorAction Stop | Select-Object -First 1
+      if ($dev) { $name = [string]$dev.Name }
+    }
+  } catch { }
+  if (-not $name) {
+    try {
+      $render = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
+      # The GUID used by most per-app policy records is the endpoint the user
+      # actually plays through; ties keep the first one seen.
+      $wanted = ""
+      $best = 0
+      $counts = @{}
+      Get-ChildItem "HKCU:\Software\Microsoft\Multimedia\Audio\DefaultEndpoint" -ErrorAction SilentlyContinue | ForEach-Object {
+        $value = (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue)."000_000"
+        if ($value) {
+          $match = [regex]::Match([string]$value, '\{0\.0\.0\.00000000\}\.\{([0-9a-fA-F-]+)\}')
+          if ($match.Success) {
+            $guid = $match.Groups[1].Value
+            $counts[$guid] = 1 + [int]$counts[$guid]
+            if ($counts[$guid] -gt $best) { $best = $counts[$guid]; $wanted = $guid }
+          }
+        }
+      }
+      $fallback = ""
+      foreach ($key in @(Get-ChildItem $render -ErrorAction SilentlyContinue)) {
+        $state = (Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue).DeviceState
+        if (($state -band 1) -ne 1) { continue }   # DEVICE_STATE_ACTIVE
+        $props = Get-ItemProperty ($key.PSPath + "\Properties") -ErrorAction SilentlyContinue
+        $friendly = [string]$props.'{a45c254e-df1c-4efd-8020-67d146a850e0},2'
+        if (-not $friendly) { continue }
+        if (-not $fallback) { $fallback = $friendly }
+        if ($wanted -and $key.PSChildName -ieq ("{" + $wanted + "}")) { $name = $friendly; break }
+      }
+      if (-not $name) { $name = $fallback }
+    } catch { }
+  }
+  return $name
+}
 $lastKey = ""
 $art = ""
 
 while ($true) {
+  if (((Get-Date) - $audioOutAt).TotalSeconds -ge 10) {
+    $audioOut = Get-DefaultAudioOutput
+    $audioOutAt = Get-Date
+  }
   $s = Get-Player
   if (-not $s) {
     Write-Output '{"active":false}'
@@ -92,6 +150,7 @@ while ($true) {
       duration = [math]::Round($tl.EndTime.TotalSeconds, 1)
       updated  = $tl.LastUpdatedTime.ToUnixTimeMilliseconds()
       source   = $s.SourceAppUserModelId
+      output   = $audioOut
       art      = $art
     }
     Write-Output ($out | ConvertTo-Json -Compress)

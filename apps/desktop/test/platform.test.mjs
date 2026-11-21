@@ -24,7 +24,7 @@ const { sameDisplayId } = require('../src/main/window-state.js');
 describe('platform: one place decides what this machine can do', () => {
   it('reports the features the app actually ships', () => {
     const caps = platform.capabilities();
-    for (const name of ['battery', 'media', 'devices', 'messenger', 'fullscreen', 'weather', 'lyrics', 'quota', 'calendar']) {
+    for (const name of ['battery', 'media', 'devices', 'messenger', 'fullscreen', 'weather', 'lyrics', 'quota', 'calendar', 'clipboard', 'volume', 'mail']) {
       assert.equal(typeof caps[name], 'boolean', name + ' must have a capability entry');
     }
   });
@@ -33,6 +33,19 @@ describe('platform: one place decides what this machine can do', () => {
     for (const [name, on] of Object.entries(platform.capabilities())) {
       assert.equal(platform.supports(name), on, name);
     }
+  });
+
+  it('keeps mail on Windows: IMAP is pure Node, not a PowerShell child', () => {
+    /* The service table gates every worker on platform.supports(feature); a
+       missing 'mail' key silently disabled the mail worker on the one platform
+       the app ships for. Pin the decision on both sides: the capability is on,
+       and the service still touches no shell. */
+    assert.match(src('main/platform.js'), /win32:\s*\{[^}]*\bmail:\s*true/s);
+    const mail = src('main/services/mail.js');
+    assert.ok(!/(^|[^.\w])spawn\(/.test(mail), 'mail.js must not spawn a watcher');
+    assert.ok(!/(^|[^.\w])execFile\(/.test(mail), 'mail.js must not shell out');
+    assert.ok(mail.includes("require('imapflow')"), 'mail.js should read IMAP directly');
+    if (process.platform === 'win32') assert.equal(platform.supports('mail'), true);
   });
 
   it('reports an unknown feature as unsupported', () => {

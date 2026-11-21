@@ -31,6 +31,14 @@ const FEATURES = {
     media: true,
     devices: true,
     messenger: true,
+    /*
+     * Mail is IMAP over Node's own sockets (imapflow), not a PowerShell child,
+     * so it was never a Windows-only feature — omitting it here left the mail
+     * service permanently off on the only platform the app ships for. The test
+     * beside this table pins both halves: the feature is on, and the service
+     * still spawns nothing.
+     */
+    mail: true,
     fullscreen: true,
     weather: true,
     lyrics: true,

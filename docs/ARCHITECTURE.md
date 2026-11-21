@@ -16,7 +16,7 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 | --- | --- | --- | --- |
 | 球 | `src/renderer/index.html` | `src/main.js` | 贴边、穿透、拖拽、Agent 联动 |
 | 灵动岛 | `src/renderer/island.html` | `src/main/island.js` | 顶部居中的胶囊，点开成功能面板 |
-| 设置中心 | `src/renderer/settings.html` | `src/main/settings.js` | <!--facts:settingsPages-->14<!--/facts--> 页，改动即写 `prefs.json` |
+| 设置中心 | `src/renderer/settings.html` | `src/main/settings.js` | <!--facts:settingsPages-->15<!--/facts--> 页，改动即写 `prefs.json` |
 
 三个窗口都提前创建，形态切换只改可见性：重建窗口会重载页面，岛会丢掉当前页，球会丢掉位置。两个 preload（`preload-island.js`、`preload-settings.js`）各自只暴露自己的几个调用。
 

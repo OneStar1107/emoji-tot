@@ -45,6 +45,11 @@
    * 15% (60ms) and uses the rest, so the capsule spreads first and the content
    * grows into it. expo-out front-loads the travel and lands flat on 1 — an
    * overshoot at this size is an edge that shivers, not a bounce.
+   *
+   * The open/close morph now steps these numbers in island.js (MORPH_OPEN /
+   * MORPH_CLOSE), which switches the transition below off while it owns the
+   * box. This declaration is what is left for a size change nobody animates
+   * explicitly — the auto-avoid strip is the one that matters.
    */
   --morph: cubic-bezier(0.22, 1, 0.36, 1);
   --morph-total: 400ms;
@@ -213,9 +218,11 @@ body {
      clipping turned it into a hard-edged dark square around each corner. */
   overflow: visible;
   /*
-   * Two tracks, one clock (see --morph*). The island's box is the model the
-   * panel is painted against, so this schedule *is* the shape change's
-   * schedule — island.js reads it back instead of keeping a second copy.
+   * Two tracks, one clock (see --morph*). This is the fallback: island.js
+   * drives the open/close box itself and sets `transition: none` inline for
+   * the length of a morph, so the schedule there is the one that runs. It
+   * stays here so a size change outside a morph — the auto-avoid strip — still
+   * glides instead of snapping.
    */
   transition:
     width var(--morph-w) var(--morph),
@@ -224,24 +231,13 @@ body {
 }
 
 /*
- * The close, on its own clock.
+ * The close has no override here any more.
  *
- * The open runs the capsule out and then lets the height catch up; the fold has
- * to be its mirror, or the seam reads as a different gesture. The height lets
- * go first (the card drains downwards) and the width lands last, so the surface
- * narrows into the capsule instead of snapping into it. 240ms end to end —
- * inside the 200–260ms the composition spec gives the fold, and shorter than
- * the open's 400ms because dismissing should feel quicker than arriving.
- *
- * island.js reads these longhands back (morphClock), so the schedule stays in
- * one place: the frame loop, the opacity fade and the window report all run on
- * the numbers written here.
+ * The fold runs on island.js's MORPH_CLOSE (height lets go first, the width
+ * lands last, 240ms end to end), and the driver turns the transition above off
+ * while it owns the box. Writing a second schedule here would be the drift the
+ * driver exists to remove.
  */
-#island[data-closing="true"] {
-  transition:
-    width 210ms var(--morph) 30ms,
-    height 190ms var(--morph);
-}
 
 #frame {
   position: absolute;
@@ -826,7 +822,9 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  * paused track with no lyrics that left a band of empty card between the
  * header and the artwork.
  */
-.music { position: relative; display: flex; flex-direction: column; height: 100%; gap: 0; overflow: hidden; }
+/* The 8px lift cancels .pages' 12px top padding, so the tab line starts 4px
+   from the panel's top edge like every other page. */
+.music { position: relative; display: flex; flex-direction: column; height: 100%; gap: 0; overflow: hidden; margin-top: -8px; }
 .cover-img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex: none; background: #222228; }
 .music-state { font-size: 10.5px; color: var(--faint); flex: none; }
 /* Three 18px lines fill the 54px window exactly (line-height 1.5, no gap); the
@@ -1224,6 +1222,9 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   position: relative;
   min-width: 0;
   height: 28px;
+  /* -2px vertically keeps the 24px row rhythm; the paint stays one grid column
+     wide. The 28px width the column cannot give is added by the ::before
+     below, which is hit-testable as part of this button. */
   margin: -2px 0;
   border: 0;
   padding: 0;
@@ -1235,6 +1236,16 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   cursor: pointer;
   display: grid;
   place-items: center;
+}
+/* A 7-column month inside 210px leaves 26.6px per column, and the 4px gap
+   cannot be borrowed. The pseudo-element grows the hit box 2px past each edge
+   (into the gap, never into a neighbour) without touching the painted cell, so
+   the target clears 28x28 while the visual grid keeps its density. It is part
+   of the button, so a press on it lands on the day. */
+.cal-cell::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
 }
 .cal-cell > span { display: grid; place-items: center; width: 100%; height: 24px; border-radius: 6px; }
 .cal-cell.empty { cursor: default; }
@@ -1267,7 +1278,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  * page's one focus and everything starts at the top of the 205px box — the
  * old centred column floated 20px down and left a band above it.
  */
-.focus { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 0; }
+.focus { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 0; margin-top: -8px; }
 .focus-main { display: flex; align-items: center; justify-content: center; gap: 10px; padding-right: 24px; flex: none; }
 .focus-ring {
   width: 96px;
@@ -1315,7 +1326,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  * row is the record button (a 36px hit target), which is what lets both
  * counters keep their numbers at reading size without a card around each.
  */
-.health { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+.health { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; margin-top: -8px; }
 .health-row {
   display: flex;
   align-items: center;
@@ -1348,7 +1359,9 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 /* todo */
 /* Fills the page so the list — not the page container — is what scrolls, and
    so an empty list has somewhere to sit instead of collapsing to 73px. */
-.todo { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+/* 8px lift: the first todo row sits 4px under the panel's top edge; the box
+   gives the 8px back at the bottom. */
+.todo { display: flex; flex-direction: column; gap: 8px; height: 100%; margin-top: -8px; }
 .todo-add { display: flex; gap: 6px; align-items: center; }
 .todo-add input[type="text"] {
   flex: 1; min-width: 0; height: 30px; padding: 0 10px;
@@ -1414,7 +1427,9 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .todo-empty { margin: auto 0; padding: 10px 4px; font-size: 11.5px; color: var(--faint); text-align: center; }
 
 /* shelf */
-.shelf { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
+/* 8px lift, same as the other pages: the shelf's first row starts 4px from
+   the panel's top edge. */
+.shelf { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; margin-top: -8px; }
 /*
  * An empty shelf is one small drop target at the top, not a page.
  *
@@ -1506,6 +1521,26 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .dev-empty-line { margin: 0; font-size: 12.5px; color: var(--dim); }
 /* Bluetooth is a state, not a switch; with no settings sheet wired, no action. */
 .dev-foot { display: flex; align-items: center; height: 28px; margin-top: 4px; font-size: 11px; color: var(--dim); }
+/*
+ * The footer is a button since the Bluetooth row opens the system settings.
+ * It has to look like the status line it replaces: no chrome, inherited type,
+ * full row width, and a quiet label next to the dot that names the action.
+ */
+.dev-foot[data-open-system] {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  color: var(--dim);
+  text-align: left;
+  cursor: pointer;
+}
+.dev-foot[data-open-system]:hover:not(:disabled) { color: var(--ink); }
+.dev-foot[data-open-system]:disabled { cursor: default; color: var(--faint); }
+.dev-foot-note { margin-left: 6px; font-size: 10.5px; color: var(--faint); }
+.dev-foot[data-open-system]:disabled .dev-foot-note { color: var(--warn); }
 .dev-bt { display: inline-flex; align-items: center; gap: 6px; }
 .dev-bt i { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
 .dev-bt i.on { background: var(--good); }
@@ -1847,6 +1882,40 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums;
 }
 .quota-foot .spacer { flex: 1; }
+/*
+ * The agent row: the quota page's one link into the linkage switches.
+ *
+ * The figures are the page's tabular numbers; the dot is the only colour —
+ * green while an agent works, accent when every session is idle, faint when
+ * nothing is connected. It stays 28px tall so the balance, the split bar, the
+ * row and the stamp still fit the 205px content box.
+ */
+.quota-agent {
+  display: flex; align-items: center; gap: 7px; width: 100%; height: 28px;
+  margin-top: -2px; padding: 0 6px 0 4px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--dim); font: inherit; font-size: 11px;
+  text-align: left; cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+.quota-agent:hover { background: var(--surface-2); color: var(--ink); }
+.quota-agent:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+.quota-agent-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--faint);
+  transition: background 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.quota-agent[data-state="busy"] .quota-agent-dot {
+  background: var(--good);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent);
+}
+.quota-agent[data-state="idle"] .quota-agent-dot { background: var(--accent); }
+.quota-agent-name { font-weight: 550; letter-spacing: 0.01em; color: var(--ink); }
+.quota-agent-stats {
+  display: inline-flex; align-items: baseline; gap: 4px; margin-left: auto;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.quota-agent-stats b { font-size: 12px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.quota-agent-note { color: var(--faint); }
 /* A status line can be long ("invalid api key …"); it truncates, never wraps. */
 .quota-flag { margin: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--warn); }
 /*
@@ -1854,6 +1923,9 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
  * .empty block centred in 205px: on a page with nothing else to show, that
  * band of air is the one state where the card reads as broken.
  */
+/* The 8px lift: the quota page is a page like any other, so its first row
+   starts 4px under the panel's inner top edge, not 12px. */
+.quota-page { margin-top: -8px; }
 .quota-page-empty { display: flex; align-items: center; gap: 10px; padding: 2px 4px 0; }
 .quota-blank { margin: 0; font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

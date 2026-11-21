@@ -774,7 +774,7 @@ function pageAbout() {
   return head('关于', 'EmojiTot') +
     group('版本', card([
       platformRow,
-      row('当前版本', '双形态、十个功能页、设置十四个分区', '<span class="badge">v' + escapeHtml(version) + '</span>'),
+      row('当前版本', '双形态、十个功能页、设置十五个分区', '<span class="badge">v' + escapeHtml(version) + '</span>'),
       row('数据目录', 'prefs.json、state.json 与缓存', '<button type="button" class="btn" data-act="button" data-key="open-data">打开</button>'),
       row('状态文件', '当前表情与状态，可给别的工具读', '<button type="button" class="btn" data-act="button" data-key="open-state">打开</button>'),
       row('项目主页', 'MIT 许可，代码与美术全部自研', '<button type="button" class="btn" data-act="button" data-key="open-repo">GitHub</button>'),
@@ -798,7 +798,6 @@ function pageAbout() {
 function pageCast() {
   const casts = meta?.casts ?? [];
   const demos = meta?.demos ?? [];
-  const agents = meta?.agents ?? [];
   const currentCast = meta?.castId ?? 'tot';
   const members = casts.reduce((all, family) => all.concat(family.members), []);
   const castGrid = members.length
@@ -817,10 +816,23 @@ function pageCast() {
     : '';
   return head('角色与表情', '点一个就换，表情会直接播放') +
     group('角色', castGrid) +
-    group('表情', faceGrid) +
-    group('Agent 联动', card(agents.map((agent) =>
+    group('表情', faceGrid);
+}
+
+/**
+ * Agent 联动: the one page that owns the status-file switches.
+ *
+ * These switches used to sit at the bottom of 角色与表情, where the quota
+ * page's agent row could not land on them. They keep the same rows and the
+ * same action; only the page moved.
+ */
+function pageAgent() {
+  const agents = meta?.agents ?? [];
+  return head('Agent 联动', '把编码 Agent 的状态接进来') +
+    group('状态来源', card(agents.map((agent) =>
       rowActionToggle(agent.label, '读取它的状态文件来驱动表情', 'agent', agent.on, agent.id),
-    )));
+    ))) +
+    '<p class="note">开启后每 350 毫秒读一次该 Agent 的状态文件，把工作状态映射成岛上和球上的表情；文件不存在时保持静默。AI 额度页顶部的 Agent 行用的是同一份状态。</p>';
 }
 
 const RENDERERS = {
@@ -829,6 +841,7 @@ const RENDERERS = {
   layout: pageLayout,
   behavior: pageBehavior,
   cast: pageCast,
+  agent: pageAgent,
   pages: pagePages,
   music: pageMusic,
   focus: pageFocus,

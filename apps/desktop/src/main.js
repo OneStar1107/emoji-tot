@@ -719,6 +719,38 @@ function ensureStateFile() {
 }
 
 /**
+ * What the island's agent row draws.
+ *
+ * The sources already map their own status files into protocol ids, so the row
+ * reuses that vocabulary instead of starting a second state machine: one
+ * enabled source is one session, and that session runs while its file maps
+ * into the agent-work segment (30–49). A source that is off or has no file is
+ * idle; nothing here invents a measured zero for a missing snapshot.
+ */
+const AGENT_WORK = [30, 49];
+
+/** Last running flag per source, written by the same poll that feeds the pet. */
+const agentRunning = {};
+let agentPush = '';
+
+function agentSnapshot() {
+  const prefs = readPrefs();
+  return AGENT_SOURCES.map((source) => {
+    const on = Boolean(prefs[`agent_${source.id}`]);
+    return { id: source.id, label: source.label, on, running: on && Boolean(agentRunning[source.id]) };
+  });
+}
+
+/** Push only when a number changes: the poll below runs every 350ms. */
+function pushAgents() {
+  const snapshot = agentSnapshot();
+  const next = JSON.stringify(snapshot);
+  if (next === agentPush) return;
+  agentPush = next;
+  island.send('island:agents', snapshot);
+}
+
+/**
  * Follow coding agents.
  *
  * Each source is polled (cheaply: the OS caches the stat) and its own status
@@ -731,7 +763,7 @@ function startAgentWatch(prefs) {
     if (!prefs[`agent_${source.id}`]) continue;
     const file = source.file();
     let last = 0;
-    agentWatch[source.id] = setInterval(() => {
+    const tick = () => {
       let stat;
       try {
         stat = fs.statSync(file);
@@ -745,17 +777,26 @@ function startAgentWatch(prefs) {
       if (raw == null) return;
       last = nextAgentMtime(last, stat.mtimeMs, raw);
       const id = source.map(raw);
+      const work = Number(id);
+      agentRunning[source.id] = Number.isInteger(work) && work >= AGENT_WORK[0] && work <= AGENT_WORK[1];
       if (id) agentsArbiter().update({ sessionId: 'agent:' + source.id, emotionId: id });
-    }, 350);
+      pushAgents();
+    };
+    tick();
+    agentWatch[source.id] = setInterval(tick, 350);
   }
 }
 
 function stopAgentWatch() {
   for (const timer of Object.values(agentWatch)) clearInterval(timer);
   agentWatch = {};
+  for (const id of Object.keys(agentRunning)) delete agentRunning[id];
   if (agentArbiter) {
     for (const source of AGENT_SOURCES) agentArbiter.remove('agent:' + source.id);
   }
+  // A source switched off in settings is still shown as a session that is off;
+  // pushing here keeps the row from claiming it runs until the next app start.
+  pushAgents();
 }
 
 /* ------------------------------------------------------------- forms */
@@ -844,11 +885,7 @@ function handleSettingsAction({ kind, value } = {}) {
           label: emotion.name.zh,
           state: emotion.state,
         })),
-        agents: AGENT_SOURCES.map((source) => ({
-          id: source.id,
-          label: source.label,
-          on: Boolean(prefs[`agent_${source.id}`]),
-        })),
+        agents: agentSnapshot(),
       };
     }
     case 'dock': {
@@ -1439,6 +1476,8 @@ function startServices() {
   // parsing its page would drop the first frame.
   guard.guardedHandle('island:bootstrap', ['island'], () => ({
     battery: lastBattery,
+    // The quota page's agent row boots from the same sources the pet watches.
+    agents: agentSnapshot(),
     weather: weather.cached(),
     media: media.current(),
     lyrics: lastLyrics,

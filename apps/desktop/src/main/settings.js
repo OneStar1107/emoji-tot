@@ -190,6 +190,24 @@ function registerIpc() {
   guard.guardedHandle('settings:open-repo', ['settings'], () =>
     shell.openExternal('https://github.com/OneStar1107/emoji-tot'));
 
+  /*
+   * One allowlist, so this channel cannot become "open any URI on the host".
+   * The devices page passes 'bluetooth'; anything else is refused before the
+   * shell is touched. A failure comes back as data, not a throw, because the
+   * button's disabled state depends on it.
+   */
+  const SYSTEM_SETTINGS = { bluetooth: 'ms-settings:bluetooth' };
+  guard.guardedHandle('settings:openSystem', ['island', 'settings'], async (target) => {
+    const uri = SYSTEM_SETTINGS[target];
+    if (!uri) return { ok: false, error: 'unsupported target' };
+    try {
+      await shell.openExternal(uri);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error) };
+    }
+  }, { maxBytes: 256 });
+
   guard.guardedHandle('app:quit', ['settings', 'island'], () => app.quit());
 
   guard.guardedHandle('settings:open', ['settings', 'island'], (page) => {

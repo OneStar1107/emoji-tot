@@ -14,7 +14,7 @@ const path = require('node:path');
 const { scriptFile } = require('../paths');
 
 const SCRIPT = scriptFile('media.ps1');
-const EMPTY = Object.freeze({ active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '' });
+const EMPTY = Object.freeze({ active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '', output: '' });
 
 let state = { ...EMPTY };
 let proc = null;
@@ -59,6 +59,8 @@ function handleLine(line) {
     next.artist !== state.artist ||
     next.playing !== state.playing ||
     next.art !== state.art ||
+    // A device switch is the whole reason the badge exists; push it at once.
+    next.output !== state.output ||
     // The progress bar needs a frame per second; everything else is change-only.
     Math.floor(next.position) !== Math.floor(state.position);
   state = next;

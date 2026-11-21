@@ -53,7 +53,7 @@ export const PAGE_MANIFEST = [
  * there is a test that walks this table and fails on a key nothing draws.
  */
 /**
- * The settings window's left rail: three groups, fourteen pages.
+ * The settings window's left rail: three groups, fifteen pages.
  *
  * It lives here rather than in the renderer because the site's docs page
  * prints the page count, and two copies of a list like this is exactly how a
@@ -69,6 +69,7 @@ export const SETTINGS_NAV = [
       { key: 'layout', label: '尺寸与位置', icon: 'move' },
       { key: 'behavior', label: '隐藏与交互', icon: 'eye' },
       { key: 'cast', label: '角色与表情', icon: 'palette' },
+      { key: 'agent', label: 'Agent 联动', icon: 'plug' },
       { key: 'pages', label: '页面管理', icon: 'grid' },
     ],
   },

@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('islandAPI', {
   reportHit: (hit) => ipcRenderer.send('island:hit', hit),
   bootstrap: () => ipcRenderer.invoke('island:bootstrap'),
   openSettings: (page) => ipcRenderer.invoke('settings:open', page),
+  /** The devices page's Bluetooth row: open the system's own Bluetooth page. */
+  openSystem: (target) => ipcRenderer.invoke('settings:openSystem', target),
   quit: () => ipcRenderer.invoke('app:quit').catch(() => {}),
 
   onBattery: (listener) => on('island:battery', listener),
@@ -41,6 +43,7 @@ contextBridge.exposeInMainWorld('islandAPI', {
   reportFace: (state) => ipcRenderer.send('face:report', state),
   onCast: (listener) => on('island:cast', listener),
   onQuota: (listener) => on('island:quota', listener),
+  onAgents: (listener) => on('island:agents', listener),
   quotaDo: (action, data) => ipcRenderer.invoke('quota:do', { action, data }),
   onMail: (listener) => on('island:mail', listener),
   onCalendar: (listener) => on('island:calendar', listener),
