@@ -440,9 +440,9 @@ function musicPage() {
       <div class="music-meta">
         <b>${escapeHtml(media.title || '未命名')}</b>
         <span>${escapeHtml(media.artist || media.album || (browser ? '媒体 · ' + (media.source || '浏览器') : media.source || ''))}</span>
-        ${prefs.music?.lyrics === false ? '' : `<div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>`}
       </div>
     </div>
+    ${prefs.music?.lyrics === false ? '' : `<div class="lyric-box" data-lyric-box>${lyricSliceHtml(lyricAt(media.position))}</div>`}
     ${live
       ? '<div class="music-bar live"><i></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span>直播</span></div>'
       : '<div class="music-bar"><i data-progress style="width:' + pct.toFixed(1) + '%"></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-dur>' + clock(media.duration) + '</span></div>'}
