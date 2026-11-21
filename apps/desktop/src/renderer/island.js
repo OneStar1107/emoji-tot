@@ -539,39 +539,52 @@ const COUNTRY_ZH = {
 const countryZh = (code) => COUNTRY_ZH[String(code || '').toUpperCase()] ?? code;
 
 function weatherPage() {
-  if (!weather) return empty(ICON.sun, '正在获取天气…', '第一次需要几秒钟。');
+  if (!weather) {
+    /*
+     * The first reading takes a second or two. Keep the note at the top of the
+     * box instead of centring it in 205px: it is a loading line, not a page.
+     */
+    return `<div class="wx wx-empty">${empty(ICON.sun, '正在获取天气…', '第一次需要几秒钟。')}</div>`;
+  }
   const fahrenheit = prefs.weather?.unit === 'f';
   const show = (celsius) => {
     const value = Number(celsius) || 0;
     return fahrenheit ? Math.round((value * 9) / 5 + 32) : Math.round(value);
   };
   const now = weather.current;
-  const days = (weather.days ?? []).slice(0, 7);
+  /* Six days after today: today owns the big number above, so the strip is
+     only what comes next. */
+  const days = (weather.days ?? []).slice(1, 7);
   const weekday = ['日', '一', '二', '三', '四', '五', '六'];
   const dayCells = days
-    .map((day, index) => {
+    .map((day) => {
       const date = new Date(day.date);
-      const label = index === 0 ? '今天' : `周${weekday[date.getDay()]}`;
-      return `<div class="weather-day" data-today="${index === 0}">
-        <em>${label}</em>
+      return `<div class="wx-day">
+        <em>周${weekday[date.getDay()]}</em>
         ${svg(WEATHER_ICON[day.icon] ?? WEATHER_ICON.cloud)}
-        <b>${show(day.max)}°</b><i>${show(day.min)}°</i>
+        <span class="wx-range"><b>${show(day.max)}°</b><i>${show(day.min)}°</i></span>
       </div>`;
     })
     .join('');
-  return `<div class="weather">
-    <div class="weather-now">
-      <div class="weather-temp">${show(now.temp)}<sup>°</sup></div>
-      <div class="weather-desc"><b>${escapeHtml(now.text)}</b><span>${escapeHtml(placeZh(weather.place.name))}${weather.place.country ? ' · ' + escapeHtml(countryZh(weather.place.country)) : ''}</span></div>
-      <span class="weather-icon">${svg(WEATHER_ICON[now.icon] ?? WEATHER_ICON.cloud)}</span>
+  const place = escapeHtml(placeZh(weather.place.name) || '当前位置');
+  const country = weather.place.country ? ' · ' + escapeHtml(countryZh(weather.place.country)) : '';
+  const sunrise = (now.sunrise || '').slice(11, 16) || '--:--';
+  const sunset = (now.sunset || '').slice(11, 16) || '--:--';
+  const updated = weather.fetchedAt ? ' · ' + timeOf(weather.fetchedAt) + ' 更新' : '';
+  return `<div class="wx">
+    <div class="wx-now">
+      <div class="wx-where"><b>${place}</b><em>${escapeHtml(now.text)}${country}</em></div>
+      <div class="wx-temp">${show(now.temp)}<sup>°</sup></div>
+      <span class="wx-icon">${svg(WEATHER_ICON[now.icon] ?? WEATHER_ICON.cloud)}</span>
     </div>
-    <div class="weather-grid">
-      <div class="weather-cell"><em>体感</em><b>${show(now.feels)}°</b></div>
-      <div class="weather-cell"><em>湿度</em><b>${Number(now.humidity) || 0}%</b></div>
-      <div class="weather-cell"><em>风速</em><b>${Number(now.wind) || 0} km/h</b></div>
-      <div class="weather-cell"><em>日出日落</em><b>${escapeHtml((now.sunrise || '').slice(11, 16) || '--')} / ${escapeHtml((now.sunset || '').slice(11, 16) || '--')}</b></div>
+    <div class="wx-grid">
+      <div class="wx-cell"><em>体感</em><b>${show(now.feels)}°</b></div>
+      <div class="wx-cell"><em>湿度</em><b>${Number(now.humidity) || 0}%</b></div>
+      <div class="wx-cell"><em>风速</em><b>${Number(now.wind) || 0}<small>km/h</small></b></div>
+      <div class="wx-cell"><em>日出 · 日落</em><b>${sunrise} / ${sunset}</b></div>
     </div>
-    <div class="weather-days">${dayCells}</div>
+    <div class="wx-days">${dayCells}</div>
+    <p class="wx-src">Open-Meteo${updated}</p>
   </div>`;
 }
 
@@ -580,71 +593,92 @@ const timeOf = (ms) => {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
 
+const PROVIDER_NAMES = {
+  deepseek: 'DeepSeek',
+  moonshot: 'Moonshot',
+  siliconflow: 'SiliconFlow',
+  openrouter: 'OpenRouter',
+};
+
+/** A provider slug is not a label: DeepSeek reads as DeepSeek, not deepseek. */
+const providerName = (value) => {
+  const key = String(value || '').toLowerCase();
+  return PROVIDER_NAMES[key] ?? (key ? key[0].toUpperCase() + key.slice(1) : 'AI');
+};
+
+const CURRENCY_MARKS = { CNY: '¥', USD: '$' };
+
 function quotaPage() {
   const state = quotaState ?? { accounts: [], current: null, last: null };
   if (!state.accounts.length) {
     /*
-     * One wrapper, so the empty state is not the whole page.
+     * One line and one action, against the top of the page.
      *
-     * .pages > .empty is centred in 205px by design, and on the quota page that
-     * read as "content floating in the middle with a band above and below it".
-     * The wrapper is what scopes the top-aligned override to this page alone.
+     * The old empty state used the shared 96px block, and .pages > .empty
+     * centres that in 205px: on a page with nothing else to show, that band of
+     * air above and below is the one state where the card reads as broken.
      */
-    return `<div class="quota-page quota-page-empty">${empty(
-      ICON.coin,
-      '还没有连接账号',
-      '在设置里填入 DeepSeek API Key，这里会显示余额和账号。',
-      '去添加账号',
-      'settings:quota',
-    )}</div>`;
+    return `<div class="quota-page quota-page-empty">
+      <p class="quota-blank">还没有连接额度账号</p>
+      <button type="button" class="ghost" data-action="settings:quota">添加账号</button>
+    </div>`;
   }
   const current = state.accounts.find((account) => account.current);
   const last = state.last;
-  const actions = `<div class="quota-actions">
-    <button type="button" class="ghost" data-local="quota:refresh">刷新</button>
-    ${state.accounts.length > 1 ? '<button type="button" class="ghost" data-local="quota:next">切换账号</button>' : ''}
-  </div>`;
+  const provider = providerName(last?.provider ?? current?.provider);
+  const currency = last?.currency ?? '';
+  const mark = CURRENCY_MARKS[currency] ?? '';
+  /*
+   * More than one account is a switch, not a stack of cards: one 6px dot per
+   * account in the provider row, the active one widened. The hit box stays
+   * 28px even though the paint is a dot, so the row is still safe to click.
+   */
+  const dots = state.accounts.length > 1
+    ? `<span class="quota-accounts">` + state.accounts
+      .map((account) => `<button type="button" data-local="quota:select" data-id="${escapeHtml(account.id)}" aria-current="${account.current ? 'true' : 'false'}" aria-label="${escapeHtml(account.name)}" title="${escapeHtml(account.name)}"></button>`)
+      .join('') + `</span>`
+    : '';
+  const meta = `<div class="quota-meta">
+      <span class="quota-id"><b>${escapeHtml(provider)}</b>${currency ? `<i>·</i>${escapeHtml(currency)}` : ''}${last && last.available === false ? '<em class="quota-off">不可用</em>' : ''}</span>
+      ${dots}
+    </div>`;
+  const refresh = '<button type="button" class="ghost" data-local="quota:refresh">刷新</button>';
   if (!last || last.error) {
-    /* No numbers yet: the page is the account name, one line of status and the
-       refresh button, stacked at the top instead of spread over 205px. */
     return `<div class="quota quota-broken">
-      <div class="quota-head"><span class="quota-note">${escapeHtml(current?.name ?? '')}</span></div>
-      <div class="quota-flag">${escapeHtml(last?.error ?? '正在查询…')}</div>
-      <div class="quota-foot"><span class="spacer"></span>${actions}</div>
+      ${meta}
+      <p class="quota-flag">${escapeHtml(last?.error ?? '正在查询…')}</p>
+      <div class="quota-foot">
+        <span>${last?.at ? '更新于 ' + timeOf(last.at) : '尚未更新'}</span>
+        <span class="spacer"></span>
+        ${refresh}
+      </div>
     </div>`;
   }
   /*
-   * The console skin draws this balance as an instrument. The quota data has
-   * no percentage of its own, only amounts, so the one ratio the numbers
-   * already contain is their split: topped-up vs granted. It is written as a
-   * custom property for the skin's bar and is not stored anywhere — no new
-   * data field, and this wrapper paints identically under the other skins.
+   * The balance is the page's one focus: 30px of tabular figures. Below it,
+   * the only ratio these two amounts contain — topped vs granted — as a 4px
+   * bar with a legend that names its two colours. The split is written as a
+   * custom property; no new data field is introduced, and every skin paints
+   * the same numbers.
    */
   const topped = Number(last.topped) || 0;
   const granted = Number(last.granted) || 0;
   const split = topped + granted;
   const share = split > 0 ? Math.round((topped / split) * 100) : 0;
-  /*
-   * Three rows, top-aligned: the amount (and the console skin's split bar that
-   * hangs under the head), the split as one legend line, then 更新于 + 刷新 on
-   * the same line. The two roster rows used to be their own paragraphs with an
-   * action row underneath, which stacked 185px into a 205px box and left the
-   * page reading as a block floating in the middle.
-   */
   return `<div class="quota" data-gauge="true" style="--quota-share:${share}">
-    <div class="quota-head">
-      <span class="quota-amount"><small>¥</small>${escapeHtml(last.total)}</span>
-      <span class="quota-note">${escapeHtml(current?.name ?? '')}${last.available ? '' : ' · 不可用'}</span>
-      <div class="quota-meter" aria-hidden="true" data-share="${share}%"></div>
-    </div>
-    <div class="quota-split">
-      <span class="quota-part topped"><i class="quota-piece topped"></i>充值 ¥${escapeHtml(last.topped)}</span>
-      <span class="quota-part granted"><i class="quota-piece granted"></i>赠送 ¥${escapeHtml(last.granted)}</span>
+    ${meta}
+    <div class="quota-balance"><span class="quota-amount"><small>${mark}</small>${escapeHtml(last.total)}</span></div>
+    <div class="quota-ratio">
+      <span class="quota-meter" aria-hidden="true"></span>
+      <div class="quota-legend">
+        <span class="quota-part topped"><i class="quota-piece"></i>充值 ${mark}${escapeHtml(last.topped)}</span>
+        <span class="quota-part granted"><i class="quota-piece"></i>赠送 ${mark}${escapeHtml(last.granted)}</span>
+      </div>
     </div>
     <div class="quota-foot">
       <span>更新于 ${timeOf(last.at)}</span>
       <span class="spacer"></span>
-      ${actions}
+      ${refresh}
     </div>
   </div>`;
 }
@@ -682,45 +716,79 @@ function messengerBlock(limit) {
   </div>`;
 }
 
+/**
+ * Mailbox: two tabs over one fixed-height row per sender.
+ *
+ * The page used to stack a messenger switchboard, a head line and two-line
+ * subject rows: six messages in 205px, every row a different height, and a dot
+ * that shifted the sender depending on whether the mail was read. Now the tabs
+ * own the first 22px, a row is exactly 20px, and unread is a 3px accent bar on
+ * the left. The subject moves to the row tooltip — this list is scanned for who
+ * wrote and when. 全部/未读 is two radios plus :has(), so a mail push that
+ * re-renders the page cannot leave stale script state behind.
+ */
+function mailTabs(total, unread) {
+  return `<input type="radio" name="mail-tab" id="mail-tab-all" class="mail-tab-radio" checked />
+    <label class="mail-tab" for="mail-tab-all">全部<i>${total}</i></label>
+    <input type="radio" name="mail-tab" id="mail-tab-unread" class="mail-tab-radio" />
+    <label class="mail-tab" for="mail-tab-unread">未读<i>${unread}</i></label>`;
+}
+
 function mailPage() {
   const state = mailState ?? { accounts: [], messages: [] };
   if (!state.accounts.length) {
-    const board = messengerBlock(3);
-    return `<div class="mail-page mail-page-empty${board ? ' mail-page-with-msg' : ''}">${board}${empty(
-      ICON.mail,
-      '还没有添加邮箱',
-      '支持 163、QQ、Gmail。授权码只保存在本机。',
-      '添加邮箱',
-      // The settings page is called comm; a stale key opens the window on the
-      // wrong page, which reads as "the button does nothing".
-      'settings:comm',
-    )}</div>`;
+    /* One line and one action at the top of the page: the centred icon, title,
+       provider note and button filled 205px with a band of air. */
+    return `<div class="mail-page mail-page-empty">
+      <div class="mail-empty">
+        <p class="mail-empty-line">还没有添加邮箱</p>
+        <button type="button" class="ghost" data-action="settings:comm">添加邮箱</button>
+      </div>
+    </div>`;
   }
-  if (!state.messages.length) {
-    const hint = state.syncing ? '正在同步…' : state.error ? state.error : '还没有拉取到邮件';
-    return `<div class="mail-page">${messengerBlock(3)}<div class="mail">
-      <div class="mail-head"><b>${state.accounts.length} 个邮箱</b><span class="spacer"></span><span>${escapeHtml(hint)}</span></div>
-      <p class="todo-empty">${state.error ? '检查一下授权码或网络，然后在设置里点同步。' : '新邮件到达后会出现在这里。'}</p>
+  const messages = state.messages ?? [];
+  /* The tab counts follow the rows the page actually shows: the list is capped
+     at nine, so an unread mail below the fold must not inflate "未读" past the
+     bars the list can draw. */
+  const visible = messages.slice(0, 9);
+  const unread = visible.filter((message) => !message.seen).length;
+  const sync = state.syncing ? '同步中' : state.error ? '部分失败' : state.lastSync ? timeOf(state.lastSync) + ' 更新' : '';
+  /* The messenger switchboard used to sit above the list; the tabs own the
+     first 22px now, so a compact "消息 N" entry opens the same app list as a
+     popover over the rows. It exists only while an app is running — a dead
+     control is worse than a missing one. */
+  const apps = messengerState?.apps ?? [];
+  const msgUnread = apps.reduce((sum, app) => sum + (Number(app.unread) || 0), 0);
+  const msgEntry = apps.length
+    ? `<span class="mail-msg"><button type="button" class="mail-msg-entry" aria-haspopup="true" aria-label="消息应用">消息 ${msgUnread}</button><span class="mail-msg-pop" role="menu">${apps.slice(0, 3).map((app) => `<button type="button" class="mail-msg-row" role="menuitem" data-local="messenger:activate" data-id="${escapeHtml(app.handle)}"><i${app.unread ? ' class="on"' : ''}></i><span class="mail-msg-name">${escapeHtml(app.label)}</span><em>${app.unread ? app.unread + ' 条' : '运行中'}</em></button>`).join('')}${apps.length > 3 ? `<span class="mail-msg-more">还有 ${apps.length - 3} 个在运行</span>` : ''}</span></span>`
+    : '';
+  /* The sync note rides on the tab line: a separate head row above the list
+     pushed the last message past the content box. */
+  const head = `<div class="mail-tabs">${mailTabs(messages.length, unread)}<span class="mail-tab-spacer"></span><span class="mail-sync" title="${escapeHtml(state.error || '')}">${escapeHtml(sync)}</span>${msgEntry}</div>`;
+  if (!messages.length) {
+    const hint = state.syncing ? '正在同步…' : state.error ? '检查授权码或网络，然后在设置里重新同步。' : '新邮件到达后会出现在这里。';
+    return `<div class="mail-page">${head}<div class="mail mail-empty-inline">
+      <p class="mail-empty-line">${escapeHtml(hint)}</p>
+      <button type="button" class="ghost" data-action="settings:comm">去设置</button>
     </div></div>`;
   }
-  const rows = state.messages
-    .slice(0, 7)
-    .map((message) => `<div class="mail-item" title="${escapeHtml(message.fromAddress || '')}">
-        <span class="mail-dot" style="opacity:${message.seen ? 0.28 : 1}"></span>
-        <b>${escapeHtml(message.subject)}</b>
-        ${message.code ? `<em class="mail-code">${escapeHtml(message.code)}</em>` : ''}
-        ${message.hasInvite ? '<em class="mail-invite">邀请</em>' : ''}
-        <em>${timeOf(message.date)}</em>
-      </div>`)
+  /* Nine rows is exactly what the 189px the tab line leaves can hold; the list
+     scrolls if a future row height widens it, but the page never grows. */
+  const rows = visible
+    .map((message) => {
+      /* The sender is the line; the subject is the tooltip. An address without
+         a display name is still a sender, so a row never renders blank. */
+      const from = message.fromName || message.fromAddress || '未知发件人';
+      const isUnread = message.seen ? 0 : 1;
+      const title = [message.subject, message.fromAddress].filter(Boolean).join(' · ');
+      return `<div class="mail-row${isUnread ? ' unread' : ''}" data-unread="${isUnread}" title="${escapeHtml(title)}">
+        <span class="mail-from">${escapeHtml(from)}</span>
+        <time class="mail-time">${timeOf(message.date)}</time>
+      </div>`;
+    })
     .join('');
-  return `<div class="mail-page">${messengerBlock(3)}<div class="mail">
-    <div class="mail-head">
-      <b>${state.accounts.length} 个邮箱</b>
-      <span class="spacer"></span>
-      <span>${state.syncing ? '同步中…' : state.error ? '部分失败' : timeOf(state.lastSync) + ' 更新'}</span>
-    </div>
-    ${rows}
-    ${state.error ? `<p class="mail-error">${escapeHtml(state.error)}</p>` : ''}
+  return `<div class="mail-page">${head}<div class="mail">
+    <div class="mail-list">${rows}<p class="mail-none">没有未读邮件</p></div>
   </div></div>`;
 }
 
@@ -738,10 +806,8 @@ const FESTIVALS = {
 
 function calendarPage() {
   const failedSubs = (calendarState.subscriptions ?? []).filter((sub) => sub.error);
-  const subErrorBar = failedSubs.length
-    ? '<p class="cal-error">' + failedSubs.length + ' 个日历订阅拉取失败：'
-      + escapeHtml(failedSubs.map((sub) => sub.name || sub.id).join('、'))
-      + '。在设置 → 通知、邮箱与日程里检查链接。</p>'
+  const subError = failedSubs.length
+    ? failedSubs.length + ' 个订阅拉取失败：' + failedSubs.map((sub) => sub.name || sub.id).join('、')
     : '';
   const events = calendarState.events ?? [];
   const byDay = new Map();
@@ -750,62 +816,72 @@ function calendarPage() {
     if (!byDay.has(key)) byDay.set(key, []);
     byDay.get(key).push(event);
   }
+  const now = new Date();
   const first = new Date(calendarView.year, calendarView.month, 1);
-  const startWeekday = first.getDay();
   const daysInMonth = new Date(calendarView.year, calendarView.month + 1, 0).getDate();
   const cells = [];
-  for (let i = 0; i < startWeekday; i += 1) cells.push(null);
+  for (let i = 0; i < first.getDay(); i += 1) cells.push(null);
   for (let day = 1; day <= daysInMonth; day += 1) cells.push(day);
   while (cells.length % 7 !== 0) cells.push(null);
+  /*
+   * A fixed 7x5 window, 24px rows: 35 cells is the whole budget for the month.
+   * Short months still fill five rows so every month keeps the same height; a
+   * month that needs a sixth week ends at cell 35 here — the grid keeps one
+   * height on every month, which is what the 205px page is sized against.
+   */
+  while (cells.length < 35) cells.push(null);
+  const shown = cells.slice(0, 35);
 
-  const now = new Date();
-  const isThisMonth = now.getFullYear() === calendarView.year && now.getMonth() === calendarView.month;
-  const selectedDate = new Date(calendarView.year, calendarView.month, calendarView.selected);
-  const selectedEvents = byDay.get(dayKey(selectedDate)) ?? [];
+  const todayKey = dayKey(now);
+  const selectedKey = dayKey(new Date(calendarView.year, calendarView.month, calendarView.selected));
+  const selectedEvents = byDay.get(selectedKey) ?? [];
+  const visibleEvents = selectedEvents.slice(0, 2);
 
-  const grid = cells
+  const grid = shown
     .map((day) => {
       if (day === null) return '<span class="cal-cell empty"></span>';
       const key = `${calendarView.year}-${calendarView.month + 1}-${day}`;
       const list = byDay.get(key) ?? [];
+      const isToday = key === todayKey;
       const classes = ['cal-cell'];
-      if (isThisMonth && day === now.getDate()) classes.push('today');
+      if (isToday) classes.push('today');
       if (day === calendarView.selected) classes.push('picked');
-      if (list.length) classes.push('has');
-      return `<button type="button" class="${classes.join(' ')}" data-cal-day="${day}">
-        <span>${day}</span>${list.length ? '<i class="cal-dot"></i>' : ''}
+      return `<button type="button" class="${classes.join(' ')}" data-cal-day="${day}" aria-label="${calendarView.month + 1} 月 ${day} 日">
+        <span>${day}</span>${isToday ? '<i class="cal-today-dot"></i>' : ''}${list.length ? '<i class="cal-ev-dot"></i>' : ''}
       </button>`;
     })
     .join('');
 
-  const rows = selectedEvents.length
-    ? selectedEvents
-        .map((event) => {
-          const start = new Date(event.start);
-          const time = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
-          return `<div class="cal-event">
-            <span class="cal-time">${time}</span>
-            <b>${escapeHtml(event.title)}</b>
-            ${event.location ? `<em>${escapeHtml(event.location)}</em>` : ''}
-          </div>`;
-        })
-        .join('')
-    : '<p class="cal-empty">这一天没有安排。</p>';
+  const isToday = selectedKey === todayKey;
+  const title = isToday
+    ? `今天 · ${selectedEvents.length} 件事`
+    : `${calendarView.month + 1} 月 ${calendarView.selected} 日 · ${selectedEvents.length} 件事`;
+  const rows = visibleEvents
+    .map((event) => {
+      const start = new Date(event.start);
+      const time = String(start.getHours()).padStart(2, '0') + ':' + String(start.getMinutes()).padStart(2, '0');
+      return `<div class="cal-event"><span class="cal-time">${time}</span><b>${escapeHtml(event.title)}</b></div>`;
+    })
+    .join('');
+  const festival = FESTIVALS[calendarView.month + 1 + '-' + calendarView.selected];
 
   return `<div class="calendar">
     <div class="cal-left">
-    <div class="cal-head">
-      <button type="button" class="icon-btn" data-cal-nav="-1" aria-label="上个月"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
-      <b>${calendarView.year} 年 ${calendarView.month + 1} 月</b>
-      <button type="button" class="icon-btn" data-cal-nav="1" aria-label="下个月"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
-    </div>
-    <div class="cal-week">${WEEK_ZH.map((day) => `<span>${day}</span>`).join('')}</div>
-    <div class="cal-grid">${grid}</div>
+      <div class="cal-head">
+        <button type="button" class="icon-btn" data-cal-nav="-1" aria-label="上个月">${svg('<path d="m15 5-7 7 7 7"/>')}</button>
+        <b>${calendarView.year} 年 ${calendarView.month + 1} 月</b>
+        <button type="button" class="icon-btn" data-cal-nav="1" aria-label="下个月">${svg('<path d="m9 5 7 7-7 7"/>')}</button>
+      </div>
+      <div class="cal-week">${WEEK_ZH.map((day) => `<span>${day}</span>`).join('')}</div>
+      <div class="cal-grid">${grid}</div>
     </div>
     <div class="cal-right">
-      <div class="cal-day-title">${calendarView.month + 1} 月 ${calendarView.selected} 日</div>
-      ${FESTIVALS[calendarView.month + 1 + '-' + calendarView.selected] ? `<div class="cal-festival">${FESTIVALS[calendarView.month + 1 + '-' + calendarView.selected]}</div>` : ''}
-      <div class="cal-events">${rows}</div>
+      <div class="cal-day-title">${title}</div>
+      ${festival ? `<em class="cal-festival">${festival}</em>` : ''}
+      ${visibleEvents.length
+        ? `<div class="cal-events">${rows}</div>`
+        : '<p class="cal-empty">没有安排</p>'}
+      ${subError ? `<p class="cal-error" title="${escapeHtml(subError)}">${escapeHtml(subError)}</p>` : ''}
     </div>
   </div>`;
 }
@@ -824,7 +900,7 @@ function updateFocusLive() {
   if (!ring) return;
   const pct = focusState.total ? Math.min(100, ((focusState.total - focusState.remaining) / focusState.total) * 100) : 0;
   ring.style.setProperty('--pct', pct.toFixed(2));
-  const time = ring.querySelector('.focus-time');
+  const time = pagesEl.querySelector('.focus-time');
   if (time) time.textContent = clock(focusState.remaining);
 }
 
@@ -832,25 +908,49 @@ function updateFocusLive() {
 
 function focusPage() {
   const state = focusState;
-  const label = state.phase === 'idle' ? '准备开始' : state.phase === 'work' ? '专注中' : '休息中';
-  const pct = state.total ? Math.min(100, ((state.total - state.remaining) / state.total) * 100) : 0;
+  /*
+   * A pomodoro that cannot start is a page of dead keys: focus.enabled gates
+   * the timer in main, so show the one action that fixes it instead of a
+   * 25:00 that never moves. A one-line state plus one button, pinned to the
+   * top of the box rather than centred in it.
+   */
+  if (prefs.focus?.enabled !== true) {
+    return `<div class="focus focus-empty">
+      <p>专注还没有打开</p>
+      <button type="button" class="ghost" data-action="settings:focus">去打开</button>
+    </div>`;
+  }
+  const workMin = Math.max(1, Number(prefs.focus?.work) || 25);
+  const phase = state.phase;
   const running = state.running;
-  const canAct = state.phase !== 'idle';
-  const primary = !canAct
-    ? '<button type="button" class="btn primary" data-local="focus:start">开始专注</button>'
-    : running
-      ? '<button type="button" class="btn primary" data-local="focus:pause">暂停</button>'
-      : '<button type="button" class="btn primary" data-local="focus:resume">继续</button>';
+  const idle = phase === 'idle';
+  const rest = phase === 'rest';
+  /* At rest the clock is the configured 25:00, not 0:00: the page is a
+     stopwatch waiting to start, and the number is its face. */
+  const seconds = idle ? workMin * 60 : state.remaining;
+  const pct = state.total ? Math.min(100, ((state.total - state.remaining) / state.total) * 100) : 0;
+  const phaseText = idle ? '准备开始' : rest ? (running ? '休息中' : '休息暂停') : running ? '专注中' : '已暂停';
+  /*
+   * Three keys, three real actions from the main process: 专注 starts or
+   * resumes work, 休息 skips into (or out of) the rest phase, 播放 is the
+   * transport. A move the current phase cannot perform is disabled, not
+   * hidden, so the row keeps its shape and the next move stays visible.
+   */
+  const focusKey = idle || (phase === 'work' && !running)
+    ? `<button type="button" class="focus-key" data-local="focus:${idle ? 'start' : 'resume'}">专注</button>`
+    : '<button type="button" class="focus-key" disabled>专注</button>';
+  const restKey = idle
+    ? '<button type="button" class="focus-key" disabled>休息</button>'
+    : `<button type="button" class="focus-key${rest ? ' on' : ''}" data-local="focus:skip">${rest ? '结束休息' : '休息'}</button>`;
+  const playKey = running
+    ? '<button type="button" class="focus-key on" data-local="focus:pause">暂停</button>'
+    : `<button type="button" class="focus-key" data-local="focus:${idle ? 'start' : 'resume'}">${idle ? '播放' : '继续'}</button>`;
   return `<div class="focus">
-    <div class="focus-ring" style="--pct:${pct.toFixed(1)}">
-      <span class="focus-time">${clock(state.remaining)}</span>
-      <span class="focus-phase">${label}</span>
+    <div class="focus-main">
+      <div class="focus-ring" style="--pct:${pct.toFixed(1)}"><span class="focus-phase">${phaseText}</span></div>
+      <b class="focus-time">${clock(seconds)}</b>
     </div>
-    <div class="focus-row">
-      ${primary}
-      <button type="button" class="btn" data-local="focus:skip">${state.phase === 'work' ? '跳过本轮' : state.phase === 'rest' ? '跳过休息' : '跳过'}</button>
-      ${canAct ? '<button type="button" class="btn" data-local="focus:stop">结束</button>' : ''}
-    </div>
+    <div class="focus-keys">${focusKey}${restKey}${playKey}</div>
     <p class="focus-note">已完成 ${state.cycles} 轮专注</p>
   </div>`;
 }
@@ -858,26 +958,31 @@ function focusPage() {
 function healthPage() {
   const state = healthState;
   if (!state.enabled) {
-    return empty(ICON.drop, '健康提醒还没有打开', '打开后会按你设的间隔提醒喝水与起身。', '去打开', 'settings:focus');
+    return `<div class="health health-empty">
+      <p>健康提醒还没有打开</p>
+      <button type="button" class="ghost" data-action="settings:focus">去打开</button>
+    </div>`;
   }
   const waterPct = Math.min(100, (state.sinceWater / state.waterMin) * 100);
   const standPct = Math.min(100, (state.sinceStand / state.standMin) * 100);
+  const total = (state.waterCount || 0) + (state.standCount || 0);
+  /*
+   * Two rows, one per counter: label, the 4px bar, then the elapsed/interval
+   * figure. The row itself is the record button — one 36px hit target instead
+   * of a separate pill, which is what keeps both counters on the page at
+   * reading size without a card around each.
+   */
+  const row = (label, action, since, every, pct, due, hint) => `<button type="button" class="health-row" data-local="health:${action}" aria-label="${hint}" title="${hint}">
+      <b class="health-label">${label}</b>
+      <span class="health-bar"><i style="width:${pct.toFixed(0)}%" data-due="${due}"></i></span>
+      <span class="health-num">${since}<i>/${every}</i></span>
+    </button>`;
   return `<div class="health">
-    <div class="health-block">
-      <div class="health-head"><b>喝水</b><span>距上次 ${state.sinceWater} 分钟 · 每 ${state.waterMin} 分钟</span></div>
-      <div class="health-bar"><i style="width:${waterPct.toFixed(0)}%" data-due="${state.waterDue}"></i></div>
-      <div class="health-actions">
-        <button type="button" class="btn" data-local="health:drink">我喝过了</button>
-        <button type="button" class="btn ghost" data-local="health:resetWater" aria-label="清除喝水记录">清除</button>
-      </div>
-    </div>
-    <div class="health-block">
-      <div class="health-head"><b>久坐</b><span>距上次 ${state.sinceStand} 分钟 · 每 ${state.standMin} 分钟</span></div>
-      <div class="health-bar"><i style="width:${standPct.toFixed(0)}%" data-due="${state.standDue}"></i></div>
-      <div class="health-actions">
-        <button type="button" class="btn" data-local="health:stand">我起来了</button>
-        <button type="button" class="btn ghost" data-local="health:resetStand" aria-label="清除久坐记录">清除</button>
-      </div>
+    ${row('喝水', 'drink', state.sinceWater, state.waterMin, waterPct, state.waterDue, '记录一次喝水')}
+    ${row('站立', 'stand', state.sinceStand, state.standMin, standPct, state.standDue, '记录一次站立')}
+    <div class="health-foot">
+      <span>今日已记录 ${total} 次</span>
+      <button type="button" class="health-clear" data-local="health:reset">清空</button>
     </div>
   </div>`;
 }
@@ -894,20 +999,19 @@ function dueLabel(due) {
 
 function todoPage() {
   if (prefs.todo?.enabled === false) {
-    return empty(ICON.check, '待办已关闭', '打开后岛上会显示清单与到期提醒。', '去打开', 'settings:todo');
+    /* The disabled state is another empty page, so it follows the same rule:
+       one line, one action, against the top. */
+    return `<div class="todo todo-blank-page">
+      <p class="todo-blank">待办已在设置里关闭</p>
+      <button type="button" class="ghost" data-action="settings:todo">去打开</button>
+    </div>`;
   }
   const openItems = todos.filter((item) => !item.done);
   const doneItems = todos.filter((item) => item.done);
-  const itemHtml = (item) => `<div class="todo-item${item.done ? ' done' : ''}" data-id="${item.id}">
-      <button type="button" class="todo-check" data-local="todo:toggle" data-id="${item.id}" aria-label="完成">${item.done ? '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>' : ''}</button>
-      <span class="todo-text">${escapeHtml(item.text)}</span>
-      ${item.repeat ? `<em class="todo-repeat">${item.repeat === 'daily' ? '每天' : '每周'}</em>` : ''}
-      ${item.due ? `<em class="todo-due${item.due < Date.now() && !item.done ? ' late' : ''}">${item.done && item.nextDue ? '下次 ' + dueLabel(item.nextDue) : dueLabel(item.due)}</em>` : ''}
-      <button type="button" class="todo-del" data-local="todo:remove" data-id="${item.id}" aria-label="删除">×</button>
-    </div>`;
-  return `<div class="todo">
-    <div class="todo-add">
-      <input type="text" placeholder="加一条待办，回车保存" data-todo-input maxlength="200" />
+  const total = todos.length;
+  const done = doneItems.length;
+  const addRow = `<div class="todo-add">
+      <input type="text" placeholder="加一个，回车保存" data-todo-input maxlength="200" />
       <label class="todo-due-pick" title="设到期时间">
         <input type="datetime-local" data-todo-due />
         <span>到期</span>
@@ -919,12 +1023,40 @@ function todoPage() {
           <option value="weekly">每周</option>
         </select>
       </label>
+    </div>`;
+  if (!total) {
+    /*
+     * One line and the field itself. The input is the page's only action, so
+     * the empty state needs no icon, no second button and no centred block:
+     * the old one sat in the middle of the card with 50px of air around it.
+     */
+    return `<div class="todo todo-blank-page">
+      <p class="todo-blank">还没有待办</p>
+      ${addRow}
+    </div>`;
+  }
+  const itemHtml = (item) => `<div class="todo-item${item.done ? ' done' : ''}" data-id="${item.id}">
+      <button type="button" class="todo-check" data-local="todo:toggle" data-id="${item.id}" aria-label="完成">${item.done ? '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>' : ''}</button>
+      <span class="todo-text">${escapeHtml(item.text)}</span>
+      ${item.repeat ? `<em class="todo-repeat">${item.repeat === 'daily' ? '每天' : '每周'}</em>` : ''}
+      ${item.due ? `<em class="todo-due${item.due < Date.now() && !item.done ? ' late' : ''}">${item.done && item.nextDue ? '下次 ' + dueLabel(item.nextDue) : dueLabel(item.due)}</em>` : ''}
+      <button type="button" class="todo-del" data-local="todo:remove" data-id="${item.id}" aria-label="删除">×</button>
+    </div>`;
+  const pct = Math.round((done / total) * 100);
+  /*
+   * Four bands against the top: done/total with a 4px bar, the add row, a
+   * three-row list, and the clear line. Six tasks used to stack 197px of rows
+   * into a 167px list; the list now has its own 88px viewport and scrolls
+   * there, so neither the page nor the panel can grow with the list.
+   */
+  return `<div class="todo">
+    <div class="todo-progress">
+      <span class="todo-count"><b>${done}</b><i>/</i>${total} 完成</span>
+      <span class="todo-bar" aria-hidden="true"><i style="width:${pct}%"${pct === 100 ? ' data-done="true"' : ''}></i></span>
     </div>
-    <div class="todo-list">
-      ${openItems.length ? openItems.map(itemHtml).join('') : '<p class="todo-empty">还没有待办，上面写一条试试。</p>'}
-      ${doneItems.length ? `<div class="todo-done-head">已完成 ${doneItems.length}<button type="button" class="todo-clear" data-local="todo:clearDone">清空</button></div>` : ''}
-      ${doneItems.map(itemHtml).join('')}
-    </div>
+    ${addRow}
+    <div class="todo-list">${[...openItems, ...doneItems].map(itemHtml).join('')}</div>
+    ${done ? `<button type="button" class="todo-clear" data-local="todo:clearDone">清空 ${done} 条已完成</button>` : ''}
   </div>`;
 }
 
@@ -933,6 +1065,9 @@ const sizeLabel = (bytes) => {
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / 1024 / 1024).toFixed(1) + ' MB';
 };
+
+/** The clipboard stays one row until the user opens it; this is UI state only. */
+let clipboardExpanded = false;
 
 function shelfPage() {
   if (prefs.shelf?.enabled === false) {
@@ -944,25 +1079,45 @@ function shelfPage() {
    * The page used to be a full-height column: the hint at the top, a centred
    * "置物架是空的" paragraph, and the clipboard panel stretching into whatever
    * was left. That reads as three blocks floating in 205px. With no files there
-   * is one 96px prompt, and the clipboard keeps its own natural height below.
+   * is one 96px prompt, and the clipboard keeps its own row below.
    */
   const emptyShelf = shelfFiles.length === 0;
+  /*
+   * One row is 24px: a 16px file glyph, the name at reading size with an
+   * ellipsis and a 16px delete key. The size label is gone — it was the third
+   * column in a 24px row and the only thing that did not fit; the open key's
+   * tooltip still carries it. The list shows four rows and scrolls, so a busy
+   * shelf cannot push the clipboard entry off the page.
+   */
+  const fileIcon = svg('<path d="M6 2.5h7l5 5V21a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 21V3a.5.5 0 0 1 .5-.5z"/><path d="M13 2.5V8h5"/>');
+  const closeIcon = svg('<path d="m6 6 12 12M18 6 6 18"/>');
+  const caretIcon = svg('<path d="m9 6 6 6-6 6"/>');
   const rows = shelfFiles
     .map((file) => `<div class="shelf-item" data-id="${escapeHtml(file.name)}">
-            <button type="button" class="shelf-open" data-local="shelf:open" data-name="${escapeHtml(file.name)}" title="打开">${escapeHtml(file.name)}</button>
-            <span class="shelf-size">${sizeLabel(file.size)}</span>
-            <button type="button" class="shelf-del" data-local="shelf:remove" data-name="${escapeHtml(file.name)}" aria-label="删除">×</button>
+            <span class="shelf-icon">${fileIcon}</span>
+            <button type="button" class="shelf-open" data-local="shelf:open" data-name="${escapeHtml(file.name)}" title="打开 · ${sizeLabel(file.size)}">${escapeHtml(file.name)}</button>
+            <button type="button" class="shelf-del" data-local="shelf:remove" data-name="${escapeHtml(file.name)}" aria-label="删除">${closeIcon}</button>
           </div>`)
     .join('');
-  const clips = clipboardItems.slice(0, 6).map((item) => `<div class="clip-item">
+  const clips = clipboardItems.map((item) => `<div class="clip-item">
       <button type="button" class="clip-text" data-local="clipboard:copy" data-id="${escapeHtml(item.id)}" title="点击复制">${escapeHtml(clipLabel(item.text))}</button>
       <button type="button" class="clip-pin${item.pinned ? ' on' : ''}" data-local="clipboard:togglePin" data-id="${escapeHtml(item.id)}" aria-label="固定">★</button>
     </div>`).join('');
-  const clipBlock = `<div class="clip">
-    <div class="clip-head"><span>剪贴板</span>${clipboardItems.length ? '<button type="button" class="ghost" data-local="clipboard:clear">清空</button>' : ''}</div>
-    <div class="clip-list">${clips || '<p class="todo-empty">复制文字后会出现在这里。</p>'}</div>
+  /*
+   * The clipboard is one row until asked for. Folded it is the page's entry
+   * line — a 28px key with the count and a caret; opened it lists the copies in
+   * place and caps itself so a long history never becomes the page.
+   */
+  const clipOpen = clipboardExpanded && clipboardItems.length > 0;
+  const clipBlock = `<div class="clip${clipOpen ? ' clip-open' : ''}">
+    <div class="clip-head">${clipboardItems.length
+      ? `<button type="button" class="clip-fold" data-clipfold aria-expanded="${clipOpen}"><span>剪贴板</span><b>${clipboardItems.length} 条</b><span class="clip-caret${clipOpen ? ' on' : ''}">${caretIcon}</span></button>`
+      : '<p class="clip-fold-empty">剪贴板 · 复制文字后会出现在这里。</p>'}
+      ${clipOpen ? '<button type="button" class="ghost" data-local="clipboard:clear">清空</button>' : ''}
+    </div>
+    ${clipOpen ? `<div class="clip-list">${clips}</div>` : ''}
   </div>`;
-  return `<div class="shelf${emptyShelf ? ' shelf-empty' : ''}" data-shelf-drop>
+  return `<div class="shelf${emptyShelf ? ' shelf-empty' : ''}${clipOpen ? ' shelf-clip-open' : ''}" data-shelf-drop>
     <div class="shelf-hint">${emptyShelf
       ? '<b>置物架是空的</b><span>把文件拖到这里 · 复制到 <code>shelf</code> 文件夹</span>'
       : '把文件拖到这里 · 复制到 <code>shelf</code> 文件夹'}</div>
@@ -977,29 +1132,51 @@ function clipLabel(text) {
   return flat.length > 42 ? flat.slice(0, 42) + '…' : flat;
 }
 
+/* The Bluetooth mark, drawn at 20px on every device row. */
+const DEVICE_ICON = '<path d="m7 7 10 10-5 5V2l5 5L7 17"/>';
+
 /**
- * Paired Bluetooth devices. A device without a battery property still earns a
- * row: knowing the headset is connected is half the answer.
+ * Paired Bluetooth devices: one row each, at most three.
+ *
+ * A row is icon, name, a 60x3 battery bar and the number — the number is the
+ * point, so it is tabular and right-aligned while the bar only gives it a shape.
+ * A device with no battery property still gets a row: knowing the headset is
+ * connected is half the answer. Three rows is the density the page promises;
+ * the count line carries the rest rather than a scrolling list that would hide
+ * the levels below the fold.
+ *
+ * The Bluetooth switch is a status dot, not a button: the island cannot toggle
+ * the radio, and a switch that only looks interactive is a false affordance.
  */
 function devicesPage() {
   const list = devicesState?.devices ?? [];
   if (!list.length) {
-    return empty(ICON.tray, '没有蓝牙设备', '连接过的耳机、键盘、手柄会出现在这里。', '去设置', 'settings:general');
-  }
-  const rows = list
-    .map((device) => {
-      const battery = device.battery === null || device.battery === undefined ? '—' : device.battery + '%';
-      const low = battery !== '—' && Number(device.battery) <= 20;
-      return `<div class="dev-item">
-      <span class="dev-name">${escapeHtml(device.name)}</span>
-      <span class="dev-status">${device.status === 'OK' ? '已连接' : escapeHtml(device.status)}</span>
-      <span class="dev-bat${low ? ' low' : ''}">${battery}</span>
+    return `<div class="dev dev-empty">
+      <div class="dev-head"><span class="dev-bt"><i></i>蓝牙</span></div>
+      <p class="dev-empty-line">没有已连接的蓝牙设备</p>
+      <button type="button" class="ghost" data-action="settings:general">去设置</button>
     </div>`;
+  }
+  const shown = list.slice(0, 3);
+  const rest = list.length - shown.length;
+  const rows = shown
+    .map((device) => {
+      const raw = device.battery;
+      const known = raw !== null && raw !== undefined && raw !== '' && Number.isFinite(Number(raw));
+      const level = known ? Math.max(0, Math.min(100, Math.round(Number(raw)))) : 0;
+      const low = known && level <= 20;
+      return `<div class="dev-item">
+        <span class="dev-icon">${svg(DEVICE_ICON)}</span>
+        <span class="dev-name">${escapeHtml(device.name)}</span>
+        <span class="dev-meter${low ? ' low' : ''}" aria-hidden="true"><i style="width:${level}%"></i></span>
+        <span class="dev-bat${low ? ' low' : ''}">${known ? level + '%' : '—'}</span>
+      </div>`;
     })
     .join('');
   return `<div class="dev">
-    <div class="dev-head"><span>${list.length} 个设备</span><span class="spacer"></span><span>每 5 分钟刷新</span></div>
-    ${rows}
+    <div class="dev-head"><span class="dev-bt"><i class="on"></i>蓝牙</span><span class="spacer"></span><span class="dev-count">${list.length} 台</span></div>
+    <div class="dev-list">${rows}</div>
+    ${rest > 0 ? `<div class="dev-more">还有 ${rest} 台已配对</div>` : ''}
   </div>`;
 }
 
@@ -1578,6 +1755,19 @@ panelEl.addEventListener('click', (event) => {
     event.stopPropagation();
     return;
   }
+  /*
+   * The clipboard row is the one interactive piece that is pure UI: opening it
+   * needs no service call, so it toggles here and re-renders. stopPropagation
+   * keeps the click from reaching the document's outside-click handler, which
+   * would fold the whole island.
+   */
+  const clipFold = event.target.closest('[data-clipfold]');
+  if (clipFold) {
+    clipboardExpanded = !clipboardExpanded;
+    renderPage();
+    event.stopPropagation();
+    return;
+  }
   const localButton = event.target.closest('[data-local]');
   if (localButton) {
     const [service, action] = localButton.dataset.local.split(':');
@@ -1590,7 +1780,7 @@ panelEl.addEventListener('click', (event) => {
               const next = list[(index + 1) % Math.max(1, list.length)];
               return next ? api.quotaDo('select', { id: next.id }) : Promise.resolve(quotaState);
             })()
-          : api.quotaDo(action);
+          : api.quotaDo(action, { id: localButton.dataset.id });
       run.then((snapshot) => { quotaState = snapshot; if (open) renderPage(); }).catch(() => {});
       event.stopPropagation();
       return;

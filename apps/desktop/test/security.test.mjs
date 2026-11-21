@@ -235,7 +235,10 @@ describe('privacy: sensitive stores', () => {
   it('escapes every weather string that comes from outside', () => {
     const island = src('renderer/island.js');
     assert.ok(island.includes('escapeHtml(now.text)'));
-    assert.ok(island.includes('escapeHtml(placeZh(weather.place.name))'));
+    // The page was re-laid out in 0.4.0 and the call now spans lines, so match
+    // the expression rather than a literal slice of it.
+    assert.match(island, /escapeHtml\(\s*placeZh\(weather\.place\.name\)/);
+    assert.match(island, /escapeHtml\(\s*countryZh\(weather\.place\.country\)/);
     assert.ok(!island.includes('<b>${now.text}</b>'), 'weather description must not be interpolated raw');
   });
 });

@@ -753,42 +753,18 @@ button.ghost:active,
  * stacked to 260px in a 217px box, and the last mail rows were clipped.
  * The wrapper clips, so nothing can push the page's scrollHeight past 217.
  */
-.mail-page { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
-/* The no-mailbox page keeps its own scroller: it is the only scroller there,
-   and a short panel must still reach the 添加邮箱 button. */
+/* The 8px lift cancels .pages' 12px top padding: the tab line starts 4px from
+   the top, and the box gives the 8px back at the bottom so the page still ends
+   where the content box does. */
+.mail-page { display: flex; flex-direction: column; height: calc(100% + 8px); min-height: 0; margin-top: -8px; overflow: hidden; }
+/* The no-mailbox page keeps its own scroller, so the one action stays reachable
+   in a short panel. */
 .mail-page-empty { overflow-y: auto; scrollbar-width: none; }
 .mail-page-empty::-webkit-scrollbar { width: 0; height: 0; display: none; }
-/* The switchboard keeps its rows and the prompt its content: shrinking either
-   squashed the 28px "添加邮箱" button to 18.7px when five apps were running. */
-.mail-page > .msg { flex: none; }
-/*
- * The list is the growing half: it fills what the switchboard leaves and
- * scrolls there, so a long mailbox never needs a second scroll layer.
- */
+/* The list is the growing half: it fills what the tab line leaves and scrolls
+   there, so a long mailbox never needs a second scroll layer. */
 .mail-page > .mail { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
 .mail-page > .mail::-webkit-scrollbar { width: 0; height: 0; display: none; }
-/*
- * The prompt sits under the switchboard, not in the middle of what is left.
- *
- * With the messenger block above it the empty state only had ~100px, and
- * centring it inside that read as a second floating block; with no switchboard
- * it filled the page and centred in it. flex:0 keeps it its own height and
- * flex-start pins it to the row right after the block above.
- */
-.mail-page > .empty { flex: 0 0 auto; min-height: 0; height: auto; justify-content: flex-start; padding-top: 6px; }
-/*
- * Two messenger rows leave the mailbox prompt about 108px, less than the
- * 157.6px empty state needs. Drop the icon and tighten the padding so the
- * title, the provider line and the button stay whole instead of pushing the
- * button out of the panel.
- */
-.mail-page-with-msg > .empty { padding: 8px 10px; gap: 5px; }
-.mail-page-with-msg > .empty > svg { display: none; }
-/* Three switchboard rows plus the prompt were 13px taller than the page. The
-   rows keep their content and the 28px button; only the row padding tightens.
-   The mailbox page gets the same tightening for its capped three rows. */
-.mail-page .msg-item { padding: 3px 2px; }
-.mail-page .msg-head { margin-bottom: 2px; }
 .empty svg { width: 26px; height: 26px; fill: none; stroke: var(--faint); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .empty b { font-size: 12.5px; font-weight: 550; color: var(--ink); }
 .empty span { font-size: 11.5px; color: var(--dim); line-height: 1.5; max-width: 250px; }
@@ -914,7 +890,10 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   -webkit-mask-image: linear-gradient(180deg, #000 25%, rgba(0, 0, 0, 0.08) 100%);
   mask-image: linear-gradient(180deg, #000 25%, rgba(0, 0, 0, 0.08) 100%);
 }
-.music .lyric-empty { padding: 0; font-size: 11.5px; line-height: 1.4; }
+/* A track without synced lyrics keeps one 11px line where the lyric would
+   start; the 24px slot exists for a lyric row, so it collapses to the text. */
+.music .lyric-box:has(> .lyric-empty) { height: auto; min-height: 0; margin-top: 3px; }
+.music .lyric-empty { padding: 0; font-size: 11px; line-height: 1.25; color: var(--faint); }
 .music .music-bar { height: 4px; border-radius: 2px; margin-top: 10px; flex: none; }
 .music .music-bar i { border-radius: 2px; }
 .music .music-times { margin-top: 4px; flex: none; line-height: 1.25; }
@@ -928,81 +907,60 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .music .music-controls button[data-action] svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
 
 /* weather */
-.weather { display: flex; flex-direction: column; gap: 10px; }
-.weather-now { display: flex; align-items: center; gap: 12px; padding: 0 2px; }
-.weather-temp { font-size: 38px; font-weight: 300; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; animation: temp-in 420ms var(--spring); }
+/*
+ * A widget, not a card: the temperature is the only display-size element, the
+ * four stats are 10px labels over 13px values, and six forecast chips sit
+ * under them at thumbnail size. The page lands at ~198px of the 205px box, so
+ * the panel ends under the content with no band of empty card, and every gap
+ * is on the 4/6/8/10 scale.
+ */
+.wx { display: flex; flex-direction: column; gap: 6px; margin-top: -8px; }
+.wx-now { display: flex; align-items: center; gap: 10px; min-height: 42px; }
+.wx-where { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.wx-where b { font-size: 12.5px; font-weight: 550; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-where em { font-style: normal; font-size: 10px; line-height: 1.2; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-temp { flex: none; font-size: 42px; font-weight: 300; letter-spacing: -0.03em; line-height: 0.9; font-variant-numeric: tabular-nums; animation: temp-in 420ms var(--spring); }
 @keyframes temp-in {
   from { opacity: 0; transform: translateY(6px) scale(0.96); }
   to { opacity: 1; transform: none; }
 }
-.weather-temp sup { font-size: 17px; vertical-align: super; color: var(--dim); }
-.weather-desc { display: flex; flex-direction: column; gap: 2px; }
-.weather-desc b { font-size: 12.5px; font-weight: 550; }
-.weather-desc span { font-size: 11px; color: var(--dim); }
-.weather-icon { margin-left: auto; color: var(--ink); opacity: 0.9; }
-.weather-icon svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.wx-temp sup { font-size: 17px; vertical-align: super; color: var(--dim); }
+.wx-icon { flex: none; display: grid; place-items: center; color: var(--ink); opacity: 0.9; }
+.wx-icon svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.wx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.wx-cell { display: flex; flex-direction: column; gap: 1px; padding: 4px 8px; border-radius: 8px; background: var(--surface-1); min-width: 0; }
+.wx-cell em { font-style: normal; font-size: 10px; line-height: 12px; color: var(--dim); }
+.wx-cell b { font-size: 13px; font-weight: 500; line-height: 16px; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wx-cell b small { margin-left: 2px; font-size: 10px; font-weight: 400; color: var(--dim); }
+.wx-days { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.wx-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 3px 0; border-radius: 8px; background: var(--surface-1); min-width: 0; }
+.wx-day em { font-style: normal; font-size: 9px; line-height: 11px; color: var(--dim); }
+.wx-day svg { width: 14px; height: 14px; fill: none; stroke: var(--dim); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.wx-range { display: flex; align-items: baseline; gap: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wx-day b { font-size: 11px; font-weight: 550; line-height: 13px; }
+.wx-day i { font-style: normal; font-size: 11px; line-height: 13px; color: var(--dim); }
+.wx-src { margin: 0; font-size: 9.5px; line-height: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /*
- * Three equal cells and one sized to its content. "06:38 / 17:38" is fourteen
- * characters — wider than a quarter of the panel — so in four equal columns it
- * wrapped onto a second line while its three neighbours stayed single-line, and
- * the row read as a cell that had broken rather than a value that was long.
+ * Loading state: one line, no action, at the top of the box. Centring it in
+ * 205px read as a page that failed to load rather than a first reading on its
+ * way.
  */
-.weather-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 6px; }
-.weather-cell:last-child { white-space: nowrap; }
-.weather-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 7px 8px;
-  border-radius: 9px;
-  background: var(--surface-1);
-}
-.weather-cell em { font-style: normal; font-size: 10px; color: var(--faint); }
-.weather-cell b { font-size: 11.5px; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
-.weather-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding-top: 2px; }
-.weather-day { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 5px 0; border-radius: 8px; }
-.weather-day[data-today="true"] { background: var(--surface-1); }
-.weather-day em { font-style: normal; font-size: 10px; color: var(--dim); }
-.weather-day svg { width: 15px; height: 15px; fill: none; stroke: var(--dim); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.weather-day b { font-size: 10.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.weather-day i { font-style: normal; font-size: 9.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
-
-/* mail extras */
-.mail-code {
-  font-style: normal;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: rgba(143, 123, 255, 0.18);
-  color: #b7a9ff;
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  flex: none;
-}
-.mail-invite {
-  font-style: normal;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: rgba(69, 212, 131, 0.16);
-  color: var(--good);
-  font-size: 10px;
-  flex: none;
-}
-.mail-error { margin: 6px 4px 0; font-size: 10.5px; color: var(--warn); line-height: 1.5; }
+.wx-empty { margin-top: -8px; }
+.wx-empty .empty { align-items: flex-start; gap: 4px; padding: 0; text-align: left; }
+.wx-empty .empty svg { width: 20px; height: 20px; }
+.wx-empty .empty b { font-size: 12px; }
+.wx-empty .empty span { max-width: none; font-size: 11px; line-height: 1.4; }
 
 /* calendar */
 /*
- * Two columns: the month on the left, the picked day and its festivals on the
- * right. The single-column version spent the whole panel on a calendar whose
- * bottom half was empty, so the day's detail had nowhere to sit.
+ * Two columns: a 7x5 month on the left, the picked day on the right. The grid
+ * is the budget — 24px rows and a 4px gap put five weeks in 136px — so the
+ * panel never grows a sixth-row band, and the right column carries the day's
+ * two lines without pushing past 205px.
  */
-.calendar { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 10px; height: 100%; min-height: 0; }
-.cal-left { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.cal-right { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; padding-left: 10px; border-left: 1px solid var(--line); }
-/* One line, always: the status line must not wrap and change the top bar
-   height, which used to make the whole panel jump while paging. */
-/* One line, and it scrolls rather than clipping the percentage off a long
-   device name. No mask on either edge, for the same reason as the title: a
-   left fade ate the leading digit of "94%". */
+.calendar { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 10px; align-items: start; margin-top: -8px; }
+.cal-left { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cal-right { display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; padding-left: 10px; border-left: 1px solid var(--line); }
 #page-sub {
   display: block;
   width: 100%;
@@ -1024,8 +982,8 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 }
 #page-sub[data-muted="true"] { opacity: 0.5; }
 
-.cal-day-title { font-size: 12.5px; font-weight: 550; color: var(--ink); }
-.cal-festival { font-size: 11px; color: var(--warn); }
+.cal-day-title { font-size: 12px; font-weight: 550; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-festival { font-style: normal; font-size: 10px; line-height: 12px; font-weight: 400; color: var(--warn); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Both actions share one pill shape: the acknowledge and the clear used to be
    a rounded rectangle and a pill side by side, which read as two different
    kinds of control. */
@@ -1049,74 +1007,149 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   cursor: pointer;
 }
 .health-actions .btn:hover { background: var(--surface-2); }
-.cal-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 2px; }
-.cal-head b { font-size: 12.5px; font-weight: 550; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; padding: 0 0 0 1px; }
+.cal-head b { font-size: 12.5px; font-weight: 550; font-variant-numeric: tabular-nums; }
+/* 32px hit area: the month arrows are the page's only controls and they are
+   14px of ink. */
+.cal-head .icon-btn { width: 32px; height: 32px; }
 .cal-head .icon-btn svg { width: 14px; height: 14px; }
-.cal-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 0 1px; }
-.cal-week span { text-align: center; font-size: 10px; color: var(--faint); }
+.cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-week span { text-align: center; font-size: 9px; line-height: 12px; color: var(--dim); }
 /*
- * The month grid shares out whatever height the column has left instead of
- * asking for a fixed 30px per row. Six-row months needed 224px in a 205px
- * column, so the last week was clipped by the panel — the row was still there,
- * you just could not see the bottom of it, and nothing on screen said so.
+ * Five rows of 24px, not a grid that grows into whatever height is left: a
+ * six-row month used to clip its last week against the page edge, and a fixed
+ * row keeps every month the same silhouette as the weather page beside it.
  */
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(0, 1fr); gap: 2px; flex: 1; min-height: 0; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: 24px; gap: 4px; }
+/*
+ * 28px of hit area over a 24px painted cell: the button is two pixels taller
+ * than its row and pulls itself back with a negative margin, while the background
+ * lives on an inner span. Density stays 24px rows; the target clears 28px.
+ */
 .cal-cell {
   position: relative;
-  min-height: 0;
+  min-width: 0;
+  height: 28px;
+  margin: -2px 0;
   border: 0;
-  border-radius: 7px;
+  padding: 0;
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   display: grid;
   place-items: center;
-  padding: 0;
 }
+.cal-cell > span { display: grid; place-items: center; width: 100%; height: 24px; border-radius: 6px; }
 .cal-cell.empty { cursor: default; }
-.cal-cell:hover:not(.empty) { background: var(--surface-1); }
+.cal-cell:hover:not(.empty) > span { background: var(--surface-1); }
+.cal-cell.picked > span { background: var(--surface-2); }
+/* When the picked day is today the accent number and dot already carry it;
+   the fill would read as two selection states stacked on one cell. */
+.cal-cell.today.picked > span { background: transparent; }
+/*
+ * Today is an accent dot under the number, not a filled cell: the month has to
+ * keep reading as a grid of numbers, and the dot survives the skins where a
+ * filled cell would fight the page's own accent.
+ */
 .cal-cell.today { color: var(--accent); font-weight: 600; }
-.cal-cell.picked { background: var(--surface-2); transform: scale(1.06); }
-.cal-dot { position: absolute; bottom: 4px; width: 3px; height: 3px; border-radius: 50%; background: var(--accent); }
-.cal-events { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 2px; padding-top: 4px; border-top: 1px solid var(--line); }
-.cal-events::-webkit-scrollbar { width: 0; height: 0; display: none; }
-.cal-event { display: flex; align-items: baseline; gap: 8px; padding: 4px 2px; animation: row-in 200ms var(--ease); }
-.cal-time { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; flex: none; }
-.cal-event b { font-size: 11.5px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cal-event em { font-style: normal; font-size: 10px; color: var(--faint); margin-left: auto; flex: none; }
-.cal-empty { margin: 6px 2px; font-size: 11px; color: var(--faint); }
+.cal-today-dot { position: absolute; left: 50%; bottom: 4px; width: 3px; height: 3px; margin-left: -1.5px; border-radius: 50%; background: var(--accent); }
+/* A day with events gets a second, dimmer dot in the corner; today keeps the
+   accent one below the number, so the two never overwrite each other. */
+.cal-ev-dot { position: absolute; top: 5px; right: 3px; width: 2.5px; height: 2.5px; border-radius: 50%; background: var(--faint); }
+.cal-events { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cal-event { display: flex; align-items: baseline; gap: 8px; height: 20px; padding: 0 1px; min-width: 0; animation: row-in 200ms var(--ease); }
+.cal-time { font-size: 10px; line-height: 1.2; color: var(--dim); font-variant-numeric: tabular-nums; flex: none; }
+.cal-event b { font-size: 11.5px; font-weight: 500; line-height: 1.2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-empty { margin: 0; font-size: 11px; color: var(--dim); }
+.cal-error { margin: 2px 0 0; font-size: 9.5px; line-height: 12px; color: var(--warn); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* focus */
-.focus { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 4px; }
+/*
+ * One reading, not a centred stack: a 96px ring on the left, the 34px clock
+ * beside it, the three keys as the only full-width row. The clock is the
+ * page's one focus and everything starts at the top of the 205px box — the
+ * old centred column floated 20px down and left a band above it.
+ */
+.focus { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 0; }
+.focus-main { display: flex; align-items: center; justify-content: center; gap: 10px; padding-right: 24px; flex: none; }
 .focus-ring {
-  width: 132px;
-  height: 132px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   align-content: center;
   position: relative;
   background: conic-gradient(var(--accent) calc(var(--pct) * 1%), var(--surface-2) 0);
+  flex: none;
 }
-.focus-ring::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--card-solid); }
-.focus-time { position: relative; font-size: 27px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.focus-phase { position: relative; font-size: 10.5px; color: var(--dim); margin-top: 1px; }
-.focus-row { display: flex; gap: 8px; }
-.focus-note { margin: 0; font-size: 11px; color: var(--faint); }
+.focus-ring::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--card-solid); }
+.focus-time { position: relative; font-size: 34px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1; }
+.focus-phase { position: relative; font-size: 10.5px; color: var(--dim); }
+.focus-keys { display: flex; gap: 8px; flex: none; }
+.focus-key {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-1);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.focus-key:hover:not(:disabled) { background: var(--surface-2); }
+.focus-key.on { border-color: color-mix(in srgb, var(--accent) 46%, var(--line)); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.focus-key:disabled { opacity: 0.35; cursor: default; }
+.focus-note { margin: 0; font-size: 11px; color: var(--dim); text-align: center; }
+.focus-empty { gap: 10px; padding-top: 2px; align-items: flex-start; }
+.focus-empty p { margin: 0; font-size: 12px; color: var(--dim); }
 
 /* health */
-.health { display: flex; flex-direction: column; gap: 10px; }
-.health-block { display: flex; flex-direction: column; gap: 7px; padding: 9px 11px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); }
-.health-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.health-head b { font-size: 12.5px; }
-.health-head span { font-size: 10.5px; color: var(--dim); }
-.health-bar { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+/*
+ * Two counters, each one row: 12px label, 4px bar, 11px tabular figure. The
+ * row is the record button (a 36px hit target), which is what lets both
+ * counters keep their numbers at reading size without a card around each.
+ */
+.health { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+.health-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.health-row:hover { background: var(--surface-1); }
+.health-label { flex: none; min-width: 28px; white-space: nowrap; font-size: 12px; font-weight: 550; }
+.health-bar { flex: 1; min-width: 0; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
 .health-bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); transition: width 400ms ease; }
 .health-bar i[data-due="true"] { background: var(--warn); }
-.health-block .btn { align-self: flex-start; height: 24px; font-size: 11px; }
+.health-num { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--dim); }
+.health-num i { font-style: normal; color: var(--faint); }
+.health-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px; }
+.health-foot span { font-size: 11px; color: var(--dim); }
+.health-clear { height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--dim); font: inherit; font-size: 11px; line-height: 1; cursor: pointer; }
+.health-clear:hover { color: var(--ink); background: var(--surface-1); }
+.health-empty { gap: 10px; padding-top: 2px; align-items: flex-start; }
+.health-empty p { margin: 0; font-size: 12px; color: var(--dim); }
 
 /* todo */
 /* Fills the page so the list — not the page container — is what scrolls, and
@@ -1160,17 +1193,31 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   from { stroke-dashoffset: 24; }
   to { stroke-dashoffset: 0; }
 }
-.todo-item.done .todo-check { background: rgba(143, 123, 255, 0.18); border-color: transparent; }
-.todo-text { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-item.done .todo-check::before { background: rgba(143, 123, 255, 0.18); border-color: transparent; }
+.todo-text { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-item.done .todo-text { text-decoration: line-through; color: var(--faint); }
-.todo-due { font-style: normal; font-size: 10px; color: var(--faint); flex: none; }
+.todo-due { font-style: normal; font-size: 10.5px; color: var(--faint); flex: none; font-variant-numeric: tabular-nums; }
 .todo-due.late { color: var(--warn); }
-.todo-del { border: 0; background: transparent; color: var(--faint); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 3px; flex: none; }
-.todo-del:hover { color: var(--bad); }
+.todo-del {
+  width: 28px; height: 28px; flex: none; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--faint); font-size: 15px; line-height: 1;
+  cursor: pointer; display: grid; place-items: center;
+}
+.todo-del:hover { color: var(--bad); background: var(--surface-1); }
+/* The empty page is one line and the input, both against the top. */
+.todo-blank-page { gap: 8px; }
+.todo-blank { margin: 0; padding: 0 4px; font-size: 11.5px; color: var(--dim); }
+/* The empty page's one action keeps its own width instead of stretching. */
+.todo-blank-page .ghost { align-self: flex-start; }
+/* Only the label is clickable, with a full 28px row under the pointer. */
+.todo-clear {
+  align-self: flex-start; height: 28px; padding: 0 4px;
+  border: 0; background: transparent; color: var(--faint);
+  font-size: 10.5px; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.todo-clear:hover { color: var(--bad); }
 /* auto margins centre it in whatever height the list has. */
 .todo-empty { margin: auto 0; padding: 10px 4px; font-size: 11.5px; color: var(--faint); text-align: center; }
-.todo-done-head { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding: 0 4px; font-size: 10.5px; color: var(--faint); }
-.todo-clear { border: 0; background: transparent; color: var(--dim); font-size: 10.5px; cursor: pointer; }
 
 /* shelf */
 .shelf { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
@@ -1195,10 +1242,10 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .shelf-empty .shelf-hint span { font-size: 11px; color: var(--faint); }
 /* The clipboard keeps its own height instead of eating the rest of the page. */
 .shelf-empty .clip { flex: 0 0 auto; }
-.shelf-empty .clip-list .todo-empty { margin: 0; }
+/* A 28px drop row when there are files; the empty state above keeps its 96px. */
 .shelf-hint {
-  padding: 10px; border: 1px dashed var(--surface-3); border-radius: 9px;
-  font-size: 11px; color: var(--faint); text-align: center;
+  padding: 5px 8px; border: 1px dashed var(--surface-3); border-radius: 9px;
+  font-size: 11px; line-height: 16px; color: var(--faint); text-align: center;
   transition: border-color 160ms var(--ease), background 160ms var(--ease), color 160ms var(--ease), transform 160ms var(--spring);
 }
 .shelf.dragover .shelf-hint {
@@ -1220,35 +1267,39 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   to { transform: translateX(320%); }
 }
 
-/* Paired devices: name, state, battery. */
+/* Paired devices: one row each; the battery number is the point. */
+.dev { display: flex; flex-direction: column; margin-top: -8px; }
 .dev-head {
   display: flex;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--faint);
-  margin-bottom: 6px;
-}
-
-.dev-item {
-  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 2px;
-  font-size: 12px;
+  gap: 6px;
+  height: 22px;
+  font-size: 11px;
+  color: var(--dim);
+  flex: none;
 }
-
-.dev-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dev-status { color: var(--dim); font-size: 11.5px; flex: none; }
-
-.dev-bat { color: var(--ink); font-variant-numeric: tabular-nums; flex: none; }
-
+.dev-head .spacer { flex: 1; }
+/* Bluetooth is a state, not a switch: the island cannot toggle the radio, so a
+   control here would be a button that draws a lie. */
+.dev-bt { display: inline-flex; align-items: center; gap: 5px; }
+.dev-bt i { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
+.dev-bt i.on { background: var(--good); }
+.dev-count { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.dev-list { display: flex; flex-direction: column; }
+.dev-item { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 2px; font-size: 12.5px; }
+.dev-icon { display: flex; width: 20px; height: 20px; color: var(--dim); flex: none; }
+.dev-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.dev-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.dev-meter { width: 60px; height: 3px; border-radius: 2px; background: var(--surface-2); overflow: hidden; flex: none; }
+.dev-meter i { display: block; height: 100%; background: var(--good); border-radius: 2px; }
+.dev-meter.low i { background: var(--bad); }
+.dev-bat { width: 32px; text-align: right; color: var(--ink); font-size: 11px; font-variant-numeric: tabular-nums; flex: none; }
 .dev-bat.low { color: var(--bad); }
+.dev-more { padding: 2px 2px 0; font-size: 10.5px; color: var(--faint); }
+/* No devices: one line and one action, 81px tall instead of a centred page. */
+.dev-empty { height: auto; }
+.dev-empty-line { margin: 8px 2px; font-size: 12.5px; color: var(--dim); }
+.dev-empty .ghost { align-self: flex-start; }
 
 /* Repeating tasks: one word where the due date already lives. */
 .todo-repeat {
@@ -1263,7 +1314,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 
 .todo-repeat-pick select {
   background: var(--surface-1);
-  border: 0;
+  border: 1px solid var(--line);
   /*
    * Full-strength ink, and the options are coloured explicitly. With --dim the
    * closed control was already hard to read; in the open list the highlighted
@@ -1271,14 +1322,15 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
    * disappear until the menu closed again.
    */
   color: var(--ink);
-  border-radius: 7px;
-  padding: 3px 4px;
+  border-radius: 8px;
+  padding: 0 6px;
+  height: 28px;
   font: inherit;
   font-size: 11px;
   /* A monospace stack (设置 → 字体 → 等宽) shrinks the line box this button
-     inherits down to 18.7px; the row is the page's only action, so hold a
-     tappable height instead of following the font. */
-  min-height: 20px;
+     inherits down to 18.7px; the row is a 28px input beside it, so hold that
+     same tappable height instead of following the font. */
+  min-height: 28px;
   cursor: pointer;
 }
 
@@ -1353,15 +1405,13 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .clip {
   /* No margin-top: .shelf already gives every child an 8px gap. */
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 6px;
   /*
-   * The clipboard history is the growing half of this page: it takes whatever
-   * room the drag hint and the file list leave over and scrolls inside itself.
-   * A fixed height here is what pushed the last rows outside the panel once the
-   * panel got shorter.
+   * One row, not a growing panel: folded the clipboard is a 28px entry line,
+   * and opened it caps its own list. It used to take the rest of the page,
+   * which is what left an empty half under four file rows.
    */
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
 }
@@ -1369,18 +1419,63 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .clip-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   font-size: 11px;
   color: var(--faint);
-  margin-bottom: 6px;
 }
+.clip-open .clip-head { margin-bottom: 6px; }
+/*
+ * Opening the clipboard is a view switch, not a second column: the copy list
+ * is the focus and the page stays inside its 205px box. On an empty shelf the
+ * 96px prompt goes too — a 120px list under it would not fit.
+ */
+.shelf-clip-open .shelf-list { display: none; }
+.shelf-empty.shelf-clip-open .shelf-hint { display: none; }
+/*
+ * The fold key: one 28px row that is the clipboard's only entry point. The
+ * caret is the whole state (rotated when the list is open), and the count is
+ * the only number on the page small enough to stay secondary.
+ */
+.clip-fold {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.clip-fold:hover { background: var(--surface-1); color: var(--dim); }
+.clip-fold b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.clip-fold-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 4px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+}
+.clip-caret { margin-left: auto; width: 12px; height: 12px; display: grid; place-items: center; transition: transform 160ms var(--ease); }
+.clip-caret svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.clip-caret.on { transform: rotate(90deg); }
 
 .clip-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1;
+  /* Open only: the list is capped at four rows and scrolls inside the cap. */
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 120px;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -1422,83 +1517,179 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .clip-pin.on { color: var(--warn); }
 
 /*
- * Fills whatever height the panel has instead of a fixed 216px: the clipboard
- * list is the only growing part of this page, so it takes the remaining space
- * and scrolls inside itself while the drag hint stays put above it.
+ * Four 24px rows: the fifth file is one wheel away, not a taller page. The
+ * list owns its height so the hint above and the clipboard entry below stay
+ * exactly where they were whatever is on the shelf.
  */
 .shelf-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  /*
-   * Grows with its contents, not with the panel: an empty file list must not
-   * eat the space the clipboard history needs, and a long one already scrolls.
-   * flex: 1 made the two halves split evenly whether or not it had files.
-   */
-  flex: 0 1 auto;
+  gap: 0;
+  flex: 0 0 auto;
   min-height: 0;
-  max-height: 34%;
+  max-height: 96px;
   overflow-y: auto;
   scrollbar-width: none;
 }
 .shelf-list::-webkit-scrollbar { width: 0; height: 0; display: none; }
-.shelf-item { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 7px; }
+/* A row is the 24px list rhythm: 16px glyph, one line of name, 16px delete. */
+.shelf-item { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 4px; border-radius: 6px; }
 .shelf-item:hover { background: rgba(255, 255, 255, 0.04); }
+.shelf-icon { display: grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--faint); }
+.shelf-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .shelf-open {
-  flex: 1; min-width: 0; border: 0; background: transparent; padding: 0; color: var(--ink);
-  font: inherit; font-size: 11.5px; text-align: left; cursor: pointer;
+  flex: 1; min-width: 0; height: 24px; border: 0; background: transparent; padding: 0; color: var(--ink);
+  font: inherit; font-size: 12.5px; line-height: 24px; text-align: left; cursor: pointer;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.shelf-size { font-size: 10px; color: var(--faint); flex: none; }
-.shelf-del { border: 0; background: transparent; color: var(--faint); font-size: 15px; cursor: pointer; padding: 0 3px; flex: none; }
+.shelf-del {
+  width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: var(--faint); cursor: pointer;
+  display: grid; place-items: center; flex: none;
+}
+.shelf-del svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
 .shelf-del:hover { color: var(--bad); }
 
 /* quota */
 /*
- * Three rows, top-aligned: amount (with the console skin's split bar under the
- * head), the split as one legend line, then 更新于 / 刷新 on one line.
- *
- * It used to be the head, two full-width money paragraphs and a separate action
- * row — 185px of content in a 205px box, i.e. a block parked in the middle of
- * the card with air above and below it on the shorter states. The numbers that
- * matter are the total and the split; the split's two amounts ride on one line
- * beside the bar they describe, and the refresh control shares the stamp line.
+ * Four bands against the top: provider + currency, the balance, the split
+ * bar with its legend, and the update line. 2 + 28 + 8 + 30 + 8 + 26 + 8 + 28
+ * = 138px in the 205px box — the old stack was 97px in the middle of nothing.
+ * The two amounts that explain the bar ride on one line beneath it, and the
+ * refresh control shares the stamp line instead of owning a row.
  */
-.quota { display: flex; flex-direction: column; gap: 6px; }
-.quota-head { display: flex; align-items: baseline; gap: 8px; padding: 2px 4px 2px; }
-.quota-amount { font-size: 30px; font-weight: 300; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; animation: temp-in 380ms var(--spring); }
-.quota-amount small { font-size: 13px; color: var(--dim); margin-right: 2px; }
-.quota-note { font-size: 11px; color: var(--dim); }
-/* The split legend: a colour key on the left of each amount. */
-.quota-split { display: flex; align-items: center; gap: 14px; padding: 0 4px; }
-.quota-part { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
-.quota-piece { width: 6px; height: 6px; border-radius: 2px; background: var(--surface-3); flex: none; }
-.quota-piece.topped { background: var(--accent); }
-.quota-piece.granted { background: var(--accent2, var(--surface-3)); }
-.quota-foot { display: flex; align-items: center; gap: 8px; padding: 0 4px; font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
-.quota-foot .spacer { flex: 1; }
-.quota-actions { display: flex; gap: 6px; }
-/* A status line can be long ("invalid api key …"); it truncates, never wraps.
-   It gets its own row, so a long error cannot squeeze the account name into
-   two lines the way a shared baseline row did. */
-.quota-flag { padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--warn); }
+.quota { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+.quota-meta { display: flex; align-items: center; gap: 8px; min-height: 16px; padding: 0 4px; }
+.quota-id { display: inline-flex; align-items: baseline; gap: 5px; font-size: 11.5px; color: var(--dim); }
+.quota-id b { font-weight: 550; color: var(--ink); letter-spacing: 0.01em; }
+.quota-id i { font-style: normal; color: var(--faint); }
+.quota-off { font-style: normal; font-size: 10.5px; color: var(--warn); }
+/* One dot per account: a second account is a switch, not a second card. */
+.quota-accounts { display: flex; gap: 2px; margin-left: auto; }
+.quota-accounts button {
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; display: grid; place-items: center; cursor: pointer;
+}
+.quota-accounts button::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--surface-3);
+  transition: width 180ms var(--ease), background 180ms var(--ease);
+}
+.quota-accounts button:hover::before { background: var(--dim); }
+.quota-accounts button[aria-current="true"]::before { width: 14px; border-radius: 3px; background: var(--ink); }
+.quota-balance { display: flex; align-items: baseline; padding: 0 4px; }
+.quota-amount {
+  font-size: 30px; line-height: 1; font-weight: 300;
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--ink);
+  animation: temp-in 380ms var(--spring);
+}
+.quota-amount small { font-size: 14px; font-weight: 400; color: var(--dim); margin-right: 3px; }
 /*
- * The empty page is a prompt at the top of the card, not a block centred in
- * 205px: .pages > .empty centres by design, and on this page that is exactly
- * the band of air the report called out.
+ * The only ratio these two amounts contain is topped vs granted, so the bar is
+ * that split and the legend names its two colours. A percentage of a spend
+ * limit would need data this page does not have.
  */
-.quota-page-empty > .empty { height: auto; justify-content: flex-start; padding: 4px 10px 8px; }
+.quota-ratio { display: flex; flex-direction: column; gap: 6px; padding: 0 4px; }
+.quota-meter {
+  display: block; position: relative; height: 4px; border-radius: 2px; overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0 calc(var(--quota-share, 0) * 1%),
+    var(--accent2, var(--surface-3)) calc(var(--quota-share, 0) * 1%) 100%
+  );
+}
+.quota-legend { display: flex; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; }
+.quota-part { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--dim); }
+.quota-piece { width: 6px; height: 6px; border-radius: 2px; flex: none; }
+.quota-part.topped .quota-piece { background: var(--accent); }
+.quota-part.granted .quota-piece { background: var(--accent2, var(--surface-3)); }
+.quota-foot {
+  display: flex; align-items: center; gap: 8px; padding: 0 4px;
+  font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums;
+}
+.quota-foot .spacer { flex: 1; }
+/* A status line can be long ("invalid api key …"); it truncates, never wraps. */
+.quota-flag { margin: 0; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--warn); }
+/*
+ * The empty page is one line and one action against the top, not the shared
+ * .empty block centred in 205px: on a page with nothing else to show, that
+ * band of air is the one state where the card reads as broken.
+ */
+.quota-page-empty { display: flex; align-items: center; gap: 10px; padding: 2px 4px 0; }
+.quota-blank { margin: 0; font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* mail */
+/*
+ * Two tabs, then one 20px row per sender.
+ *
+ * The sender is the line and the time is the right rail; the subject lives in
+ * the row's tooltip. Unread is a 3px accent bar on the left instead of a dot
+ * that pushed the sender in by 5px, so every row starts on the same x and nine
+ * rows fit under the 22px tab line. 全部/未读 is two radios plus :has(): the
+ * page re-renders from every mail push, and radios keep the state in the DOM
+ * instead of in a variable a re-render would forget.
+ */
 .mail { display: flex; flex-direction: column; gap: 2px; }
-.mail-head { display: flex; align-items: center; gap: 10px; padding: 2px 3px 8px; font-size: 11px; color: var(--dim); }
-.mail-head b { color: var(--ink); font-weight: 550; font-size: 11.5px; }
-.mail-head .spacer { flex: 1; }
-.mail-item { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-radius: 8px; animation: row-in 200ms var(--ease); }
-.mail-item:hover { background: var(--surface-1); }
-.mail-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; }
-.mail-item b { font-size: 11.5px; font-weight: 520; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
-.mail-item em { font-style: normal; font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; flex: none; }
+.mail-tabs { display: flex; align-items: center; gap: 2px; height: 22px; margin-bottom: 2px; flex: none; }
+.mail-tab-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.mail-tab {
+  display: flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px;
+  border-radius: 6px; font-size: 12px; color: var(--dim); cursor: pointer;
+}
+.mail-tab:hover { color: var(--ink); }
+.mail-tab i { font-style: normal; font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.mail-tab-radio:checked + .mail-tab { color: var(--ink); background: var(--surface-1); }
+.mail-tab-radio:checked + .mail-tab i { color: var(--dim); }
+.mail-tab-radio:focus-visible + .mail-tab { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mail-tab-spacer { flex: 1; }
+.mail-sync { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+/* The messenger entry on the tab line: "消息 N", with the app list in a popover
+   under it. The switchboard is gone from the page, so this is the one door to
+   the running apps — and it only exists while one is running. */
+.mail-msg { position: relative; display: inline-flex; align-items: center; flex: none; }
+.mail-msg-entry {
+  height: 22px; padding: 0 6px; border: 0; border-radius: 6px; background: none;
+  color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.mail-msg-entry:hover { color: var(--ink); background: var(--surface-1); }
+.mail-msg-pop {
+  display: none; position: absolute; top: 100%; right: 0; z-index: 3; min-width: 150px;
+  padding: 6px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+}
+/* Focus, not a click state: the entry is a button, so clicking anywhere else
+   moves the focus out and closes the popover with no outside-click handler. */
+.mail-msg:focus-within .mail-msg-pop { display: flex; flex-direction: column; }
+.mail-msg-row {
+  display: flex; align-items: center; gap: 6px; width: 100%; height: 22px;
+  padding: 0 6px; border: 0; border-radius: 5px; background: none;
+  color: var(--ink); font-size: 11.5px; text-align: left; cursor: pointer;
+}
+.mail-msg-row:hover { background: var(--surface-1); }
+.mail-msg-row i { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); flex: none; }
+.mail-msg-row i.on { background: var(--bad); }
+.mail-msg-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-msg-row em { font-style: normal; font-size: 10.5px; color: var(--dim); font-variant-numeric: tabular-nums; flex: none; }
+.mail-msg-more { padding: 2px 6px 0; font-size: 10px; color: var(--faint); }
+.mail-list { display: flex; flex-direction: column; }
+.mail-row { position: relative; display: flex; align-items: center; gap: 8px; height: 20px; padding: 0 2px 0 9px; border-radius: 6px; animation: row-in 200ms var(--ease); }
+.mail-row:hover { background: var(--surface-1); }
+.mail-row.unread::before {
+  content: ''; position: absolute; left: 0; top: 3px; bottom: 3px; width: 3px;
+  border-radius: 2px; background: var(--accent);
+}
+.mail-from { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mail-row:not(.unread) .mail-from { color: var(--dim); }
+.mail-time { flex: none; font-size: 10.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+/* 未读 with nothing in it says so once instead of leaving a blank list. */
+.mail-none { display: none; margin: 8px 2px; font-size: 12px; color: var(--dim); }
+.mail-page:has(#mail-tab-unread:checked) .mail-row[data-unread="0"] { display: none; }
+.mail-page:has(#mail-tab-unread:checked):not(:has(.mail-row[data-unread="1"])) .mail-none { display: block; }
+/* The no-account and no-mail states: one line, one action, pinned to the top. */
+.mail-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 2px; }
+.mail-empty-line { margin: 0; font-size: 12.5px; color: var(--dim); }
+.mail-empty-inline { margin-top: 8px; padding-left: 2px; gap: 8px; align-items: flex-start; }
 /*
  * The reduce-motion switch.
  *
@@ -1720,12 +1911,13 @@ body[data-skin="magazine"] .topbar {
  * rows that already fill the 217px page. An inset ring paints the same edge
  * without touching the box model.
  */
-body[data-skin="magazine"] .weather-cell,
-body[data-skin="magazine"] .health-block {
+body[data-skin="magazine"] .wx-cell,
+body[data-skin="magazine"] .health-row {
   border-radius: 11px;
   background: var(--surface-1);
   box-shadow: inset 0 0 0 1px var(--line);
 }
+body[data-skin="magazine"] .health-row:hover { background: var(--surface-2); }
 body[data-skin="magazine"] .cover,
 body[data-skin="magazine"] .cover-img {
   border-radius: 6px;
@@ -1737,16 +1929,12 @@ body[data-skin="magazine"] .shelf-hint { border-radius: 12px; }
 body[data-skin="magazine"] .music-bar i,
 body[data-skin="magazine"] .health-bar i { background: var(--accent); }
 body[data-skin="magazine"] .dots button[aria-current="true"]::after { background: var(--accent); }
-body[data-skin="magazine"] .todo-item.done .todo-check {
+body[data-skin="magazine"] .todo-item.done .todo-check::before {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 body[data-skin="magazine"] .shelf.dragover .shelf-hint {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-body[data-skin="magazine"] .mail-code {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: color-mix(in srgb, var(--accent) 76%, var(--ink));
 }
 
 /* ------------------------------------------------------------- light paper */
@@ -1891,25 +2079,23 @@ body[data-skin="console"] .top-page-name {
 /*
  * Quota.
  *
- * The page has two money values and no ratio of its own. The split between
- * topped-up and granted balance is the one percentage those numbers already
- * contain; island.js writes it as --quota-share on .quota[data-gauge], and no
- * new data field is involved. The bar is absolutely positioned in the 10px gap
- * under the head, so it adds no height to the page.
+ * The split bar is the one ratio the two money values already contain;
+ * island.js writes it as --quota-share and no new data field is involved. In
+ * console it reads as a segmented instrument: the two accents plus one dark
+ * notch every 7px, with the amount in the mono face as the page's focus.
  */
-body[data-skin="console"] .quota-head { position: relative; }
 body[data-skin="console"] .quota-amount {
   font-family: var(--console-mono);
-  /* 27px, not 30: mono digits are wider, and the note beside the amount has to
-     keep fitting on one line. */
-  font-size: 27px;
+  /* 28px: mono digits are wider than the sans face, so 30 would crowd the row;
+     28 still reads as the biggest thing on the page. */
+  font-size: 28px;
   font-weight: 400;
   letter-spacing: -0.01em;
   color: var(--accent);
   text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 body[data-skin="console"] .quota-amount small { color: var(--dim); }
-body[data-skin="console"] .quota-note { letter-spacing: 0.06em; }
+body[data-skin="console"] .quota-id { font-family: var(--console-mono); letter-spacing: 0.08em; }
 body[data-skin="console"] .quota-part {
   font-family: var(--console-mono);
   font-size: 10.5px;
@@ -1918,23 +2104,10 @@ body[data-skin="console"] .quota-part {
 /* The two legend entries are the bar's two segments, in the bar's two colours. */
 body[data-skin="console"] .quota[data-gauge] .quota-part.topped { color: var(--accent); }
 body[data-skin="console"] .quota[data-gauge] .quota-part.granted { color: var(--accent2); }
-body[data-skin="console"] .quota[data-gauge] .quota-piece.topped { background: var(--accent); }
-body[data-skin="console"] .quota[data-gauge] .quota-piece.granted { background: var(--accent2); }
+body[data-skin="console"] .quota[data-gauge] .quota-part.topped .quota-piece { background: var(--accent); }
+body[data-skin="console"] .quota[data-gauge] .quota-part.granted .quota-piece { background: var(--accent2); }
 body[data-skin="console"] .quota-foot { font-family: var(--console-mono); letter-spacing: 0.06em; }
 body[data-skin="console"] .quota-meter {
-  display: block;
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: -5px;
-  height: 3px;
-  border-radius: 1px;
-  background:
-    linear-gradient(
-      90deg,
-      var(--accent) 0 calc(var(--quota-share, 0) * 1%),
-      color-mix(in srgb, var(--accent2) 72%, transparent) calc(var(--quota-share, 0) * 1%) 100%
-    );
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 /* Coded, not solid: one dark notch every 7px reads as a segmented instrument. */
@@ -1945,16 +2118,13 @@ body[data-skin="console"] .quota-meter::after {
   background: repeating-linear-gradient(90deg, transparent 0 6px, rgba(8, 14, 22, 0.6) 6px 7px);
 }
 
-/* The meter exists in the markup for every skin so switching skins does not
-   need a re-render; outside console it is display:none, i.e. zero footprint. */
-body:not([data-skin="console"]) .quota-meter { display: none; }
-
 /*
  * Focus.
  *
  * The ring was already a conic-gradient gauge driven by --pct, so the skin only
  * changes the instrument: calibration ticks outside it, a hairline inside it,
- * a mono countdown in the middle. 132px stays 132px.
+ * the phase word in the middle. 96px stays 96px; the clock is its neighbour now,
+ * not its centre.
  */
 body[data-skin="console"] .focus-ring {
   background:
@@ -1965,7 +2135,7 @@ body[data-skin="console"] .focus-ring {
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 body[data-skin="console"] .focus-ring::before {
-  inset: 11px;
+  inset: 7px;
   background: var(--card-solid);
   box-shadow: inset 0 0 0 1px var(--line);
 }
@@ -1979,7 +2149,7 @@ body[data-skin="console"] .focus-ring::after {
 }
 body[data-skin="console"] .focus-time {
   font-family: var(--console-mono);
-  font-size: 25px;
+  font-size: 34px;
   font-weight: 400;
   letter-spacing: 0;
   color: var(--ink);
@@ -1998,23 +2168,23 @@ body[data-skin="console"] .focus-phase {
  * a segment grid and a cold fill. 2px taller per bar is the only box-model
  * change in this block, and the acceptance run measures the page after it.
  */
-body[data-skin="console"] .health-block {
+body[data-skin="console"] .health-row {
   border-radius: 3px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent 62%), var(--surface-1);
   box-shadow: inset 2px 0 0 var(--accent), inset 0 0 0 1px var(--line);
 }
-body[data-skin="console"] .health-head b {
+body[data-skin="console"] .health-label {
   letter-spacing: 0.18em;
   color: var(--accent);
 }
-body[data-skin="console"] .health-head span {
+body[data-skin="console"] .health-num {
   font-family: var(--console-mono);
   font-size: 10px;
   letter-spacing: 0.02em;
 }
 body[data-skin="console"] .health-bar {
   position: relative;
-  height: 6px;
+  height: 4px;
   border-radius: 1px;
   background: var(--surface-2);
   box-shadow: inset 0 0 0 1px var(--line);
@@ -2054,32 +2224,25 @@ body[data-skin="console"] .cover-img {
   border-radius: 4px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
 }
-body[data-skin="console"] .weather-temp {
+body[data-skin="console"] .wx-temp {
   font-family: var(--console-mono);
   font-weight: 300;
 }
-body[data-skin="console"] .weather-cell {
+body[data-skin="console"] .wx-cell {
   border-radius: 3px;
   background: var(--surface-1);
   box-shadow: inset 0 0 0 1px var(--line);
 }
-body[data-skin="console"] .weather-day[data-today="true"] {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
 body[data-skin="console"] .cal-cell { border-radius: 3px; }
 body[data-skin="console"] .cal-day-title { font-family: var(--console-mono); }
-body[data-skin="console"] .todo-item.done .todo-check {
+body[data-skin="console"] .todo-item.done .todo-check::before {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
-body[data-skin="console"] .todo-check { border-radius: 2px; }
+body[data-skin="console"] .todo-check::before { border-radius: 2px; }
 body[data-skin="console"] .shelf-hint { border-radius: 3px; }
 body[data-skin="console"] .shelf.dragover .shelf-hint {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-body[data-skin="console"] .mail-code {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
 }
 body[data-skin="console"] .dev-item {
   box-shadow: inset 0 -1px 0 var(--surface-1);
