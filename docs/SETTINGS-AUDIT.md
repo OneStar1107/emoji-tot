@@ -89,6 +89,7 @@
 | `devices.showBattery` | `true` | devices | 渲染进程 | `island.js devicesPage() · settings.js pageDevices() → 电量条与百分比` | 即时 | 关掉后只画名称与连接状态 | lists every path · writes dotted keys through setPath |
 | `devices.pinned` | `[]` | devices | 渲染进程 | `island.js devicesPage() · settings.js pageDevices() · main.js island:devices-pin / settings:devices-pin` | 即时 | 最多 3 台；岛设备页行尾或设置·设备页星标切换 | lists every path · writes dotted keys through setPath |
 | `devices.hidden` | `[]` | devices | 渲染进程 | `island.js devicesPage() → visibleDevices() · settings.js pageDevices() 行的显示开关` | 即时 | 隐藏的设备不在岛设备页出现，设置页仍列出 | lists every path · writes dotted keys through setPath |
+| `devices.order` | `[]` | devices | 渲染进程 | `island.js devicesPage() → orderDevices() · settings.js pageDevices() 拖动` | 即时 | 设置·设备页拖动出来的整表顺序；置顶的行仍排在最前 | lists every path · writes dotted keys through setPath |
 | `weather.city` | `香港` | 天气 | 主进程 | `main.js refreshWeather()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `weather.unit` | `c` | 天气 | 渲染进程 | `island.js renderPillStatus() / weather card` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `weather.intervalMin` | `15` | 天气 | 主进程 | `main.js scheduleWeather()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |

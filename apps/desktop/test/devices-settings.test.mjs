@@ -14,6 +14,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   DEFAULTS,
+  orderDevices,
   DEVICE_PIN_LIMIT,
   SETTINGS_NAV,
   SETTINGS_PAGE_KEYS,
@@ -175,5 +176,38 @@ describe('the settings window renders and writes the devices page', () => {
     const body = functionBody(island, 'devicesPage');
     assert.ok(body.includes('visibleDevices(probed, prefs.devices?.hidden)'), 'the island must hide, not the probe');
     assert.ok(body.includes('设备都隐藏了'), 'all-hidden has its own empty state');
+  });
+});
+
+describe('devices: the order a person dragged', () => {
+  const rows = [
+    { name: 'Keyboard' },
+    { name: 'Mouse' },
+    { name: 'Headset' },
+  ];
+
+  it('follows the stored order', () => {
+    const out = orderDevices(rows, { order: ['Headset', 'Keyboard', 'Mouse'] });
+    assert.deepEqual(out.map((d) => d.name), ['Headset', 'Keyboard', 'Mouse']);
+  });
+
+  it('keeps pinned rows above the stored order', () => {
+    const out = orderDevices(rows, { pinned: ['Mouse'], order: ['Headset', 'Keyboard'] });
+    assert.deepEqual(out.map((d) => d.name), ['Mouse', 'Headset', 'Keyboard']);
+  });
+
+  it('puts a device the order has never seen after the known ones, in probe order', () => {
+    const out = orderDevices(rows, { order: ['Headset'] });
+    assert.deepEqual(out.map((d) => d.name), ['Headset', 'Keyboard', 'Mouse']);
+  });
+
+  it('ignores names that are no longer paired and duplicates in the order', () => {
+    const out = orderDevices(rows, { order: ['Ghost', 'Mouse', 'Mouse', 'Keyboard'] });
+    assert.deepEqual(out.map((d) => d.name), ['Mouse', 'Keyboard', 'Headset']);
+  });
+
+  it('is a stable no-op with no order stored', () => {
+    const out = orderDevices(rows, {});
+    assert.deepEqual(out.map((d) => d.name), ['Keyboard', 'Mouse', 'Headset']);
   });
 });

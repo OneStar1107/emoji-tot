@@ -300,7 +300,13 @@ export const DEFAULTS = {
    *                forgetting: the row keeps its pin, and the settings page
    *                still lists the device so it can be shown again.
    */
-  devices: { showBattery: true, pinned: [], hidden: [] },
+  /*
+   *   order        the row order the person dragged into place. Pinned rows
+   *                still come first (that is what pinning is for), and inside
+   *                each group the stored order wins; a device the list has
+   *                never seen falls to the end and keeps the probe's order.
+   */
+  devices: { showBattery: true, pinned: [], hidden: [], order: [] },
 
   /* grouped */
   /*
@@ -369,6 +375,7 @@ export function withDefaults(raw) {
     ...next.devices,
     pinned: [...(Array.isArray(next.devices.pinned) ? next.devices.pinned : DEFAULTS.devices.pinned)],
     hidden: [...(Array.isArray(next.devices.hidden) ? next.devices.hidden : DEFAULTS.devices.hidden)],
+    order: [...(Array.isArray(next.devices.order) ? next.devices.order : DEFAULTS.devices.order)],
   };
   return next;
 }
@@ -629,6 +636,37 @@ export function togglePinnedDevice(pinned, name, limit = DEVICE_PIN_LIMIT) {
 }
 
 /**
+ * The rows in the order a person dragged them, pinned first.
+ *
+ * Pinning and ordering answer two different questions ("always show this one on
+ * top" vs "this is the order I like"), so they compose instead of competing: a
+ * pin lifts a row above the rest, and inside each block the dragged order is
+ * what decides. A name the stored order has never seen falls to the end and
+ * keeps the probe's own order, so a new device appears where it was found
+ * rather than jumping to the top of a list nobody has touched.
+ */
+export function orderDevices(list, { pinned = [], order = [] } = {}) {
+  const rows = (Array.isArray(list) ? list : []).filter((device) => device && typeof device.name === 'string' && device.name);
+  const pinnedList = (Array.isArray(pinned) ? pinned : []).filter((name) => typeof name === 'string' && name);
+  const pinRank = new Map(pinnedList.map((name, index) => [name, index]));
+  const rank = new Map();
+  for (const name of Array.isArray(order) ? order : []) {
+    if (typeof name === 'string' && name && !rank.has(name)) rank.set(name, rank.size);
+  }
+  const probeRank = new Map(rows.map((device, index) => [device.name, index]));
+  return rows.slice().sort((a, b) => {
+    const aPinned = pinRank.has(a.name);
+    const bPinned = pinRank.has(b.name);
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    if (aPinned) return pinRank.get(a.name) - pinRank.get(b.name);
+    const aRank = rank.has(a.name) ? rank.get(a.name) : Number.POSITIVE_INFINITY;
+    const bRank = rank.has(b.name) ? rank.get(b.name) : Number.POSITIVE_INFINITY;
+    if (aRank !== bRank) return aRank - bRank;
+    return probeRank.get(a.name) - probeRank.get(b.name);
+  });
+}
+
+/**
  * The rows an island may draw: every probed device the user did not hide.
  *
  * The probe keeps returning a hidden device (it is still paired); filtering is
@@ -814,6 +852,7 @@ export const CONSUMERS = {
 
   'devices.showBattery': { scope: 'renderer', at: 'island.js devicesPage() · settings.js pageDevices() → 电量条与百分比', live: true, note: '关掉后只画名称与连接状态' },
   'devices.pinned': { scope: 'renderer', at: 'island.js devicesPage() · settings.js pageDevices() · main.js island:devices-pin / settings:devices-pin', live: true, note: '最多 3 台；岛设备页行尾或设置·设备页星标切换' },
+  'devices.order': { scope: 'renderer', at: 'island.js devicesPage() → orderDevices() · settings.js pageDevices() 拖动', live: true, note: '设置·设备页拖动出来的整表顺序；置顶的行仍排在最前' },
   'devices.hidden': { scope: 'renderer', at: 'island.js devicesPage() → visibleDevices() · settings.js pageDevices() 行的显示开关', live: true, note: '隐藏的设备不在岛设备页出现，设置页仍列出' },
 
   'calendar.leadMin': { scope: 'main', at: 'services/calendar.js lead time', live: true },

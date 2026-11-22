@@ -8,6 +8,7 @@
 import {
   PAGE_MANIFEST as PAGES,
   STATUS_MANIFEST as STATUS_ITEMS,
+  orderDevices,
   visibleDevices,
 } from '../shared/schema.js';
 /*
@@ -2426,13 +2427,11 @@ function devicesPage() {
     </div>`;
   }
   /*
-   * Pinned rows first, in the order they were pinned; the rest keep the order
-   * the probe reported, so a device does not jump between sweeps.
+   * Pinned rows first, then the order the person dragged into place in
+   * settings; a device the stored order has never seen keeps the probe's
+   * order, so a newly paired one does not jump to the top.
    */
-  const ordered = pinned
-    .map((name) => list.find((device) => device.name === name))
-    .filter(Boolean)
-    .concat(list.filter((device) => !pinned.includes(device.name)));
+  const ordered = orderDevices(list, { pinned, order: prefs.devices?.order });
   /*
    * Every row is rendered. .dev-list is the scroll container (see island.css),
    * so the fifth row is where the viewport ends, not where the list ends: a

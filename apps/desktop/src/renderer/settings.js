@@ -16,6 +16,7 @@ import {
   defaultStatusItems,
   enabledStatusKeys,
   moveStatusKey,
+  orderDevices,
   orderedPageKeys,
   orderedStatusKeys,
   presetPatch,
@@ -1004,6 +1005,7 @@ function pageDevices() {
   const showBattery = prefs.devices?.showBattery !== false;
   const probedAt = Number(devicesState?.probedAt) || 0;
   const pinFull = pinned.length >= DEVICE_PIN_LIMIT;
+  const orderStored = Array.isArray(prefs.devices?.order) && prefs.devices.order.length > 0;
   const levelOf = (value) => {
     if (value === null || value === undefined || value === '') return null;
     const level = Number(value);
@@ -1011,7 +1013,9 @@ function pageDevices() {
     return Math.max(0, Math.min(100, Math.round(level)));
   };
 
-  const rows = list.map((device) => {
+  /* The order the person dragged into place; pinned rows still lead. */
+  const ordered = orderDevices(list, { pinned, order: prefs.devices?.order });
+  const rows = ordered.map((device) => {
     const name = String(device.name ?? '');
     const shown = !hidden.includes(name);
     const isPinned = pinned.includes(name);
@@ -1027,7 +1031,8 @@ function pageDevices() {
     const pinTitle = isPinned
       ? T('devices.row.unpinTitle')
       : pinFull ? T('devices.row.pinFull', { max: DEVICE_PIN_LIMIT }) : T('devices.row.pinTitle', { max: DEVICE_PIN_LIMIT });
-    return '<div class="row dev-row' + (shown ? '' : ' off') + '" title="' + escapeHtml([name, state, source, level === null ? T('devices.row.unreadable') : T('devices.row.level', { n: level })].filter(Boolean).join(' · ')) + '">' +
+    return '<div class="row dev-row" draggable="true" data-device="' + escapeHtml(name) + '"' + (shown ? '' : ' data-off="1"') + ' title="' + escapeHtml([name, state, source, level === null ? T('devices.row.unreadable') : T('devices.row.level', { n: level })].filter(Boolean).join(' · ')) + '">' +
+      '<span class="dev-grip" aria-hidden="true" title="' + escapeHtml(T('devices.row.drag')) + '"><svg viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></span>' +
       '<span class="dev-glyph" aria-hidden="true"><svg viewBox="0 0 24 24">' + (DEVICE_GLYPHS[deviceKind(name)] ?? DEVICE_GLYPHS.other) + '</svg></span>' +
       '<span class="dev-main"><b>' + escapeHtml(name) + '</b><span>' + escapeHtml(state) + (source ? ' · ' + escapeHtml(source) : '') + '</span></span>' +
       battery +
@@ -1046,7 +1051,11 @@ function pageDevices() {
         : null,
     ])) +
     (list.length
-      ? group(T('devices.list.title'), '<div class="card dev-rows">' + rows + '</div>')
+      ? group(T('devices.list.title'),
+          '<div class="card dev-rows" data-device-order>' + rows + '</div>'
+          + '<p class="hint dev-order-hint">' + T('devices.order.hint')
+          + (orderStored ? ' · <button type="button" class="btn dev-order-reset" data-act="button" data-key="devices-order-reset">' + T('devices.order.reset') + '</button>' : '')
+          + '</p>')
       : emptyCard(T('devices.empty.title'), T('devices.empty.sub'), 'devices-refresh', T('devices.refresh.action'))) +
     '<p class="note">' + T('devices.note', { max: DEVICE_PIN_LIMIT }) + '</p>';
 }
@@ -1639,6 +1648,10 @@ content.addEventListener('click', async (event) => {
       await patch({ devices: { ...(prefs.devices || {}), pinned: [] } });
       return;
     }
+    if (key === 'devices-order-reset') {
+      await patch({ devices: { ...(prefs.devices || {}), order: [] } });
+      return;
+    }
     if (key === 'open-data') { await api.openData?.(); return; }
     if (key === 'open-state') { await api.openState?.(); return; }
     if (key === 'cal-subscribe') {
@@ -1816,6 +1829,54 @@ content.addEventListener('dragend', async () => {
   await saveOrder(list);
 });
 
+
+/* ------------------------------------------------------------ device rows */
+
+/*
+ * Devices drag like the page list does — HTML5 drag, so the OS draws the ghost
+ * exactly as it does for 页面管理 — but the handler is separate because a device
+ * row is not an .order-item: it carries a switch and a star, and dropping it
+ * into the generic list would have made saveOrder() rewrite statusItems.
+ *
+ * Only the finished order is written; the DOM is what the person sees while
+ * dragging, and one patch at dragend keeps "where it landed" and "what is
+ * stored" the same number.
+ */
+let deviceDrag = null;
+
+function deviceRows() {
+  return [...content.querySelectorAll('[data-device-order] .dev-row[data-device]')];
+}
+
+async function saveDeviceOrder() {
+  const names = deviceRows().map((row) => row.dataset.device).filter(Boolean);
+  if (!names.length) return;
+  await patch({ devices: { ...(prefs.devices ?? {}), order: names } });
+}
+
+content.addEventListener('dragstart', (event) => {
+  const row = event.target.closest('[data-device-order] .dev-row[data-device]');
+  if (!row) return;
+  deviceDrag = row;
+  row.dataset.dragging = 'true';
+  event.dataTransfer.effectAllowed = 'move';
+  try { event.dataTransfer.setData('text/plain', row.dataset.device); } catch { /* older engines */ }
+});
+content.addEventListener('dragover', (event) => {
+  const row = event.target.closest('[data-device-order] .dev-row[data-device]');
+  if (!row || !deviceDrag || row === deviceDrag) return;
+  event.preventDefault();
+  const rect = row.getBoundingClientRect();
+  const after = event.clientY > rect.top + rect.height / 2;
+  row.parentNode.insertBefore(deviceDrag, after ? row.nextSibling : row);
+});
+content.addEventListener('dragend', async () => {
+  if (!deviceDrag) return;
+  const row = deviceDrag;
+  deviceDrag = null;
+  row.dataset.dragging = 'false';
+  await saveDeviceOrder();
+});
 
 /* -------------------------------------------------------- residency drag */
 
