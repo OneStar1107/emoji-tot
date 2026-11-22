@@ -453,6 +453,18 @@ function registerIpc() {
       return { w: Math.round(box.w), h: Math.round(box.h) };
     },
   });
+  guard.guardedHandle('island:prepare-size', ['island'], (box) => {
+    if (!box || !Number.isFinite(box.w) || !Number.isFinite(box.h)) return false;
+    setBox(box);
+    return true;
+  }, {
+    maxBytes: 512,
+    check: (box) => {
+      if (!guard.isPlainObject(box)) return undefined;
+      if (!guard.isNumber(box.w, 1, 10000) || !guard.isNumber(box.h, 1, 10000)) return undefined;
+      return { w: Math.round(box.w), h: Math.round(box.h) };
+    },
+  });
   guard.guardedSend('island:hit', ['island'], (hit) => setHit(hit), {
     maxBytes: 256,
     check: (hit) => {

@@ -26,9 +26,9 @@ function rejectText(file, needle, why) {
 }
 
 for (const file of ['README.md', 'README.en.md']) {
-  expectText(file, `EmojiTot.Setup.${artifactVersion}.exe`, 'installer link must match artifactName');
-  expectText(file, `EmojiTot.${artifactVersion}.portable.exe`, 'portable link must match artifactName');
-  rejectText(file, `EmojiTot.${artifactVersion}.exe`, 'the portable artifact has a .portable suffix');
+  expectText(file, `releases/download/v${artifactVersion}/EmojiTot.exe`, 'installer link must match artifactName');
+  expectText(file, `releases/download/v${artifactVersion}/EmojiTot.Portable.exe`, 'portable link must match artifactName');
+  rejectText(file, 'EmojiTot.Setup.', 'the user-facing installer no longer exposes its build number');
   expectText(file, 'pnpm smoke:desktop', 'document the real-window smoke command');
 }
 

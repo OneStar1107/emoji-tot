@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('islandAPI', {
   material: () => windowMaterial,
   /** Content size, measured by the page. The window follows it. */
   reportBox: (box) => ipcRenderer.send('island:box', box),
+  /**
+   * Grow the native transparent window before the first morph frame. Without
+   * this the compositor clips the opening panel and leaves a grey stale edge.
+   */
+  prepareBox: (box) => ipcRenderer.invoke('island:prepare-size', box),
   /** Size of what is drawn right now (pill, panel or strip) — the hover target. */
   reportHit: (hit) => ipcRenderer.send('island:hit', hit),
   bootstrap: () => ipcRenderer.invoke('island:bootstrap'),

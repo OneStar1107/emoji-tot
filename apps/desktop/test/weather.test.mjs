@@ -122,6 +122,24 @@ describe('weather: auto-locate', () => {
     assert.ok(calls.some((call) => call.includes('-CityB64')));
     assert.ok(!calls.some((call) => call.includes('-AutoLocate')), 'a manual city never asks the locator');
   });
+
+  it('deduplicates simultaneous startup requests for the same place', async () => {
+    locator = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { ok: true, stdout: JSON.stringify(reading(GUANGZHOU)) };
+    };
+    const [first, second] = await Promise.all([
+      weather.load('香港', true),
+      weather.load('香港', true),
+    ]);
+    assert.equal(first.place.name, '广州');
+    assert.equal(second.place.name, '广州');
+    assert.equal(
+      calls.filter((call) => call.includes('-AutoLocate')).length,
+      1,
+      'one cold request feeds both startup consumers',
+    );
+  });
 });
 
 describe('weather: failed locate keeps a place', () => {

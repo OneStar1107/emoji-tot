@@ -32,8 +32,8 @@ Folded, it is just a face; click it and it grows into a 420px panel in place. Th
 <!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot.Setup.0.8.18.13.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.13/EmojiTot.Setup.0.8.18.13.exe) | Installer — starts from the Start menu |
-| [EmojiTot.0.8.18.13.portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.13/EmojiTot.0.8.18.13.portable.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.14/EmojiTot.exe) | Installer — starts from the Start menu |
+| [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.14/EmojiTot.Portable.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases) · current <!--facts:version-->0.8.18<!--/facts-->

@@ -9,6 +9,7 @@
 const platform = require('../platform');
 const path = require('node:path');
 const { scriptFile } = require('../paths');
+const { createFullscreenGuard } = require('../fullscreen-guard');
 
 const SCRIPT = scriptFile('fullscreen.ps1');
 let proc = null;
@@ -20,6 +21,12 @@ function start(handler) {
   stop();
   stopped = false;
   onEdge = handler;
+  /*
+   * One sample is not enough: a snipping overlay or a screenshot flash can
+   * cover the desktop for one two-second tick. Two adjacent samples suppress
+   * that false hide without adding another polling clock.
+   */
+  const confirm = createFullscreenGuard({ hideAfter: 2, showAfter: 2 });
   proc = platform.spawnPowerShell(
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT],
     { stdio: ['ignore', 'pipe', 'ignore'] },
@@ -37,7 +44,9 @@ function start(handler) {
     for (const line of parts) {
       const value = line.trim();
       if (value !== '1' && value !== '0') continue;
-      const full = value === '1';
+      const action = confirm.push(value === '1');
+      if (!action) continue;
+      const full = action === 'hide';
       if (full === last) continue;
       last = full;
       try {

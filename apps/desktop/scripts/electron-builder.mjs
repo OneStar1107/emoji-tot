@@ -17,7 +17,7 @@ const internalPortable = join(
 );
 const publicPortable = join(
   releaseDir,
-  'EmojiTot.' + info.buildVersion + '.portable.exe',
+  'EmojiTot.Portable.exe',
 );
 const env = { ...process.env, BUILD_NUMBER: String(info.number) };
 const child = spawn(process.execPath, [cli, ...process.argv.slice(2)], {

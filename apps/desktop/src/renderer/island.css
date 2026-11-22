@@ -116,11 +116,11 @@
   --ring: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
   --glass-edge: rgba(255, 255, 255, 0.17);
   /* The light layers that make one translucent pane read as liquid glass. */
-  --glass-key: rgba(255, 255, 255, 0.2);
-  --glass-sheen: rgba(255, 255, 255, 0.065);
-  --glass-prism: rgba(151, 132, 255, 0.085);
-  --glass-cool: rgba(58, 202, 255, 0.07);
-  --glass-depth: rgba(0, 0, 0, 0.24);
+  --glass-key: rgba(255, 255, 255, 0.14);
+  --glass-sheen: rgba(255, 255, 255, 0.035);
+  --glass-prism: transparent;
+  --glass-cool: transparent;
+  --glass-depth: rgba(0, 0, 0, 0.18);
   /* Radii, named so one corner is decided in one place. */
   --r-xs: 8px;
   --r-sm: 12px;
@@ -158,11 +158,11 @@ body[data-theme="light"] {
   --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
   --ring: inset 0 0 0 1px rgba(0, 0, 0, 0.055);
   --glass-edge: rgba(0, 0, 0, 0.1);
-  --glass-key: rgba(255, 255, 255, 0.62);
-  --glass-sheen: rgba(0, 0, 0, 0.025);
-  --glass-prism: rgba(91, 72, 217, 0.055);
-  --glass-cool: rgba(38, 159, 211, 0.045);
-  --glass-depth: rgba(0, 0, 0, 0.07);
+  --glass-key: rgba(255, 255, 255, 0.72);
+  --glass-sheen: rgba(0, 0, 0, 0.018);
+  --glass-prism: transparent;
+  --glass-cool: transparent;
+  --glass-depth: rgba(0, 0, 0, 0.055);
 }
 
 * { box-sizing: border-box; }
@@ -366,13 +366,12 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
   overflow: hidden;
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-full);
-  /* The capsule and panel share one five-layer liquid-glass stack. */
+  /* One neutral pane, one specular wash, one restrained depth ramp. */
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
-    radial-gradient(125% 150% at 20% -54%, var(--glass-key), rgba(255, 255, 255, 0) 58%),
-    linear-gradient(115deg, var(--glass-sheen) 0%, rgba(255, 255, 255, 0) 27%, rgba(255, 255, 255, 0) 69%, var(--glass-prism) 100%),
-    radial-gradient(80% 120% at 100% 120%, var(--glass-cool), rgba(255, 255, 255, 0) 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0) 54%, var(--glass-depth) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.022'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
+    radial-gradient(110% 130% at 18% -44%, var(--glass-key), transparent 56%),
+    linear-gradient(112deg, var(--glass-sheen), transparent 34% 74%, rgba(255, 255, 255, 0.018)),
+    linear-gradient(180deg, transparent 58%, var(--glass-depth) 100%),
     var(--card);
   color: var(--ink);
   /*
@@ -383,7 +382,7 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
    * under the bottom edge is what replaced the halo: depth from a drawn line
    * instead of a cloud.
    */
-  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.32), var(--hi), var(--lo), var(--ring);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24), var(--hi), var(--lo), var(--ring);
   backdrop-filter: none;
   transition: transform var(--base) var(--spring), box-shadow var(--base) var(--ease), border-color var(--base) var(--ease);
   cursor: pointer;
@@ -398,7 +397,7 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
 
 /* A 2% lift, not a 3.5% pop: the pill is a resting object, not a button that
    jumps when the pointer crosses it. */
-.pill:hover { transform: translateY(-1px) scale(1.02); border-color: var(--surface-3); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.36), var(--hi), var(--lo), var(--ring); }
+.pill:hover { transform: translateY(-1px) scale(1.02); border-color: var(--surface-3); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28), var(--hi), var(--lo), var(--ring); }
 .pill:active { transform: translateY(0) scale(0.99); }
 
 /*
@@ -635,11 +634,10 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    * cannot cover the content, and the solid/plain skins drop it for free.
    */
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
-    radial-gradient(135% 82% at 18% -28%, var(--glass-key), rgba(255, 255, 255, 0) 60%),
-    linear-gradient(112deg, var(--glass-sheen) 0%, rgba(255, 255, 255, 0) 24%, rgba(255, 255, 255, 0) 72%, var(--glass-prism) 100%),
-    radial-gradient(72% 72% at 96% 108%, var(--glass-cool), rgba(255, 255, 255, 0) 64%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0) 66%, var(--glass-depth) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.018'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
+    radial-gradient(120% 76% at 18% -30%, var(--glass-key), transparent 58%),
+    linear-gradient(112deg, var(--glass-sheen), transparent 32% 76%, rgba(255, 255, 255, 0.012)),
+    linear-gradient(180deg, transparent 68%, var(--glass-depth) 100%),
     var(--card);
   /*
    * Kept inside the window margin on purpose. The shadow used to be 44px of
@@ -659,7 +657,7 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    * be clipped into an edge.
    */
   box-shadow:
-    0 16px 36px -20px rgba(0, 0, 0, 0.55),
+    0 10px 26px -20px rgba(0, 0, 0, 0.42),
     var(--hi), var(--lo), var(--ring);
   /*
    * The grain that turns a gradient into a pane.
@@ -698,7 +696,37 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
  * the first frame and then slid upwards through the whole open, which is the
  * drift that was reported.
  */
-.panel-body { transform-origin: top center; }
+.panel-body { transform: none; transform-origin: top center; }
+
+/*
+ * During the morph the panel and content are siblings in one fixed-size frame.
+ * Only the panel box changes; the content layer keeps its final layout and is
+ * clipped by the panel. This avoids the compound transform that made the face
+ * drift and left a stale grey edge beside the translucent surface.
+ */
+body[data-morphing="true"] #frame {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+body[data-morphing="true"] .panel,
+body[data-morphing="true"] .panel-body {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+body[data-morphing="true"] .pill {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+}
+body[data-morphing="true"] .pill,
+body[data-morphing="true"] .panel {
+  box-shadow: none;
+}
 
 /* --------------------------------------------------------------- real glass */
 

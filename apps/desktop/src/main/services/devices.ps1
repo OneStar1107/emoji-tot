@@ -28,12 +28,10 @@
 #
 # So one sweep prints twice, and the reader replaces its list per line:
 #
-#   1. phase "list"    - who is connected, battery null. One
-#                        Get-CimInstance Win32_PnPEntity call (~1.0s) is the
-#                        only enumeration: it returns the same instance ids and
-#                        the same friendly names as the four Get-PnpDevice
-#                        calls it replaces (measured: 45/45 Bluetooth, 53/53
-#                        HID, 1/1 HFP node, 0 name differences on 178 nodes).
+#   1. phase "list"    - who is connected, battery null. Four class-filtered
+#                        `pnputil /enum-devices /connected` calls cost ~0.7s
+#                        combined, compared with a cold WMI sweep that can stall
+#                        for a minute while the service starts.
 #   2. phase "battery" - the same rows with the batched battery property read.
 #
 # The reader merges the vendor probe (device-battery.ps1) on top of a null
@@ -112,6 +110,43 @@ function Get-SourceKind([string]$name) {
     if ($name -like "*$word*") { return 'hid-wireless' }
   }
   return 'hid'
+}
+
+# Fast, class-filtered PnP enumeration.
+#
+# `pnputil` writes XML in the Windows OEM code page. Reading it through the
+# PowerShell pipeline decodes that as UTF-8 and turns Chinese device names into
+# replacement characters, so the child is started with the OEM encoding
+# explicitly. The class filter also avoids building the 300+ node WMI list.
+function Get-PnpDevices([string]$className) {
+  $info = [Diagnostics.ProcessStartInfo]::new()
+  $info.FileName = 'pnputil.exe'
+  $info.Arguments = "/enum-devices /connected /class $className /format xml"
+  $info.UseShellExecute = $false
+  $info.CreateNoWindow = $true
+  $info.RedirectStandardOutput = $true
+  $info.RedirectStandardError = $true
+  $info.StandardOutputEncoding = [Text.Encoding]::GetEncoding(
+    [Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage
+  )
+  $info.StandardErrorEncoding = $info.StandardOutputEncoding
+
+  $process = [Diagnostics.Process]::Start($info)
+  $xmlText = $process.StandardOutput.ReadToEnd()
+  $process.WaitForExit()
+  if (-not $xmlText.Trim()) { return @() }
+
+  try { $xml = [xml]$xmlText } catch { return @() }
+  foreach ($device in @($xml.PnpUtil.Device)) {
+    $status = [string]$device.Status
+    if ($status -eq 'Started') { $status = 'OK' }
+    [pscustomobject]@{
+      id = [string]$device.InstanceId
+      name = [string]$device.DeviceDescription
+      status = $status
+      class = [string]$device.ClassName
+    }
+  }
 }
 
 # The Bluetooth MAC a BTHENUM instance id encodes, or '' when there is none.
@@ -215,15 +250,22 @@ function Write-Rows([string]$phase, $list) {
 $delay = $WARMUP_MS
 
 while ($true) {
-  # ---- enumerate: one WMI call, no property reads --------------------------
+  # ---- enumerate: four fast connected-class queries, no WMI ----------------
   $btNodes = @()
   $hidNodes = @()
   $hfpBattery = @{}
-  foreach ($entity in (Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue)) {
-    $id = [string]$entity.PNPDeviceID
+  $nodes = @()
+  foreach ($className in @('Bluetooth', 'HIDClass', 'Mouse', 'Keyboard')) {
+    $nodes += @(Get-PnpDevices $className)
+  }
+  $seenIds = @{}
+  foreach ($entity in $nodes) {
+    $id = [string]$entity.id
     if (-not $id) { continue }
+    if ($seenIds.ContainsKey($id)) { continue }
+    $seenIds[$id] = $true
     $name = [string]$entity.Name
-    if ([string]$entity.PNPClass -eq 'Bluetooth') {
+    if ([string]$entity.class -eq 'Bluetooth') {
       if (-not $name) { continue }
       if (-not (Test-IsDevice $name)) { continue }
       $btNodes += [pscustomobject]@{ name = $name; status = [string]$entity.Status; id = $id }
@@ -237,7 +279,7 @@ while ($true) {
       if ($mac) { $hfpBattery[$mac] = $id }
       continue
     }
-    if ([string]$entity.PNPClass -in @('HIDClass', 'Mouse', 'Keyboard')) {
+    if ([string]$entity.class -in @('HIDClass', 'Mouse', 'Keyboard')) {
       # Only real HID/USB nodes: BTHLEDEVICE, ACPI, VHF and ROOT ids are driver
       # plumbing and the Bluetooth pass already covers the device they belong to.
       if ($id -notmatch '^(HID|USB)\\') { continue }

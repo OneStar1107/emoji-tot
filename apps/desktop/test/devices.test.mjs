@@ -24,6 +24,7 @@ const SCRIPT = require.resolve('../src/main/services/devices.ps1');
 
 const stats = { spawn: 0 };
 const children = [];
+const cache = { value: null, writes: 0 };
 /** What the vendor probe would answer, by device name. */
 let vendorLevel = null;
 const battery = {
@@ -60,7 +61,17 @@ Module._load = function patched(request, parent) {
         },
       };
     }
-    if (request === '../paths') return { scriptFile: (name) => name };
+    if (request === '../paths') {
+      return {
+        scriptFile: (name) => name,
+        cachePath: (name) => name,
+        readJson: () => cache.value,
+        writeJson: (_name, value) => {
+          cache.value = value;
+          cache.writes += 1;
+        },
+      };
+    }
     if (request === './device-battery') return battery;
   }
   return originalLoad.apply(this, arguments);
@@ -88,6 +99,8 @@ describe('devices: one resident child, two pushes per sweep', () => {
     battery.starts = 0;
     battery.probes = 0;
     battery.focused.length = 0;
+    cache.value = null;
+    cache.writes = 0;
     mock.timers.enable({ apis: ['setTimeout', 'setInterval'], now: 0 });
   });
 
@@ -108,24 +121,28 @@ describe('devices: one resident child, two pushes per sweep', () => {
     const pushes = [];
     devices.onChange((value) => pushes.push(value));
     devices.start();
+    assert.equal(pushes.length, 1, 'start pushes the cold/scanning state immediately');
+    assert.equal(pushes[0].scanning, true);
 
     line(listLine([
       { name: 'Xbox Wireless Controller', status: 'OK', battery: null, source: 'bluetooth' },
       { name: 'ROG AZOTH', status: 'OK', battery: null, source: 'bluetooth' },
     ]));
-    assert.equal(pushes.length, 1, 'the first line is its own push');
-    assert.equal(pushes[0].phase, 'list');
-    assert.deepEqual(pushes[0].devices.map((row) => row.battery), [null, null]);
-    assert.equal(pushes[0].withBattery, 0);
+    assert.equal(pushes.length, 2, 'the first line is its own push');
+    assert.equal(pushes[1].phase, 'list');
+    assert.equal(pushes[1].scanning, false);
+    assert.deepEqual(pushes[1].devices.map((row) => row.battery), [null, null]);
+    assert.equal(pushes[1].withBattery, 0);
 
     line(batteryLine([
       { name: 'Xbox Wireless Controller', status: 'OK', battery: 89, source: 'bluetooth' },
       { name: 'ROG AZOTH', status: 'OK', battery: 100, source: 'bluetooth' },
     ]));
-    assert.equal(pushes.length, 2, 'the second line repaints, it does not wait');
-    assert.equal(pushes[1].phase, 'battery');
-    assert.deepEqual(pushes[1].devices.map((row) => row.battery), [89, 100]);
-    assert.equal(pushes[1].withBattery, 2);
+    assert.equal(pushes.length, 3, 'the second line repaints, it does not wait');
+    assert.equal(pushes[2].phase, 'battery');
+    assert.deepEqual(pushes[2].devices.map((row) => row.battery), [89, 100]);
+    assert.equal(pushes[2].withBattery, 2);
+    assert.ok(cache.value && cache.value.devices.length === 2, 'the last list is persisted');
     devices.stop();
   });
 
@@ -137,21 +154,21 @@ describe('devices: one resident child, two pushes per sweep', () => {
     devices.start();
 
     line(listLine([{ name: 'ROG GLADIUS III WIRELESS AIMPOINT', status: 'OK', battery: null, source: 'hid-wireless' }]));
-    assert.deepEqual(pushes[0].devices.map((row) => row.battery), [64], 'the receiver level is merged on read');
-    assert.equal(pushes[0].withBattery, 1);
+    assert.deepEqual(pushes[1].devices.map((row) => row.battery), [64], 'the receiver level is merged on read');
+    assert.equal(pushes[1].withBattery, 1);
     devices.stop();
   });
 
-  it('one child per start, and the child owns the five-minute clock', () => {
+  it('one child per start; the only Node-side timer is the cold-output watchdog', () => {
     const devices = fresh();
     devices.start();
     devices.start();
     assert.equal(stats.spawn, 1, 'a second start() must not spawn a second sweeper');
 
-    /* The sweep clock is inside the resident PowerShell child, so this module
-     * must not have a timer that spawns a replacement on its own. */
-    mock.timers.tick(5 * 60 * 1000);
-    assert.equal(stats.spawn, 1, 'nothing respawns on a Node-side timer');
+    /* The five-minute sweep clock lives in the resident child. Node's timer is
+     * the bounded first-output watchdog, not a second sweep loop. */
+    mock.timers.tick(5 * 1000);
+    assert.equal(stats.spawn, 1, 'nothing respawns before the watchdog deadline');
 
     devices.stop();
     devices.start();
@@ -164,6 +181,7 @@ describe('devices: one resident child, two pushes per sweep', () => {
     devices.start();
     devices.refresh();
     assert.equal(battery.probes, 1);
+    assert.equal(stats.spawn, 2, 'refresh restarts the stalled list probe as well');
     devices.setFocused(true);
     assert.deepEqual(battery.focused, [true]);
     devices.stop();
@@ -192,9 +210,10 @@ describe('devices.ps1: the two-line protocol and the post-boot sweep', () => {
     );
   });
 
-  it('enumerates with one WMI pass instead of four Get-PnpDevice calls', () => {
-    const wmi = script.match(/Get-CimInstance Win32_PnPEntity -ErrorAction/g) || [];
-    assert.equal(wmi.length, 1, 'one enumeration per sweep');
+  it('enumerates with fast class-filtered pnputil calls instead of cold WMI', () => {
+    assert.doesNotMatch(script, /Get-CimInstance Win32_PnPEntity/);
+    assert.match(script, /pnputil\.exe/);
+    assert.match(script, /OEMCodePage/);
     assert.ok(!/Get-PnpDevice -Class/.test(script), 'the slow class queries are gone');
   });
 });

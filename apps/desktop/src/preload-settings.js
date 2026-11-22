@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   /** Show or hide one device on the island, by name; replies with merged prefs. */
   hideDevice: (name, hidden) => ipcRenderer.invoke('settings:devices-hidden', { name, hidden: hidden === true }),
   onDevices: (listener) => on('settings:devices', listener),
+  onUpdateStatus: (listener) => on('settings:update-status', listener),
   quota: () => ipcRenderer.invoke('quota:get'),
   quotaDo: (action, data) => ipcRenderer.invoke('quota:do', { action, data }),
   mail: () => ipcRenderer.invoke('mail:get'),

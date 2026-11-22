@@ -311,6 +311,15 @@ function pageProbeFactory(minimumControlHeight) {
       const style = getComputedStyle(node);
       const hideX = style.overflowX === 'hidden' || style.overflowX === 'clip';
       const hideY = style.overflowY === 'hidden' || style.overflowY === 'clip';
+      const scrollX = style.overflowX === 'auto' || style.overflowX === 'scroll';
+      const scrollY = style.overflowY === 'auto' || style.overflowY === 'scroll';
+      /*
+       * Rows below a list viewport are reachable by scrolling. They can sit
+       * outside the list's border box without being clipped by the card; the
+       * scroll container is the correct boundary, as it is for the device
+       * list's 31 PnP rows.
+       */
+      if (scrollX || scrollY) break;
       if (hideX || hideY) {
         const outer = node.getBoundingClientRect();
         if (
@@ -349,6 +358,9 @@ function pageProbeFactory(minimumControlHeight) {
         const outerStyle = getComputedStyle(node);
         const hideX = outerStyle.overflowX === 'hidden' || outerStyle.overflowX === 'clip';
         const hideY = outerStyle.overflowY === 'hidden' || outerStyle.overflowY === 'clip';
+        const scrollX = outerStyle.overflowX === 'auto' || outerStyle.overflowX === 'scroll';
+        const scrollY = outerStyle.overflowY === 'auto' || outerStyle.overflowY === 'scroll';
+        if (scrollX || scrollY) break;
         if ((hideX || hideY) && !ellipsis(outerStyle)) {
           const outer = node.getBoundingClientRect();
           const x = hideX && (box.right > outer.right + 1 || box.left < outer.left - 1);
@@ -662,19 +674,42 @@ async function auditIsland(cdp, sessionId, errors, label) {
      smoke test does the same); retry because a fresh profile can still be
      loading island.js when the first event lands. */
   let opened = false;
+  let requested = false;
+  let lastState = '{}';
+  const states = [];
   for (let attempt = 0; attempt < 24 && !opened; attempt += 1) {
+    lastState = await evaluate(cdp, sessionId, [
+      "JSON.stringify((() => {",
+      "  const panel = document.getElementById('panel');",
+      "  const island = document.getElementById('island');",
+      "  return {",
+      "    open: island?.dataset.open,",
+      "    panelHidden: panel?.hidden,",
+      "    dots: document.querySelectorAll('#dots button').length,",
+      "    morphing: document.body.dataset.morphing,",
+      "    outer: window.outerWidth + 'x' + window.outerHeight,",
+      "  };",
+      "})())",
+    ].join('\n'));
+    states.push(lastState);
     opened = Boolean(await evaluate(cdp, sessionId, [
       "(() => {",
       "  const panel = document.getElementById('panel');",
-      "  if (panel && !panel.hidden && document.querySelectorAll('#dots button').length) return true;",
-      "  const pill = document.getElementById('pill');",
-      "  if (pill) pill.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));",
-      "  return false;",
+      "  return Boolean(panel && !panel.hidden && document.querySelectorAll('#dots button').length);",
       "})()",
     ].join('\n')));
+    if (!opened && !requested) {
+      requested = true;
+      await evaluate(cdp, sessionId, [
+        "(() => {",
+        "  const pill = document.getElementById('pill');",
+        "  if (pill) pill.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));",
+        "})()",
+      ].join('\n'));
+    }
     if (!opened) await sleep(250);
   }
-  if (!opened) throw new Error('island panel did not open');
+  if (!opened) throw new Error('island panel did not open: ' + states.join(' -> '));
   await sleep(700);
   await waitFor(cdp, sessionId, "document.querySelectorAll('#dots button').length > 0", 'island dots');
 

@@ -49,6 +49,8 @@ const HOURS = 12;
 const FAILURE_TTL = 30 * 1000;
 /** The last failed lookup: { key, at, message }. */
 let failure = null;
+/** One cold lookup per city/auto slot, shared by every startup consumer. */
+const inFlight = new Map();
 const SCRIPT = scriptFile('weather.ps1');
 
 /** WMO weather codes, the vocabulary Open-Meteo answers in. */
@@ -219,7 +221,7 @@ function cached() {
  * does not repeat both lookups, but it is never written to the cache file, so
  * the refresh after that window asks the locator again.
  */
-async function load(city, autoLocate) {
+async function loadUncached(city, autoLocate) {
   const file = cacheFile();
   // "auto" is its own cache slot: switching back to a named city must not
   // reuse the coordinates the locator happened to find.
@@ -286,6 +288,19 @@ async function load(city, autoLocate) {
   failure = null;
   writeJson(file, { city: key, v: CACHE_VERSION, data });
   return data;
+}
+
+async function load(city, autoLocate) {
+  const key = autoLocate ? 'auto' : city;
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+  const request = loadUncached(city, autoLocate);
+  inFlight.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (inFlight.get(key) === request) inFlight.delete(key);
+  }
 }
 
 module.exports = { load, cached, describe };

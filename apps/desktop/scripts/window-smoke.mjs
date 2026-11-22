@@ -174,9 +174,160 @@ try {
     'collapsed liquid glass has rounded corners and layered CSS',
     surface.radius?.every((value) => value === surface.radius[0]) &&
       surface.radius?.[0] !== '0px' &&
-      surface.gradients >= 4 &&
+      surface.gradients >= 3 &&
       surface.backdrop === 'none',
     JSON.stringify(surface),
+  );
+
+  /*
+   * Exercise the interrupted fold, not only its resting state.
+   *
+   * The old test waited for the panel and checked one frame, which let a
+   * window that grew after the first spring frame pass. This sample starts at
+   * the pointerdown and reverses through Escape halfway through the open, so
+   * the same run catches a clipped first frame, content drift, a per-corner
+   * radius mismatch, and the compositor-only shadow that caused the grey halo.
+   */
+  const motion = JSON.parse(await evaluate(`
+    (async () => {
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      const rect = (selector) => {
+        const node = document.querySelector(selector);
+        if (!node) return null;
+        const box = node.getBoundingClientRect();
+        return { x: box.x, y: box.y, w: box.width, h: box.height };
+      };
+      const start = performance.now();
+      let reversed = false;
+      let started = false;
+      let startedAt = 0;
+      const samples = [];
+      document.getElementById('pill')?.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+      }));
+      while (performance.now() - start < 1400) {
+        await nextFrame();
+        const panel = document.getElementById('panel');
+        const style = panel ? getComputedStyle(panel) : null;
+        const morphing = document.body.dataset.morphing === 'true';
+        const island = rect('#island');
+        const panelBody = document.getElementById('panel-body');
+        const bodyOpacity = panelBody ? parseFloat(getComputedStyle(panelBody).opacity) : 0;
+        if (!started && morphing && island?.w > 172) {
+          started = true;
+          startedAt = performance.now() - start;
+        }
+        samples.push({
+          t: performance.now() - start,
+          started,
+          morphing,
+          outerW: window.outerWidth,
+          outerH: window.outerHeight,
+          screenX: window.screenX,
+          screenY: window.screenY,
+          island,
+          panelSize: panel ? [panel.offsetWidth, panel.offsetHeight, panel.hidden] : null,
+          frame: rect('#frame'),
+          topBall: rect('.top-face emojitot-ball'),
+          bodyOpacity,
+          radius: style ? [
+            parseFloat(style.borderTopLeftRadius),
+            parseFloat(style.borderTopRightRadius),
+            parseFloat(style.borderBottomRightRadius),
+            parseFloat(style.borderBottomLeftRadius),
+          ] : [],
+          shadow: style?.boxShadow ?? '',
+          transform: style?.transform ?? '',
+        });
+        if (started && !reversed && performance.now() - start >= startedAt + 100) {
+          reversed = true;
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Escape',
+            bubbles: true,
+          }));
+        }
+        if (started && reversed && !morphing) break;
+      }
+      return JSON.stringify({
+        samples,
+        open: document.getElementById('island')?.dataset.open,
+        morphing: document.body.dataset.morphing,
+      });
+    })()
+  `));
+  const moving = motion.samples.filter((sample) => sample.started && sample.morphing);
+  const firstMoving = moving[0];
+  const maxOuterW = Math.max(...motion.samples.map((sample) => sample.outerW));
+  const maxOuterH = Math.max(...motion.samples.map((sample) => sample.outerH));
+  const ballCentres = moving
+    .filter((sample) => sample.bodyOpacity > 0.05)
+    .filter((sample) => sample.topBall)
+    .map((sample) => ({
+      /* getBoundingClientRect is window-local; the OS window grows around its
+         centre, so screenX is what tells us whether the character moved. */
+      x: sample.screenX + sample.topBall.x + sample.topBall.w / 2,
+      y: sample.screenY + sample.topBall.y + sample.topBall.h / 2,
+    }));
+  const driftX = ballCentres.length
+    ? Math.max(...ballCentres.map((point) => point.x)) - Math.min(...ballCentres.map((point) => point.x))
+    : Infinity;
+  const driftY = ballCentres.length
+    ? Math.max(...ballCentres.map((point) => point.y)) - Math.min(...ballCentres.map((point) => point.y))
+    : Infinity;
+  const cornerSpread = moving.length
+    ? Math.max(...moving.map((sample) => Math.max(...sample.radius) - Math.min(...sample.radius)))
+    : Infinity;
+  const widthDelta = moving.length > 1
+    ? Math.max(...moving.slice(1).map((sample, index) => Math.abs(sample.island.w - moving[index].island.w)))
+    : Infinity;
+  const heightDelta = moving.length > 1
+    ? Math.max(...moving.slice(1).map((sample, index) => Math.abs(sample.island.h - moving[index].island.h)))
+    : Infinity;
+  const radiusDelta = moving.length > 1
+    ? Math.max(...moving.slice(1).map((sample, index) => Math.abs(sample.radius[0] - moving[index].radius[0])))
+    : Infinity;
+  const preExpanded =
+    firstMoving &&
+    Math.abs(firstMoving.outerW - maxOuterW) <= 1 &&
+    Math.abs(firstMoving.outerH - maxOuterH) <= 1;
+  ok(
+    'island folds continuously without drift, ghosting, or unequal corners',
+    moving.length >= 8 &&
+      motion.open === 'false' &&
+      motion.morphing === undefined &&
+      preExpanded &&
+      driftX <= 1 &&
+      driftY <= 1 &&
+      cornerSpread <= 0.05 &&
+      moving.every((sample) => sample.shadow === 'none'),
+    JSON.stringify({
+      frames: moving.length,
+      driftX: Number(driftX.toFixed(2)),
+      driftY: Number(driftY.toFixed(2)),
+      cornerSpread,
+      widthDelta: Number(widthDelta.toFixed(2)),
+      heightDelta: Number(heightDelta.toFixed(2)),
+      radiusDelta: Number(radiusDelta.toFixed(2)),
+      preExpanded,
+      outer: [maxOuterW, maxOuterH],
+      first: firstMoving && {
+        t: Number(firstMoving.t.toFixed(1)),
+        outer: [firstMoving.outerW, firstMoving.outerH],
+        island: firstMoving.island,
+        panelSize: firstMoving.panelSize,
+        frame: firstMoving.frame,
+        topBall: firstMoving.topBall,
+      },
+      last: moving.at(-1) && {
+        t: Number(moving.at(-1).t.toFixed(1)),
+        outer: [moving.at(-1).outerW, moving.at(-1).outerH],
+        island: moving.at(-1).island,
+        panelSize: moving.at(-1).panelSize,
+        frame: moving.at(-1).frame,
+        topBall: moving.at(-1).topBall,
+      },
+    }),
   );
 
   // Open the shelf page and measure the clipboard block.
@@ -197,7 +348,17 @@ try {
       }
       await new Promise((r) => setTimeout(r, 500));
       const box = (sel) => { const el = document.querySelector(sel); return el ? Math.round(el.getBoundingClientRect().height) : -1; };
-      return JSON.stringify({ pages: box('.pages'), hint: box('.shelf-hint'), files: box('.shelf-list'), clip: box('.clip'), list: box('.clip-list'), head: box('.clip-head') });
+      const panel = document.getElementById('panel');
+      return JSON.stringify({
+        pages: box('.pages'),
+        hint: box('.shelf-hint'),
+        files: box('.shelf-list'),
+        clip: box('.clip'),
+        list: box('.clip-list'),
+        head: box('.clip-head'),
+        panel: panel ? [panel.offsetWidth, panel.offsetHeight] : null,
+        outer: [window.outerWidth, window.outerHeight],
+      });
     })()
   `);
   console.log('  INFO  shelf metrics: ' + metrics);
@@ -208,6 +369,16 @@ try {
   /* 0.7.0 routes the shelf empty state through the shared .state template, so
      the old .shelf-hint node is gone; the page box is the stable reading. */
   ok('shelf metrics collected', shelf.pages > 0, metrics);
+  ok(
+    'expanded panel has the full native window box',
+    Array.isArray(shelf.panel) &&
+      Array.isArray(shelf.outer) &&
+      shelf.panel[0] > 0 &&
+      shelf.panel[1] > 0 &&
+      shelf.outer[0] === shelf.panel[0] + 64 &&
+      shelf.outer[1] === shelf.panel[1] + 72,
+    JSON.stringify({ panel: shelf.panel, outer: shelf.outer }),
+  );
 
   const pagingTargets = JSON.parse(await evaluate(`
     JSON.stringify((() => {
@@ -251,7 +422,7 @@ try {
     'expanded liquid glass keeps all four CSS corners',
     panelSurface.radius?.every((value) => value === panelSurface.radius[0]) &&
       panelSurface.radius?.[0] !== '0px' &&
-      panelSurface.gradients >= 4,
+      panelSurface.gradients >= 3,
     JSON.stringify(panelSurface),
   );
 

@@ -954,10 +954,11 @@ function emptyCardRow() {
 }
 
 function pageWeather() {
+  const cityValue = prefs.weather?.autoLocate === true ? '' : prefs.weather.city;
   return head(T('weather.title'), T('weather.lead')) +
     group(T('weather.location.title'), card([
       rowToggle(T('weather.autoLocate.label'), T('weather.autoLocate.sub'), 'weather.autoLocate'),
-      rowInput(T('weather.city.label'), T('weather.city.sub'), 'weather.city', prefs.weather.city, T('weather.city.placeholder')),
+      rowInput(T('weather.city.label'), T('weather.city.sub'), 'weather.city', cityValue, T('weather.city.placeholder')),
       rowSeg(T('weather.unit.label'), '', 'weather.unit', [['c', T('weather.unit.c')], ['f', T('weather.unit.f')]]),
     ])) +
     '<p class="note">' + T('weather.privacy.note') + '</p>' +
@@ -1003,6 +1004,7 @@ function pageDevices() {
   const pinned = Array.isArray(prefs.devices?.pinned) ? prefs.devices.pinned : [];
   const showBattery = prefs.devices?.showBattery !== false;
   const probedAt = Number(devicesState?.probedAt) || 0;
+  const scanning = devicesState?.scanning === true;
   const pinFull = pinned.length >= DEVICE_PIN_LIMIT;
   const orderStored = Array.isArray(prefs.devices?.order) && prefs.devices.order.length > 0;
   const levelOf = (value) => {
@@ -1055,7 +1057,9 @@ function pageDevices() {
           + '<p class="hint dev-order-hint">' + T('devices.order.hint')
           + (orderStored ? ' · <button type="button" class="btn dev-order-reset" data-act="button" data-key="devices-order-reset">' + T('devices.order.reset') + '</button>' : '')
           + '</p>')
-      : emptyCard(T('devices.empty.title'), T('devices.empty.sub'), 'devices-refresh', T('devices.refresh.action'))) +
+      : scanning
+        ? emptyCard(T('devices.scanning.title'), T('devices.scanning.sub'), null, null)
+        : emptyCard(T('devices.empty.title'), T('devices.empty.sub'), 'devices-refresh', T('devices.refresh.action'))) +
     '<p class="note">' + T('devices.note', { max: DEVICE_PIN_LIMIT }) + '</p>';
 }
 
@@ -1068,6 +1072,18 @@ function pagePlugins() {
 function pageAbout() {
   const caps = meta?.platform?.features ?? {};
   const missing = Object.entries(caps).filter(([, on]) => !on).map(([name]) => name);
+  const update = meta?.update ?? {};
+  const updateState = String(update.state ?? 'idle');
+  const latest = String(update.latestVersion ?? '');
+  const updateText = updateState === 'checking'
+    ? T('about.update.checking')
+    : updateState === 'available'
+      ? T('about.update.available', { version: latest })
+      : updateState === 'current'
+        ? T('about.update.current', { version: latest || version })
+        : updateState === 'error'
+          ? T('about.update.error')
+          : T('about.update.idle');
   const platformRow = missing.length
     ? row(T('about.platform.label'), T('about.platform.missing', { list: missing.join(T('list.separator')) }), '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>')
     : row(T('about.platform.label'), T('about.platform.ok'), '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>');
@@ -1075,6 +1091,8 @@ function pageAbout() {
     group(T('about.version.title'), card([
       platformRow,
       row(T('about.currentVersion.label'), T('about.currentVersion.sub'), '<span class="badge">v' + escapeHtml(version) + '</span>'),
+      row(T('about.update.label'), updateText, '<button type="button" class="btn" data-act="button" data-key="open-repo">' + T('about.update.action') + '</button>'),
+      row(T('about.license.label'), T('about.license.sub'), '<span class="badge">' + T('about.license.value') + '</span>'),
       row(T('about.dataDir.label'), T('about.dataDir.sub'), '<button type="button" class="btn" data-act="button" data-key="open-data">' + T('action.open') + '</button>'),
       row(T('about.stateFile.label'), T('about.stateFile.sub'), '<button type="button" class="btn" data-act="button" data-key="open-state">' + T('action.open') + '</button>'),
       row(T('about.repo.label'), T('about.repo.sub'), '<button type="button" class="btn" data-act="button" data-key="open-repo">GitHub</button>'),
@@ -1087,8 +1105,8 @@ function pageAbout() {
       row(T('about.feed.label'), T('about.feed.sub'), '<span class="badge">' + T('badge.readonly') + '</span>'),
     ])) +
     group(T('about.assets.title'), card([
-      row(T('about.engine.label'), '@emojitot/core · MIT', '<span class="badge">' + T('badge.inhouse') + '</span>'),
-      row(T('about.protocol.label'), '@emojitot/protocol · MIT', '<span class="badge">' + T('badge.inhouse') + '</span>'),
+      row(T('about.engine.label'), T('about.license.value'), '<span class="badge">' + T('badge.inhouse') + '</span>'),
+      row(T('about.protocol.label'), T('about.license.value'), '<span class="badge">' + T('badge.inhouse') + '</span>'),
       row(T('about.weather.label'), T('about.weather.sub'), '<span class="badge">' + T('badge.external') + '</span>'),
       row(T('about.lyrics.label'), T('about.lyrics.sub'), '<span class="badge">' + T('badge.external') + '</span>'),
     ])) +
@@ -2033,6 +2051,12 @@ api.onDevices?.((value) => {
      the node under the pointer and the saved order would be the rebuilt one,
      not the one the person dragged. The snapshot is kept either way. */
   if (page === 'devices' && !deviceDrag) paintContent();
+});
+
+api.onUpdateStatus?.((value) => {
+  if (!value || typeof value !== 'object') return;
+  meta = { ...(meta ?? {}), update: value };
+  if (page === 'about') paintContent();
 });
 
 api.onChanged((next) => {

@@ -15,14 +15,20 @@
  */
 const platform = require('../platform');
 const path = require('node:path');
-const { scriptFile } = require('../paths');
+const { cachePath, readJson, scriptFile, writeJson } = require('../paths');
 const deviceBattery = require('./device-battery');
+const { classifyDeviceSnapshot } = require('../device-cache');
 
 const RESPAWN_MS = 30000;
+/** A cold child that never emits is replaced instead of leaving an empty list. */
+const FIRST_OUTPUT_TIMEOUT_MS = 10000;
 
 let child = null;
 let buffer = '';
 let devices = [];
+let scanning = true;
+let cachedAt = 0;
+let firstOutputTimer = null;
 /**
  * Cold start is the whole point of the two-stage push, so the first sweep is
  * printed: "the page was empty for N seconds" is answerable from the app's own
@@ -37,6 +43,24 @@ let stopped = true;
 const listeners = new Set();
 
 const scriptPath = () => scriptFile('devices.ps1');
+const cacheFile = () => cachePath('devices');
+
+function loadCached() {
+  const saved = readJson(cacheFile(), null);
+  if (!saved || !Array.isArray(saved.devices)) return;
+  devices = saved.devices;
+  cachedAt = Number(saved.at) || 0;
+}
+
+function saveCached() {
+  cachedAt = Date.now();
+  writeJson(cacheFile(), { at: cachedAt, devices });
+}
+
+function clearFirstOutputTimer() {
+  clearTimeout(firstOutputTimer);
+  firstOutputTimer = null;
+}
 
 function emit() {
   const value = snapshot();
@@ -61,7 +85,7 @@ function snapshot() {
     }
     return row;
   });
-  return {
+  return classifyDeviceSnapshot({
     devices: rows,
     /* Counted from the merged rows: a level the vendor probe supplied is on
      * screen, so leaving it out of the count was the one place the page said
@@ -76,11 +100,13 @@ function snapshot() {
      * background clock even with the page closed, which is what makes "the
      * reading is fresh without opening the page" observable. */
     probedAt: deviceBattery.status().probedAt,
+    cachedAt,
+    scanning,
     /* 'list' = names and connection only, 'battery' = the levels as well. The
      * page does not draw it; it is what makes the two-stage push observable in
      * a log or a test. */
     phase,
-  };
+  });
 }
 
 function handleLine(line) {
@@ -123,6 +149,9 @@ function handleLine(line) {
     if (!existing || (existing.battery === null && entry.battery !== null)) byName.set(name, entry);
   }
   devices = Array.from(byName.values());
+  scanning = false;
+  clearFirstOutputTimer();
+  saveCached();
   const value = emit();
   if (firstPushesLogged < 2) {
     firstPushesLogged += 1;
@@ -135,6 +164,9 @@ function start() {
   stopped = false;
   startedAt = Date.now();
   firstPushesLogged = 0;
+  if (!devices.length) loadCached();
+  scanning = true;
+  emit();
   spawnChild();
   /* The vendor probe has its own clock; repainting when it lands is what
    * turns a late answer into a number on the page. */
@@ -160,6 +192,19 @@ function spawnChild() {
     return;
   }
   child.stdout.setEncoding('utf8');
+  const current = child;
+  clearFirstOutputTimer();
+  firstOutputTimer = setTimeout(() => {
+    firstOutputTimer = null;
+    if (stopped || child !== current) return;
+    console.warn('[devices] no output after ' + FIRST_OUTPUT_TIMEOUT_MS + 'ms; restarting probe');
+    child = null;
+    try { current.kill(); } catch {}
+    buffer = '';
+    scanning = true;
+    emit();
+    spawnChild();
+  }, FIRST_OUTPUT_TIMEOUT_MS);
   child.stdout.on('data', (chunk) => {
     buffer += chunk;
     let newline;
@@ -176,10 +221,12 @@ function spawnChild() {
   child.on('exit', () => {
     if (child !== self) return;
     child = null;
+    clearFirstOutputTimer();
     if (!stopped) setTimeout(spawnChild, RESPAWN_MS);
   });
   child.on('error', () => {
     child = null;
+    clearFirstOutputTimer();
     if (!stopped) setTimeout(spawnChild, RESPAWN_MS);
   });
 }
@@ -187,6 +234,7 @@ function spawnChild() {
 function stop() {
   stopped = true;
   deviceBattery.stop();
+  clearFirstOutputTimer();
   if (child) {
     try {
       child.kill();
@@ -206,9 +254,28 @@ function setFocused(active) {
   deviceBattery.setFocused(active);
 }
 
-/** The page's refresh button: one vendor probe now, outside both clocks. */
+function restartProbe() {
+  if (stopped) return;
+  const old = child;
+  child = null;
+  clearFirstOutputTimer();
+  if (old) {
+    try { old.kill(); } catch {}
+  }
+  buffer = '';
+  scanning = true;
+  emit();
+  spawnChild();
+}
+
+/**
+ * Explicit refresh: restart the resident list probe and ask the vendor battery
+ * channel now. The old button only refreshed levels, so a stalled enumerator
+ * looked permanently broken even while the button said it re-probed.
+ */
 function refresh() {
-  return deviceBattery.probeNow();
+  restartProbe();
+  return deviceBattery.probeNow().then(() => emit());
 }
 
 module.exports = { start, stop, snapshot, onChange, setFocused, refresh };

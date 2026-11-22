@@ -45,10 +45,10 @@ New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=EmojiTot" \
 ## 签完之后要验什么
 
 ```powershell
-Get-AuthenticodeSignature release/EmojiTot.Setup.<version>.exe | Format-List Status, SignerCertificate
+Get-AuthenticodeSignature release/EmojiTot.exe | Format-List Status, SignerCertificate
 ```
 
-`Status` 应为 `Valid`。同时确认 `release/EmojiTot.exe`（主程序）和 `EmojiTot.Setup.*.__uninstaller.exe`（卸载器）也都签上了——electron-builder 只在配置了证书时才会签卸载器。
+`Status` 应为 `Valid`。同时确认 `release/win-unpacked/EmojiTot.exe`（主程序）和卸载器也都签上了——electron-builder 只在配置了证书时才会签卸载器。
 
 ## 打包流水线的位置
 

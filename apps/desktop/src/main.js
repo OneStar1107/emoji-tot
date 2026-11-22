@@ -25,6 +25,8 @@ const island = require('./main/island');
 const settings = require('./main/settings');
 const onboarding = require('./main/onboarding');
 const updatePrompt = require('./main/update-prompt');
+const updateCheck = require('./main/update-check');
+const { loadBuildVersion } = require('./main/build-version');
 const { mailAction, quotaAction, calendarAction } = require('./main/data-actions');
 const battery = require('./main/services/battery');
 const weather = require('./main/services/weather');
@@ -1104,6 +1106,7 @@ function handleSettingsAction({ kind, value } = {}) {
         castId,
         islandVisible: Boolean(island.isVisible()),
         ballVisible: Boolean(win && win.isVisible()),
+        update: updateCheck.snapshot(),
         casts: CORE
           ? CORE.FAMILIES.map((family) => ({
               id: family.id,
@@ -2147,6 +2150,15 @@ if (!gotTheLock) {
     await loadCore();
     await loadSchema();
     const stored = readPrefs();
+    /*
+     * Warm the two latency-sensitive startup services before the first window
+     * can ask for them. Weather will publish its disk cache immediately and its
+     * fresh reading later; devices can publish a cached list while pnputil is
+     * still running. startServices() remains the single owner of their clocks.
+     */
+    const bootServices = SCHEMA?.enabledServices(stored) ?? new Set();
+    if (bootServices.has('devices')) devices.start();
+    if (bootServices.has('weather')) void refreshWeather();
     castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'tot';
     displayMode = stored.displayMode;
     createWindow();
@@ -2168,6 +2180,11 @@ if (!gotTheLock) {
      */
     updatePrompt.registerIpc();
     updatePrompt.startTestInjection();
+    updateCheck.start({
+      currentVersion: loadBuildVersion(path.join(__dirname, '..'), app.getVersion()),
+      prompt: updatePrompt,
+      onChange: (value) => settings.sendUpdateStatus(value),
+    });
     // The island page cannot hold data that was pushed before it listened.
     island.onLoaded(() => {
       if (runningServices.has('battery')) pushBattery();
@@ -2245,6 +2262,7 @@ if (!gotTheLock) {
       // shutting down anyway
     }
     fullscreen.stop();
+    updateCheck.stop();
     volume.stop();
     games.stop();
     // Anything a service spawned but did not stop (a watcher whose kill raced the

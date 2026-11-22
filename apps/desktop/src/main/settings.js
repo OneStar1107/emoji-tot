@@ -66,6 +66,11 @@ function sendDevices(payload) {
   win.webContents.send('settings:devices', payload);
 }
 
+function sendUpdateStatus(payload) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('settings:update-status', payload);
+}
+
 /**
  * Push one face payload to the open settings window.
  *
@@ -324,6 +329,7 @@ module.exports = {
   applyPatch,
   sendFace,
   sendDevices,
+  sendUpdateStatus,
   setWeatherRefresher,
   setActionHook,
   setFaceLoader,

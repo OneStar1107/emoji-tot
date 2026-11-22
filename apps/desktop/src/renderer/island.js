@@ -33,6 +33,7 @@ import {
   seekFromRatio,
   seekPercent,
 } from './media-controls.mjs';
+import { createSpring, geometryAt } from './island-motion.mjs';
 
 const api = window.islandAPI;
 /* The bridge always reports none now; keep the dataset for old profiles and
@@ -238,6 +239,14 @@ function measure() {
     reportHit();
     if (avoidCollapsed) return;
     /*
+     * A morph owns the native window. Reporting the half-swapped frame here
+     * used to shrink the window to 168x36 while prepareBox was in flight, then
+     * grow it again. That resize storm clipped the surface and made the first
+     * frame jump. settleMorph reports the exact final box once the driver is
+     * done.
+     */
+    if (document.body.dataset.morphing === 'true') return;
+    /*
      * The frame is the content's natural box — it is out of flow with
      * width: max-content, so it reports the real size of whichever surface is
      * showing. Reading the surface itself (panel/pill) reported zero while the
@@ -265,8 +274,9 @@ new ResizeObserver(measure).observe(frameEl);
  * visible and left the first open after a cold start with no morph at all.
  */
 let morph = null;
+let preparing = null;
 function syncSize() {
-  if (morph) return;
+  if (morph || preparing) return;
   const rect = frameEl.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
   islandEl.style.width = `${Math.ceil(rect.width)}px`;
@@ -2386,6 +2396,7 @@ function refreshDevices() {
 
 function devicesPage() {
   const probed = devicesState?.devices ?? [];
+  const scanning = devicesState?.scanning === true;
   /*
    * Hidden is a display decision, not a probe result: a hidden device stays
    * paired, keeps its level and keeps its pin, it just has no row here. The
@@ -2439,6 +2450,8 @@ function devicesPage() {
      */
     const empty = probed.length
       ? stateBlock('good', '设备都隐藏了', '在设置 → 设备里重新显示', '去设置', 'data-action="settings:devices"')
+      : scanning
+        ? stateBlock('warn', '正在检测外设', '蓝牙与 HID 列表通常一秒内出现')
       : stateBlock('good', '没有已连接的蓝牙设备', '在系统蓝牙里配对后会显示', '去设置', 'data-action="settings:general"');
     /* The state line goes first, against the top: the battery block below it is
        this machine's own reading, not a device answer, and it stays. */
@@ -2769,14 +2782,17 @@ document.addEventListener(
  * 190ms first, width 210ms after 30ms, 240ms — dismissing is quicker than
  * arriving, and the card drains downwards before it narrows.
  */
-const MORPH_OPEN = { durW: 240, durH: 340, delayW: 0, delayH: 60, total: 400 };
-const MORPH_CLOSE = { durW: 210, durH: 190, delayW: 30, delayH: 0, total: 240 };
+const ISLAND_SPRING = Object.freeze({ mass: 1, stiffness: 520, damping: 34.2 });
+const MORPH_SETTLE_MS = 320;
+const MORPH_GUARD_MS = 520;
 
 let morphFrame = 0;
 /** Fires if the rAF chain dies mid-flight (hidden or occluded window). */
 let morphGuard = 0;
 /** True from the moment a fold starts until the pill is the surface again. */
 let closing = false;
+/** Monotonic token so a delayed native resize cannot start a stale morph. */
+let morphIntent = 0;
 
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 
@@ -2784,39 +2800,11 @@ const clamp01 = (value) => Math.min(1, Math.max(0, value));
 const smoothstep = (t) => { const x = clamp01(t); return x * x * (3 - 2 * x); };
 
 /*
- * The morph is a spring, not a curve.
- *
- * stiffness 520, damping 32, mass 1 gives zeta ~0.70 and wn ~22.8 rad/s: the
- * set Apple own controls land on, and the closest a single parameter pair gets
- * to "quick, but it has weight". It settles in ~420ms with one 4.5% overshoot,
- * which is the difference between a card appearing and a surface being
- * stretched — a cubic-bezier can be fast but it cannot overshoot and come back,
- * and that return is most of what the eye reads as physical.
- *
- * Same numbers as the --spring token in island.css (linear() there, sampling
- * here), so a hover and a morph move on one rhythm.
+ * The public calibration remains k=520, c=32, m=1 (response 0.2755 s,
+ * damping fraction 0.7016, 4.54% overshoot). The shipped surface uses c=34.2:
+ * the damping fraction becomes 0.750 and overshoot falls to ~2.95%, without
+ * materially lengthening the same ~0.27 s perceptual response.
  */
-const SPRING_ZETA = 0.7;
-const SPRING_OMEGA = Math.sqrt(520);
-const SPRING_SETTLE_MS = 420;
-
-/**
- * Spring position at normalised time u (0 to 1 over SPRING_SETTLE_MS).
- *
- * Capped at 1.02 rather than 1.045: a window bounds change of +4.5% is a few
- * pixels of edge the user did not ask for, and it lands against screen edges.
- * The cap keeps the return leg (1.02 to 1.0) while the approach stays honest.
- */
-function easeMorph(u) {
-  const x = clamp01(u);
-  if (x === 0) return 0;
-  if (x >= 1) return 1;
-  const t = (x * SPRING_SETTLE_MS) / 1000;
-  const wd = SPRING_OMEGA * Math.sqrt(1 - SPRING_ZETA * SPRING_ZETA);
-  const decay = Math.exp(-SPRING_ZETA * SPRING_OMEGA * t);
-  const value = 1 - decay * (Math.cos(wd * t) + ((SPRING_ZETA * SPRING_OMEGA) / wd) * Math.sin(wd * t));
-  return Math.max(0, Math.min(1.02, value));
-}
 
 /** The radius the panel rests at, read from the preference the stylesheet publishes. */
 function panelRadius() {
@@ -2824,208 +2812,159 @@ function panelRadius() {
   return Number.isFinite(value) ? value : 22;
 }
 
-/** Drop the painted scale and the inline box rule; the panel is its layout again. */
+function clearMorphStyles() {
+  islandEl.style.width = '';
+  islandEl.style.height = '';
+  islandEl.style.transition = '';
+  frameEl.style.width = '';
+  frameEl.style.height = '';
+  panelEl.style.width = '';
+  panelEl.style.height = '';
+  panelEl.style.opacity = '';
+  panelEl.style.borderRadius = '';
+  panelEl.style.clipPath = '';
+  if (panelBodyEl) {
+    panelBodyEl.style.width = '';
+    panelBodyEl.style.height = '';
+    panelBodyEl.style.opacity = '';
+  }
+  pillEl.style.opacity = '';
+}
+
+/** Drop the painted box and return every surface to its natural layout. */
 function stopMorph() {
   if (morphFrame) cancelAnimationFrame(morphFrame);
   morphFrame = 0;
   if (morphGuard) clearTimeout(morphGuard);
   morphGuard = 0;
   morph = null;
-  islandEl.style.transition = '';
-  panelEl.style.transform = '';
-  panelEl.style.opacity = '';
-  panelEl.style.borderRadius = '';
-  if (panelBodyEl) {
-    panelBodyEl.style.transform = '';
-    panelBodyEl.style.opacity = '';
-  }
-  pillEl.style.opacity = '';
+  preparing = null;
+  delete document.body.dataset.morphing;
+  clearMorphStyles();
 }
 
-/*
- * Paint one frame of the morph from the box the driver just wrote.
- *
- * The corner and the fade are carried values, not functions of the box: each
- * frame re-aims a short tween at the surface's end state (open or folded) and
- * keeps the value the previous frame reached. That is what lets a reversed
- * morph resume exactly where the eye left it — neither snaps back to an end
- * state, and neither derives its rate from an axis that is front-loaded.
- */
-function paintMorph(w, h, elapsed) {
+/** Paint one frame from the single spring progress. */
+function paintMorph(geometry) {
   const m = morph;
-  islandEl.style.width = `${w}px`;
-  islandEl.style.height = `${h}px`;
-  /* Two short tweens, not ratios of the box: the close drains 264px of height
-     in 190ms and the width is front-loaded, so a radius or a fade read off
-     either axis moves in visible steps. These follow the same schedule for
-     both directions and only ever continue from their last value. */
-  const cornerAt = clamp01(elapsed / m.cornerMs);
-  m.corner = m.cornerFrom + (m.cornerTo - m.cornerFrom) * smoothstep(cornerAt);
-  const fadeAt = clamp01((elapsed - m.fadeDelay) / m.fadeMs);
-  m.opacity = m.fadeFrom + (m.fadeTo - m.fadeFrom) * smoothstep(fadeAt);
-  /* Transform origin is top centre (island.css), so this box is pinned to the
-     pill's top edge and grows outwards without a second position animation. */
-  const scaleX = Math.min(1, w / m.panelW);
-  const scaleY = Math.min(1, h / m.panelH);
-  panelEl.style.transform = `scale(${scaleX}, ${scaleY})`;
-  panelEl.style.opacity = String(m.opacity);
-  panelEl.style.borderRadius = `${Math.round(999 + (m.radius - 999) * m.corner)}px`;
+  const width = Math.max(1, geometry.width);
+  const height = Math.max(1, geometry.height);
+  const radius = Math.max(0, geometry.radius);
+  islandEl.style.width = `${width}px`;
+  islandEl.style.height = `${height}px`;
+  panelEl.style.width = `${width}px`;
+  panelEl.style.height = `${height}px`;
+  panelEl.style.borderRadius = `${radius}px`;
+  panelEl.style.clipPath = `inset(0 round ${radius}px)`;
+  panelEl.style.opacity = '1';
   /*
-   * The page is not scaled with the card.
-   *
-   * The inverse of the panel's scale puts the content back at its natural size
-   * inside the scaled panel: the card's overflow:hidden (with its radius on the
-   * same clock) then cuts the page at the box it is shrinking to, instead of
-   * squashing 217px of page into a 60px band. That squash was the second layer
-   * of text on screen during the fold — unreadable, but painted for all 240ms.
+   * The content layer stays at its natural size and position. The panel's
+   * rounded clipping box supplies every visible change, so there is no inverse
+   * transform and no one-frame disagreement between the shell and character.
    */
   if (panelBodyEl) {
-    /*
-     * The card is laid out centred in the window, so while the window grows
-     * its left edge moves: panel.left goes from (w - panelW)/2 to 0. The
-     * counter-scale keeps the page at its natural size but does not cancel
-     * that translation, so the whole page slid right by (panelW - w)/2 over
-     * the open — the character visibly drifting to the right. Pushing the
-     * content back by exactly that amount keeps it still:
-     *   panel.left + shift + x = (w - panelW)/2 + (panelW - w)/2 + x = x
-     */
-    const shift = (m.panelW - w) / 2;
-    panelBodyEl.style.transform = `translateX(${shift}px) scale(${1 / scaleX}, ${1 / scaleY})`;
-    /*
-     * Text leaves before the pill's text arrives: this layer is opaque for the
-     * first 45% of the close (108ms of 240) and gone by then, while the pill's
-     * own text starts at 55% (132ms). Two layers of text are never on screen in
-     * the same frame, and the surface alone carries the hand-over.
-     */
-    const bodyMs = m.open ? 240 : MORPH_CLOSE.total * 0.45;
-    const bodyTo = m.open ? 1 : 0;
-    const bodyAt = clamp01(elapsed / bodyMs);
-    m.bodyOpacity = m.bodyFrom + (bodyTo - m.bodyFrom) * smoothstep(bodyAt);
-    panelBodyEl.style.opacity = String(m.bodyOpacity);
+    panelBodyEl.style.opacity = String(smoothstep((m.progress - 0.08) / 0.34));
   }
-  if (!m.open) {
-    /* The pill comes back over the last stretch, once the card is nearly the
-       pill's own box: one silhouette dissolving into the other. */
-    const progress = clamp01(elapsed / MORPH_CLOSE.total);
-    pillEl.style.opacity = String(smoothstep((progress - 0.55) / 0.45));
-  }
+  pillEl.style.opacity = String(1 - smoothstep((m.progress - 0.015) / 0.25));
   reportHit();
 }
 
-/**
- * Run the box to the open (or folded) target from the box on screen.
- *
- * `from` is read from the live box, not from the previous target, so an
- * interrupt starts where the eye left it. `fold` is the pill box the morph
- * measures itself against: the panel's opacity and corner are a function of
- * where the box sits between the two, not of elapsed time alone.
- */
-function startMorph(open, from, fold) {
-  const panelW = panelEl.offsetWidth;
-  const panelH = panelEl.offsetHeight;
-  if (!panelW || !panelH || !fold.width || !fold.height) return false;
-  /* Carry the corner and the fade where the eye last saw them, so a reversed
-     morph does not snap either back to an end state. */
-  const carriedCorner = morph ? morph.corner : open ? 0 : 1;
-  const carriedFade = morph ? morph.opacity : open ? 0 : 1;
-  /* A press during the fold takes the card back while its text may already be
-     gone; the layer resumes from that value instead of snapping to 1. */
-  const carriedBody = morph && Number.isFinite(morph.bodyOpacity) ? morph.bodyOpacity : 1;
-  stopMorph();
-  const clock = open ? MORPH_OPEN : MORPH_CLOSE;
-  /* The blurred photograph is re-rendered every frame while the box grows, at
-     a 20px radius over a 1280px frame — that is the stutter, not the screenshot.
-     island.css drops the filter for the duration; a plain backdrop is invisible
-     while the panel is scaling anyway. */
-  document.body.dataset.morphing = 'true';
-  morph = {
+function retargetMorph(open, nowMs) {
+  morph.open = open;
+  morph.startedAt = nowMs;
+  morph.spring.retarget(open ? 1 : 0, nowMs / 1000);
+  morph.progress = morph.spring.sample(nowMs / 1000).position;
+}
+
+function createMorphState(open, compact, expanded) {
+  const now = performance.now();
+  return {
     open,
-    fromW: from.width,
-    fromH: from.height,
-    toW: open ? panelW : Math.ceil(fold.width),
-    toH: open ? panelH : Math.ceil(fold.height),
-    panelW,
-    panelH,
-    foldW: fold.width,
-    foldH: fold.height,
-    radius: panelRadius(),
-    corner: carriedCorner,
-    cornerFrom: carriedCorner,
-    cornerTo: open ? 1 : 0,
-    cornerMs: open ? 400 : 240,
-    opacity: carriedFade,
-    fadeFrom: carriedFade,
-    fadeTo: open ? 1 : 0,
-    fadeMs: 160,
-    fadeDelay: open ? 0 : 80,
-    bodyOpacity: carriedBody,
-    bodyFrom: carriedBody,
-    startedAt: performance.now(),
+    compact,
+    expanded,
+    startedAt: now,
+    progress: open ? 0 : 1,
+    spring: createSpring({
+      ...ISLAND_SPRING,
+      from: open ? 0 : 1,
+      target: open ? 1 : 0,
+      startedAt: now / 1000,
+    }),
   };
-  /* The CSS transition is the fallback clock for non-morph size changes; while
-     this loop owns the box it must be off, or every write would start a race
-     between the transition and the next frame. */
+}
+
+/**
+ * Run one spring on the compact/expanded pair.
+ *
+ * An existing spring is retargeted in place, which preserves both position and
+ * velocity. A first run creates the analytic state at compact (opening) or
+ * expanded (closing).
+ */
+function startMorph(open, compact, expanded, content) {
+  if (!compact?.width || !compact?.height || !expanded?.width || !expanded?.height) return false;
+  document.body.dataset.morphing = 'true';
   islandEl.style.transition = 'none';
-  paintMorph(morph.fromW, morph.fromH, 0);
+  frameEl.style.width = `${expanded.width}px`;
+  frameEl.style.height = `${expanded.height}px`;
+  if (panelBodyEl && content?.width && content?.height) {
+    panelBodyEl.style.width = `${content.width}px`;
+    panelBodyEl.style.height = `${content.height}px`;
+  }
+  if (!morph) morph = createMorphState(open, compact, expanded);
+  else {
+    morph.compact = compact;
+    morph.expanded = expanded;
+    retargetMorph(open, performance.now());
+  }
+  paintMorph(geometryAt(morph.compact, morph.expanded, morph.progress));
+  if (morphFrame) cancelAnimationFrame(morphFrame);
   const step = (now) => {
     const m = morph;
     if (!m) return;
-    const t = now - m.startedAt;
-    /* The 1.02 overshoot is a "grow past the target then settle" gesture; run
-       backwards it means the fold ends 5px narrower than the pill it lands on,
-       and the last frames of the close read as a squeeze. Clamp the shrinking
-       direction, keep the bounce on the way out. */
-    const easeW = easeMorph((t - clock.delayW) / clock.durW);
-    const easeH = easeMorph((t - clock.delayH) / clock.durH);
-    const w = m.fromW + (m.toW - m.fromW) * (m.open ? easeW : Math.min(1, easeW));
-    const h = m.fromH + (m.toH - m.fromH) * (m.open ? easeH : Math.min(1, easeH));
-    paintMorph(w, h, t);
-    if (t >= clock.total) settleMorph();
+    const sample = m.spring.sample(now / 1000);
+    m.progress = sample.position;
+    paintMorph(geometryAt(m.compact, m.expanded, m.progress));
+    if (now - m.startedAt >= MORPH_SETTLE_MS) settleMorph();
     else morphFrame = requestAnimationFrame(step);
   };
   morphFrame = requestAnimationFrame(step);
-  /*
-   * rAF stops when the window is hidden or fully occluded, and a stopped
-   * chain leaves `morph` set — syncSize() and requestGlass() both
-   * short-circuit on it, so the window would keep the old box until the next
-   * open. measure() already learned this and moved to a microtask; the morph
-   * gets the same guard, one tick after the clock would have finished.
-   */
   if (morphGuard) clearTimeout(morphGuard);
   morphGuard = setTimeout(() => {
     morphGuard = 0;
     if (morph) settleMorph();
-  }, clock.total + 120);
+  }, MORPH_GUARD_MS);
   return true;
 }
 
-/** Land the running morph: drop the painted scale and make the target the surface. */
+/** Land the running morph on the exact target, never on a stale sample. */
 function settleMorph() {
   if (morphFrame) cancelAnimationFrame(morphFrame);
   morphFrame = 0;
+  if (morphGuard) clearTimeout(morphGuard);
+  morphGuard = 0;
   const wasOpen = morph ? morph.open : false;
   morph = null;
+  preparing = null;
   delete document.body.dataset.morphing;
-  islandEl.style.transition = '';
-  panelEl.style.transform = '';
-  panelEl.style.opacity = '';
-  panelEl.style.borderRadius = '';
-  if (panelBodyEl) {
-    panelBodyEl.style.transform = '';
-    panelBodyEl.style.opacity = '';
-  }
-  pillEl.style.opacity = '';
+  clearMorphStyles();
   if (wasOpen) {
-    syncSize();
-    reportBoxNow();
-    reportHit();
-    measure();
-    /* The panel is at its final box and unscaled: this is the first moment a
-       screen-positioned photograph can be painted without being scaled. */
-    requestGlass();
+    landOpen();
   } else {
     landClosed();
   }
+}
+
+/** Land directly on the open panel when there is no spring to run. */
+function landOpen() {
+  closing = false;
+  islandEl.dataset.closing = 'false';
+  stopMorph();
+  pillEl.hidden = true;
+  panelEl.hidden = false;
+  syncSize();
+  reportBoxNow();
+  reportHit();
+  measure();
+  requestGlass();
 }
 
 /*
@@ -3033,8 +2972,8 @@ function settleMorph() {
  *
  * Closing used to be a state flip: the panel was hidden in the same task and
  * the only thing left moving was the pill's own entrance — the card did not
- * fold, it ceased to exist. The fold now runs the open backwards on its own
- * 240ms clock (see MORPH_CLOSE).
+ * fold, it ceased to exist. The fold now retargets the same spring towards the
+ * pill's compact geometry.
  *
  * The window stays at the panel's box while the card folds inside it. Growing
  * the OS window frame by frame was the alternative and it is the one that
@@ -3049,18 +2988,30 @@ function settleMorph() {
  * is one silhouette dissolving into the other, not a change of shape.
  */
 function closeMorph() {
+  if (preparing) {
+    preparing = null;
+    landClosed();
+    return;
+  }
   closing = true;
   islandEl.dataset.closing = 'true';
   pillEl.style.animation = 'none';
   pillEl.hidden = false;
   pillEl.style.opacity = '0';
-  /* offsetWidth, not the rect: a hovered pill carries a 1.02 scale in its
-     rect, and folding to that would leave the island 3px wider than the pill
-     it lands on. */
-  const fold = { width: Math.ceil(pillEl.offsetWidth), height: Math.ceil(pillEl.offsetHeight) };
-  if (!fold.width || !fold.height || !panelEl.offsetWidth) return landClosed();
-  const start = islandEl.getBoundingClientRect();
-  if (!startMorph(false, { width: start.width, height: start.height }, fold)) landClosed();
+  const pillW = Math.ceil(pillEl.offsetWidth);
+  const pillH = Math.ceil(pillEl.offsetHeight);
+  const compact = { width: pillW, height: pillH, radius: Math.ceil(Math.min(pillW, pillH) / 2) };
+  const expanded = {
+    width: Math.ceil(panelEl.offsetWidth),
+    height: Math.ceil(panelEl.offsetHeight),
+    radius: panelRadius(),
+  };
+  const content = panelBodyEl
+    ? { width: Math.ceil(panelBodyEl.offsetWidth), height: Math.ceil(panelBodyEl.offsetHeight) }
+    : null;
+  if (!pillW || !pillH || !expanded.width || !expanded.height) return landClosed();
+  if (morph) retargetMorph(false, performance.now());
+  if (!startMorph(false, compact, expanded, content)) landClosed();
 }
 
 /** Land the fold: the pill is the surface now, and every report follows it. */
@@ -3094,7 +3045,7 @@ function clearGlass() {}
 function requestGlass() {}
 function scheduleGlassRefresh() {}
 function syncGlassMaterial() {}
-function setOpen(next) {
+async function setOpen(next) {
   const opening = next === true && !open;
   const folding = next === false && open;
   /* Already there, or the same toggle twice: nothing to move. */
@@ -3103,15 +3054,6 @@ function setOpen(next) {
      no business outliving the panel that shows it. */
   if (folding) clearGlass();
   /*
-   * The pill's box has to be read while it is still laid out — the very next
-   * line hides it. In the strip state the pill is visibility:hidden but keeps
-   * its box, while what is actually drawn is the 5px strip inside #frame, so
-   * the strip is what the panel grows out of there.
-   */
-  const fold = opening
-    ? (document.body.dataset.avoid === '1' ? frameEl : pillEl).getBoundingClientRect()
-    : null;
-  /*
    * A fold under reduced motion, or while a listed app covers the island, is
    * a state change, not an animation: it has to land in this same task so the
    * measurement below describes the surface the user ends up with.
@@ -3119,35 +3061,86 @@ function setOpen(next) {
   const animated = document.body.dataset.motion !== 'off';
   /* A folded island has no menu: reopening starts from the reading. */
   if (folding) cityMenuOpen = false;
+  const intent = ++morphIntent;
   open = next;
   islandEl.dataset.open = String(open);
   /* Only the devices page needs the vendor probe awake. */
   syncDevicesFocus();
   pillEl.setAttribute('aria-expanded', String(open));
   if (opening) {
-    /*
-     * A press during the fold takes the card back: the driver re-targets from
-     * the box on screen, so there is no dead quarter-second and no seam to
-     * jump. The pill's own overlay is dropped in the same task.
-     */
+    if (morph) {
+      closing = false;
+      islandEl.dataset.closing = 'false';
+      retargetMorph(true, performance.now());
+      syncAvoidVisual();
+      reportHit();
+      return;
+    }
+    const fold = (document.body.dataset.avoid === '1' ? frameEl : pillEl).getBoundingClientRect();
+    const compact = {
+      width: Math.ceil(fold.width),
+      height: Math.ceil(fold.height),
+      radius: Math.ceil(Math.min(fold.width, fold.height) / 2),
+    };
     closing = false;
     islandEl.dataset.closing = 'false';
-    pillEl.hidden = true;
-    pillEl.style.opacity = '';
+    pillEl.hidden = false;
     panelEl.hidden = false;
+    preparing = { intent };
     renderPage();
     /*
-     * Measured after renderPage, not before: the target ratio is the pill over
-     * the panel's *final* box, and reading the panel before the first page has
-     * rendered sized it from a half-built panel (300 instead of 324).
+     * Measure the resting panel before installing the morph layout. The morph
+     * makes .panel-body absolute so it can stay still while the rounded shell
+     * grows; leaving that rule on during this read removed the body from flow
+     * and collapsed the panel height to its padding. The window then grew only
+     * in width, clipping the lower content until the next measurement.
      */
-    const start = islandEl.getBoundingClientRect();
-    if (!animated || !startMorph(true, { width: start.width, height: start.height }, fold)) {
-      stopMorph();
+    const expanded = {
+      width: Math.ceil(panelEl.offsetWidth),
+      height: Math.ceil(panelEl.offsetHeight),
+      radius: panelRadius(),
+    };
+    const content = panelBodyEl
+      ? { width: Math.ceil(panelBodyEl.offsetWidth), height: Math.ceil(panelBodyEl.offsetHeight) }
+      : null;
+    document.body.dataset.morphing = 'true';
+    frameEl.style.width = `${expanded.width}px`;
+    frameEl.style.height = `${expanded.height}px`;
+    if (panelBodyEl) {
+      panelBodyEl.style.width = `${content.width}px`;
+      panelBodyEl.style.height = `${content.height}px`;
+      panelBodyEl.style.opacity = '0';
+    }
+    islandEl.style.width = `${compact.width}px`;
+    islandEl.style.height = `${compact.height}px`;
+    panelEl.style.width = `${compact.width}px`;
+    panelEl.style.height = `${compact.height}px`;
+    panelEl.style.borderRadius = `${compact.radius}px`;
+    panelEl.style.clipPath = `inset(0 round ${compact.radius}px)`;
+    pillEl.style.opacity = '1';
+    if (typeof api.prepareBox === 'function') {
+      try {
+        await api.prepareBox({ w: expanded.width, h: expanded.height });
+      } catch {
+        api.reportBox({ w: expanded.width, h: expanded.height });
+      }
+    } else {
+      api.reportBox({ w: expanded.width, h: expanded.height });
+    }
+    if (intent !== morphIntent || !open) {
+      preparing = null;
+      if (!open) landClosed();
+      return;
+    }
+    preparing = null;
+    if (!animated || avoiding) {
+      landOpen();
+    } else if (!startMorph(true, compact, expanded, content)) {
+      open = false;
+      islandEl.dataset.open = 'false';
+      landClosed();
     }
   } else if (animated && !avoiding) {
-    /* closeMorph paints, reports and hands off on its own loop; the frame is
-       still the panel, so nothing below may measure it yet. */
     closeMorph();
     return;
   } else {
@@ -3204,7 +3197,7 @@ function reportHit() {
      outside the drawn box, whatever the click-through preference says — the
      fold leaves a wide transparent margin behind it for a quarter of a second
      and none of it may swallow a click. */
-  const rect = (morph || closing ? islandEl : frameEl).getBoundingClientRect();
+  const rect = (morph || preparing || closing ? islandEl : frameEl).getBoundingClientRect();
   if (!rect.width || !rect.height) return;
   api.reportHit({
     w: Math.ceil(rect.width),
