@@ -391,13 +391,19 @@ guard.guardedSync('island:material', ['island'], () => systemMaterial(), { fallb
  */
 function systemMaterial() {
   /*
-   * System material removed on request. The DWM acrylic blurred the whole
-   * window rectangle (win.setShape only clips the corners), and on this
-   * machine it made the island read as a grey slab over the desktop. The
-   * CSS layered material is the one that ships now; the channel stays so
-   * the page and the main process still agree on what is behind it.
+   * The glass, and the only glass.
+   *
+   * The screenshot route needed a preference and a capture per open; this is
+   * what it was standing in for. DWM blurs whatever is behind the window, so
+   * the window has to be opaque with no page fill of its own, and the visible
+   * silhouette comes from the region built in applyIslandShape.
+   *
+   * 22621 is the first Windows 11 build (22H2) with the acrylic material;
+   * older builds keep the CSS material.
    */
-  return 'none';
+  if (process.platform !== 'win32') return 'none';
+  const build = Number(String(os.release()).split('.')[2] || 0);
+  return build >= 22621 ? 'acrylic' : 'none';
 }
 
 function createWindow() {
@@ -474,9 +480,14 @@ function applyIslandShape() {
   // because the region is in physical pixels while the bounds are DIP here.
   if (systemMaterial() !== 'acrylic') return;
   if (!win || win.isDestroyed()) return;
-  const { width, height } = win.getBounds();
+  // The region is Win32 physical pixels while getBounds() is DIP. At 150% a
+  // DIP-sized region clips the window to a strip along its top edge.
+  const bounds = win.getBounds();
+  const scale = screen.getPrimaryDisplay().scaleFactor || 1;
+  const width = Math.round(bounds.width * scale);
+  const height = Math.round(bounds.height * scale);
   if (!width || !height) return;
-  const radius = Math.min(22, Math.floor(Math.min(width, height) / 2));
+  const radius = Math.min(Math.round(22 * scale), Math.floor(Math.min(width, height) / 2));
   const rects = [];
   for (let y = 0; y < height; y += SHAPE_STEP) {
     const dy = Math.min(y, height - y - 1);
@@ -1961,7 +1972,6 @@ function startServices() {
    * space inside the main process.
    */
   guard.guardedHandle('island:backdrop', ['island'], async (rect, event) => {
-    if (readPrefs().glassBackdrop === false) return null;
     const target = BrowserWindow.fromWebContents(event.sender);
     if (!target || target.isDestroyed()) return null;
     const bounds = target.getBounds();

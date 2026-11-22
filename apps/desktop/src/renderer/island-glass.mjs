@@ -34,7 +34,6 @@ const finite = (value) => typeof value === 'number' && Number.isFinite(value);
  */
 export function glassAllowed(prefs) {
   if (!prefs || typeof prefs !== 'object') return false;
-  if (prefs.glassBackdrop === false) return false;
   if (prefs.blur === false) return false;
   return GLASS_SKINS.includes(prefs.skin ?? 'frost');
 }

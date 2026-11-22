@@ -37,11 +37,11 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.0.8.13.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.13/EmojiTot.Setup.0.8.13.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.0.8.13.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.13/EmojiTot.0.8.13.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.0.8.14.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.14/EmojiTot.Setup.0.8.14.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.0.8.14.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.14/EmojiTot.0.8.14.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
-Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.13<!--/facts-->
+Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.14<!--/facts-->
 
 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护；它指向的版本还没打标签时链接会 404，从「全部版本」里取当前已发布的那一版。
 
@@ -89,7 +89,7 @@ pnpm smoke:desktop          # 启动真实 Electron 窗口做烟测
 
 ## 开源与许可
 
-**源码公开，但不可商用。** 个人学习、研究、自用、改着玩都没问题；把它打包卖钱、放进收费产品、做成带广告的服务，这些都不行——想商用请先来谈授权。
+**源码公开，但不可商用。** 个人学习、研究、自用、改着玩都没问题；把它打包卖钱、放进收费产品、做成带广告的服务，这些都不行——想商用请先来谈授权（hyx110702@163.com）。
 
 本许可**不授予服务商标使用权**：EmojiTot 这个名字、角色和画风是本项目的标识，别人用了也不代表与我合作或经我认证。
 

@@ -1,26 +1,32 @@
 ;
 ; EmojiTot installer hooks.
 ;
-; The welcome page used to be drawn here from a 500x262 brand bitmap. That
-; page's callback stalled the assisted flow (the directory was created and
-; then the install stopped before extracting), so the custom page is gone
-; until it can be replaced by something the flow drives itself. What stays
-; is the part that is load-bearing: where it installs, and the shortcut.
+; Only one job is left here: the Desktop shortcut.
+;
+; This machine's Desktop is redirected into OneDrive under a Chinese name
+; (C:\Users\<user>\OneDrive\桌面), and electron-builder's own
+; createDesktopShortcut writes to $DESKTOP, which the shell no longer uses --
+; the shortcut silently never appeared. Read the folder the shell actually
+; reports instead of assuming %USERPROFILE%\Desktop.
+;
+; Nothing here draws a page or sets $INSTDIR: a custom welcome page stalled
+; the assisted flow (the directory was created and nothing was extracted)
+; and a hard-coded D:\ target was unwanted. The default location stands.
 ;
 
-!macro customInit
-  ; D:\EmojiTot is where this user wants it. The directory page still lets
-  ; it be changed; this only seeds $INSTDIR before that page is shown.
-  StrCpy $INSTDIR "D:\EmojiTot"
-!macroend
-
 !macro customInstall
-  ; The Desktop here is redirected into OneDrive (a Chinese folder name) and
-  ; electron-builder's own shortcut never appeared, so write it explicitly.
-  SetShellVarContext current
-  CreateShortCut "$DESKTOP\EmojiTot.lnk" "$INSTDIR\EmojiTot.exe"
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders" "Desktop"
+  ${If} $0 == ""
+    StrCpy $0 "$PROFILE\Desktop"
+  ${EndIf}
+  ExpandEnvStrings $0 $0
+  CreateShortCut "$0\EmojiTot.lnk" "$INSTDIR\EmojiTot.exe"
 !macroend
 
 !macro customUnInstall
-  Delete "$DESKTOP\EmojiTot.lnk"
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders" "Desktop"
+  ${If} $0 != ""
+    ExpandEnvStrings $0 $0
+    Delete "$0\EmojiTot.lnk"
+  ${EndIf}
 !macroend

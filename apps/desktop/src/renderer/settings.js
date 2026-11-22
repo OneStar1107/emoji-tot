@@ -347,7 +347,6 @@ function pageAppearance() {
       /* The one switch on this page that captures something: one screenshot of
          the desktop per open, in memory only. Its note says so, because a
          material this good is only acceptable if it says what it reads. */
-      rowToggle(T('appearance.glassBackdrop.label'), T('appearance.glassBackdrop.sub'), 'glassBackdrop'),
       rowRange(T('appearance.radius.label'), T('appearance.radius.sub'), 'radius', 12, 30, 1, 'px'),
       rowRange(T('appearance.uiScale.label'), T('appearance.uiScale.sub'), 'uiScale', 80, 140, 5, '%'),
     ])) +

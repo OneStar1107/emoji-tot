@@ -2,6 +2,14 @@
 
 已发布的版本，新的在上。版本号规则见 [RELEASING.md](RELEASING.md)。
 
+## 0.8.14
+
+- 安装器回到 electron-builder 默认向导：移除自绘欢迎页、自定义 header/sidebar 位图与 installer.nsh 注入；这三样会让安装过程在部分机器上不出现或卡住。
+- 删除 `customInit` 里写死 `$INSTDIR=D:\EmojiTot` 的设定：安装位置跟随系统默认，向导内仍可改。
+- 删除 `glassBackdrop`（截图毛玻璃）偏好与其设置在界面、schema、i18n 与主进程的三处引用；系统材质 acrylic 重新成为默认与唯一的毛玻璃。
+- `systemMaterial()` 按 Windows build 判定（>=22621 用 acrylic），`applyIslandShape()` 的区域改按物理像素生成（bounds 是 DIP，150% 缩放下会把窗口裁成顶部一条）。
+- README 与 LICENSE 补商用联系邮箱。
+
 ## 0.8.13
 
 - **修掉「什么都用不了」**：0.8.12 的预加载脚本在改动时丢了事件注册函数 `on`，所有 `onHover`/`onMedia` 订阅在启动时抛异常，渲染层初始化中断——媒体、天气、设备、电池全部不出数，胶囊只剩一个数字。已恢复并加断言。

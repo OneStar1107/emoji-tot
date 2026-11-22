@@ -45,18 +45,12 @@ describe('glass: when the photograph may be shown', () => {
   it('only for the frost material with blur on', () => {
     assert.deepEqual(GLASS_SKINS, ['frost']);
     assert.equal(glassAllowed({}), true, 'a fresh profile has the frost material');
-    assert.equal(glassAllowed({ skin: 'frost', blur: true, glassBackdrop: true }), true);
+    assert.equal(glassAllowed({ skin: 'frost', blur: true }), true);
     assert.equal(glassAllowed({ skin: 'solid' }), false, 'a solid skin promises an opaque card');
     assert.equal(glassAllowed({ skin: 'plain' }), false);
     assert.equal(glassAllowed({ blur: false }), false, 'blur off means no translucency at all');
   });
 
-  it('is off when the switch is off, and off without preferences', () => {
-    assert.equal(glassAllowed({ glassBackdrop: false }), false);
-    assert.equal(glassAllowed({ skin: 'frost', glassBackdrop: false }), false);
-    assert.equal(glassAllowed(null), false);
-    assert.equal(glassAllowed('frost'), false);
-  });
 });
 
 describe('glass: the style values a payload becomes', () => {
@@ -267,7 +261,6 @@ describe('glass: the layer is only visible after a capture', () => {
   });
 
   it('drops the frame when the material turns it off', () => {
-    assert.match(material, /prefs\.glassBackdrop === false/);
     const sync = islandJs.slice(islandJs.indexOf('function syncGlassMaterial'));
     const body = sync.slice(0, sync.indexOf('\n}'));
     assert.ok(body.includes('if (!glassAllowed(prefs)) clearGlass();'));
@@ -285,7 +278,6 @@ describe('glass: the capture stays local and island-only', () => {
     const body = handler;
     assert.ok(body.includes("['island']"), 'no other window may photograph the screen');
     assert.ok(body.includes('check: guard.checkRect'));
-    assert.ok(body.includes("readPrefs().glassBackdrop === false"), 'the switch is re-read in main');
     assert.ok(body.includes('getDisplayMatching(bounds)'), 'the display under the window, not the primary one');
   });
 
@@ -294,10 +286,4 @@ describe('glass: the capture stays local and island-only', () => {
     assert.ok(!preload.includes('desktopCapturer'), 'the renderer cannot capture anything itself');
   });
 
-  it('ships the preference off by default, on the appearance page, and switchable on', () => {
-    assert.match(schemaJs, /glassBackdrop: false/);
-    assert.match(schemaJs, /glassBackdrop: 'appearance'/);
-    assert.match(schemaJs, /glassBackdrop: \{ scope: 'renderer'/);
-    assert.match(settingsJs, /rowToggle\(T\('appearance\.glassBackdrop\.label'\), T\('appearance\.glassBackdrop\.sub'\), 'glassBackdrop'\)/);
-  });
 });

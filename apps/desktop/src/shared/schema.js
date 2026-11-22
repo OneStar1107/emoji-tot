@@ -208,7 +208,6 @@ export const DEFAULTS = {
    * anything (island-glass.mjs checks all three). The frame lives in memory
    * only: never written, never uploaded.
    */
-  glassBackdrop: false,
   uiScale: 100,
   radius: 22,
   font: 'system',
@@ -718,7 +717,6 @@ export function pageOfPath(path) {
     theme: 'appearance',
     skin: 'appearance',
     blur: 'appearance',
-    glassBackdrop: 'appearance',
     uiScale: 'appearance',
     radius: 'appearance',
     font: 'appearance',
@@ -796,7 +794,6 @@ export const CONSUMERS = {
   theme: { scope: 'renderer', at: 'island.js resolveTheme() · settings.js applyChrome()', live: true },
   skin: { scope: 'renderer', at: 'island.js applyPrefs() → body[data-skin]', live: true },
   blur: { scope: 'renderer', at: 'island.js applyPrefs() → body[data-blur]', live: true },
-  glassBackdrop: { scope: 'renderer', at: 'island.js requestGlass() → island:backdrop · main.js 关闭时拒抓', live: true, note: '抓一次屏幕作模糊背景，只在本机内存' },
   uiScale: { scope: 'renderer', at: 'island.js --ui-scale · settings.js zoom', live: true },
   radius: { scope: 'renderer', at: 'island.js --radius', live: true },
   font: { scope: 'renderer', at: 'island.js --ui-font / settings.js applyChrome', live: true },

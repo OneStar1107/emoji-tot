@@ -335,44 +335,6 @@ describe('schema: page presets', () => {
   });
 });
 
-/*
- * Real glass.
- *
- * The switch has to exist in three places at once to do anything: DEFAULTS (or
- * the write is refused), pageOfPath (or the audit groups it wrong) and the
- * appearance page (or there is no way to reach it). The renderer's own gate is
- * asserted in test/glass.test.mjs.
- */
-describe('schema: real glass', () => {
-  it('is off by default, because the capture path is the unstable one', () => {
-    /* 0.8.6 shipped it on and some Windows/GPU pairs flicker while the window is
-       excluded from its own capture. The CSS material is the default; the
-       photograph is an opt-in. Turning it on must still work. */
-    assert.equal(DEFAULTS.glassBackdrop, false);
-    assert.equal(withDefaults({}).glassBackdrop, false);
-    assert.equal(withDefaults({ glassBackdrop: true }).glassBackdrop, true);
-  });
-
-  it('keeps a stored switch-off, because that is a decision', () => {
-    assert.equal(withDefaults({ glassBackdrop: false }).glassBackdrop, false);
-  });
-
-  it('accepts the write and files it under appearance', () => {
-    assert.deepEqual(filterPatch({ glassBackdrop: false }), {
-      accepted: { glassBackdrop: false },
-      rejected: [],
-    });
-    assert.equal(pageOfPath('glassBackdrop'), 'appearance');
-  });
-
-  it('has a row on the appearance page', () => {
-    const settings = src('renderer/settings.js');
-    const page = settings.slice(settings.indexOf('function pageAppearance'));
-    const body = page.slice(0, page.indexOf('\n}'));
-    assert.ok(body.includes("'glassBackdrop'"), 'the switch must be reachable');
-  });
-});
-
 describe('settings UI actually reads and writes the schema', () => {
   const settings = src('renderer/settings.js');
   const settingsCss = src('renderer/settings.css');

@@ -3175,7 +3175,7 @@ function requestGlass() {
  */
 let appliedGlass = '';
 function syncGlassMaterial() {
-  const key = (prefs.glassBackdrop !== false) + '|' + (prefs.blur !== false) + '|' + (prefs.skin ?? 'frost');
+  const key = (prefs.blur !== false) + '|' + (prefs.skin ?? 'frost');
   if (key === appliedGlass) return;
   appliedGlass = key;
   if (!glassAllowed(prefs)) clearGlass();
