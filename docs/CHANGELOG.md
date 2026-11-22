@@ -2,6 +2,10 @@
 
 已发布的版本，新的在上。版本号规则见 [RELEASING.md](RELEASING.md)。
 
+## 0.8.11
+
+- 安装器改为向导式（许可证 / 目录选择 / 完成即启动），顶横幅与侧栏换成项目视觉。
+- 新增 docs/SIGNING.md：Azure Trusted Signing、OVF 证书、自签名三条路与校验方法；安装包仍未签名。
 ## 0.8.10
 
 - 许可改为不可商用（EmojiTot Noncommercial License），README 加徽章与开源说明。

@@ -1,7 +1,7 @@
 {
   "name": "@emojitot/desktop",
   "private": true,
-  "version": "0.8.10",
+  "version": "0.8.11",
   "description": "EmojiTot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
   "author": "OneStar1107",
   "main": "src/main.js",
@@ -27,7 +27,9 @@
     "productName": "EmojiTot",
     "files": [
       "src/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "!assets/installer-*.png",
+      "!assets/installer-*.bmp"
     ],
     "asarUnpack": [
       "src/main/services/*.ps1"
@@ -41,7 +43,20 @@
       }
     },
     "nsis": {
-      "artifactName": "EmojiTot.Setup.${version}.${ext}"
+      "artifactName": "EmojiTot.Setup.${version}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EmojiTot",
+      "installerHeader": "../../apps/desktop/assets/installer-header.bmp",
+      "installerSidebar": "../../apps/desktop/assets/installer-sidebar.bmp",
+      "uninstallerSidebar": "../../apps/desktop/assets/installer-sidebar.bmp",
+      "license": "../../LICENSE",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     },
     "portable": {
       "artifactName": "EmojiTot.${version}.${ext}"

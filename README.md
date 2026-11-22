@@ -37,11 +37,11 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.0.8.10.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.10/EmojiTot.Setup.0.8.10.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.0.8.10.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.10/EmojiTot.0.8.10.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.0.8.11.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.11/EmojiTot.Setup.0.8.11.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.0.8.11.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.11/EmojiTot.0.8.11.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
-Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.10<!--/facts-->
+Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.11<!--/facts-->
 
 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护；它指向的版本还没打标签时链接会 404，从「全部版本」里取当前已发布的那一版。
 
@@ -83,7 +83,7 @@ pnpm smoke:desktop          # 启动真实 Electron 窗口做烟测
 
 - **变更记录**：[docs/CHANGELOG.md](docs/CHANGELOG.md) —— 每个版本 2–4 条。
 - **站点**：[控制台](https://onestar1107.github.io/emoji-tot/#/console) · [表情馆](https://onestar1107.github.io/emoji-tot/#/gallery) · [场景](https://onestar1107.github.io/emoji-tot/#/scene) · [文档](https://onestar1107.github.io/emoji-tot/#/docs)（由代码生成，不会过时）
-- **技术**：[架构](docs/ARCHITECTURE.md) · [协议](docs/PROTOCOL.md) · [灵动岛](docs/ISLAND.md) · [设置](docs/SETTINGS.md) · [发版](docs/RELEASING.md) · [调研与许可核对](docs/RESEARCH.md)
+- **技术**：[架构](docs/ARCHITECTURE.md) · [协议](docs/PROTOCOL.md) · [灵动岛](docs/ISLAND.md) · [设置](docs/SETTINGS.md) · [发版](docs/RELEASING.md) · [签名](docs/SIGNING.md) · [调研与许可核对](docs/RESEARCH.md)
 - **验收**：`pnpm check` —— 类型、构建、测试、文档一致性、站点、窗口烟测、依赖审计与敏感信息扫描。
 - **反馈**：[Issues](https://github.com/OneStar1107/emoji-tot/issues)
 
