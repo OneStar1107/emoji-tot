@@ -6,28 +6,81 @@
  * ask for it". The stage draws the character as SVG directly rather than
  * through the custom element, so the editor is not limited by what an
  * attribute can express; the element is what the snippet hands you.
+ *
+ * The page is meant to be played with, so three things answer the pointer at
+ * once: the eyes (through two CSS variables on the hero, never through
+ * per-frame attributes), the expression grid, and the code block — which only
+ * flashes when the text it shows actually changed, because a flash on every
+ * re-render is noise, not feedback.
  */
-import { castMember, renderCast } from '@emojitot/core';
+import { castMember, renderCast, renderCharacter } from '@emojitot/core';
+import { EMOTIONS } from '@emojitot/protocol';
 import { createDrawer } from './drawer';
 import { backgroundClass, look, onLookChange, setLook } from './store';
-import { t } from './i18n';
+import { getLang, t } from './i18n';
 import type { RouteContext, View } from './main';
 
-function hero(size = 260): string {
+/** The hero's default size. The snippet only prints a size that differs. */
+const DEFAULT_SIZE = 260;
+
+/** Three stage sizes: small enough for a phone, large enough to read the face. */
+const SIZES = [160, 260, 320];
+
+/** Where the chosen stage size survives a page change. */
+const SIZE_KEY = 'es.stage.size';
+
+/** How far the pupils may travel, in CSS pixels. */
+const LOOK_RANGE = 6;
+
+function storedSize(): number {
+  try {
+    const raw = Number(localStorage.getItem(SIZE_KEY));
+    if (SIZES.includes(raw)) return raw;
+  } catch {
+    /* private mode */
+  }
+  return DEFAULT_SIZE;
+}
+
+/** Shared by every console instance: resizing the stage is a page preference. */
+let stageSize = storedSize();
+
+function hero(size = stageSize): string {
   const id = look.cast || 'tot';
   return renderCast({ id, state: look.state, size, style: look.finish });
+}
+
+/** The expression's own name, from the protocol — zh and en both live there. */
+function faceLabel(state: string): string {
+  const emotion = EMOTIONS.find((item) => item.state === state);
+  if (!emotion) return state;
+  return getLang() === 'zh' ? emotion.name.zh : emotion.name.en;
 }
 
 function snippet(): string {
   const id = look.cast || 'tot';
   const finish = look.finish === 'flat' ? ' finish="flat"' : '';
-  return `<emojitot-ball cast="${id}"${finish} state="${look.state}"></emojitot-ball>`;
+  const size = stageSize === DEFAULT_SIZE ? '' : ' size="' + stageSize + '"';
+  return '`emojitot-ball cast="' + id + '"' + finish + size + ' state="' + look.state + '"></emojitot-ball>';
 }
 
 function genome(): string {
   const id = look.cast || 'tot';
   const member = castMember(id);
   return JSON.stringify({ cast: id, state: look.state, finish: look.finish, body: member?.body }, null, 2);
+}
+
+/** One cell of the expression grid: the current character wearing that face. */
+function faceChip(state: string): string {
+  const art = renderCharacter({ body: look.body, color: look.color, traits: look.traits, state, size: 30 });
+  return (
+    '<button type="button" class="chip face-chip" data-face="' + state + '" aria-pressed="' +
+    (look.state === state) +
+    '" title="' + faceLabel(state) + '">' +
+    '<span class="face-chip-art">' + art + '</span>' +
+    '<span class="face-chip-name">' + faceLabel(state) + '</span>' +
+    '</button>'
+  );
 }
 
 export function createConsole(ctx: RouteContext = { route: 'console' }): View {
@@ -51,9 +104,16 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
           <span class="sep"></span>
           <button type="button" data-finish="sticker" aria-pressed="true">${t('console.finish.sticker')}</button>
           <button type="button" data-finish="flat" aria-pressed="false">${t('console.finish.flat')}</button>
+          <span class="sep"></span>
+          ${SIZES.map(
+            (size) =>
+              '<button type="button" data-size="' + size + '" aria-pressed="' + (size === stageSize) +
+              '" title="' + size + ' px">' + size + '</button>',
+          ).join('')}
         </div>
         <div class="who" id="who"></div>
       </div>
+      <div class="chips face-grid" id="faceGrid" role="group" aria-label="${t('drawer.face')}"></div>
       <div class="island-demo">
         <button type="button" class="island-pill" id="island-pill" aria-expanded="false">
           <span class="island-face" data-island-face></span>
@@ -72,12 +132,12 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
 
     <aside class="studio-side">
       <div class="code-card">
-        <div class="code-head"><span>${t('console.snippet')}</span><button type="button" id="copy">${t('console.copy')}</button></div>
-        <pre class="snippet"><code data-snippet>${snippet()}</code></pre>
+        <div class="code-head"><span>${t('console.snippet')}</span><button type="button" class="btn" id="copy">${t('console.copy')}</button></div>
+        <pre class="snippet code" data-code><code data-snippet>${snippet()}</code></pre>
       </div>
       <div class="code-card">
-        <div class="code-head"><span>${t('console.genome')}</span><button type="button" id="copy-json">${t('console.copy')}</button></div>
-        <pre class="snippet"><code data-genome>${genome()}</code></pre>
+        <div class="code-head"><span>${t('console.genome')}</span><button type="button" class="btn" id="copy-json">${t('console.copy')}</button></div>
+        <pre class="snippet code" data-code><code data-genome>${genome()}</code></pre>
       </div>
     </aside>
   `;
@@ -85,30 +145,166 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
   const stage = el.querySelector<HTMLElement>('#stage')!;
   const heroEl = el.querySelector<HTMLElement>('[data-hero]')!;
   const who = el.querySelector<HTMLElement>('#who')!;
+  const faceGrid = el.querySelector<HTMLElement>('#faceGrid')!;
   const snippetEl = el.querySelector<HTMLElement>('[data-snippet]')!;
   const genomeEl = el.querySelector<HTMLElement>('[data-genome]')!;
 
   /** Timers this view owns; dispose() clears them. */
   const timers = new Set<number>();
 
+  /** What the stage shows, so a real change can be told from a repaint. */
+  let shownState = look.state;
+
+  /** The genome the chips were drawn from; the chip art is that genome. */
+  let chipGenome = '';
+
+  /* --- the pointer moves the eyes ------------------------------------- */
+
+  /*
+   * The stage writes two custom properties and nothing else.
+   *
+   * mousemove can fire far more often than the screen refreshes, so the
+   * handler only records the latest position and one rAF per frame does the
+   * write. Setting attributes or rebuilding the SVG here would cost a layout
+   * per event for an effect that is a couple of pixels.
+   */
+  let lookX = 0;
+  let lookY = 0;
+  let lookFrame = 0;
+
+  function paintLook(): void {
+    lookFrame = 0;
+    heroEl.style.setProperty('--look-x', lookX + 'px');
+    heroEl.style.setProperty('--look-y', lookY + 'px');
+  }
+
+  function queueLook(): void {
+    if (!lookFrame) lookFrame = window.requestAnimationFrame(paintLook);
+  }
+
+  function onStageMove(event: PointerEvent): void {
+    const rect = stage.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const clamp = (value: number): number => Math.max(-1, Math.min(1, value));
+    const x = clamp(((event.clientX - rect.left) / rect.width) * 2 - 1);
+    const y = clamp(((event.clientY - rect.top) / rect.height) * 2 - 1);
+    lookX = Math.round(x * LOOK_RANGE * 100) / 100;
+    lookY = Math.round(y * LOOK_RANGE * 100) / 100;
+    queueLook();
+  }
+
+  function resetLook(): void {
+    lookX = 0;
+    lookY = 0;
+    queueLook();
+  }
+
+  stage.addEventListener('pointermove', onStageMove);
+  stage.addEventListener('pointerleave', resetLook);
+  paintLook();
+
+  /* --- feedback ------------------------------------------------------- */
+
+  /**
+   * Flash the code block whose text just changed.
+   *
+   * The attribute is removed and re-added around a forced reflow so a second
+   * change inside the flash window restarts it instead of being swallowed.
+   * The timer exists so the attribute never outlives the animation.
+   */
+  function flash(block: Element | null): void {
+    if (!(block instanceof HTMLElement)) return;
+    block.removeAttribute('data-flash');
+    void block.offsetWidth;
+    block.setAttribute('data-flash', '');
+    const id = window.setTimeout(() => {
+      timers.delete(id);
+      block.removeAttribute('data-flash');
+    }, 240);
+    timers.add(id);
+  }
+
+  /** Mark the hero for one 200ms expression cross-fade. */
+  function swapFace(): void {
+    heroEl.removeAttribute('data-swap');
+    void heroEl.offsetWidth;
+    heroEl.setAttribute('data-swap', '');
+    const id = window.setTimeout(() => {
+      timers.delete(id);
+      heroEl.removeAttribute('data-swap');
+    }, 200);
+    timers.add(id);
+  }
+
+  function paintFaces(): void {
+    faceGrid.innerHTML = EMOTIONS.map((emotion) => faceChip(emotion.state)).join('');
+    chipGenome = look.body + '|' + look.color + '|' + look.traits.join(' ');
+  }
+
+  function syncFaces(): void {
+    for (const button of faceGrid.querySelectorAll<HTMLElement>('[data-face]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.face === look.state));
+    }
+  }
+
   function apply(): void {
+    const nextSnippet = snippet();
+    const nextGenome = genome();
+    const change = {
+      snippet: snippetEl.textContent !== nextSnippet,
+      genome: genomeEl.textContent !== nextGenome,
+      state: shownState !== look.state,
+    };
+    shownState = look.state;
+
     heroEl.innerHTML = hero();
-    stage.className = `stage ${backgroundClass()}`;
-    snippetEl.textContent = snippet();
-    genomeEl.textContent = genome();
+    if (change.state) swapFace();
+
+    stage.className = 'stage ' + backgroundClass();
+    if (change.snippet) {
+      snippetEl.textContent = nextSnippet;
+      flash(snippetEl.closest('[data-code]'));
+    }
+    if (change.genome) {
+      genomeEl.textContent = nextGenome;
+      flash(genomeEl.closest('[data-code]'));
+    }
+
     const member = look.cast ? castMember(look.cast) : undefined;
     who.textContent = member
-      ? `${member.name.zh} · ${member.name.en} · ${member.desc}`
+      ? member.name.zh + ' · ' + member.name.en + ' · ' + member.desc
       : t('console.customGenome');
+
     const face = el.querySelector<HTMLElement>('[data-island-face]');
     if (face) face.innerHTML = hero(22);
     const art = el.querySelector<HTMLElement>('[data-island-art]');
     if (art) art.innerHTML = hero(54);
     const title = el.querySelector<HTMLElement>('[data-island-title]');
     if (title) title.textContent = member ? member.name.zh : t('console.custom');
-    for (const b of el.querySelectorAll<HTMLElement>('[data-finish]')) {
-      b.setAttribute('aria-pressed', String(b.dataset.finish === look.finish));
+
+    for (const button of el.querySelectorAll<HTMLElement>('[data-finish]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.finish === look.finish));
     }
+    for (const button of el.querySelectorAll<HTMLElement>('[data-size]')) {
+      button.setAttribute('aria-pressed', String(Number(button.dataset.size) === stageSize));
+    }
+
+    // Chip art is the current genome, so it only needs a redraw when a gene
+    // changed; a face change just moves the pressed state.
+    const nextChipGenome = look.body + '|' + look.color + '|' + look.traits.join(' ');
+    if (nextChipGenome !== chipGenome) paintFaces();
+    else syncFaces();
+  }
+
+  function setStageSize(size: number): void {
+    if (size === stageSize || !SIZES.includes(size)) return;
+    stageSize = size;
+    try {
+      localStorage.setItem(SIZE_KEY, String(size));
+    } catch {
+      /* private mode */
+    }
+    apply();
   }
 
   /**
@@ -125,6 +321,7 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     try {
       await navigator.clipboard.writeText(text);
       button.textContent = t('console.copied');
+      button.setAttribute('data-done', '');
       button.dataset.state = 'ok';
     } catch (error) {
       button.textContent = t('console.copyFailed');
@@ -135,8 +332,9 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
       const id = window.setTimeout(() => {
         timers.delete(id);
         button.textContent = label;
+        button.removeAttribute('data-done');
         delete button.dataset.state;
-      }, 1400);
+      }, 1200);
       timers.add(id);
     }
   }
@@ -145,6 +343,17 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     const finishBtn = (event.target as HTMLElement).closest<HTMLElement>('[data-finish]');
     if (finishBtn) {
       setLook({ finish: finishBtn.dataset.finish as 'sticker' | 'flat' });
+      return;
+    }
+    const sizeBtn = (event.target as HTMLElement).closest<HTMLElement>('[data-size]');
+    if (sizeBtn) {
+      setStageSize(Number(sizeBtn.dataset.size));
+      return;
+    }
+    const faceBtn = (event.target as HTMLElement).closest<HTMLElement>('[data-face]');
+    if (faceBtn) {
+      // Strictly a one-line store write: every panel follows from it.
+      setLook({ state: faceBtn.dataset.face! });
       return;
     }
     const pill = (event.target as HTMLElement).closest<HTMLElement>('#island-pill');
@@ -175,6 +384,10 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     el,
     dispose(): void {
       unsubscribe();
+      stage.removeEventListener('pointermove', onStageMove);
+      stage.removeEventListener('pointerleave', resetLook);
+      if (lookFrame) window.cancelAnimationFrame(lookFrame);
+      lookFrame = 0;
       for (const id of timers) window.clearTimeout(id);
       timers.clear();
     },

@@ -783,3 +783,337 @@ select:focus-visible {
   outline: 2px solid var(--ink, #1b1a18);
   outline-offset: 2px;
 }
+
+
+/* ============================================================================
+ * v2 — surfaces, type scale and motion
+ *
+ * The first pass drew a page: white body, grey boxes, default easing. This pass
+ * builds a system. Spacing is an 8px grid, type is a fixed ramp, radii are three
+ * steps, and every state change uses one easing curve. Colours keep the token
+ * names the views already use, so the four pages inherit the new surface without
+ * touching their code.
+ *
+ * Depth comes from light, not from shadows: a translucent key light at the top
+ * edge, a hairline ring, a shallow ambient drop. On a light page that reads as
+ * paper; on a dark page it reads as glass.
+ * ========================================================================== */
+
+:root {
+  /* space — 8px grid */
+  --s1: 8px;  --s2: 16px; --s3: 24px; --s4: 32px;
+  --s5: 40px; --s6: 48px; --s7: 64px; --s8: 80px;
+
+  /* type ramp */
+  --t12: 12px; --t14: 14px; --t16: 16px; --t20: 20px;
+  --t24: 24px; --t32: 32px; --t48: 48px; --t64: 64px;
+
+  /* radii */
+  --r1: 8px; --r2: 14px; --r3: 20px; --r4: 28px; --rfull: 999px;
+
+  /* motion: one curve, two durations */
+  --snap: 160ms cubic-bezier(.2, .8, .2, 1);
+  --soft: 240ms cubic-bezier(.2, .8, .2, 1);
+
+  /* surfaces — keep the names the views already use */
+  --ink: light-dark(#111114, #f3f3f6);
+  --muted: light-dark(#5f5f6a, #9a9aa6);
+  --line: light-dark(#e8e8ee, #23232c);
+  --page: light-dark(#fbfbfd, #0b0b0f);
+  --card: light-dark(#ffffff, #131319);
+  --stage: light-dark(#f5f5f9, #0f0f14);
+  /* One accent, the same violet the desktop island uses. */
+  --accent: light-dark(#6d5cff, #9683ff);
+  --accent-soft: light-dark(rgba(109, 92, 255, .10), rgba(150, 131, 255, .16));
+
+  /* a hairline that survives both themes */
+  --edge: light-dark(rgba(0, 0, 0, .07), rgba(255, 255, 255, .07));
+  --edge-strong: light-dark(rgba(0, 0, 0, .12), rgba(255, 255, 255, .12));
+  --key-light: light-dark(rgba(255, 255, 255, .9), rgba(255, 255, 255, .06));
+  --ambient: light-dark(0 18px 40px -24px rgba(20, 20, 40, .28), 0 18px 40px -24px rgba(0, 0, 0, .8));
+}
+
+/* The page is a lit surface, not a flat fill: one soft key light from above and
+   a barely-there grid that gives the scroll something to move against. */
+body {
+  position: relative;
+  background:
+    radial-gradient(1100px 560px at 50% -12%, light-dark(rgba(109, 92, 255, .09), rgba(150, 131, 255, .14)), transparent 68%),
+    var(--page);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--edge) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--edge) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(900px 520px at 50% 0%, #000 0%, transparent 78%);
+  opacity: .55;
+}
+body > * { position: relative; z-index: 1; }
+
+/* ---------- shell ---------- */
+
+.bar {
+  height: 64px;
+  padding: 0 var(--s4);
+  gap: var(--s3);
+  background: color-mix(in srgb, var(--page) 72%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  border-bottom: 1px solid var(--edge);
+}
+.brand { gap: 10px; font-size: var(--t16); font-weight: 650; letter-spacing: -.01em; }
+.brand emojitot-ball { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .18)); }
+.nav { gap: 4px; }
+.nav a {
+  position: relative;
+  padding: 8px 14px;
+  border-radius: var(--rfull);
+  font-size: var(--t14);
+  font-weight: 520;
+  color: var(--muted);
+  transition: color var(--snap), background var(--snap);
+}
+.nav a:hover { color: var(--ink); background: var(--accent-soft); }
+.nav a[aria-current="true"] {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.nav a[aria-current="true"]::after {
+  content: "";
+  position: absolute;
+  left: 14px; right: 14px; bottom: 3px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: navIn var(--soft) both;
+}
+@keyframes navIn { from { transform: scaleX(.2); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+
+#lang button, .switch, .bg-chip {
+  border-radius: var(--rfull);
+  transition: background var(--snap), color var(--snap), box-shadow var(--snap);
+}
+#lang button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--page);
+}
+#lang button[data-lang="en"] { font-variant-caps: all-small-caps; letter-spacing: .04em; }
+
+/* ---------- view chrome ---------- */
+
+#view { padding: var(--s6) var(--s4) var(--s8); max-width: 1240px; margin: 0 auto; width: 100%; }
+.hero, .wall-head, .scene-head, .docs-head { margin-bottom: var(--s4); }
+.view-title {
+  font-size: var(--t32);
+  font-weight: 640;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+}
+.lead {
+  margin: 10px 0 0;
+  font-size: var(--t16);
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 62ch;
+}
+.count { font-size: var(--t12); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ---------- surfaces ---------- */
+
+.card, .stage, .studio-main, .studio-side, .doc-section, .scene-stage, .panel {
+  border: 1px solid var(--edge);
+  border-radius: var(--r3);
+  background:
+    linear-gradient(180deg, var(--key-light), transparent 42%),
+    var(--card);
+  box-shadow: var(--ambient);
+}
+.card { padding: var(--s3); }
+/* The stage is the one big object on the page: more air, a lit floor. */
+.stage {
+  border-radius: var(--r4);
+  background:
+    radial-gradient(70% 60% at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--key-light), transparent 34%),
+    var(--stage);
+}
+.stage-bar { border-top: 1px solid var(--edge); background: color-mix(in srgb, var(--card) 60%, transparent); }
+
+/* Nested panels sit one step up rather than repeating the same white. */
+.panel, .code-card, .doc-table, .arbiter {
+  background: color-mix(in srgb, var(--card) 88%, var(--page));
+  border: 1px solid var(--edge);
+  border-radius: var(--r2);
+}
+
+/* ---------- controls ---------- */
+
+.chip, .cast-chip, .trait-chip, .color-chip, .face-chip, .wall-tab, .wall-tabs button, .btn {
+  border: 1px solid var(--edge);
+  border-radius: var(--rfull);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--t14);
+  transition: transform var(--snap), background var(--snap), border-color var(--snap), color var(--snap);
+}
+.chip:hover, .btn:hover, .wall-tabs button:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, var(--edge)); }
+.chip:active, .btn:active { transform: scale(.97); }
+.chip[aria-pressed="true"], .wall-tabs button[aria-pressed="true"], .wall-tab[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--page);
+  border-color: transparent;
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 560;
+  box-shadow: 0 8px 20px -12px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.btn[data-done] { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+
+/* keyboard focus: one ring, never two */
+:where(a, button, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r1);
+}
+
+/* ---------- tiles ---------- */
+
+.tile, .cast-tile, .face-chip, .theme-card, .scene-card {
+  border: 1px solid var(--edge);
+  border-radius: var(--r2);
+  background: var(--card);
+  transition: transform var(--snap), box-shadow var(--snap), border-color var(--snap);
+  will-change: transform;
+}
+.tile:hover, .cast-tile:hover, .face-chip:hover, .theme-card:hover, .scene-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--edge));
+  box-shadow: 0 14px 30px -18px rgba(20, 20, 40, .45);
+}
+.tile-name, .cast-label, .face-name { font-size: var(--t14); font-weight: 540; }
+
+/* ---------- code ---------- */
+
+.code, .snippet, pre {
+  font-family: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  border-radius: var(--r2);
+  background: var(--stage);
+  border: 1px solid var(--edge);
+  color: var(--ink);
+}
+.code-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.code[data-flash], .code-card[data-flash] {
+  animation: flash var(--soft) both;
+}
+@keyframes flash {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+  100% { box-shadow: 0 0 0 6px transparent; }
+}
+
+/* ---------- wall / lightbox ---------- */
+
+.wall-grid { gap: var(--s2); }
+.wall-filters { gap: 6px; }
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: var(--s4);
+  background: color-mix(in srgb, #05050a 62%, transparent);
+  backdrop-filter: blur(14px) saturate(120%);
+  animation: fadeIn var(--soft) both;
+}
+.lightbox-card {
+  width: min(560px, 100%);
+  padding: var(--s4);
+  border-radius: var(--r4);
+  border: 1px solid var(--edge-strong);
+  background: var(--card);
+  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, .6);
+  text-align: center;
+  animation: riseIn var(--soft) both;
+}
+.lightbox-name { font-size: var(--t20); font-weight: 620; margin: var(--s2) 0 4px; }
+.lightbox-id { font-family: ui-monospace, monospace; color: var(--muted); font-size: var(--t12); }
+.lightbox-close {
+  position: absolute;
+  top: var(--s3); right: var(--s3);
+  width: 36px; height: 36px;
+  border-radius: var(--rfull);
+  border: 1px solid var(--edge-strong);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes riseIn { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
+
+/* ---------- docs ---------- */
+
+.docs-view .toc {
+  position: sticky;
+  top: 84px;
+  align-self: start;
+  padding: var(--s2);
+  border: 1px solid var(--edge);
+  border-radius: var(--r2);
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+}
+.toc a { display: block; padding: 6px 10px; border-radius: var(--r1); color: var(--muted); font-size: var(--t14); }
+.toc a[aria-current="true"] { color: var(--ink); background: var(--accent-soft); }
+.doc-section { padding: var(--s3); margin-bottom: var(--s3); opacity: 0; transform: translateY(10px); transition: opacity var(--soft), transform var(--soft); }
+.doc-section.in { opacity: 1; transform: none; }
+.doc-table tr:hover { background: var(--accent-soft); }
+
+/* ---------- scene ---------- */
+
+.scene-card { padding: var(--s2); }
+.scene-card[data-state="error"] { border-color: color-mix(in srgb, #e5484d 45%, var(--edge)); }
+.scene-card[data-state="busy"] { border-color: color-mix(in srgb, var(--accent) 45%, var(--edge)); }
+.arbiter-now { font-variant-numeric: tabular-nums; }
+
+/* ---------- footer ---------- */
+
+footer {
+  border-top: 1px solid var(--edge);
+  color: var(--muted);
+  font-size: var(--t12);
+  padding: var(--s3) var(--s4);
+}
+footer a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--edge-strong); }
+
+/* ---------- motion opt-out ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .doc-section { opacity: 1; transform: none; }
+}
+
+/* ---------- narrow ---------- */
+
+@media (max-width: 900px) {
+  #view { padding: var(--s4) var(--s2) var(--s7); }
+  .view-title { font-size: var(--t24); }
+  .lead { font-size: var(--t14); }
+  body::before { background-size: 48px 48px; }
+}

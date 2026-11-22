@@ -124,11 +124,14 @@ function setMono(on: boolean): void {
   }
 }
 
-let saved = false;
+/* Dark first: the product is a black ball on a lit stage, and the light page
+   was making the ball read as a sticker on paper. An explicit '0' still wins. */
+let saved = true;
 try {
-  saved = localStorage.getItem('es.mono') === '1';
+  const stored = localStorage.getItem('es.mono');
+  saved = stored === null ? true : stored === '1';
 } catch {
-  saved = false;
+  saved = true;
 }
 mono.checked = saved;
 setMono(saved);

@@ -6,9 +6,16 @@
  * arbiter, and only one face can show at a time. Urgent events interrupt the
  * dwell, everything else queues. That is the protocol's actual behaviour, and
  * this page used to describe it without demonstrating it.
+ *
+ * Presentation only, on top of that: the nine chips are cards, each showing
+ * its own session's state and the priority the arbiter gives it, and clicking
+ * one makes that session report. The strip under the panel names the session
+ * currently on screen and rolls its priority number when the winner changes,
+ * so a takeover is visible instead of inferred from a label. None of this
+ * touches the arbitration itself — createArbiter still owns every decision.
  */
 import { CAST, castMember, renderCast } from '@emojitot/core';
-import { EMOTIONS, createArbiter } from '@emojitot/protocol';
+import { DEFAULT_PRIORITY, EMOTIONS, createArbiter, type ArbiterResult } from '@emojitot/protocol';
 import { getLang, t } from './i18n';
 import { look } from './store';
 import type { View } from './main';
@@ -22,6 +29,35 @@ const SESSIONS = ['plan', 'parse', 'render', 'test', 'docs', 'build', 'lint', 'd
 /** Ongoing states a source may report, with the label taken from the protocol. */
 const CYCLE = ['30', '32', '36', '37', '31', '02'];
 
+/** What a click may report: work most of the time, then a failure, then a finish. */
+const WORK_IDS = ['30', '32', '36', '37', '39', '40', '42', '43', '47', '48'];
+const ERROR_ID = '34';
+const DONE_ID = '33';
+
+/** The three faces of a session, as far as a card is concerned. */
+type SessionKind = 'working' | 'idle' | 'error' | 'done';
+
+const IDLE_STATES = new Set([
+  'idle', 'sleeping', 'dormant', 'drowsy', 'bored', 'spacing-out', 'powering-down', 'powering-off',
+]);
+
+const COPY = {
+  pause: { zh: '暂停自动上报', en: 'Pause auto-report' },
+  resume: { zh: '继续自动上报', en: 'Resume auto-report' },
+  from: { zh: '当前显示来自', en: 'Shown from' },
+  priority: { zh: '优先级', en: 'priority' },
+  noReport: { zh: '未上报', en: 'no report' },
+  hint: { zh: '点击让这个会话上报一次', en: 'Click to make this session report' },
+  sessions: { zh: '九个会话', en: 'Nine sessions' },
+} as const;
+
+type CopyKey = keyof typeof COPY;
+
+/** Scene-only strings, kept out of the shared dictionary on purpose. */
+function copy(key: CopyKey): string {
+  return getLang() === 'zh' ? COPY[key].zh : COPY[key].en;
+}
+
 /**
  * The name of a state, in the current language.
  *
@@ -33,6 +69,136 @@ function stateLabel(state: string): string {
   const emotion = EMOTIONS.find((item) => item.state === state);
   if (!emotion) return state;
   return getLang() === 'zh' ? emotion.name.zh : emotion.name.en;
+}
+
+/** The arbiter's own priority table, read rather than re-derived. */
+function priorityOf(state: string): number {
+  return DEFAULT_PRIORITY[state as keyof typeof DEFAULT_PRIORITY] ?? 0;
+}
+
+/** Which of the four colours a session card shows. */
+function kindOf(state: string): SessionKind {
+  if (!state) return 'idle';
+  if (state === 'error' || state === 'alerting' || state === 'panicked' || state === 'refusing') return 'error';
+  if (state === 'done' || state === 'celebrate' || state === 'satisfied') return 'done';
+  if (IDLE_STATES.has(state)) return 'idle';
+  return 'working';
+}
+
+/*
+ * A small stylesheet for this page's own additions.
+ *
+ * Structure and motion only, no palette: the shared style.css describes the
+ * screen, and these selectors are scoped to the .sd- nodes this view creates.
+ * It lives here so the demo is presentable before the shared sheet is
+ * rewritten; the class names are listed in the hand-off report.
+ */
+const STYLE_ID = 'sd-scene-style';
+const CSS = String.raw`
+.sd-sessions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.card.sd-session {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "head rank" "state rank";
+  gap: 2px 8px;
+  align-items: center;
+  padding: 9px 11px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: transform 120ms cubic-bezier(.2,.8,.2,1),
+    border-color 120ms cubic-bezier(.2,.8,.2,1),
+    box-shadow 120ms cubic-bezier(.2,.8,.2,1);
+}
+.card.sd-session:hover { transform: translateY(-2px); }
+.card.sd-session:active { transform: scale(.98); }
+.card.sd-session.is-active {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.sd-session-head {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sd-session-state { grid-area: state; font-size: 11px; color: var(--muted); }
+.sd-session-rank {
+  grid-area: rank;
+  align-self: center;
+  font: 600 13px/1 ui-monospace, monospace;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.sd-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: .45;
+  flex: none;
+}
+.card.sd-session[data-kind="working"] .sd-dot { background: var(--ink); opacity: 1; }
+.card.sd-session[data-kind="done"] .sd-dot { background: #2f9e6e; opacity: 1; }
+.card.sd-session[data-kind="error"] .sd-dot { background: #d64545; opacity: 1; }
+.sd-session[data-kind="error"] .sd-session-rank { color: #d64545; }
+.sd-session[data-kind="done"] .sd-session-rank { color: #2f9e6e; }
+
+.card.sd-source {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.sd-source b { color: var(--ink); font-weight: 600; }
+.sd-rank {
+  display: inline-flex;
+  position: relative;
+  overflow: hidden;
+  height: 1.1em;
+  min-width: 1.6em;
+  font: 600 13px/1.1 ui-monospace, monospace;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.sd-rank-in { display: block; }
+.sd-rank-out { position: absolute; inset: 0; display: block; }
+.sd-rank.is-rolling .sd-rank-in { animation: sd-rank-in 120ms cubic-bezier(.2,.8,.2,1) both; }
+.sd-rank.is-rolling .sd-rank-out { animation: sd-rank-out 120ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes sd-rank-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sd-rank-out { from { transform: translateY(0); } to { transform: translateY(-100%); } }
+.sd-toggle[aria-pressed="true"] { border-color: var(--ink); }
+@media (max-width: 720px) {
+  .sd-sessions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card.sd-session,
+  .sd-rank.is-rolling .sd-rank-in,
+  .sd-rank.is-rolling .sd-rank-out { transition: none; animation: none; }
+}
+`;
+
+function ensureStyle(): void {
+  if (document.getElementById(STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = STYLE_ID;
+  style.textContent = CSS;
+  document.head.append(style);
+}
+
+function reducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 interface Actor {
@@ -58,6 +224,8 @@ export function createScene(): View {
   const el = document.createElement('div');
   el.className = 'scene-view';
 
+  ensureStyle();
+
   el.innerHTML = `
     <header class="scene-head">
       <h2>${t('scene.heading')}</h2>
@@ -71,18 +239,27 @@ export function createScene(): View {
         <span id="arbiter-from">${t('scene.noSession')}</span>
       </div>
       <div class="arbiter-actions">
-        <button type="button" data-act="report">${t('scene.act.report')}</button>
-        <button type="button" data-act="error">${t('scene.act.error')}</button>
-        <button type="button" data-act="done">${t('scene.act.done')}</button>
-        <button type="button" data-act="reset">${t('scene.act.reset')}</button>
+        <button type="button" class="btn btn-primary" data-act="report">${t('scene.act.report')}</button>
+        <button type="button" class="btn" data-act="error">${t('scene.act.error')}</button>
+        <button type="button" class="btn" data-act="done">${t('scene.act.done')}</button>
+        <button type="button" class="btn" data-act="reset">${t('scene.act.reset')}</button>
+        <button type="button" class="btn sd-toggle" id="arbiter-toggle" data-act="toggle" aria-pressed="false">${copy('pause')}</button>
       </div>
-      <div class="arbiter-sessions" id="arbiter-sessions"></div>
+      <div class="arbiter-sessions sd-sessions" id="arbiter-sessions" role="group" aria-label="${copy('sessions')}"></div>
     </section>
 
+    <div class="card sd-source" id="arbiter-source">
+      <span>${copy('from')}</span>
+      <b id="arbiter-owner">—</b>
+      <span>·</span>
+      <span>${copy('priority')}</span>
+      <span class="sd-rank" id="arbiter-rank">—</span>
+    </div>
+
     <div class="scene-actions">
-      <button type="button" data-act="shuffle">${t('scene.act.shuffle')}</button>
-      <button type="button" data-act="party">${t('scene.act.party')}</button>
-      <button type="button" data-act="sleep">${t('scene.act.sleep')}</button>
+      <button type="button" class="btn" data-act="shuffle">${t('scene.act.shuffle')}</button>
+      <button type="button" class="btn" data-act="party">${t('scene.act.party')}</button>
+      <button type="button" class="btn" data-act="sleep">${t('scene.act.sleep')}</button>
     </div>
 
     <div class="stage scene-stage bg-night" id="scene-stage">
@@ -96,9 +273,16 @@ export function createScene(): View {
   const stateEl = el.querySelector<HTMLElement>('#arbiter-state')!;
   const fromEl = el.querySelector<HTMLElement>('#arbiter-from')!;
   const sessionsEl = el.querySelector<HTMLElement>('#arbiter-sessions')!;
+  const ownerEl = el.querySelector<HTMLElement>('#arbiter-owner')!;
+  const rankEl = el.querySelector<HTMLElement>('#arbiter-rank')!;
+  const toggleEl = el.querySelector<HTMLButtonElement>('#arbiter-toggle')!;
   let actors: Actor[] = [];
   let arbiterTimer = 0;
-  /** One-shot timers (cheer, doze, poke); dispose clears them. */
+  let paused = false;
+  let shownRank: number | null = null;
+  /** Which session the arbiter is actually showing — not just the last to report. */
+  let shownSession = '';
+  /** One-shot timers (cheer, doze, poke, rank roll); dispose clears them. */
   const timeouts = new Set<number>();
 
   function later(fn: () => void, ms: number): void {
@@ -153,24 +337,77 @@ export function createScene(): View {
       fromEl.textContent = result.sessionId
         ? `${result.sessionId} · #${result.emotionId}`
         : t('scene.noSession');
-      queueMicrotask(() => paintSessions(result.sessionId));
+      shownSession = result.sessionId ?? '';
+      paintSource(result);
+      queueMicrotask(() => paintSessions());
     },
   });
 
-  function paintSessions(active?: string): void {
+  /** The strip under the panel: who is on screen, and their priority. */
+  function paintSource(result: ArbiterResult | null): void {
+    const sessionId = result?.sessionId ?? '';
+    ownerEl.textContent = sessionId || '—';
+    if (!sessionId) {
+      shownRank = null;
+      shownSession = '';
+      rankEl.textContent = '—';
+      rankEl.dataset.value = '';
+      return;
+    }
+    const rank = priorityOf(result!.state);
+    if (shownRank === rank) return;
+    shownRank = rank;
+    rollTo(rank);
+  }
+
+  /** Roll the number up: 120ms, transform only, off under reduced motion. */
+  function rollTo(value: number): void {
+    const text = String(value);
+    const previous = rankEl.dataset.value ?? '';
+    rankEl.dataset.value = text;
+    if (!previous || reducedMotion()) {
+      rankEl.textContent = text;
+      return;
+    }
+    rankEl.innerHTML = `<span class="sd-rank-out">${previous}</span><span class="sd-rank-in">${text}</span>`;
+    void rankEl.offsetWidth;
+    rankEl.classList.add('is-rolling');
+    later(() => {
+      rankEl.classList.remove('is-rolling');
+      rankEl.textContent = text;
+    }, 140);
+  }
+
+  function paintSessions(): void {
     const sessions = arbiter.sessions();
+    const active = shownSession;
     sessionsEl.innerHTML = SESSIONS.map((name) => {
       const session = sessions.get(name);
       const state = session?.state ?? '';
-      const label = session ? stateLabel(state) : '—';
-      const cls = name === active ? 'chip on' : session ? 'chip' : 'chip idle';
-      return `<span class="${cls}" title="${name} · #${session?.emotionId ?? ''}">${name}<i>${label}</i></span>`;
+      const label = session ? stateLabel(state) : copy('noReport');
+      const rank = session ? priorityOf(state) : null;
+      const isActive = name === active;
+      return `<button type="button" class="card sd-session${isActive ? ' is-active' : ''}" data-session="${name}" data-kind="${kindOf(state)}" aria-pressed="${isActive}" title="${name} · ${copy('hint')}">
+        <span class="sd-session-head"><i class="sd-dot" aria-hidden="true"></i><b>${name}</b></span>
+        <span class="sd-session-state">${label}</span>
+        <span class="sd-session-rank" title="${copy('priority')}">${rank === null ? '—' : rank}</span>
+      </button>`;
     }).join('');
   }
 
   function reportOne(): void {
     const name = SESSIONS[Math.floor(Math.random() * SESSIONS.length)];
     const emotionId = CYCLE[Math.floor(Math.random() * CYCLE.length)];
+    arbiter.update({ sessionId: name, emotionId });
+    paintSessions();
+  }
+
+  /** One session reports whatever a click rolls: work, failure, or done. */
+  function reportFor(name: string): void {
+    const roll = Math.random();
+    const emotionId = roll < 0.6
+      ? WORK_IDS[Math.floor(Math.random() * WORK_IDS.length)]
+      : roll < 0.85 ? ERROR_ID : DONE_ID;
     arbiter.update({ sessionId: name, emotionId });
     paintSessions();
   }
@@ -195,6 +432,19 @@ export function createScene(): View {
     }, 1800);
   }
 
+  /** Pause is a promise about the timer, not a visual switch: nothing ticks. */
+  function toggleAuto(): void {
+    paused = !paused;
+    if (paused) {
+      window.clearInterval(arbiterTimer);
+      arbiterTimer = 0;
+    } else {
+      startTicking();
+    }
+    toggleEl.textContent = paused ? copy('resume') : copy('pause');
+    toggleEl.setAttribute('aria-pressed', String(paused));
+  }
+
   /* ------------------------------------------------------------ wiring */
 
   el.addEventListener('click', (event) => {
@@ -207,6 +457,7 @@ export function createScene(): View {
       else if (kind === 'error') reportAll('34');
       else if (kind === 'done') reportAll('33');
       else if (kind === 'reset') reset();
+      else if (kind === 'toggle') toggleAuto();
       else if (kind === 'party' || kind === 'sleep') {
         const mood = kind === 'party' ? 'celebrate' : 'sleeping';
         for (const actor of actors) {
@@ -216,6 +467,11 @@ export function createScene(): View {
           later(() => actor.el.classList.remove('cheer', 'doze'), 2200);
         }
       }
+      return;
+    }
+    const session = target.closest<HTMLElement>('[data-session]');
+    if (session) {
+      reportFor(session.dataset.session!);
       return;
     }
     const actor = target.closest<HTMLElement>('.actor');
@@ -233,6 +489,7 @@ export function createScene(): View {
 
   spawn();
   paintSessions();
+  paintSource(null);
   startTicking();
 
   return {
@@ -244,6 +501,7 @@ export function createScene(): View {
       for (const id of timeouts) window.clearTimeout(id);
       timeouts.clear();
       arbiter.dispose();
+      document.getElementById(STYLE_ID)?.remove();
     },
   };
 }
