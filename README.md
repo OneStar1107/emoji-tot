@@ -37,8 +37,8 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.0.8.18.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18/EmojiTot.Setup.0.8.18.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.0.8.18.portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18/EmojiTot.0.8.18.portable.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.0.8.18.13.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.13/EmojiTot.Setup.0.8.18.13.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.0.8.18.13.portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.13/EmojiTot.0.8.18.13.portable.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
 Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.18<!--/facts-->
@@ -58,7 +58,7 @@ pnpm scan                   # 发布前敏感信息扫描
 pnpm smoke:desktop          # 启动真实 Electron 窗口做烟测
 ```
 
-仓库路径含中文时 Electron 45 会在启动前崩溃：开发脚本会自动在 `%LOCALAPPDATA%\EmojiTot\electron-runtime` 建一次 ASCII 运行缓存（约 374 MB），可用 `EMOJITOT_ELECTRON_CACHE` 改到其它纯 ASCII 目录。
+Electron 45 的运行时本身不能从中文路径启动。开发脚本、安装版和便携版都带原生 ASCII 启动引导：开发缓存位于 `%LOCALAPPDATA%\EmojiTot\electron-runtime`，打包版位于 `%LOCALAPPDATA%\EmojiTot\app-runtime`，便携载荷位于 `%LOCALAPPDATA%\EmojiTot\portable`。缓存按构建版本切换并自动清理旧版本，不需要用户把 EmojiTot 安装到英文目录。
 
 ## 五个能力
 
@@ -72,7 +72,7 @@ pnpm smoke:desktop          # 启动真实 Electron 窗口做烟测
 
 - **接口只有一个文件**：`%APPDATA%/EmojiTot/state.json`。裸 id、JSON 串、JSON 对象都收，坏数据保留当前表情。
 - **数据都在本机**：偏好、待办、日程、邮件缓存、置物架文件、剪贴板历史都写在本机数据目录，不上传。
-- **不抓屏**：当前界面使用实色面板，不截取桌面、不保存屏幕内容；`frost` 只是半透明皮肤的命名。
+- **不抓屏**：Windows 11 22H2 及以上由系统 Acrylic 实时处理窗口背后的桌面；旧系统回退到半透明分层材质。应用不截取、不保存屏幕内容。
 - **定位只管天气**：用来决定天气城市，不上传位置、不记录轨迹。
 - **消息只读条数**：微信、企业微信、飞书、钉钉的未读数从窗口标题读，不读聊天内容。
 - **剪贴板历史默认关闭**：开启后存本机 `clipboard.json`，关掉即清未固定项；只做长度与空值过滤，不做敏感内容识别。

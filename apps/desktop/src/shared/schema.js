@@ -197,16 +197,10 @@ export const DEFAULTS = {
   skin: 'frost',
   blur: true,
   /*
-   * The fallback frosted glass, for machines without a system blur.
-   *
-   * Windows 11 draws the real thing itself (backgroundMaterial: acrylic in
-   * main.js); everywhere else this photographs the desktop once and blurs the
-   * photograph, because a transparent window has no desktop in its compositing
-   * stack for `backdrop-filter` to sample. Off by default: the capture route
-   * needs the window excluded from its own frame, and on some GPU drivers that
-   * flag makes the window flicker. It needs the frost skin with blur on to mean
-   * anything (the skin switch now paints a flat card). The frame lives in memory
-   * only: never written, never uploaded.
+   * Frost uses a layered CSS material on every platform. A transparent window
+   * does not expose the desktop to backdrop-filter, and DWM acrylic cannot
+   * follow the island's rounded silhouette. Turning blur off paints the solid
+   * card instead; nothing is captured, written, or uploaded.
    */
   uiScale: 100,
   radius: 22,

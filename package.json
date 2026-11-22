@@ -15,7 +15,7 @@
     "dev": "pnpm --filter @emojitot/gallery dev",
     "desktop": "pnpm --filter @emojitot/desktop start",
     "test": "pnpm -r test",
-    "test:scripts": "node --test scripts/*.test.mjs",
+    "test:scripts": "node --test scripts/scan-sensitive.test.mjs scripts/build-info.test.mjs scripts/package-version.test.mjs scripts/release-version.test.mjs",
     "typecheck": "pnpm -r typecheck",
     "preview": "pnpm build && node apps/gallery/scripts/preview.mjs",
     "dist": "pnpm build && pnpm --filter @emojitot/desktop dist",

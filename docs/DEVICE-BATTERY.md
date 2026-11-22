@@ -17,7 +17,7 @@
 | [HeyOkay/HaloBattery](https://github.com/HeyOkay/HaloBattery) | **MIT** | Python | 每个型号一个 provider，走 hidapi 原始报文 | 约 90 个型号 / 30 个品牌，见 §2 | **是（唯一一份能直接对照实现的）**：`providers/asus.py`、`logitech.py`、`razer.py` 都写清了报文与字节位 |
 | [krisgfx9/Wireless-Device-Battery-Monitor](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor)（BatteryHub） | **GPL-3.0**（LICENSE 原文与 GitHub API 均为 GPL-3.0） | C++ | 每个品牌一个 driver，Win32 HID 原始报文 | 18 个品牌族，见 §3.4 | **否（GPL）**：只取协议事实（VID/PID、报告号、命令字节、回复偏移、型号 ID），不复制代码 |
 | [AngeloCore/gpx-battery](https://github.com/AngeloCore/gpx-battery) | **无 LICENSE 文件**（`gh api` 返回 `null`） | Rust | HID++ 2.0，0x1004/0x1000/0x1001 | 罗技 G Pro X Superlight 1/2 及任意 HID++ 2.0 鼠标 | 只能读，不能抄：无许可证即「保留所有权利」 |
-| [deancanen/LGSTrayBattery](https://github.com/deancanen/LGSTrayBattery) | **GPL-3.0** | C# | HID++（`LGSTrayHID/HIDMsg.cs`）+ G HUB WebSocket | 罗技鼠标/键盘/耳机 | 否：GPL 与本项目 MIT 不兼容，只取协议事实 |
+| [deancanen/LGSTrayBattery](https://github.com/deancanen/LGSTrayBattery) | **GPL-3.0** | C# | HID++（`LGSTrayHID/HIDMsg.cs`）+ G HUB WebSocket | 罗技鼠标/键盘/耳机 | 否：本项目采用非商用自定义许可，不复制 GPL 源码，只取协议事实 |
 | [LucvanDeenen/logipal](https://github.com/LucvanDeenen/logipal) | **MIT** | Python | HID++ 2.0，短/长报告自适应 | 罗技 G Pro（Lightspeed） | 是：`battery_overlay.py` 是最短的 HID++ 可运行样例（约 110 行） |
 | [openrazer/openrazer](https://github.com/openrazer/openrazer) | **GPL-2.0** | C | 90 字节 feature report，class 0x07 | 雷蛇全系（`razerchromacommon.c`） | 否：内核驱动 + GPL；协议事实可用（见 §3.2） |
 | [L1GHTSHAPER/BT-Charge-Indicator](https://github.com/L1GHTSHAPER/BT-Charge-Indicator) | **MIT** | C# | Windows 设备属性 + BLE GATT + 各家广播包 | 蓝牙耳机/手柄/键鼠，另有 AirPods、Nothing、Fast Pair | 是，但只对蓝牙路径有意义（我们已用系统属性，比它轻） |
@@ -192,7 +192,7 @@ Areson，`260D` 下有三个 DAREU 家族。因此：
 
 1. **写设备配置**：本项目的目标是显示电量，写配置既有风险又无需求。
 2. **GPL 代码**：Solaar / OpenRazer / HeadsetControl / LGSTrayBattery / BatteryHub 都是 GPL，与本项目
-   MIT 冲突，只取「协议事实」（报文结构、字节位），实现全部独立编写。
+   许可条款不兼容，只取「协议事实」（报文结构、字节位），实现全部独立编写。
 3. **无许可证项目**（gpx-battery）：同样只读不抄。
 4. **分体耳机电量、厂商广播包**（AirPods / Nothing / Fast Pair）：属于蓝牙广播解析，与「外设私有
    HID」是两条线，收益低于维护成本。
@@ -200,14 +200,14 @@ Areson，`260D` 下有三个 DAREU 家族。因此：
 
 ## 6. NOTICE / 许可证归属
 
-- 本项目 EmojiTot 为 **MIT**（根 `LICENSE`）。
+- 本项目 EmojiTot 为 **EmojiTot Noncommercial License**（根 `LICENSE`）。
 - 参考实现 BatteryHub / Wireless Battery（krisgfx9/Wireless-Device-Battery-Monitor，commit 632f204c）为
-  **GPL-3.0**。GPL-3.0 与 MIT 不兼容，**本项目没有复制、改写或链接其源代码**。
+  **GPL-3.0**。本项目采用更严格的非商用自定义许可，**没有复制、改写或链接其 GPL 源代码**。
 - 使用的内容是协议事实：VID/PID、报告号、命令字节、回复偏移、状态码。这些事实同时被 HaloBattery、
   Solaar、OpenRazer、G-Helper、HeadsetControl 与各厂商网页驱动独立使用；本项目按这些事实独立实现为
   PowerShell。
 - 根目录 `NOTICE` 记录了该归属与「未复制 GPL 代码」的声明。若未来需要直接复用 BatteryHub 代码，必须
-  把相应文件按 GPL-3.0 分发并重新评估整个二进制的许可证，不能标成 MIT。
+  把相应文件按 GPL-3.0 分发并重新评估整个二进制的许可证，不能标成项目自有许可。
 
 ## 7. 可复核清单
 

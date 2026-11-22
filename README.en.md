@@ -32,8 +32,8 @@ Folded, it is just a face; click it and it grows into a 420px panel in place. Th
 <!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot.Setup.0.8.18.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18/EmojiTot.Setup.0.8.18.exe) | Installer — starts from the Start menu |
-| [EmojiTot.0.8.18.portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18/EmojiTot.0.8.18.portable.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.Setup.0.8.18.13.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.13/EmojiTot.Setup.0.8.18.13.exe) | Installer — starts from the Start menu |
+| [EmojiTot.0.8.18.13.portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.13/EmojiTot.0.8.18.13.portable.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases) · current <!--facts:version-->0.8.18<!--/facts-->
@@ -53,7 +53,7 @@ pnpm scan                   # sensitive-information scan, run before publishing
 pnpm smoke:desktop          # launch a real Electron window and check sandbox and layout
 ```
 
-Electron 45 cannot start from a repository path containing non-ASCII characters: the development launcher builds a one-time ASCII runtime cache (about 374 MB) under `%LOCALAPPDATA%\EmojiTot\electron-runtime`; set `EMOJITOT_ELECTRON_CACHE` to use another ASCII-only directory.
+The Electron 45 runtime itself cannot start from a non-ASCII path. Development, installed and portable builds therefore include a native ASCII bootstrap: development uses `%LOCALAPPDATA%\EmojiTot\electron-runtime`, packaged builds use `%LOCALAPPDATA%\EmojiTot\app-runtime`, and the portable payload uses `%LOCALAPPDATA%\EmojiTot\portable`. The cache follows the build identity and removes obsolete versions, so EmojiTot can be installed under a non-ASCII folder.
 
 ## Five things it does
 
@@ -67,7 +67,7 @@ Electron 45 cannot start from a repository path containing non-ASCII characters:
 
 - **One file is the interface** — `%APPDATA%/EmojiTot/state.json`. A bare id, a JSON string or a JSON object all work; malformed writes keep the current face.
 - **Everything stays local** — preferences, todos, calendar, mail cache, shelf files and clipboard history live in the local data directory and are never uploaded.
-- **No screen capture** — the current interface uses solid panels; it does not capture the desktop or store screen content. The `frost` skin name is historical.
+- **No screen capture** — on Windows 11 22H2 and newer, the system Acrylic material blurs the desktop behind the window; older systems use the translucent layered fallback. The app never captures or stores screen content.
 - **Location only picks a city** for the weather — no position upload, no history of where you went.
 - **Message counts only** — unread badges for WeChat, WeCom, Feishu and DingTalk come from window titles; message contents are never read.
 - **Clipboard history is off by default** — when on, recent text entries live in a local `clipboard.json`; turning it off clears unpinned entries. Filtering is length and empty-value only.
@@ -84,10 +84,10 @@ What is stored, for how long and how to delete it: [docs/PRIVACY.md](docs/PRIVAC
 
 ## Licence
 
-**MIT.** The engine, the protocol, the pages and every character were implemented from scratch in this repository: use it commercially, close-source it, redistribute it — keep the copyright notice. No third-party character engine code or art is included.
+**EmojiTot Noncommercial License.** The engine, the protocol, the pages and every character were implemented from scratch in this repository. Personal, non-commercial use, modification and redistribution are allowed when the licence and attribution travel with the work; selling the software, bundling it into a paid product, or running it in an ad-supported service requires a commercial licence first. No third-party character engine code or art is included.
 
 The island window and media-bridge approach came from studying public MIT projects; the code was rewritten in this project’s own style, and the research notes and licence checks are in [docs/RESEARCH.md](docs/RESEARCH.md).
 
 ---
 
-Made by [OneStar1107](https://github.com/OneStar1107) · [MIT](LICENSE)
+Made by [OneStar1107](https://github.com/OneStar1107) · [EmojiTot Noncommercial License](LICENSE)

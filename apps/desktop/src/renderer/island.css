@@ -12,44 +12,12 @@
   --faint: rgba(242, 242, 245, 0.4);
   --line: var(--surface-2);
   /*
-   * Frost is a real translucency: the desktop has to show through, otherwise
-   * "frost" and "solid" are the same card twice. 0.90 is where the panel still
-   * reads as glass but text-heavy pages (calendar, todo) keep their contrast —
-   * lower values let busy wallpapers wash the text out.
+   * A shaped transparent Electron window cannot sample the desktop with
+   * backdrop-filter, and DWM acrylic always fills the window's rectangular
+   * padding. The frost surface is therefore a layered CSS material: a
+   * translucent tint, specular light, a cool refraction, and fine grain.
    */
-  --card: rgba(21, 21, 25, 0.90);
-  /*
-   * Real glass (设置 → 外观 → 真毛玻璃).
-   *
-   * `backdrop-filter` cannot see a transparent window's desktop, so the glass
-   * is a screenshot of the screen, blurred and painted behind the panel. Two
-   * numbers make it work: the layer reaches `--glass-bleed` past the panel on
-   * every side, so the blur's fade happens outside the panel's clip instead of
-   * pale bands at its edges (the main process subtracts the same distance when
-   * it works out where to paint the picture), and `--glass-veil` is the
-   * theme's own tint at 76% of the card's alpha — at the card's full 0.90 the
-   * photograph is 10% of the result and the layer is the acrylic it replaces.
-   *
-   * A test (test/glass.test.mjs) recomputes the veil's worst-case contrast
-   * against --ink from these two declarations, so a future alpha change cannot
-   * silently take body text under 4.5:1.
-   */
-  --glass-bleed: 24px;
-  /* The tint over the blurred desktop. 76% buried the picture; the floor is
-     what keeps light ink at 4.5:1 over a white page, which lands at 66% with
-     the photograph darkened to 0.90. Below ~64% the glass reads better but the
-     text stops being readable on a bright desktop. */
-  --glass-veil: color-mix(in srgb, var(--card) 64%, transparent);
-  /*
-   * The one fill both surfaces paint with.
-   *
-   * The capsule and the panel used to disagree here: the panel sat on a
-   * photographed backdrop with the veil over it, while the capsule painted
-   * --card at 0.90 with a `backdrop-filter` that a transparent window cannot
-   * honour — so the same material read as glass when open and as a plastic
-   * slab when closed. Both now take --glass-fill, and the glass switch below
-   * is the only thing that changes it.
-   */
+  --card: rgba(17, 17, 22, 0.88);
   --glass-fill: var(--card);
   /* Native widgets (select popups, scrollbars) follow the theme instead of
      drawing a white menu with white text in dark mode. */
@@ -143,20 +111,16 @@
    * ring — builds the same depth with nothing to clip. The ring is what makes a
    * translucent surface read as a material instead of as a hole in the desktop.
    */
-  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.11);
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.15);
   --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.34);
-  --ring: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
-  /*
-   * Glass, as three layers instead of one flat fill.
-   *
-   * A transparent Electron window has no backdrop to blur (see .panel), so the
-   * material has to be built from light: a soft key light pooling at the top
-   * edge, a faint second highlight along the upper third, and a hairline of
-   * noise on top so the surface reads as a pane rather than as a vector shape.
-   * Alpha is deliberately small — anything stronger looks like paint.
-   */
-  --glass-key: rgba(255, 255, 255, 0.10);
-  --glass-sheen: rgba(255, 255, 255, 0.045);
+  --ring: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --glass-edge: rgba(255, 255, 255, 0.17);
+  /* The light layers that make one translucent pane read as liquid glass. */
+  --glass-key: rgba(255, 255, 255, 0.2);
+  --glass-sheen: rgba(255, 255, 255, 0.065);
+  --glass-prism: rgba(151, 132, 255, 0.085);
+  --glass-cool: rgba(58, 202, 255, 0.07);
+  --glass-depth: rgba(0, 0, 0, 0.24);
   /* Radii, named so one corner is decided in one place. */
   --r-xs: 8px;
   --r-sm: 12px;
@@ -178,7 +142,7 @@ body[data-theme="light"] {
   --faint: rgba(26, 26, 30, 0.5);
   --line: rgba(0, 0, 0, 0.1);
   /* Frost needs a translucent light surface too, or light mode has no frost. */
-  --card: rgba(255, 255, 255, 0.92);
+  --card: rgba(250, 250, 252, 0.9);
   color-scheme: light;
   --card-solid: #fbfbfd;
   --accent: #5b48d9;
@@ -193,8 +157,12 @@ body[data-theme="light"] {
   --hi: inset 0 1px 0 rgba(255, 255, 255, 0.95);
   --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
   --ring: inset 0 0 0 1px rgba(0, 0, 0, 0.055);
-  --glass-key: rgba(255, 255, 255, 0.55);
-  --glass-sheen: rgba(0, 0, 0, 0.02);
+  --glass-edge: rgba(0, 0, 0, 0.1);
+  --glass-key: rgba(255, 255, 255, 0.62);
+  --glass-sheen: rgba(0, 0, 0, 0.025);
+  --glass-prism: rgba(91, 72, 217, 0.055);
+  --glass-cool: rgba(38, 159, 211, 0.045);
+  --glass-depth: rgba(0, 0, 0, 0.07);
 }
 
 * { box-sizing: border-box; }
@@ -396,19 +364,16 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
   height: var(--fold-h);
   padding: 0 12px;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--r-full);
-  /*
-   * The same glass stack as the panel, at capsule scale: a key light pooling at
-   * the top, a sheen along the upper third, grain, then the card tint. The
-   * grain matters most here — this is the surface that sits on a wallpaper all
-   * day, and a flat fill is what makes a pill look like a sticker.
-   */
+  /* The capsule and panel share one five-layer liquid-glass stack. */
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
-    radial-gradient(120% 140% at 50% -40%, var(--glass-key), rgba(255, 255, 255, 0) 66%),
-    linear-gradient(180deg, var(--glass-sheen), rgba(255, 255, 255, 0) 42%),
-    var(--card-solid);
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
+    radial-gradient(125% 150% at 20% -54%, var(--glass-key), rgba(255, 255, 255, 0) 58%),
+    linear-gradient(115deg, var(--glass-sheen) 0%, rgba(255, 255, 255, 0) 27%, rgba(255, 255, 255, 0) 69%, var(--glass-prism) 100%),
+    radial-gradient(80% 120% at 100% 120%, var(--glass-cool), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 54%, var(--glass-depth) 100%),
+    var(--card);
   color: var(--ink);
   /*
    * One ring, one highlight, one lift. At 34px tall the old 24px blur read as a
@@ -419,7 +384,7 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
    * instead of a cloud.
    */
   box-shadow: 0 7px 20px rgba(0, 0, 0, 0.32), var(--hi), var(--lo), var(--ring);
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
   transition: transform var(--base) var(--spring), box-shadow var(--base) var(--ease), border-color var(--base) var(--ease);
   cursor: pointer;
   white-space: nowrap;
@@ -654,7 +619,7 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
   /* Children must not paint outside the rounded corners. The pager used to
      leak a hard-edged fill into the corner and read as a stray white square. */
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius);
   /*
    * The skin decides the fill. --card is the translucent one (frost), and each
@@ -670,10 +635,12 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    * cannot cover the content, and the solid/plain skins drop it for free.
    */
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
-    radial-gradient(140% 92% at 50% -22%, var(--glass-key), rgba(255, 255, 255, 0) 62%),
-    linear-gradient(180deg, var(--glass-sheen), rgba(255, 255, 255, 0) 34%),
-    var(--card-solid);
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
+    radial-gradient(135% 82% at 18% -28%, var(--glass-key), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(112deg, var(--glass-sheen) 0%, rgba(255, 255, 255, 0) 24%, rgba(255, 255, 255, 0) 72%, var(--glass-prism) 100%),
+    radial-gradient(72% 72% at 96% 108%, var(--glass-cool), rgba(255, 255, 255, 0) 64%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 66%, var(--glass-depth) 100%),
+    var(--card);
   /*
    * Kept inside the window margin on purpose. The shadow used to be 44px of
    * blur with 18px of offset while the window padding was only 28/18, so the
@@ -3422,27 +3389,3 @@ body[data-theme="light"][data-skin="console"] .health-bar::after {
  * smooth open and a stutter.
  */
 body[data-morphing="true"] .glass-root { filter: none; }
-
-/*
- * Windows 11 draws the blur behind the window (DWM acrylic), so this skin no
- * longer needs a near-opaque card to fake depth: the backdrop is real, and a
- * lighter tint lets it through. The alpha still clears 4.5:1 against --ink
- * over a white page — see test/glass.test.mjs, which recomputes it.
- */
-/* The lighter card above is global, not gated on the material flag: the same
-   alpha reads correctly whether the blur behind it comes from DWM acrylic
-   (Windows 11) or from the layered CSS the other builds paint. */
-/*
- * On a window that Windows 11 is already blurring, the card can be lighter:
- * the depth behind it is real, so the tint only has to keep the text legible.
- * 0.72 over a white page still clears 4.5:1 against --ink; the :root value
- * (0.90) stays the fallback for machines without the system material.
- */
-body[data-material="acrylic"] .pill,
-body[data-material="acrylic"] .panel {
-  --card: rgba(21, 21, 25, 0.72);
-}
-body[data-theme="light"][data-material="acrylic"] .pill,
-body[data-theme="light"][data-material="acrylic"] .panel {
-  --card: rgba(255, 255, 255, 0.80);
-}

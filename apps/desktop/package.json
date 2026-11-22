@@ -12,9 +12,9 @@
     "start": "node scripts/electron-launch.mjs .",
     "dev": "node scripts/electron-launch.mjs . --dev",
     "prepack": "node scripts/copy-vendor.mjs",
-    "pack": "electron-builder --dir",
+    "pack": "node scripts/electron-builder.mjs --dir",
     "predist": "node scripts/copy-vendor.mjs",
-    "dist": "electron-builder",
+    "dist": "node scripts/electron-builder.mjs",
     "test": "node --test"
   },
   "devDependencies": {
@@ -28,6 +28,7 @@
     "files": [
       "src/**/*",
       "assets/**/*",
+      "build-info.json",
       "!assets/installer-*.png",
       "!assets/installer-*.bmp"
     ],
@@ -37,13 +38,15 @@
     "directories": {
       "output": "../../release"
     },
+    "electronDist": "node_modules/electron/dist",
+    "afterPack": "scripts/after-pack.mjs",
     "electronDownload": {
       "checksums": {
         "electron-v45.3.4-win32-x64.zip": "b177908b5c48dad990612d7861fc8f03f8c06be0ca3351383a83cc11dd8e9144"
       }
     },
     "nsis": {
-      "artifactName": "EmojiTot.Setup.${version}.${ext}",
+      "artifactName": "EmojiTot.Setup.${buildVersion}.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
@@ -59,7 +62,7 @@
       "uninstallerSidebar": "../../apps/desktop/build/uninstaller-sidebar.bmp"
     },
     "portable": {
-      "artifactName": "EmojiTot.${version}.portable.${ext}"
+      "artifactName": "EmojiTot.${buildVersion}.portable.internal.${ext}"
     },
     "win": {
       "target": [

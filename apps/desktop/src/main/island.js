@@ -126,16 +126,13 @@ function place() {
   windowRect = { x, y, width, height };
   notifyBounds();
   const bounds = win.getBounds();
-  if (bounds.x === x && bounds.y === y && bounds.width === width && bounds.height === height) return;
-  win.setBounds({ x, y, width, height });
+  if (bounds.x !== x || bounds.y !== y || bounds.width !== width || bounds.height !== height) {
+    win.setBounds({ x, y, width, height });
+  }
   /*
-   * A moved window has a different desktop under it.
-   *
-   * The real-glass layer is positioned in *screen* coordinates, so the panel
-   * sliding sideways by a few pixels (a display change, the OLED drift, the
-   * window growing as the panel opens) leaves the blurred photograph behind.
-   * The page re-shoots it after a short debounce; a move with no open panel
-   * costs one message and nothing else.
+   * The page still receives a move event for layout-dependent state. The
+   * surface itself is now entirely CSS, so there is no captured backdrop to
+   * re-shoot after a move.
    */
   safeSend(win, 'island:moved', null);
 }

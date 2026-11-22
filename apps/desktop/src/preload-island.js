@@ -6,11 +6,9 @@
  */
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 /*
- * A sandboxed preload gets a cut-down process and does not see the
- * additionalArguments a webPreferences list sets, so the argv route read
- * none on a machine whose window really was acrylic. One synchronous IPC
- * call before the page runs is the reliable form: it blocks for a few
- * microseconds and the answer is final.
+ * The island's window is transparent and intentionally unshaped. A DWM
+ * material would fill its rectangular padding, so the visible surface is
+ * painted entirely by CSS.
  */
 
 /** Subscribe to one channel; returns the unsubscribe function. */
@@ -19,16 +17,9 @@ const on = (channel, listener) => {
   ipcRenderer.on(channel, handler);
   return () => ipcRenderer.removeListener(channel, handler);
 };
-const windowMaterial = (() => {
-  try {
-    const value = ipcRenderer.sendSync('island:material');
-    return typeof value === 'string' && value ? value : 'none';
-  } catch (error) {
-    return 'none';
-  }
-})();
+const windowMaterial = 'none';
 contextBridge.exposeInMainWorld('islandAPI', {
-  /** 'acrylic' (Windows 11 DWM blur) or 'none'. Read-only, decided at launch. */
+  /** Kept for preload compatibility; the island has no native material. */
   material: () => windowMaterial,
   /** Content size, measured by the page. The window follows it. */
   reportBox: (box) => ipcRenderer.send('island:box', box),

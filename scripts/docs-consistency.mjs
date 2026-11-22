@@ -9,10 +9,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PAGE_MANIFEST, SETTINGS_PAGE_KEYS } from '../apps/desktop/src/shared/schema.js';
+import { latestReleaseVersionFromNotes } from './release-version-lib.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => readFileSync(resolve(root, file), 'utf8');
 const version = JSON.parse(read('package.json')).version;
+const artifactVersion = latestReleaseVersionFromNotes(read('docs/RELEASE-NOTES.md'), version);
 const failures = [];
 
 function expectText(file, needle, why) {
@@ -24,8 +26,9 @@ function rejectText(file, needle, why) {
 }
 
 for (const file of ['README.md', 'README.en.md']) {
-  expectText(file, `EmojiTot.Setup.${version}.exe`, 'installer link must match artifactName');
-  expectText(file, `EmojiTot.${version}.portable.exe`, 'portable link must match artifactName');
+  expectText(file, `EmojiTot.Setup.${artifactVersion}.exe`, 'installer link must match artifactName');
+  expectText(file, `EmojiTot.${artifactVersion}.portable.exe`, 'portable link must match artifactName');
+  rejectText(file, `EmojiTot.${artifactVersion}.exe`, 'the portable artifact has a .portable suffix');
   expectText(file, 'pnpm smoke:desktop', 'document the real-window smoke command');
 }
 
@@ -42,6 +45,10 @@ rejectText('README.en.md', '23 tests', 'protocol suite now has 33 tests');
 rejectText('README.md', 'EmojiTot Setup 0.3.0.exe', 'packaged artifacts now use the versioned dotted name');
 expectText('README.en.md', 'EmojiTot Noncommercial License', 'English README must match the root license');
 rejectText('README.en.md', '**MIT.**', 'the project license is noncommercial, not MIT');
+for (const file of ['packages/core/package.json', 'packages/protocol/package.json']) {
+  expectText(file, 'LicenseRef-EmojiTot-Noncommercial', 'published package metadata must match the root license');
+  rejectText(file, '"license": "MIT"', 'the project license is noncommercial, not MIT');
+}
 
 rejectText('docs/PROTOCOL.md', '27 个测试', 'protocol suite now has 33 tests');
 rejectText('docs/SETTINGS.md', '"anchor"', 'anchor is not a schema key');
@@ -61,6 +68,8 @@ rejectText('apps/desktop/src/renderer/settings.js', '十个功能页', `page man
 
 expectText('docs/SETTINGS.md', 'mailProvider', 'mail provider is persisted');
 expectText('apps/gallery/index.html', '15 characters', 'social metadata must describe the current cast');
+expectText('apps/gallery/index.html', 'emoji-tot/blob/main/LICENSE', 'structured data must point at the project license');
+rejectText('apps/gallery/index.html', 'opensource.org/licenses/MIT', 'the project is not MIT licensed');
 if (!existsSync(resolve(root, 'apps/gallery/public/og.png'))) {
   failures.push('apps/gallery/public/og.png: missing Open Graph image');
 }

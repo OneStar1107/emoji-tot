@@ -12,10 +12,24 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 
+import {
+  compareReleaseVersions,
+  currentReleaseVersion,
+  latestReleaseVersionFromNotes,
+  releaseBumpKind,
+} from './release-version-lib.mjs';
+
 const read = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const pkg = JSON.parse(read('package.json'));
-const builder = pkg.build && pkg.build.buildVersion ? String(pkg.build.buildVersion) : '';
-const current = builder || pkg.version;
+const buildInfoPath = 'apps/desktop/build-info.json';
+const buildInfo = existsSync(new URL('../' + buildInfoPath, import.meta.url))
+  ? JSON.parse(read(buildInfoPath))
+  : null;
+const notesPath = 'docs/RELEASE-NOTES.md';
+const notes = existsSync(new URL('../' + notesPath, import.meta.url)) ? read(notesPath) : '';
+const current = buildInfo
+  ? currentReleaseVersion({ packageVersion: pkg.version, buildInfo })
+  : latestReleaseVersionFromNotes(notes, pkg.version);
 
 let lastTag = '';
 try {
@@ -25,24 +39,12 @@ try {
   process.exit(0);
 }
 
-const parse = (v) => {
-  const parts = v.replace(/^v/, '').split('.').map((n) => Number(n) || 0);
-  while (parts.length < 4) parts.push(0);
-  return parts;
-};
-const c = parse(current);
-const l = parse(lastTag);
-let cmp = 0;
-for (let i = 0; i < 4; i += 1) { if (c[i] !== l[i]) { cmp = c[i] - l[i]; break; } }
-
-if (cmp <= 0) {
+if (compareReleaseVersions(current, lastTag) <= 0) {
   console.error('version:check FAIL — ' + current + ' is not newer than ' + lastTag);
   process.exit(1);
 }
 
-const kind = c[1] > l[1] ? 'SERIES' : c[2] > l[2] ? 'BIG' : 'SMALL';
-const notesPath = 'docs/RELEASE-NOTES.md';
-const notes = existsSync(new URL('../' + notesPath, import.meta.url)) ? read(notesPath) : '';
+const kind = releaseBumpKind(current, lastTag);
 const section = notes.split(/^## /m).find((s) => s.startsWith(current) || s.startsWith('v' + current)) || '';
 const bullets = section.split('\n').filter((line) => /^- /.test(line.trim())).length;
 const need = kind === 'SMALL' ? 1 : 3;

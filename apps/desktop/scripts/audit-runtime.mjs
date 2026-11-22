@@ -53,5 +53,5 @@ export function stageAsciiAuditRuntime(exePath, options = {}) {
 
 export function removeStagedAuditRuntime(runtime) {
   if (!runtime?.stagingDir) return;
-  rmSync(runtime.stagingDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  rmSync(runtime.stagingDir, { recursive: true, force: true, maxRetries: 60, retryDelay: 250 });
 }

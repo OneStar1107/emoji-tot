@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   auditRuntimePlan,
@@ -46,5 +47,14 @@ describe('UI audit runtime staging', () => {
       rmSync(testRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
     }
     assert.equal(staged ? existsSync(staged.stagingDir) : false, false);
+  });
+});
+
+describe('desktop packaging runtime', () => {
+  it('uses the installed Electron distribution instead of downloading it again', () => {
+    const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
+    const pkg = JSON.parse(readFileSync(join(desktopRoot, 'package.json'), 'utf8'));
+    assert.equal(pkg.build.electronDist, 'node_modules/electron/dist');
+    assert.equal(existsSync(resolve(desktopRoot, pkg.build.electronDist, 'electron.exe')), true);
   });
 });

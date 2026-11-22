@@ -12,6 +12,8 @@ const os = require('node:os');
 const { readPrefs, writePrefs, userDir, statePath } = require('./paths');
 const guard = require('./ipc-guard');
 const avoidance = require('./services/avoidance');
+const { loadBuildVersion } = require('./build-version');
+const { loginItemOptions } = require('./login-item');
 
 let win = null;
 const listeners = new Set();
@@ -146,7 +148,7 @@ function applyPatch(patch) {
   // future onboarding) consistent.
   if ('launchAtLogin' in patch) {
     try {
-      app.setLoginItemSettings({ openAtLogin: Boolean(patch.launchAtLogin) });
+      app.setLoginItemSettings(loginItemOptions(Boolean(patch.launchAtLogin), process.execPath));
     } catch {
       // Unsupported on some Linux desktops; prefs still records the intent.
     }
@@ -207,7 +209,8 @@ function registerIpc() {
     { check: checkPatch, maxBytes: PATCH_LIMIT },
   );
 
-  guard.guardedHandle('settings:version', ['settings'], () => app.getVersion());
+  guard.guardedHandle('settings:version', ['settings'], () =>
+    loadBuildVersion(path.join(__dirname, '..', '..'), app.getVersion()));
 
   guard.guardedHandle('settings:avoid-apps', ['settings'], () => avoidance.listApps());
   guard.guardedHandle('settings:avoid-icons', ['settings'], (paths) => avoidance.icons(paths), {

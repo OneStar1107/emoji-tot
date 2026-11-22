@@ -4,7 +4,7 @@
  * page target directly. The page socket accepts the handshake but never
  * answers Runtime.evaluate, which is what made the first attempt hang.
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -137,6 +137,47 @@ try {
   ok('renderer has no Node globals (sandbox on)', parsed.process === 'undefined' && parsed.require === 'undefined', sandbox);
   ok('preload bridge present', parsed.api === 'object');
   ok('outer window size sane', /^\d+x\d+$/.test(parsed.outer) && !parsed.outer.startsWith('0'), parsed.outer);
+  const material = JSON.parse(await evaluate(`
+    (async () => {
+      for (let i = 0; i < 30 && !document.body.dataset.material; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return JSON.stringify({
+        bridge: window.islandAPI.material(),
+        body: document.body.dataset.material,
+      });
+    })()
+  `));
+  ok(
+    'island leaves the window material to CSS',
+    material.bridge === 'none' && material.body === 'none',
+    JSON.stringify(material),
+  );
+  const surface = JSON.parse(await evaluate(`
+    JSON.stringify((() => {
+      const pill = document.querySelector('.pill');
+      if (!pill) return {};
+      const style = getComputedStyle(pill);
+      return {
+        radius: [
+          style.borderTopLeftRadius,
+          style.borderTopRightRadius,
+          style.borderBottomRightRadius,
+          style.borderBottomLeftRadius,
+        ],
+        gradients: (style.backgroundImage.match(/gradient\\(/g) || []).length,
+        backdrop: style.backdropFilter,
+      };
+    })())
+  `));
+  ok(
+    'collapsed liquid glass has rounded corners and layered CSS',
+    surface.radius?.every((value) => value === surface.radius[0]) &&
+      surface.radius?.[0] !== '0px' &&
+      surface.gradients >= 4 &&
+      surface.backdrop === 'none',
+    JSON.stringify(surface),
+  );
 
   // Open the shelf page and measure the clipboard block.
   const metrics = await evaluate(`
@@ -190,13 +231,40 @@ try {
       pagingTargets.dot?.h >= 24,
     JSON.stringify(pagingTargets),
   );
+  const panelSurface = JSON.parse(await evaluate(`
+    JSON.stringify((() => {
+      const panel = document.querySelector('.panel');
+      if (!panel) return {};
+      const style = getComputedStyle(panel);
+      return {
+        radius: [
+          style.borderTopLeftRadius,
+          style.borderTopRightRadius,
+          style.borderBottomRightRadius,
+          style.borderBottomLeftRadius,
+        ],
+        gradients: (style.backgroundImage.match(/gradient\\(/g) || []).length,
+      };
+    })())
+  `));
+  ok(
+    'expanded liquid glass keeps all four CSS corners',
+    panelSurface.radius?.every((value) => value === panelSurface.radius[0]) &&
+      panelSurface.radius?.[0] !== '0px' &&
+      panelSurface.gradients >= 4,
+    JSON.stringify(panelSurface),
+  );
 
   browser.close();
 } catch (error) {
   ok('attach run', false, String(error && error.message));
   if (appOutput) console.error('\n[window-smoke] Electron output:\n' + appOutput);
 } finally {
-  try { app.kill(); } catch {}
+  try {
+    if (app.exitCode === null) {
+      spawnSync('taskkill', ['/PID', String(app.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+    }
+  } catch {}
   try {
     rmSync(SMOKE_USER_DATA, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   } catch {

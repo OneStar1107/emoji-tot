@@ -133,7 +133,7 @@ const MESSAGES = {
     'docs.extendIntro': '岛上的每一个页面都是注册表里的一行，加上一个只负责数据的服务：',
     'docs.extendP': '约定有三条：服务只写自己的文件；推送的载荷结构与 bootstrap 返回的一模一样（结构不一致是「推送成功但页面永远空」的经典原因）；页面在空数据时给一句话加一个动作按钮，而不是一个空盒子。',
 
-    'footer.license': 'MIT 许可 · 由 @emojitot/core 绘制',
+    'footer.license': 'EmojiTot 非商用许可 · 由 @emojitot/core 绘制',
   },
   en: {
     'nav.console': 'Console',
@@ -260,7 +260,7 @@ const MESSAGES = {
     'docs.extendIntro': 'Every island page is one row in the registry plus a service that owns only data:',
     'docs.extendP': 'Three rules: a service writes only its own file; a pushed payload has exactly the shape bootstrap returns (a mismatch is the classic “push succeeds but the page stays empty”); and an empty page offers one sentence plus one action, not an empty box.',
 
-    'footer.license': 'MIT licensed · drawn by @emojitot/core',
+    'footer.license': 'EmojiTot Noncommercial License · drawn by @emojitot/core',
   },
 } as const;
 

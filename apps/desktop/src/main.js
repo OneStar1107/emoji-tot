@@ -364,33 +364,15 @@ function defaultPosition(dim) {
 
 /* ---------------------------------------------------------------- window */
 
-/*
- * The preload asks for this synchronously (sendSync) before the page runs.
- * The renderer cannot read the OS build, and the answer has to be final
- * before the first paint or the page draws its own blur over the system
- * one and then has to take it back.
- */
-guard.guardedSync('island:material', ['island'], () => systemMaterial(), { fallback: 'none' });
 /**
- * The window material this build of Windows can actually draw.
+ * Native window material selection.
  *
- * `acrylic` is the Windows 11 backdrop: the DWM blurs whatever is behind the
- * client rectangle, including over a playing video, with no screenshot and no
- * per-frame filter. Windows 10 has the option name but needs an opaque frame
- * for it, so older builds fall back to the translucent surface the CSS paints.
+ * DWM materials are tied to the rectangular client area, not the rounded shape
+ * the page draws. Requesting one here leaves a grey rectangle around the
+ * island's transparent padding, so the app deliberately paints every surface
+ * in CSS and asks for no native material on any build.
  */
 function systemMaterial() {
-  /*
-   * No system material, on any build.
-   *
-   * The island's silhouette is drawn with setShape on a transparent window,
-   * and a shaped transparent window cannot carry a DWM material: the blur only
-   * fills a client rectangle, so it would either be clipped away or leak a
-   * rectangle of blur behind the capsule. The surfaces paint --card-solid.
-   *
-   * The function stays because the window creation path and the island:material
-   * channel both ask for it; returning 'none' is the whole answer.
-   */
   return 'none';
 }
 
@@ -434,10 +416,8 @@ function createWindow() {
       // The preload only uses contextBridge and ipcRenderer, so the renderer
       // has no reason to share a process with Node.
       sandbox: true,
-      /* The material is decided in main (only it knows the OS build) and handed
-         to the preload as an argv flag, so the first paint already knows whether
-         the window behind it is real DWM acrylic. A bootstrap round-trip was one
-         frame too late and the page painted its own blur over the system one. */
+      /* Keep the capability flag explicit for older preloads. Native material
+         stays off because DWM cannot follow the CSS-rounded silhouette. */
       additionalArguments: ['--emojitot-material=' + systemMaterial()],
       /* Nothing here is typeable text, and the spellchecker loads a dictionary
          per language into every renderer for a feature the island cannot use. */
@@ -1916,8 +1896,8 @@ function startServices() {
   // parsing its page would drop the first frame.
   guard.guardedHandle('island:bootstrap', ['island'], () => ({
     battery: lastBattery,
-    /* The OS version is the only thing that knows whether the window really
-       has DWM acrylic behind it; the page needs it to stop painting its own. */
+    /* Native materials fill the padded window rectangle, so the island always
+       leaves its silhouette to the layered CSS surface. */
     windowMaterial: systemMaterial(),
     /* The AI page boots from one snapshot: the balance and the sources the pet
        watches, so its first paint cannot show half a page. */

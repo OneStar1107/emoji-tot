@@ -15,6 +15,11 @@
 ;
 
 !macro customInstall
+  ; A user can install onto a virtual or shared drive whose folder label is
+  ; Low integrity. The launcher must be able to populate its ASCII runtime
+  ; cache, so make the installed tree Medium after extraction.
+  ExecWait '"$SYSDIR\icacls.exe" "$INSTDIR" /setintegritylevel (OI)(CI)M /T'
+
   ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders" "Desktop"
   ${If} $0 == ""
     StrCpy $0 "$PROFILE\Desktop"

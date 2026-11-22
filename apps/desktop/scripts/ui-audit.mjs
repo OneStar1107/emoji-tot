@@ -545,7 +545,7 @@ function cleanupSync() {
   activeRuntime = null;
   if (child && child.exitCode === null) forceKillTree(child.pid);
   if (profile) {
-    try { rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* best effort on exit */ }
+    try { rmSync(profile, { recursive: true, force: true, maxRetries: 40, retryDelay: 250 }); } catch { /* best effort on exit */ }
   }
   if (runtime?.stagingDir) {
     try { removeStagedAuditRuntime(runtime); } catch { /* best effort on exit */ }
@@ -628,7 +628,11 @@ async function stopApp(child, profile) {
     while (child.exitCode === null && Date.now() < deadline) await sleep(100);
   }
   if (activeChild === child) activeChild = null;
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  /* Electron's cache and service workers can retain files for several seconds
+     after the process tree has gone. On Windows an immediate recursive remove
+     intermittently reports EPERM; keep trying long enough for the OS to
+     release those handles instead of leaving a profile under %TEMP%. */
+  for (let attempt = 0; attempt < 60; attempt += 1) {
     try {
       rmSync(profile, { recursive: true, force: true });
       if (activeProfile === profile) activeProfile = null;

@@ -18,8 +18,10 @@
 npm / pnpm / electron-builder 只接受三段 semver（`MAJOR.MINOR.PATCH`），四段会被拒绝。所以：
 
 - `package.json` 的 `version` 永远是**三段**（等于 0.系列.大版本）；
-- 第四段写进 electron-builder 的 `buildVersion`，它决定 Windows 可执行文件里的 FileVersion；tag 与 Release 标题用完整四段；
-- 应用内「关于」显示完整四段：`package.json.version` + `buildVersion` 的尾段。
+- 第四段由 `scripts/build-info.mjs` 在每次 `pack` / `dist` 前自动生成，写进 electron-builder 的 `buildVersion`，并决定安装包文件名、应用内版本和原生启动器的 FileVersion；tag 与 Release 标题用完整四段；
+- 本地构建读取 `apps/desktop/.build-number` 并递增；CI 可用 `EMOJITOT_BUILD_NUMBER` 或 `BUILD_NUMBER` 提供确定值；
+- `apps/desktop/build-info.json` 是当前构建的单一身份来源，同时包含版本、构建号、commit 与时间；`core`、`protocol`、`gallery` 的 package version 由构建脚本同步成三段公开版本；
+- 应用内「关于」显示完整四段：`package.json.version` + 生成的第四段。
 
 例：`version=0.6.2`、`buildVersion=0.6.2.3`、tag=`v0.6.2.3`、exe FileVersion=`0.6.2.3`。
 

@@ -35,13 +35,10 @@ import {
 } from './media-controls.mjs';
 
 const api = window.islandAPI;
-/*
- * The window material comes from the preload synchronously, so it is known
- * before any await: the page can paint the right surface on its very first
- * frame instead of drawing its own blur and then taking it back when the
- * bootstrap reply lands (or never lands, if a service is slow).
- */
-document.body.dataset.material = api.material && api.material() === 'acrylic' ? 'acrylic' : 'none';
+/* The bridge always reports none now; keep the dataset for old profiles and
+   extensions that use it as a read-only surface capability. */
+const windowMaterial = api.material && api.material() === 'acrylic' ? 'acrylic' : 'none';
+document.body.dataset.material = windowMaterial;
 
 const islandEl = document.getElementById('island');
 const frameEl = document.getElementById('frame');
@@ -2598,12 +2595,8 @@ function applyPrefs() {
   document.body.dataset.motion = prefs.motion === false ? 'off' : 'on';
   document.body.dataset.reduceMotion = prefs.reduceMotion === true ? 'on' : 'off';
   document.body.dataset.theme = resolveTheme();
-  /*
-   * Which material the window itself is drawing. Windows 11 paints DWM acrylic
-   * behind the client area, the stylesheet lightens the card when it does, and
-   * the screenshot route stays off — the two blurs would stack.
-   */
-  document.body.dataset.material = prefs.windowMaterial === 'acrylic' ? 'acrylic' : 'none';
+  /* The visible material is CSS-only; this remains a compatibility signal. */
+  document.body.dataset.material = windowMaterial;
   timeFormat24 = prefs.timeFormat !== '12h';
 }
 
@@ -4154,8 +4147,7 @@ prefs = boot?.prefs ?? {};
 /* Main owns the OS check; a preference never decides this, because a Windows 10
    machine cannot paint the material no matter what the switch says. */
 /* Synchronous, from the preload argv: no round-trip, no first-frame guess. */
-prefs.windowMaterial = api.material ? api.material() : 'none';
-document.body.dataset.material = prefs.windowMaterial === 'acrylic' ? 'acrylic' : 'none';
+document.body.dataset.material = windowMaterial;
 if (boot?.cast) {
   for (const face of document.querySelectorAll('emojitot-ball')) {
     face.setAttribute('cast', String(boot.cast));

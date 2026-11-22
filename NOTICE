@@ -1,4 +1,4 @@
-Licensed under the MIT License (see LICENSE).
+Licensed under the EmojiTot Noncommercial License (see LICENSE).
 
 Third-party reference notice
 ----------------------------
@@ -19,11 +19,10 @@ OpenRazer, G-Helper, HeadsetControl and the vendors' own web drivers, which the
 upstream driver comments also cite.
 
 The same protocol facts were used earlier for the Logitech HID++ 2.0, Razer and
-ASUS ROG readers already present in this project. EmojiTot remains MIT-licensed
-as a whole; the reference does not change the license of this repository.
+ASUS ROG readers already present in this project. EmojiTot remains licensed
+under the EmojiTot Noncommercial License as a whole; the reference does not
+change the license of this repository.
 
 If GPL-3.0 code from BatteryHub is ever reused directly, the affected files must
 be distributed under GPL-3.0 and the combined distribution re-evaluated. Do not
 label such a reuse as MIT.
-diff --git a/apps/desktop/src/main/services/device-battery.js b/apps/desktop/src/main/services/device-battery.js
-new file mode 100644

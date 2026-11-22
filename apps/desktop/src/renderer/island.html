@@ -12,7 +12,7 @@
     <div id="frame">
     <!-- Collapsed: one pill. The face is the character; the rest is status. -->
     <button class="pill" id="pill" type="button" aria-expanded="false" aria-label="展开 EmojiTot">
-      <!-- Flat board: the card paints --card-solid, nothing is captured. -->
+      <!-- Frost is a layered CSS surface; nothing is captured or filtered. -->
       <span class="pill-face"><emojitot-ball cast="tot" size="24" state="idle"></emojitot-ball></span>
       <span class="pill-status" id="pill-status"></span>
       <span class="pill-live" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
@@ -20,11 +20,6 @@
 
     <!-- Expanded: header, one page, dots. -->
     <section class="panel" id="panel" hidden aria-label="EmojiTot 面板">
-      <!-- Real glass: a screenshot of the desktop behind the panel, blurred,
-           and the theme's own tint over it (see island.css and
-           main/services/backdrop.js). Both paint under the content; the fill is
-           written by island.js only after a capture has arrived, so a failed or
-           slow capture leaves the CSS material exactly as it was. -->
       <!-- The page and its chrome, as one layer the fold clips against the
            card's animated box (see paintMorph in island.js). The paging
            arrows stay outside: they are chrome that scales with the surface. -->

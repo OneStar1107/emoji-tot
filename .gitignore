@@ -16,6 +16,8 @@ docs/shots/
 .release-notes.md
 .dsh-meow/
 .superpowers/
+apps/desktop/.build-number
+apps/desktop/build-info.json
 
 # Browser acceptance leaves a Chrome profile behind.
 .chrome-check/

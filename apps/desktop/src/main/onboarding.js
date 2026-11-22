@@ -21,6 +21,7 @@ const { readPrefs } = require('./paths');
 const settings = require('./settings');
 const guard = require('./ipc-guard');
 const { FRAME } = require('./ipc-frame');
+const { loadBuildVersion } = require('./build-version');
 
 /** The closed set of answers page two may send back. */
 const DISPLAY_MODES = ['island', 'ball', 'both'];
@@ -155,7 +156,7 @@ function registerIpc() {
       displayMode: prefs.displayMode,
       skin: prefs.skin,
       theme: prefs.theme,
-      version: app.getVersion(),
+      version: loadBuildVersion(path.join(__dirname, '..', '..'), app.getVersion()),
     };
   });
 
