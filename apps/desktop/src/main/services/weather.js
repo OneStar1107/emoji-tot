@@ -102,7 +102,15 @@ function savePlace(place) {
   if (!place || !Number.isFinite(Number(place.lat)) || !Number.isFinite(Number(place.lon))) return;
   writeJson(locateFile(), {
     at: Date.now(),
-    place: { name: place.name ?? '', country: place.country ?? '', lat: Number(place.lat), lon: Number(place.lon) },
+    place: {
+      name: place.name ?? '',
+      country: place.country ?? '',
+      lat: Number(place.lat),
+      lon: Number(place.lon),
+      /* The district is what the page leads with; a cached place without one
+         still works (the city name takes its place). */
+      district: String(place.district ?? ''),
+    },
   });
 }
 
@@ -166,7 +174,13 @@ function normalize(raw) {
       rain: raw.hourly.precipitation_probability?.[index + 1] ?? 0,
     }));
   return {
-    place: { name: raw.place?.name ?? '', country: raw.place?.country ?? '', lat: raw.place?.lat, lon: raw.place?.lon },
+    place: {
+      name: raw.place?.name ?? '',
+      country: raw.place?.country ?? '',
+      district: String(raw.place?.district ?? ''),
+      lat: raw.place?.lat,
+      lon: raw.place?.lon,
+    },
     current: {
       temp: Math.round(current.temperature_2m ?? 0),
       feels: Math.round(current.apparent_temperature ?? 0),

@@ -253,7 +253,11 @@ describe('privacy: sensitive stores', () => {
     assert.ok(island.includes('escapeHtml(now.text)'));
     // The page was re-laid out in 0.4.0 and the call now spans lines, so match
     // the expression rather than a literal slice of it.
-    assert.match(island, /escapeHtml\(\s*placeZh\(weather\.place\.name\)/);
+    /* The place line now leads with the district, so the escape sits on the
+       composite: both names come from the same external place object. */
+    assert.match(island, /escapeHtml\(\s*district \|\| cityName/);
+    assert.match(island, /placeZh\(weather\.place\.district/);
+    assert.match(island, /placeZh\(weather\.place\.name/);
     assert.match(island, /escapeHtml\(\s*countryZh\(weather\.place\.country\)/);
     assert.ok(!island.includes('<b>${now.text}</b>'), 'weather description must not be interpolated raw');
   });

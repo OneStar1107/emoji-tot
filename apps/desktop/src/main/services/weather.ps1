@@ -155,25 +155,46 @@ function Resolve-GeocodedName([string]$name, [double]$lat, [double]$lon, [double
 # address for keyless use; each level of it is then resolved through Open-Meteo
 # geocoding so the page keeps one naming scheme.
 function Get-ReversePlace([double]$lat, [double]$lon) {
-  $reverse = Get-Json ("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=$lat&longitude=$lon&localityLanguage=zh") 8
+  # Keyless and rate-limited: a single 8s attempt dropped the district often
+  # enough to be visible (the answer is a city name by then). One retry with a
+  # longer budget keeps the district as the normal case instead of the luck.
+  $reverse = $null
+  foreach ($attempt in 1..2) {
+    $reverse = Get-Json ("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=$lat&longitude=$lon&localityLanguage=zh") 15
+    if ($reverse) { break }
+    if ($attempt -lt 2) { Start-Sleep -Milliseconds 600 }
+  }
   if (-not $reverse) {
     Write-Step 'reverse name: no JSON from BigDataCloud'
     return $null
   }
+  # The district is the name a person actually uses for where they are: someone
+  # in 番禺区 says 番禺区, not 广州. BigDataCloud's administrative list carries it
+  # at adminLevel 6 (city district); adminLevel 8 is the town below it, which is
+  # more precise than a weather page should claim.
+  $district = ''
+  foreach ($level in @($reverse.localityInfo.administrative)) {
+    if (-not $level) { continue }
+    if ([int]$level.adminLevel -eq 6 -and [string]$level.name) {
+      $district = [string]$level.name
+      break
+    }
+  }
+  if (-not $district) { $district = [string]$reverse.locality }
   $raw = @(([string]$reverse.city, [string]$reverse.locality, [string]$reverse.principalSubdivision) | Where-Object { $_ })
   if (-not $raw) { Write-Step 'reverse name: empty address'; return $null }
   foreach ($candidate in $raw) {
     $geo = Resolve-GeocodedName $candidate $lat $lon 120
     if ($geo) {
-      Write-Step ('reverse name: ' + $geo.name + ' (' + $geo.country + ')')
-      return $geo
+      Write-Step ('reverse name: ' + $geo.name + ' (' + $geo.country + ') district=' + $district)
+      return [pscustomobject]@{ name = $geo.name; country = $geo.country; lat = $geo.lat; lon = $geo.lon; district = $district }
     }
     Write-Step ('reverse name: no geocoding hit for ' + $candidate)
   }
   # No canonical hit within range: keep the local label rather than dropping
   # the fix we already have.
-  Write-Step ('reverse name: using ' + $raw[0])
-  return [pscustomobject]@{ name = $raw[0]; country = [string]$reverse.countryName; lat = $lat; lon = $lon }
+  Write-Step ('reverse name: using ' + $raw[0] + ' district=' + $district)
+  return [pscustomobject]@{ name = $raw[0]; country = [string]$reverse.countryName; lat = $lat; lon = $lon; district = $district }
 }
 
 # One IP source -> one candidate, or $null when the body is not the shape this
@@ -268,9 +289,9 @@ function Resolve-Place {
   if ($fix) {
     $named = Get-ReversePlace $fix.lat $fix.lon
     if ($named) {
-      return [pscustomobject]@{ name = $named.name; country = $named.country; lat = $fix.lat; lon = $fix.lon; source = 'system' }
+      return [pscustomobject]@{ name = $named.name; country = $named.country; district = [string]$named.district; lat = $fix.lat; lon = $fix.lon; source = 'system' }
     }
-    return [pscustomobject]@{ name = ''; country = ''; lat = $fix.lat; lon = $fix.lon; source = 'system' }
+    return [pscustomobject]@{ name = ''; country = ''; district = ''; lat = $fix.lat; lon = $fix.lon; source = 'system' }
   }
   $ip = Get-IpPlace
   if ($ip) { return $ip }
@@ -305,7 +326,7 @@ $forecast += "&timezone=auto&forecast_days=7&forecast_hours=13"
 $data = Invoke-WithRetry -Label 'forecast' -Uri $forecast
 
 [pscustomobject]@{
-  place   = [pscustomobject]@{ name = $place.name; country = $place.country; lat = $place.lat; lon = $place.lon }
+  place   = [pscustomobject]@{ name = $place.name; country = $place.country; district = [string]$place.district; lat = $place.lat; lon = $place.lon }
   source  = $place.source
   log     = @($steps)
   current = $data.current

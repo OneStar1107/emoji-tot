@@ -1203,8 +1203,16 @@ function weatherPage() {
       </div>`;
     })
     .join('');
-  const place = escapeHtml(placeZh(weather.place.name) || '当前位置');
-  const country = weather.place.country ? ' · ' + escapeHtml(countryZh(weather.place.country)) : '';
+  /*
+   * The district leads: someone in 番禺区 is in 番禺区, and the city only says
+   * how far down the map the locator got. A place without one (an IP-only
+   * answer, or a city a person picked by hand) falls back to the city name.
+   */
+  const district = placeZh(weather.place.district || '');
+  const cityName = placeZh(weather.place.name || '');
+  const place = escapeHtml(district || cityName || '当前位置');
+  const subtitle = district && cityName && district !== cityName ? ' · ' + escapeHtml(cityName) : '';
+  const country = (subtitle || '') + (weather.place.country ? ' · ' + escapeHtml(countryZh(weather.place.country)) : '');
   const sunrise = (now.sunrise || '').slice(11, 16) || '--:--';
   const sunset = (now.sunset || '').slice(11, 16) || '--:--';
   const updated = weather.fetchedAt ? ' · ' + timeOf(weather.fetchedAt) + ' 更新' : '';
