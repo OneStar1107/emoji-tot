@@ -81,7 +81,7 @@
 | `hoverOpenDelay` | `100` | 隐藏与交互 | 渲染进程 | `island.js hover watcher` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `hoverCloseDelay` | `120` | 隐藏与交互 | 渲染进程 | `island.js hover watcher` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `hoverAutoHide` | `true` | 隐藏与交互 | 渲染进程 | `island.js hover watcher` | 即时 |  | lists every path · writes dotted keys through setPath |
-| `statusItems` | `[battery, clock, weather]` | 页面管理 | 渲染进程 | `island.js enabledStatusKeys → renderPillStatus()` | 即时 |  | draws every status item |
+| `statusItems` | `[battery, clock, weather]` | 页面管理 | 渲染进程 | `island.js renderPillStatus() / settings.js residencyCard()` | 即时 |  | draws every status item |
 | `pages` | 10/11 项开 | 页面管理 | 主进程 | `main.js applyServicePlan() · island.js enabledPages()` | 即时 | 同时控制渲染入口与后台服务 | pages drive services |
 | `pageOrder` | `[music, weather, quota, mail, focus, todo, health, shelf, devices, calendar, messenger]` | 页面管理 | 渲染进程 | `island.js enabledPages()` | 即时 |  | pages drive services |
 | `defaultPage` | `music` | 页面管理 | 渲染进程 | `island.js initial page selection` | 重启后 | 下次打开生效 | lists every path · writes dotted keys through setPath |

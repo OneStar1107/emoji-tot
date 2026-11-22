@@ -471,6 +471,56 @@ export function setStatusItemEnabled(prefs, key, enabled) {
   return next;
 }
 
+/**
+ * The default status row, in the default order.
+ *
+ * The reset button's whole value is being exactly the fresh-install list —
+ * battery, clock, weather — with the balance switched off, not "some sensible
+ * order". A copy is returned so no caller can edit DEFAULTS by accident.
+ */
+export function defaultStatusItems() {
+  return [...DEFAULTS.statusItems];
+}
+
+/**
+ * Move one switched-on status item to a new position, returning the next
+ * statusItems array.
+ *
+ * `index` is the item's FINAL position, not the gap it was dropped before:
+ * dragging the last item to the front asks for 0, and that one number describes
+ * both the preview strip and the row list underneath it, so the two controls
+ * cannot disagree about where the drop landed.
+ *
+ * Only switched-on keys are stored: an item that is off has no custom slot,
+ * because the island never draws it. Moving one is a no-op rather than an
+ * error — the preview keeps off items in the strip, and a drag that starts on
+ * one must not invent an order nothing reads.
+ */
+export function moveStatusKey(prefs, key, index) {
+  const on = enabledStatusKeys(prefs);
+  const from = on.indexOf(key);
+  if (from < 0) return on;
+  const to = Math.max(0, Math.min(on.length - 1, Math.trunc(Number(index)) || 0));
+  if (to === from) return on;
+  const next = on.slice();
+  next.splice(from, 1);
+  next.splice(to, 0, key);
+  return next;
+}
+
+/**
+ * The preview strip's rows: every status component in pill order, each one
+ * saying whether it is switched on.
+ *
+ * Switched-off components keep their slot in the strip. That is what lets the
+ * preview show where a component WILL sit once it is switched on, and what the
+ * card's note promises when it says the position is kept.
+ */
+export function statusPreviewRows(prefs) {
+  const on = enabledStatusKeys(prefs);
+  return orderedStatusKeys(prefs).map((key) => ({ key, enabled: on.includes(key) }));
+}
+
 /** Every page, switched-on ones first in the user's order. */
 export function orderedPageKeys(prefs) {
   const p = withDefaults(prefs);
@@ -724,7 +774,7 @@ export const CONSUMERS = {
   hoverCloseDelay: { scope: 'renderer', at: 'island.js hover watcher', live: true },
   hoverAutoHide: { scope: 'renderer', at: 'island.js hover watcher', live: true },
 
-  statusItems: { scope: 'renderer', at: 'island.js enabledStatusKeys → renderPillStatus()', live: true },
+  statusItems: { scope: 'renderer', at: 'island.js renderPillStatus() / settings.js residencyCard()', live: true },
   pages: { scope: 'main', at: 'main.js applyServicePlan() · island.js enabledPages()', live: true, note: '同时控制渲染入口与后台服务' },
   pageOrder: { scope: 'renderer', at: 'island.js enabledPages()', live: true },
   defaultPage: { scope: 'renderer', at: 'island.js initial page selection', live: false, note: '下次打开生效' },

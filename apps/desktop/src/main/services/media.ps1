@@ -1,8 +1,14 @@
 # EmojiTot media bridge — Windows SMTC in, one JSON line per second out.
 #
-#   media.ps1 watch              -> stream now-playing JSON until killed
-#   media.ps1 toggle|next|prev   -> one control action, then exit
-#   media.ps1 seek <seconds>     -> jump, then exit
+#   media.ps1 watch                      -> stream now-playing JSON until killed
+#   media.ps1 toggle|next|prev           -> one control action, then exit
+#   media.ps1 seek <seconds>             -> jump, then exit
+#   media.ps1 rate <factor>              -> playback speed, then exit
+#   media.ps1 repeat <0 none|1 track|2 list> -> auto-repeat, then exit
+#   media.ps1 shuffle <0|1>              -> shuffle, then exit
+#
+# Every non-watch run prints one {"kind":..,"ok":bool} line so the caller can
+# tell a refused command from an accepted one.
 #
 # Windows has no Node-accessible now-playing API, so the island talks to the
 # same session Windows uses for its own media keys. The architecture (a
@@ -43,14 +49,31 @@ function Get-Player {
 
 if ($Mode -ne "watch") {
   $s = Get-Player
-  if ($s) {
+  $ok = $false
+  $note = ""
+  if (-not $s) {
+    $note = "no-session"
+  } else {
     switch ($Mode) {
-      "toggle" { Await ($s.TryTogglePlayPauseAsync()) ([bool]) | Out-Null }
-      "next"   { Await ($s.TrySkipNextAsync()) ([bool]) | Out-Null }
-      "prev"   { Await ($s.TrySkipPreviousAsync()) ([bool]) | Out-Null }
-      "seek"   { Await ($s.TryChangePlaybackPositionAsync([long]($Arg * 10000000))) ([bool]) | Out-Null }
+      "toggle"  { $ok = [bool](Await ($s.TryTogglePlayPauseAsync()) ([bool])) }
+      "next"    { $ok = [bool](Await ($s.TrySkipNextAsync()) ([bool])) }
+      "prev"    { $ok = [bool](Await ($s.TrySkipPreviousAsync()) ([bool])) }
+      "seek"    { $ok = [bool](Await ($s.TryChangePlaybackPositionAsync([long]($Arg * 10000000))) ([bool])) }
+      # The three below only exist where the player implements them. The Try*
+      # call answers true only for "accepted"; a player can accept and then
+      # do nothing, so the island also reads the Controls flags the watch
+      # branch forwards and hides the row a player never claimed.
+      "rate"    { $ok = [bool](Await ($s.TryChangePlaybackRateAsync([double]$Arg)) ([bool])) }
+      "repeat"  { $ok = [bool](Await ($s.TryChangeAutoRepeatModeAsync([int]$Arg)) ([bool])) }
+      "shuffle" { $ok = [bool](Await ($s.TryChangeShuffleActiveAsync($Arg -ne 0)) ([bool])) }
+      default   { $note = "unknown" }
     }
   }
+  # One JSON line back, the same shape the watcher speaks: media.js turns the
+  # boolean into the page's answer instead of moving the button and hoping.
+  $result = [ordered]@{ kind = $Mode; ok = $ok }
+  if ($note) { $result.note = $note }
+  Write-Output ($result | ConvertTo-Json -Compress)
   exit
 }
 
@@ -153,6 +176,23 @@ while ($true) {
       output   = $audioOut
       art      = $art
     }
+    # What this session claims to implement. `Controls` is the only honest
+    # answer: TryChangePlaybackRateAsync returns true for a browser tab that
+    # then keeps playing at 1x. The three flags decide which rows the page
+    # draws, so a player without them gets no dead buttons.
+    try { $ctl = $info.Controls } catch { $ctl = $null }
+    if ($ctl) {
+      $out.controls = [ordered]@{
+        rate    = [bool]$ctl.IsPlaybackRateEnabled
+        repeat  = [bool]$ctl.IsRepeatEnabled
+        shuffle = [bool]$ctl.IsShuffleEnabled
+      }
+    }
+    # Current values, and only when the session reports them: most players
+    # leave these null, and an invented "1x" would draw a state nobody set.
+    try { $v = $info.PlaybackRate; if ($null -ne $v) { $out.rate = [double]$v } } catch { }
+    try { $v = $info.AutoRepeatMode; if ($null -ne $v) { $out.autoRepeatMode = [int]$v } } catch { }
+    try { $v = $info.IsShuffleActive; if ($null -ne $v) { $out.shuffleActive = [bool]$v } } catch { }
     Write-Output ($out | ConvertTo-Json -Compress)
   }
   Start-Sleep -Milliseconds 1000

@@ -13,12 +13,23 @@ import {
   STATUS_MANIFEST,
   deviceKind,
   withDefaults,
+  defaultStatusItems,
+  enabledStatusKeys,
+  moveStatusKey,
   orderedPageKeys,
   orderedStatusKeys,
   presetPatch,
   SETTINGS_NAV,
   setStatusItemEnabled,
+  statusPreviewRows,
 } from '../shared/schema.js';
+import {
+  batteryGlyph,
+  batteryText,
+  clockText,
+  quotaText,
+  temperatureText,
+} from '../shared/status-view.js';
 import { LANGS, translate } from './i18n.js';
 
 /** The rail, from the one manifest. */
@@ -231,10 +242,16 @@ const card = (rows) => rows.filter(Boolean).join('');
 /** Rows in a group body, for the "N 项" count in the card head. */
 const countRows = (body) => (String(body).match(/class="row[" ]/g) ?? []).length;
 
-const group = (title, body) => {
+/*
+ * `action` is the optional control in the card's top-right: one per card, and
+ * only where the card has a single obvious verb. 常驻排列 uses it for 恢复默认,
+ * so the reset sits with the thing it resets instead of inside its hint line.
+ */
+const group = (title, body, action = '') => {
   const count = countRows(body);
   return '<section class="group"><header class="ch"><h2>' + escapeHtml(title) + '</h2>' +
-    (count ? '<span class="cnum">' + T('count.items', { n: count }) + '</span>' : '') + '</header>' +
+    (count ? '<span class="cnum">' + T('count.items', { n: count }) + '</span>' : '') +
+    (action ? '<span class="ch-action">' + action + '</span>' : '') + '</header>' +
     '<div class="gbody">' + body + '</div></section>';
 };
 
@@ -663,6 +680,66 @@ function orderList(listId, items, enabledOf, toggleAction = 'toggle-nested') {
     '</div>').join('') + '</div>';
 }
 
+/* ------------------------------------------------------- residency strip */
+
+/*
+ * 条上的示意电量与温度。
+ *
+ * 电池和天气归岛那边三个窗口的服务，设置窗口没有它们的实时快照，所以预览
+ * 画一组固定读数：值不必是真的，格式必须是——两条路走的是同一组
+ * status-view 函数。时间用真实当前时间，余额有真读数就用真读数。
+ */
+const RESIDENCY_BATTERY = 82;
+const RESIDENCY_CELSIUS = 17;
+
+/**
+ * 「常驻排列」：岛折叠时那颗胶囊的预览条，拖动直接在条上换位。
+ *
+ * 条是胶囊的等比放大：同一个胶囊圆角、同一套内边距节奏、同一组读数函数。
+ * 皮肤与主题跟随 prefs.skin 与 html[data-theme] —— .skin-preview 这个类把
+ * 五套皮肤映射成岛自己的变量名（--card-solid / --accent / --ink / --ui-font），
+ * 这里只借它的变量壳，尺寸由 .residency-pill 自己重写。
+ *
+ * 未启用的组件留在条上（虚线 + 降透明度）：位置看得见，只是它现在不画在
+ * 胶囊里。开关仍在下方的「状态组件」卡里，两处读的是同一份 prefs.statusItems，
+ * 所以任一处改完，这一条下一帧就是新顺序。
+ */
+function residencyCard() {
+  const use24 = prefs.timeFormat !== '12h';
+  const unit = prefs.weather?.unit === 'f' ? 'f' : 'c';
+  const now = new Date();
+  const balance = quotaText(quotaState.last);
+  const chips = statusPreviewRows(prefs).map(({ key, enabled }) => {
+    const label = T('status.' + key, null, key);
+    const icon = key === 'battery' ? batteryGlyph(RESIDENCY_BATTERY, true) : '';
+    const value = key === 'battery' ? batteryText(RESIDENCY_BATTERY)
+      : key === 'clock' ? clockText(now, use24)
+        : key === 'weather' ? temperatureText(RESIDENCY_CELSIUS, unit)
+          : balance || '¥20.8';
+    const off = T('pages.residency.off', { name: label });
+    const aria = enabled ? T('pages.residency.chip', { name: label, value }) : off;
+    return '<div class="residency-chip" role="listitem" tabindex="0" data-residency-key="' + key +
+      '" data-on="' + enabled + '" aria-label="' + escapeHtml(aria) + '"' +
+      (enabled ? '' : ' aria-disabled="true"') +
+      ' title="' + escapeHtml(enabled ? T('pages.residency.drag') : off) + '">' +
+      (icon ? '<span class="rc-icon" aria-hidden="true">' + icon + '</span>' : '') +
+      '<b class="rc-value">' + escapeHtml(value) + '</b>' +
+      '</div>';
+  }).join('');
+  return '<div class="residency" data-residency>' +
+    '<div class="residency-pill skin-preview" data-skin-preview="' + escapeHtml(prefs.skin ?? 'frost') +
+      '" role="list" aria-label="' + escapeHtml(T('pages.residency.preview')) + '">' +
+      '<span class="residency-face" aria-hidden="true">' +
+        '<emojitot-ball cast="' + escapeHtml(meta?.castId ?? 'tot') + '" size="30" state="' +
+          escapeHtml(faceState || 'idle') + '"></emojitot-ball>' +
+      '</span>' + chips +
+    '</div>' +
+    '<span class="residency-mark" data-residency-mark hidden aria-hidden="true"></span>' +
+    '</div>' +
+    '<p class="hint">' + escapeHtml(T('pages.residency.hint')) + '</p>' +
+    '<p class="note">' + escapeHtml(T('pages.residency.note')) + '</p>';
+}
+
 function pagePages() {
   const pageTable = pagesTable();
   const statusTableRows = statusTable();
@@ -675,6 +752,10 @@ function pagePages() {
 
   const defaultOptions = pageItems.map((item) => [item.key, item.label]);
   return head(T('pages.title'), T('pages.lead')) +
+    group(T('pages.residency.title'), residencyCard(),
+      '<button type="button" class="btn" data-act="status-reset" aria-label="' +
+        escapeHtml(T('pages.residency.reset.aria')) + '">' +
+        escapeHtml(T('pages.residency.reset')) + '</button>') +
     group(T('pages.status.title'), '<div class="card">' +
       orderList('status', statusItems, (key) => prefs.statusItems.includes(key), 'toggle-status') + '</div>') +
     group(T('pages.pages.title'), '<div class="card">' + orderList('pages', pageItems, (key) => prefs.pages[key] !== false) + '</div>') +
@@ -1490,6 +1571,11 @@ content.addEventListener('click', async (event) => {
     await patch({ statusItems: setStatusItemEnabled(prefs, key, !enabled) });
     return;
   }
+  if (act === 'status-reset') {
+    /* 恢复默认是「回到新装那天」：电量、时间、温度，余额关掉，顺序也复原。 */
+    await patch({ statusItems: defaultStatusItems() });
+    return;
+  }
   if (act === 'device-show') {
     /* The switch says whether the row is on the island, so flipping it from
        shown asks main to hide. Main writes the group from current prefs and
@@ -1724,6 +1810,130 @@ content.addEventListener('dragend', async () => {
   dragging = null;
   if (!list) return;
   await saveOrder(list);
+});
+
+
+/* -------------------------------------------------------- residency drag */
+
+/*
+ * 条上的拖动用 pointer 事件，不用 HTML5 drag。
+ *
+ * native drag 在 Electron 里要先过一层 OLE 拖放：起手有一次明显的延迟，
+ * 拖动时给的坐标还是"放下"位置的近似值，而且整个拖动过程中指针样式由
+ * 系统接管——条上排一排 26px 的小格子，这种手感没法用。pointer 事件是
+ * 直接的：按下就拿到起点，4px 之后才算拖动（避免把点击当拖），落点用
+ * 指针与每个格子中线的位置算。
+ *
+ * 拖动期间不改 prefs，也不动 DOM：只画一条插入位标记。松手才写一次
+ * statusItems，于是「拖到哪」和「写什么」是同一个数字。
+ */
+let residencyDrag = null;
+
+function residencyChips() {
+  return [...content.querySelectorAll('.residency-chip')];
+}
+
+/** 指针落在别的格子之间的哪个位置：返回最终索引，被拖的那个不算。 */
+function residencyIndexAt(clientX, dragged) {
+  let index = 0;
+  for (const chip of residencyChips()) {
+    if (chip === dragged) continue;
+    const rect = chip.getBoundingClientRect();
+    if (clientX > rect.left + rect.width / 2) index += 1;
+  }
+  return index;
+}
+
+/** 插入位标记：一条 2px 的竖线，画在落点所在的缝里。 */
+function residencyMark(dragged, index) {
+  const wrap = content.querySelector('[data-residency]');
+  const mark = content.querySelector('[data-residency-mark]');
+  const pill = content.querySelector('.residency-pill');
+  if (!wrap || !mark || !pill) return;
+  const others = residencyChips().filter((chip) => chip !== dragged);
+  const base = wrap.getBoundingClientRect();
+  let x;
+  if (!others.length) {
+    x = pill.getBoundingClientRect().left - base.left + 18;
+  } else if (index <= 0) {
+    x = others[0].getBoundingClientRect().left - base.left - 5;
+  } else if (index >= others.length) {
+    x = others[others.length - 1].getBoundingClientRect().right - base.left + 5;
+  } else {
+    const left = others[index - 1].getBoundingClientRect().right;
+    const right = others[index].getBoundingClientRect().left;
+    x = (left + right) / 2 - base.left;
+  }
+  mark.style.left = Math.round(x) + 'px';
+  mark.hidden = false;
+}
+
+function clearResidencyMark() {
+  const mark = content.querySelector('[data-residency-mark]');
+  if (mark) mark.hidden = true;
+}
+
+content.addEventListener('pointerdown', (event) => {
+  const chip = event.target.closest('.residency-chip');
+  /* 关掉的组件不在 statusItems 里，也就没有它自己的位置可写：拖它只会
+     让下一帧跳回原位。让它按不动，比拖完弹回去诚实。 */
+  if (!chip || event.button !== 0 || chip.dataset.on !== 'true') return;
+  const from = enabledStatusKeys(prefs).indexOf(chip.dataset.residencyKey);
+  if (from < 0) return;
+  residencyDrag = { chip, key: chip.dataset.residencyKey, from, startX: event.clientX, index: from, active: false };
+  chip.setPointerCapture?.(event.pointerId);
+});
+
+content.addEventListener('pointermove', (event) => {
+  const drag = residencyDrag;
+  if (!drag) return;
+  if (!drag.active) {
+    if (Math.abs(event.clientX - drag.startX) < 4) return;
+    drag.active = true;
+    drag.chip.dataset.dragging = 'true';
+  }
+  event.preventDefault();
+  drag.index = residencyIndexAt(event.clientX, drag.chip);
+  residencyMark(drag.chip, drag.index);
+});
+
+content.addEventListener('pointerup', async () => {
+  const drag = residencyDrag;
+  if (!drag) return;
+  residencyDrag = null;
+  drag.chip.dataset.dragging = 'false';
+  clearResidencyMark();
+  if (!drag.active || drag.index === drag.from) return;
+  const next = moveStatusKey(prefs, drag.key, drag.index);
+  if (next.join() === enabledStatusKeys(prefs).join()) return;
+  /* 重绘会换掉整条 DOM：写完之后按 key 找回新格子，把焦点放回原处，
+     键盘用户不会因为一次换位掉出条外。 */
+  await patch({ statusItems: next });
+  content.querySelector('[data-residency-key="' + drag.key + '"]')?.focus();
+});
+
+content.addEventListener('pointercancel', () => {
+  if (!residencyDrag) return;
+  residencyDrag.chip.dataset.dragging = 'false';
+  residencyDrag = null;
+  clearResidencyMark();
+});
+
+/* 键盘路径：Tab 到某个格子上，Alt + ← / → 换位。上下箭头仍归下面那张
+   状态组件列表（它的 .order-item 有同样的移动按钮）。 */
+content.addEventListener('keydown', async (event) => {
+  const chip = event.target.closest('.residency-chip');
+  if (!chip || !event.altKey) return;
+  const delta = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
+  if (!delta) return;
+  event.preventDefault();
+  const key = chip.dataset.residencyKey;
+  const keys = enabledStatusKeys(prefs);
+  const index = keys.indexOf(key);
+  const to = index + delta;
+  if (index < 0 || to < 0 || to >= keys.length) return;
+  await patch({ statusItems: moveStatusKey(prefs, key, to) });
+  content.querySelector('[data-residency-key="' + key + '"]')?.focus();
 });
 
 /* ------------------------------------------------------------------ shell */

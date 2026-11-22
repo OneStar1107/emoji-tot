@@ -78,6 +78,18 @@
    */
   --fold-h: clamp(34px, calc(var(--pill-h) * 1.16), 64px);
   --fold-face: clamp(20px, calc(var(--fold-h) * 0.7), 40px);
+  /*
+   * The collapsed pill used to be a fixed 168px because it held a face and one
+   * expression. It now sizes to its status components, so it needs a ceiling:
+   * the widest it may get before the row is trimmed at a component boundary.
+   *
+   * Tied to the panel it unfolds into, not to the viewport. The island window
+   * is set from this very content (measure -> reportBox -> setBounds), so a vw
+   * cap would feed the capped box back into the unit it is capped with. Four
+   * components measure 207-300px across the uiScale range, so this is a ceiling
+   * for long values (a six-figure balance) and never the normal case.
+   */
+  --pill-max-w: min(520px, calc(var(--island-w) + 72px));
   --ui-font: system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --ui-size: 12.5px;
   --ui-weight: 400;
@@ -318,10 +330,22 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  width: var(--fold-w);
+  /*
+   * 8px between the face, the status row and the expression: one rhythm for
+   * the whole capsule. The row inside .pill-status uses a 7px gap of its own,
+   * because numbers read as one block and the face is a different thing.
+   */
+  gap: 8px;
+  /*
+   * Sized by its content, floored at the old fixed width and capped by
+   * --pill-max-w. min-width keeps the face-only capsule the size it has always
+   * been; max-width is what the row is trimmed against (see fitPillStatus).
+   */
+  width: max-content;
+  min-width: var(--fold-w);
+  max-width: var(--pill-max-w);
   height: var(--fold-h);
-  padding: 0;
+  padding: 0 12px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--r-full);
@@ -376,22 +400,44 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
 .pill-status {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
+  gap: 7px;
+  /*
+   * The row keeps its natural width (flex: none) so fitPillStatus can measure
+   * it, and the capsule's own overflow clips the tail for the frame between
+   * the render and that trim. Each component is flex: none for the same
+   * reason: a number is never squeezed into half its width, it is dropped
+   * whole and replaced by the "…".
+   */
+  min-width: 0;
+  flex: none;
+  overflow: hidden;
+  /*
+   * The island's own text size rather than a literal 12.5px: at the small end
+   * of the scale four components have to share the capsule, and the numbers
+   * should not be larger than every other value on the island.
+   */
+  font-size: var(--ui-size);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   color: var(--ink);
 }
 
+/* An empty row must not spend a gap on nothing. */
+.pill-status:empty { display: none; }
+
 .pill-status .stat {
   display: inline-flex;
   align-items: center;
+  flex: none;
   gap: 4px;
   color: var(--ink);
   opacity: 0.92;
 }
 
 .pill-status .stat.dim { color: var(--dim); }
+
+/* The marker that replaced the components which did not fit. */
+.pill-status .stat.more { color: var(--faint); opacity: 1; letter-spacing: 0; }
 .pill-status svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
 .pill-live {
@@ -416,15 +462,20 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
 body[data-playing="false"] .pill-live { display: none; }
 
 /*
- * C's collapsed state is the face and nothing else.
+ * The collapsed capsule carries the status row.
  *
- * Weather, battery, clock and the play indicator live in the expanded panel
- * (its header still carries battery + clock, its pages carry the rest), so the
- * folded pill gives that row back and keeps one very short expression next to
- * the face. Hiding is scoped to the collapsed state: the status row and its
- * renderer are untouched, they reappear whenever the island is open.
+ * 0.3.49 hid .pill-status and .pill-live here, on the idea that C's folded
+ * state is "the face and nothing else". The renderer kept producing battery,
+ * clock, temperature and balance the whole time; one rule in this file was the
+ * only thing keeping them off the capsule — the reason a folded island showed
+ * a face and an expression where the reference app shows the numbers.
+ *
+ * So the row is back. The row that stays hidden is the play indicator: four
+ * animated bars next to four numbers are a louder second copy of the same
+ * fact, and the numbers already say "something is playing" through the media
+ * row the panel opens. The expression steps aside by itself once the row has
+ * two or more components (see #pill[data-trailer="off"] below).
  */
-#island[data-open="false"] .pill .pill-status,
 #island[data-open="false"] .pill .pill-live { display: none; }
 
 .pill::after {
@@ -438,6 +489,13 @@ body[data-playing="false"] .pill-live { display: none; }
   line-height: 1.3;
   color: var(--dim);
 }
+/*
+ * Filler, not status: pillContentPlan() sets data-trailer="off" whenever the
+ * row carries two or more components, and this rule is what makes that
+ * decision visible. Kept as a data attribute rather than :has() because the
+ * count includes components whose data arrived a beat later.
+ */
+#pill[data-trailer="off"]::after { display: none; }
 
 /* Skins: one fill difference each, not three themes to maintain. */
 /* ---------------------------------------------------------------- skins */
@@ -3120,3 +3178,101 @@ body[data-theme="light"][data-skin="console"] .quota-meter::after {
 body[data-theme="light"][data-skin="console"] .health-bar::after {
   background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(242, 247, 252, 0.66) 9px 10px);
 }
+
+/* ------------------------------------------------------- seek rail & more */
+
+/*
+ * The rail is a 3px line inside a 12px hit box.
+ *
+ * The old bar was the whole target: three pixels tall — a reasonable thing to
+ * look at, an unreasonable thing to press. The wrapper owns the pointer and
+ * the focus ring; the bar keeps its own height, so every skin's colour rule
+ * and the live sweep are untouched.
+ */
+.music-seek {
+  display: flex;
+  align-items: center;
+  height: 12px;
+  flex: none;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 3px;
+}
+.music-seek { position: relative; }
+.music .music-seek .music-bar { margin: 0; width: 100%; }
+.music-seek[data-dragging="true"] { cursor: grabbing; }
+/* The handle only appears when the rail is in use: a permanent dot on a 3px
+   line is noise on every track, and the pointer is the moment it explains
+   itself. */
+.music-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--card-solid);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--fast) var(--ease);
+}
+.music-seek:hover .music-thumb,
+.music-seek:focus-visible .music-thumb,
+.music-seek[data-dragging="true"] .music-thumb { opacity: 1; }
+.music[data-music="lyrics"] .music-seek { height: 8px; }
+
+/*
+ * The "more" card: the volume panel's trick, three rows tall.
+ *
+ * 205px of page is already spent on the cover, the lyric window, the rail and
+ * the keys; anything in the flow would push the transport out of the box. It
+ * floats above the rail on a solid surface so a song title never reads
+ * through a menu, and it is the same width as the volume card because the
+ * narrowest island setting leaves 250px for content.
+ */
+.more-panel {
+  position: absolute;
+  right: 0;
+  bottom: 46px;
+  z-index: 3;
+  width: 236px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--card-solid);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.38);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: volume-in var(--fast) var(--ease);
+}
+.more-panel[hidden] { display: none; }
+/* Label over its row of options: 236px cannot hold "播放速率" and six
+   buttons side by side, and a wrapped sixth button read as a second group. */
+.more-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; }
+.more-label { font-size: 10px; line-height: 1.2; color: var(--dim); white-space: nowrap; }
+.more-opts { display: flex; flex-wrap: wrap; gap: 4px; }
+.more-opts button {
+  border: 0;
+  background: var(--surface-1);
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.more-opts button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 42%, var(--surface-1));
+  color: var(--ink);
+}
+.more-opts button:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.more-opts button:disabled { opacity: 0.4; cursor: default; }
+.more-note { margin: 0; font-size: 10px; line-height: 1.3; color: var(--dim); }
+.more-note[hidden] { display: none; }
+

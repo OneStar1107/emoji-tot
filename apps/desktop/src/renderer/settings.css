@@ -49,6 +49,8 @@
   --surface-2: rgba(255, 255, 255, 0.1);
   --surface-3: rgba(255, 255, 255, 0.16);
   --bad: #ff6b6b;
+  /* 电池图标的三档色和岛共用一套名字：低电量红、偏低橙、正常跟随文字色。 */
+  --warn: #ffb340;
   /* Filled field, so light mode does not need a second rule per control. */
   --field: #23232a;
 }
@@ -78,6 +80,7 @@ html[data-theme="light"] {
   --surface-2: rgba(0, 0, 0, 0.09);
   --surface-3: rgba(0, 0, 0, 0.14);
   --bad: #cf2f2f;
+  --warn: #965a00;
   --field: #ffffff;
 }
 
@@ -1460,3 +1463,116 @@ html[data-theme="light"] .dev-meter.warn i { background: #b97612; }
 .dev-star.on svg { fill: currentColor; }
 .dev-star:disabled { opacity: 0.32; cursor: not-allowed; }
 .dev-star:disabled:hover { background: transparent; color: var(--faint); }
+
+/* --------------------------------------------------- residency strip */
+/*
+ * 页面管理页顶上的「常驻排列」：一条按胶囊放大的预览条。
+ *
+ * 变量借 .skin-preview 的壳（同一个 class 已经把五套皮肤映射成岛自己的
+ * --card-solid / --accent / --ink / --ui-font），尺寸在这里重写。条给到
+ * 420px 才够把四五个格子摊开来拖；字号和图标只提一档，不按字面比例放大
+ * （168 → 420 是 2.5 倍，那会把 12.5px 变成 31px，出一条巨幅横条）。
+ */
+.group > .ch .ch-action { margin-left: auto; display: flex; }
+.group > .ch .ch-action .btn { height: 24px; padding: 0 10px; font-size: 11.5px; }
+
+/*
+ * 条上自己取一份强调色。
+ *
+ * 皮肤壳（.skin-preview[data-skin-preview=…]）里的 `--accent: var(--accent)`
+ * 是自引用，CSS 变量循环会让它变成无效值——chip 的焦点环、拖动底色、插入位
+ * 标记如果直接用 var(--accent)，整条 outline 声明会被丢掉（computed style 里
+ * outline-style: none，看起来就是"没有焦点环"）。所以这里先在外层取一份，
+ * 三套紫皮肤共用它，magazine / console 按自己的真实强调色覆盖。
+ */
+.gbody > .residency {
+  position: relative;
+  padding: 6px 16px 12px;
+  --rsv-accent: var(--accent-2, #b9adff);
+}
+.residency .residency-pill[data-skin-preview="magazine"] { --rsv-accent: #e9c46a; }
+.residency .residency-pill[data-skin-preview="console"] { --rsv-accent: #4fd1ff; }
+html[data-theme="light"] .residency .residency-pill[data-skin-preview="magazine"] { --rsv-accent: #8a6410; }
+html[data-theme="light"] .residency .residency-pill[data-skin-preview="console"] { --rsv-accent: #0b6fb8; }
+
+.residency .residency-pill {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: min(100%, 420px);
+  height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--card-solid);
+  box-shadow: var(--hi);
+  overflow: hidden;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.residency .residency-face { display: grid; place-items: center; flex: none; width: 30px; height: 30px; margin-right: 6px; }
+.residency .residency-face emojitot-ball { width: 30px; height: 30px; }
+
+.residency .residency-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--r-full);
+  color: var(--ink);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.residency .residency-chip:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+/* 被拿起来的那一格：底色、阴影、轻微下沉，和插入位标记一起说明"现在拖着它"。 */
+.residency .residency-chip[data-dragging="true"] {
+  cursor: grabbing;
+  background: color-mix(in srgb, var(--rsv-accent) 26%, transparent);
+  color: var(--ink);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.36);
+  opacity: 0.94;
+}
+/* 关掉的组件：虚线框 + 降透明度。位置在，只是现在不画在胶囊里。 */
+.residency .residency-chip[data-on="false"] {
+  color: var(--dim);
+  cursor: default;
+  background: transparent;
+  outline: 1px dashed color-mix(in srgb, var(--ink) 26%, transparent);
+  outline-offset: 1px;
+}
+.residency .residency-chip[data-on="false"]:hover { background: transparent; }
+/* 焦点环最后写：关掉的格子也有焦点环，键盘用户要知道自己停在哪一格。 */
+.residency .residency-chip:focus-visible { outline: 2px solid var(--rsv-accent); outline-offset: 2px; }
+
+.residency .rc-value { font: inherit; font-weight: 500; letter-spacing: 0.01em; }
+.residency .rc-icon { display: inline-flex; }
+.residency .rc-icon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 插入位标记：拖动时唯一会动的东西。松手前不改 DOM、不写 prefs。 */
+.residency .residency-mark {
+  position: absolute;
+  top: 16px;
+  width: 2px;
+  height: 32px;
+  border-radius: 1px;
+  background: var(--rsv-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rsv-accent) 22%, transparent);
+  pointer-events: none;
+}
+

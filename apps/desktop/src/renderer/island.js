@@ -10,7 +10,27 @@ import {
   STATUS_MANIFEST as STATUS_ITEMS,
   visibleDevices,
 } from '../shared/schema.js';
+/*
+ * 读数怎么长只写一份：设置页的「常驻排列」预览条读的是同一组函数。
+ * clockText 起别名：这个文件下面还有一个日历用的 clockText（把 ISO 时间切成
+ * HH:mm 给日历行），两个同名 const 会让整个模块在解析期就挂掉。
+ */
+import {
+  batteryGlyph,
+  batteryText,
+  clockText as clockReadout,
+  quotaText,
+  temperatureText,
+} from '../shared/status-view.js';
 import { islandHeaderState, pagingVisibility } from './island-header.mjs';
+import { fitStatusRow, pillContentPlan } from './island-pill.mjs';
+import {
+  advancedSections,
+  canSeek,
+  seekFromKey,
+  seekFromRatio,
+  seekPercent,
+} from './media-controls.mjs';
 
 const api = window.islandAPI;
 
@@ -55,6 +75,7 @@ const ICON = {
   pause: '<rect x="7" y="5" width="3.4" height="14" rx="1.2"/><rect x="13.6" y="5" width="3.4" height="14" rx="1.2"/>',
   prev: '<path d="M6 5v14M18 5.5v13a1 1 0 0 1-1.5.86l-8-6.5a1 1 0 0 1 0-1.72l8-6.5A1 1 0 0 1 18 5.5z"/>',
   next: '<path d="M18 5v14M6 5.5v13a1 1 0 0 0 1.5.86l8-6.5a1 1 0 0 0 0-1.72l-8-6.5A1 1 0 0 0 6 5.5z"/>',
+  more: '<circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/>',
 };
 
 const WEATHER_ICON = {
@@ -68,13 +89,8 @@ const WEATHER_ICON = {
   storm: '<path d="M7 15h10a4 4 0 0 0 0-8 5 5 0 0 0-9.6 1.3A3.5 3.5 0 0 0 7 15z"/><path d="m12 15-2.5 4h3L10 23"/>',
 };
 
-function batterySvg(level, charging) {
-  const width = Math.max(2, Math.round(13 * Math.max(0, Math.min(1, level / 100))));
-  const tone = level <= 12 ? 'var(--bad)' : level <= 30 ? 'var(--warn)' : 'currentColor';
-  return svg(
-    `<rect x="1.2" y="7" width="17" height="10" rx="2.6"/><rect x="19" y="10" width="2" height="4" rx="1"/><rect x="3" y="8.8" width="${width}" height="6.4" rx="1.4" fill="${tone}" stroke="none"/>${charging ? '<path d="m11 8-2.6 4.2h2.4L9.6 16l3.4-4.6H10.8z" fill="var(--good)" stroke="none"/>' : ''}`,
-  );
-}
+/* 电池图标在 shared/status-view.js：设置页预览条画的是同一个。 */
+const batterySvg = (level, charging) => batteryGlyph(level, charging);
 
 /* --------------------------------------------------------------- app state */
 
@@ -162,13 +178,7 @@ const enabledPages = () => {
 
 let timeFormat24 = true;
 
-const hhmm = () => {
-  const now = new Date();
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  if (timeFormat24) return `${String(now.getHours()).padStart(2, '0')}:${minutes}`;
-  const hour = now.getHours() % 12 || 12;
-  return `${hour}:${minutes} ${now.getHours() < 12 ? 'AM' : 'PM'}`;
-};
+const hhmm = () => clockReadout(new Date(), timeFormat24);
 
 const escapeHtml = (value) =>
   String(value ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -365,45 +375,107 @@ function renderHeader() {
   }
 }
 
+/**
+ * Trim the status row at a component boundary, never mid-number.
+ *
+ * The capsule is capped by --pill-max-w; past that cap the row is what gives
+ * way. Measuring is the only way to know the cut: the values are localised,
+ * the balance is user data, and the two fonts in play have different digit
+ * widths. One synchronous read, one trim, and the row the window measures is
+ * the row that gets painted — keeping whole components is what stops the last
+ * column from reading "¥20." instead of "¥20.8".
+ *
+ * A hidden pill (the expanded state) measures 0 and is skipped: the row is
+ * rendered but not visible, so there is nothing to trim yet.
+ */
+function fitPillStatus() {
+  pillEl.dataset.truncated = 'false';
+  for (const el of pillStatus.querySelectorAll('.stat.more')) el.remove();
+  const stats = [...pillStatus.querySelectorAll('.stat')];
+  if (stats.length < 2) return;
+  /*
+   * How much of the row the cap took.
+   *
+   * The row is flex: none, so its own width is the width of every component;
+   * the capsule around it is capped, and the difference is what has to go. An
+   * earlier version read the row's clientWidth as "the room available", which
+   * is the room it is already using — the row then looked one rounding error
+   * too wide and trimmed itself on every render, cap or no cap.
+   */
+  const pillStyle = getComputedStyle(pillEl);
+  const cap = parseFloat(pillStyle.maxWidth);
+  if (!Number.isFinite(cap)) return;
+  const face = pillEl.querySelector('.pill-face');
+  if (!face) return;
+  const statusWidth = pillStatus.getBoundingClientRect().width;
+  if (!statusWidth) return;
+  const padding = parseFloat(pillStyle.paddingLeft) + parseFloat(pillStyle.paddingRight);
+  const gap = parseFloat(pillStyle.columnGap) || 8;
+  const overflow = padding + face.getBoundingClientRect().width + gap + statusWidth - cap;
+  if (overflow <= 0.5) return;
+  const rowGap = parseFloat(getComputedStyle(pillStatus).columnGap) || 7;
+  const widths = stats.map((el) => Math.ceil(el.getBoundingClientRect().width));
+  const fit = fitStatusRow(widths, rowGap, statusWidth - overflow);
+  if (!fit.truncated) return;
+  for (const el of stats.slice(fit.keep)) el.remove();
+  const more = document.createElement('span');
+  more.className = 'stat more';
+  more.setAttribute('aria-hidden', 'true');
+  more.textContent = '…';
+  pillStatus.appendChild(more);
+  pillEl.dataset.truncated = 'true';
+}
+
 function renderPillStatus() {
   const playing = Boolean(media.active && media.playing);
   document.body.dataset.playing = String(playing);
   /*
-   * While a song plays the pill shows the current lyric instead of battery,
-   * clock and temperature: three numbers plus a lyric sentence does not fit in
-   * a pill, and the lyric is the only one of them that changes every few
-   * seconds. Pausing brings the status row back.
+   * The row the collapsed pill carries: the user's order, and only the
+   * components that have a value. A component with no data is not drawn at
+   * all — a placeholder battery looks like a reading.
    */
-  const lyricMode = playing && prefs.music?.islandLyrics !== false;
-  if (lyricMode) {
+
+  const items = prefs.statusItems ?? ['battery', 'clock', 'weather'];
+  const parts = [];
+  for (const key of items) {
+    if (key === 'battery' && battery) {
+      parts.push(`<span class="stat" title="电量 ${battery.level}%">${batterySvg(battery.level, battery.charging)}<b>${batteryText(battery.level)}</b></span>`);
+    } else if (key === 'clock') {
+      parts.push(`<span class="stat" data-clock>${hhmm()}</span>`);
+    } else if (key === 'weather' && weather) {
+      parts.push(`<span class="stat dim">${temperatureText(weather.current?.temp, prefs.weather?.unit)}</span>`);
+    } else if (key === 'quota') {
+      /*
+       * The pill used to offer a balance toggle that drew nothing, because
+       * this loop only knew battery, clock and weather. A status item with no
+       * renderer is worse than no status item: it looks switched on.
+       */
+      const balance = quotaText(quotaState?.last);
+      if (balance) parts.push(`<span class="stat dim" title="AI 余额">${escapeHtml(balance)}</span>`);
+    }
+  }
+  /*
+   * Components first, and that is true while a song plays as well.
+   *
+   * The lyric used to replace this row whenever music.islandLyrics was on, so
+   * a playing capsule could never show battery, clock, temperature and balance
+   * at once. The lyric still has its place: the expanded music page, and the
+   * collapsed pill only when every component is switched off (pillContentPlan
+   * keeps the settings switch meaningful without ever covering the row).
+   */
+  const plan = pillContentPlan({
+    statusCount: parts.length,
+    playing,
+    islandLyrics: prefs.music?.islandLyrics,
+  });
+  if (plan.mode === 'status') pillStatus.innerHTML = parts.join('');
+  else if (plan.mode === 'lyric') {
     const line = currentLyricLine() || media.title || '';
     pillStatus.innerHTML = `<span class="stat lyric-pill">${escapeHtml(clip(line, 24))}</span>`;
-  } else {
-    const items = prefs.statusItems ?? ['battery', 'clock', 'weather'];
-    const parts = [];
-    for (const key of items) {
-      if (key === 'battery' && battery) {
-        parts.push(`<span class="stat" title="电量 ${battery.level}%">${batterySvg(battery.level, battery.charging)}<b>${battery.level}%</b></span>`);
-      } else if (key === 'clock') {
-        parts.push(`<span class="stat" data-clock>${hhmm()}</span>`);
-      } else if (key === 'weather' && weather) {
-        const celsius = Number(weather.current?.temp) || 0;
-        const temp = prefs.weather?.unit === 'f' ? Math.round((celsius * 9) / 5 + 32) : Math.round(celsius);
-        parts.push(`<span class="stat dim">${temp}°</span>`);
-      } else if (key === 'quota') {
-        /*
-         * The pill used to offer a balance toggle that drew nothing, because
-         * this loop only knew battery, clock and weather. A status item with no
-         * renderer is worse than no status item: it looks switched on.
-         */
-        const last = quotaState?.last;
-        if (last && !last.error && last.total !== undefined) {
-          parts.push(`<span class="stat dim" title="AI 余额">¥${escapeHtml(String(last.total))}</span>`);
-        }
-      }
-    }
-    pillStatus.innerHTML = parts.join('');
-  }
+  } else pillStatus.innerHTML = '';
+  pillEl.dataset.trailer = plan.trailer ? 'on' : 'off';
+  pillEl.dataset.status = String(plan.statusCount);
+  fitPillStatus();
   topClock.textContent = hhmm();
   if (battery) {
     topBattery.innerHTML = batterySvg(battery.level, battery.charging);
@@ -513,6 +585,13 @@ function musicPage() {
   const live = isLiveMedia();
   const browser = isBrowserMedia();
   /*
+   * The rail is draggable only when the frame carries a length. A broadcast
+   * reports none, and a paused player that reports none is the same shape:
+   * there is no position to seek to, so the rail stays the live one.
+   */
+  const seekable = canSeek(media);
+  const sections = advancedSections(media);
+  /*
    * A broadcast with no artwork still gets a cover-shaped block in the skin
    * colour: an empty rectangle reads as "the picture failed", a tinted one
    * reads as "this stream has no cover".
@@ -553,14 +632,17 @@ function musicPage() {
     ${prefs.music?.lyrics === false
       ? ''
       : `<div class="lyric-box" data-lyric-box${canLyrics ? ` role="button" tabindex="0" data-lyric-toggle="1" aria-pressed="${lyricMode}" aria-label="${lyricMode ? '收起歌词' : '展开歌词'}"` : ''}>${lyricSliceHtml(lyricAt(media.position), lyricMode ? 5 : 3)}</div>`}
-    ${live
-      ? '<div class="music-bar live"><i></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-live title="直播时长">' + liveClock(liveElapsed()) + '</span></div>'
-      : '<div class="music-bar"><i data-progress style="width:' + pct.toFixed(1) + '%"></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-dur>' + clock(media.duration) + '</span></div>'}
+    ${seekable
+      ? `<div class="music-seek" data-seek role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="${Math.round(media.duration)}" aria-valuenow="${Math.round(media.position)}" aria-valuetext="${clock(media.position)} / ${clock(media.duration)}"><div class="music-bar"><i data-progress style="width:${pct.toFixed(1)}%"></i></div><span class="music-thumb" data-thumb style="left:${pct.toFixed(1)}%"></span></div><div class="music-times"><span data-pos>${clock(media.position)}</span><span data-dur>${clock(media.duration)}</span></div>`
+      : '<div class="music-bar live"><i></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-live title="直播时长">' + liveClock(liveElapsed()) + '</span></div>'}
     <div class="music-controls">
       <button type="button" data-media="prev" aria-label="上一首">${svg(ICON.prev)}</button>
       <button type="button" class="main" data-media="toggle" aria-label="${media.playing ? '暂停' : '播放'}">${svg(media.playing ? ICON.pause : ICON.play)}</button>
       <button type="button" data-media="next" aria-label="下一首">${svg(ICON.next)}</button>
       <button type="button" data-action="settings:music" aria-label="歌词设置" title="歌词设置">${svg('<path d="M4 7h16M4 12h9M4 17h13"/>')}</button>
+      ${sections.length
+        ? `<button type="button" data-more="toggle" aria-label="更多播放控制" aria-expanded="false" aria-controls="more-panel" title="播放速率、重复、随机">${svg(ICON.more)}</button>`
+        : ''}
       <button type="button" data-volume="toggle" aria-label="系统音量" aria-expanded="false" aria-controls="volume-panel" title="系统音量">${svg(ICON.volume)}</button>
     </div>
     <div class="volume-panel" id="volume-panel" data-volume-panel data-state="loading" hidden>
@@ -575,7 +657,40 @@ function musicPage() {
       </div>
       <p class="volume-note" data-volume-note hidden>系统音量不可用</p>
     </div>
+    ${sections.length ? morePanelHtml(sections) : ''}
   </div>`;
+}
+
+/**
+ * The three player switches, in a floating card like the volume panel.
+ *
+ * Only the rows this session claims to implement are drawn — media-controls
+ * decides, from SMTC's own `Controls` flags — so a browser tab, which accepts
+ * the call and then ignores it, never gets a speed menu. A player that claims
+ * a row and refuses the call is recorded in `moreDenied` and the row is
+ * disabled, so a key never sits there pretending the last press worked.
+ */
+let moreDenied = {};
+
+function moreRowsHtml(sections) {
+  const rows = sections
+    .map((section) => {
+      const refused = moreDenied[section.key] === true;
+      const options = section.options
+        .map((option) => {
+          const on = section.value !== null && Math.abs(Number(section.value) - Number(option.value)) < 0.001;
+          return `<button type="button" data-more-pick="${section.key}" data-more-value="${option.value}" aria-pressed="${on}"${refused ? ' disabled' : ''}>${option.label}</button>`;
+        })
+        .join('');
+      return `<div class="more-row" data-more-row="${section.key}"><span class="more-label">${section.label}</span><div class="more-opts">${options}</div></div>`;
+    })
+    .join('');
+  const refusedAny = sections.some((section) => moreDenied[section.key] === true);
+  return `${rows}<p class="more-note" data-more-note${refusedAny ? '' : ' hidden'}>播放器不接受这一项</p>`;
+}
+
+function morePanelHtml(sections) {
+  return `<div class="more-panel" id="more-panel" data-more-panel hidden>${moreRowsHtml(sections)}</div>`;
 }
 
 /*
@@ -669,6 +784,190 @@ function closeVolumePanel() {
   paintVolume();
 }
 
+/* ------------------------------------------------- the "more" panel & rail */
+
+/*
+ * Two floating cards cannot share the same 100px: opening one closes the
+ * other, and each closes on a click that lands outside it (the click handler
+ * below owns that, because the page re-renders on a one-second frame and a
+ * document listener would outlive it).
+ */
+let morePanelOpen = false;
+
+function paintMorePanel() {
+  const panel = pagesEl.querySelector('[data-more-panel]');
+  const toggle = pagesEl.querySelector('[data-more="toggle"]');
+  if (toggle) toggle.setAttribute('aria-expanded', String(morePanelOpen));
+  if (panel) panel.hidden = !morePanelOpen;
+}
+
+function toggleMorePanel() {
+  morePanelOpen = !morePanelOpen;
+  if (morePanelOpen) closeVolumePanel();
+  paintMorePanel();
+}
+
+function closeMorePanel() {
+  if (!morePanelOpen) return;
+  morePanelOpen = false;
+  paintMorePanel();
+}
+
+/**
+ * Redraw just the rows after a frame changed speed/repeat/shuffle.
+ *
+ * A full renderPage would close the card the user has open. Returns false
+ * when the card has to change shape (a row appearing or disappearing), which
+ * is the one case that does need the page rebuilt.
+ */
+function refreshMorePanel() {
+  const panel = pagesEl.querySelector('[data-more-panel]');
+  if (!panel) return false;
+  const sections = advancedSections(media);
+  if (!sections.length) return false;
+  panel.innerHTML = moreRowsHtml(sections);
+  paintMorePanel();
+  return true;
+}
+
+/**
+ * One tap on a panel option.
+ *
+ * The reply is the player's own Try* answer. A refusal marks the row and
+ * repaints it disabled; an acceptance is not shown as a new value, because a
+ * player may say yes and leave the state alone — the next frame is the only
+ * thing allowed to move the selection.
+ */
+function pickMore(kind, value) {
+  if (!Number.isFinite(value)) return;
+  api
+    .control(kind, value)
+    .then((state) => {
+      if (!state || !state.control || state.control.ok !== false) return;
+      moreDenied = { ...moreDenied, [kind]: true };
+      renderPage();
+      morePanelOpen = true;
+      paintMorePanel();
+    })
+    .catch(() => {});
+}
+
+/*
+ * The rail: press to jump, hold to scrub.
+ *
+ * The preview is local — the fill and the left clock follow the pointer — and
+ * only the release commits. Frames are ignored while the pointer is down and
+ * for the moment after the release, otherwise the one-second push would drag
+ * the handle back under the user's finger.
+ */
+let seekDrag = null;
+let seekHoldUntil = 0;
+
+function paintSeekPreview(seconds) {
+  const rail = pagesEl.querySelector('[data-seek]');
+  if (!rail) return;
+  const percent = seekPercent(seconds, media.duration);
+  const fill = rail.querySelector('[data-progress]');
+  if (fill) {
+    /* No glide while dragging: the preview has to follow the pointer, not
+       chase it at one second per tick. */
+    fill.style.transition = seekDrag ? 'none' : '';
+    fill.style.width = percent.toFixed(1) + '%';
+  }
+  const thumb = rail.querySelector('[data-thumb]');
+  if (thumb) thumb.style.left = percent.toFixed(1) + '%';
+  const position = pagesEl.querySelector('[data-pos]');
+  if (position) position.textContent = clock(seconds);
+  rail.setAttribute('aria-valuenow', String(Math.round(seconds)));
+  rail.setAttribute('aria-valuetext', clock(seconds) + ' / ' + clock(media.duration));
+}
+
+function moveSeek(event) {
+  if (!seekDrag) return;
+  const rail = pagesEl.querySelector('[data-seek]');
+  if (!rail) return;
+  const rect = rail.getBoundingClientRect();
+  if (!rect.width) return;
+  seekDrag.seconds = seekFromRatio((event.clientX - rect.left) / rect.width, media.duration);
+  paintSeekPreview(seekDrag.seconds);
+}
+
+function stopSeek() {
+  if (!seekDrag) return null;
+  const seconds = seekDrag.seconds;
+  seekDrag = null;
+  window.removeEventListener('pointermove', moveSeek);
+  window.removeEventListener('pointerup', endSeek);
+  window.removeEventListener('pointercancel', endSeek);
+  const rail = pagesEl.querySelector('[data-seek]');
+  if (rail) rail.removeAttribute('data-dragging');
+  return seconds;
+}
+
+/** Drop a drag without committing — a page rebuild must not seek. */
+function cancelSeek() {
+  seekDrag = null;
+  window.removeEventListener('pointermove', moveSeek);
+  window.removeEventListener('pointerup', endSeek);
+  window.removeEventListener('pointercancel', endSeek);
+}
+
+function endSeek(event) {
+  const seconds = stopSeek();
+  if (seconds === null) return;
+  if (event && event.type === 'pointercancel') return;
+  /* Keep the committed position on screen until the player's next frame
+     lands. Without this the rail snapped back for up to a second and read as
+     "the seek did not take". */
+  seekHoldUntil = Date.now() + 900;
+  api
+    .control('seek', seconds)
+    .then((state) => {
+      if (state && state.control && state.control.ok === false) {
+        seekHoldUntil = 0;
+        renderPage();
+      }
+    })
+    .catch(() => {
+      seekHoldUntil = 0;
+    });
+}
+
+function beginSeek(event) {
+  if (event.button !== undefined && event.button !== 0) return false;
+  const rail = event.target.closest('[data-seek]');
+  if (!rail) return false;
+  const rect = rail.getBoundingClientRect();
+  if (!rect.width) return false;
+  seekDrag = { seconds: seekFromRatio((event.clientX - rect.left) / rect.width, media.duration) };
+  rail.dataset.dragging = 'true';
+  paintSeekPreview(seekDrag.seconds);
+  window.addEventListener('pointermove', moveSeek);
+  window.addEventListener('pointerup', endSeek);
+  window.addEventListener('pointercancel', endSeek);
+  /* Not preventDefault: that would keep the rail from taking focus, and the
+     arrows above are the reason it is focusable at all. Selection is stopped
+     by user-select on .music-seek instead. */
+  event.stopPropagation();
+  return true;
+}
+
+/** Left/right move five seconds, Home/End jump to the ends; everything else passes. */
+function seekByKey(event) {
+  const rail = event.target.closest ? event.target.closest('[data-seek]') : null;
+  if (!rail) return false;
+  const base = Number(rail.dataset.seekFrom ?? media.position) || 0;
+  const target = seekFromKey(base, media.duration, event.key);
+  if (target === null) return false;
+  rail.dataset.seekFrom = String(target);
+  seekHoldUntil = Date.now() + 900;
+  paintSeekPreview(target);
+  api.control('seek', target).catch(() => {});
+  event.preventDefault();
+  event.stopPropagation();
+  return true;
+}
+
 function setVolume(level) {
   const value = Math.max(0, Math.min(100, Math.round(Number(level) || 0)));
   volumeState = { ...volumeState, volume: value };
@@ -727,10 +1026,15 @@ function updateMusicLive() {
      live page — update it before the progress branch gives up. */
   const live = pagesEl.querySelector('[data-live]');
   if (live) live.textContent = liveClock(liveElapsed());
+  /* The rail belongs to whoever is holding it, and to the value they just
+     committed until the player's next frame confirms it. */
+  if (seekDrag || Date.now() < seekHoldUntil) return;
   const bar = pagesEl.querySelector('[data-progress]');
   if (!bar) return;
   const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
   bar.style.width = pct.toFixed(1) + '%';
+  const thumb = pagesEl.querySelector('[data-thumb]');
+  if (thumb) thumb.style.left = pct.toFixed(1) + '%';
   const position = pagesEl.querySelector('[data-pos]');
   if (position) position.textContent = clock(media.position);
   const index = lyricAt(media.position);
@@ -2290,6 +2594,8 @@ function renderPage(animate = false) {
   const list = enabledPages();
   // A new page is a new DOM: the old panel (and its open state) is gone.
   volumePanelOpen = false;
+  morePanelOpen = false;
+  cancelSeek();
   if (!list.length) {
     document.body.dataset.pages = '0';
     /* Write the inner span, never the host: textContent on #page-title would
@@ -2885,6 +3191,15 @@ panelEl.addEventListener('pointerdown', (event) => {
   }
 });
 
+/*
+ * The rail is scrubbed from the press, not the click: a drag starts on
+ * pointerdown, and by the time a click would fire the pointer has already
+ * moved off the 3px line.
+ */
+pagesEl.addEventListener('pointerdown', (event) => {
+  beginSeek(event);
+});
+
 panelEl.addEventListener('click', (event) => {
   /*
    * The city menu owns the first three clicks it can receive. The scrim is a
@@ -2917,6 +3232,20 @@ panelEl.addEventListener('click', (event) => {
     return;
   }
   if (volumePanelOpen && !event.target.closest('[data-volume-panel]')) closeVolumePanel();
+
+  const moreControl = event.target.closest('[data-more]');
+  if (moreControl) {
+    if (moreControl.dataset.more === 'toggle') toggleMorePanel();
+    event.stopPropagation();
+    return;
+  }
+  if (morePanelOpen && !event.target.closest('[data-more-panel]')) closeMorePanel();
+  const morePick = event.target.closest('[data-more-pick]');
+  if (morePick) {
+    pickMore(morePick.dataset.morePick, Number(morePick.dataset.moreValue));
+    event.stopPropagation();
+    return;
+  }
 
   /* The lyric window is the switch between the card and lyrics mode. */
   const lyricToggle = event.target.closest('[data-lyric-toggle]');
@@ -3231,6 +3560,13 @@ panelEl.addEventListener('keydown', (event) => {
     event.stopPropagation();
     return;
   }
+  if (event.key === 'Escape' && morePanelOpen) {
+    closeMorePanel();
+    event.stopPropagation();
+    return;
+  }
+  /* The rail is focusable, so it answers the keyboard as well. */
+  if (seekByKey(event)) return;
 
   /* The lyric window is focusable, so it answers the keyboard as well. */
   if ((event.key === 'Enter' || event.key === ' ') && event.target.closest('[data-lyric-toggle]')) {
@@ -3547,6 +3883,20 @@ api.onMedia((value) => {
   if (!value) return;
   const trackChanged = value.title !== media.title || value.active !== media.active;
   const playingChanged = value.playing !== media.playing;
+  /* A refusal belongs to the player that refused: a new source may accept. */
+  if (value.source !== media.source) moreDenied = {};
+  /*
+   * Speed, repeat and shuffle only change the open card, so they repaint its
+   * rows instead of the whole page — a rebuild would close the card the user
+   * is looking at.
+   */
+  const advancedChanged =
+    value.rate !== media.rate ||
+    value.autoRepeatMode !== media.autoRepeatMode ||
+    value.shuffleActive !== media.shuffleActive ||
+    value.controls?.rate !== media.controls?.rate ||
+    value.controls?.repeat !== media.controls?.repeat ||
+    value.controls?.shuffle !== media.controls?.shuffle;
   /* A stream that gains or loses a duration is a different row: a live clock
      on one side, a total length on the other. */
   const liveChanged = !value.duration !== !media.duration;
@@ -3569,6 +3919,8 @@ api.onMedia((value) => {
     if (trackChanged || playingChanged || liveChanged || artChanged) {
       lastLyricIndex = -2;
       renderPage();
+    } else if (advancedChanged) {
+      if (!refreshMorePanel()) renderPage();
     } else {
       updateMusicLive();
     }

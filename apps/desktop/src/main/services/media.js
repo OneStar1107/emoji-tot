@@ -15,7 +15,7 @@ const { scriptFile } = require('../paths');
 const bilibili = require('./bilibili');
 
 const SCRIPT = scriptFile('media.ps1');
-const EMPTY = Object.freeze({ active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '', output: '', error: false, liveSince: 0 });
+const EMPTY = Object.freeze({ active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '', output: '', controls: null, error: false, liveSince: 0 });
 
 let state = { ...EMPTY };
 let proc = null;
@@ -130,7 +130,18 @@ function handleLine(line) {
     // A device switch is the whole reason the badge exists; push it at once.
     next.output !== state.output ||
     // The progress bar needs a frame per second; everything else is change-only.
-    Math.floor(next.position) !== Math.floor(state.position);
+    Math.floor(next.position) !== Math.floor(state.position) ||
+    /*
+     * Speed, repeat and shuffle drive the "more" panel, which is redrawn only
+     * on a structural change. Comparing the three flags of `controls` rather
+     * than the object keeps a per-second frame from repainting the page.
+     */
+    next.rate !== state.rate ||
+    next.autoRepeatMode !== state.autoRepeatMode ||
+    next.shuffleActive !== state.shuffleActive ||
+    next.controls?.rate !== state.controls?.rate ||
+    next.controls?.repeat !== state.controls?.repeat ||
+    next.controls?.shuffle !== state.controls?.shuffle;
   state = next;
   /*
    * Push on change, and at least every few seconds regardless.
@@ -206,13 +217,99 @@ function stop() {
   }
 }
 
-/** One control action: toggle | next | prev | seek. */
+/* One control action: toggle | next | prev | seek | rate | repeat | shuffle. */
+const COMMAND_KINDS = ['toggle', 'next', 'prev', 'seek', 'rate', 'repeat', 'shuffle'];
+/** SMTC rejects a rate outside this; a wrong value must not reach the player. */
+const RATE_RANGE = [0.25, 4];
+/** A seek target past a day is not a position, it is a bug. */
+const SEEK_MAX = 86400;
+/** How long one control child may take before the caller is told it failed. */
+const COMMAND_TIMEOUT_MS = 4000;
+
+/**
+ * The one whitelist, and the one place an argument is turned into a number.
+ *
+ * The renderer is untrusted and can send any string; this returns null for
+ * anything the script has no branch for, so an unknown kind is refused here
+ * instead of being handed to PowerShell as an argument. It is exported so the
+ * refusal is testable without spawning a process.
+ */
+function normalizeCommand(kind, arg = 0) {
+  if (typeof kind !== 'string' || !COMMAND_KINDS.includes(kind)) return null;
+  const value = Number(arg);
+  if (!Number.isFinite(value)) return null;
+  if (kind === 'seek') {
+    return { kind, arg: Math.round(Math.min(SEEK_MAX, Math.max(0, value)) * 10) / 10 };
+  }
+  if (kind === 'rate') {
+    if (value < RATE_RANGE[0] || value > RATE_RANGE[1]) return null;
+    return { kind, arg: Math.round(value * 100) / 100 };
+  }
+  if (kind === 'repeat') {
+    if (!Number.isInteger(value) || value < 0 || value > 2) return null;
+    return { kind, arg: value };
+  }
+  if (kind === 'shuffle') {
+    if (value !== 0 && value !== 1) return null;
+    return { kind, arg: value };
+  }
+  return { kind, arg: 0 };
+}
+
+/**
+ * Run one control action; resolves with what the player answered.
+ *
+ * The script prints one `{"kind":..,"ok":bool}` line and the boolean is the
+ * player's own Try* answer. It is a claim, not proof — Edge accepts a rate
+ * change and keeps playing at 1x — so the page reads values from the watch
+ * frames and uses this only to say "refused" instead of pretending it worked.
+ */
 function command(kind, arg = 0) {
-  if (!['toggle', 'next', 'prev', 'seek'].includes(kind)) return;
-  const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, kind];
-  if (kind === 'seek') args.push(String(arg));
-  const child = platform.spawnPowerShell(args, { stdio: 'ignore' });
-  child?.on('error', () => {});
+  const request = normalizeCommand(kind, arg);
+  if (!request) return Promise.resolve({ kind: String(kind), ok: false, note: 'unknown' });
+  const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, request.kind];
+  /* toggle/next/prev take no value; everything else must pass its own, zero
+     included — "shuffle 0" and "shuffle with no argument" are the same call
+     only by accident of the script's default, and the page should not rely
+     on that. */
+  if (!['toggle', 'next', 'prev'].includes(request.kind)) args.push(String(request.arg));
+  let child;
+  try {
+    child = platform.spawnPowerShell(args, { stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch {
+    child = null;
+  }
+  if (!child) return Promise.resolve({ kind: request.kind, ok: false, note: 'spawn' });
+  return new Promise((resolve) => {
+    let settled = false;
+    let buffered = '';
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        child.kill();
+      } catch {
+        // already gone
+      }
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish({ kind: request.kind, ok: false, note: 'timeout' }), COMMAND_TIMEOUT_MS);
+    child.stdout?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk) => {
+      buffered += chunk;
+      const line = buffered.split(/\r?\n/).find((part) => part.trim().startsWith('{'));
+      if (!line) return;
+      try {
+        const parsed = JSON.parse(line);
+        finish({ kind: request.kind, ok: parsed.ok === true, note: String(parsed.note || '') });
+      } catch {
+        // Half a line; the rest is still on its way.
+      }
+    });
+    child.on('error', () => finish({ kind: request.kind, ok: false, note: 'spawn' }));
+    child.on('close', () => finish({ kind: request.kind, ok: false, note: 'exit' }));
+  });
 }
 
 /** Called after a control action so the UI does not wait a full second. */
@@ -233,4 +330,4 @@ function current() {
   return state;
 }
 
-module.exports = { start, stop, command, onChange, current, refreshSoon };
+module.exports = { start, stop, command, normalizeCommand, onChange, current, refreshSoon };

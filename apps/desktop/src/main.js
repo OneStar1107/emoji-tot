@@ -1292,10 +1292,28 @@ const checkCalendar = guard.actionPayload([
   'add', 'remove', 'import', 'subscribe', 'unsubscribe', 'refresh-subscriptions',
 ]);
 const checkQuota = guard.actionPayload(['add', 'remove', 'select', 'refresh']);
+/*
+ * Seven actions now, and the argument means something different for each:
+ * a rate is a factor, repeat is 0/1/2 and shuffle is a flag. The ranges live
+ * here instead of in the page because this is the boundary the renderer
+ * cannot cross; media.normalizeCommand applies the same rules a second time.
+ */
+const MEDIA_ACTIONS = {
+  toggle: null,
+  next: null,
+  prev: null,
+  seek: [0, 86400],
+  rate: [0.25, 4],
+  repeat: [0, 2],
+  shuffle: [0, 1],
+};
 const checkMedia = (payload) => {
   if (!guard.isPlainObject(payload)) return undefined;
-  if (!guard.oneOf(payload.kind, ['toggle', 'next', 'prev', 'seek'])) return undefined;
-  if (payload.arg !== undefined && !guard.isNumber(payload.arg, -1e9, 1e9)) return undefined;
+  const range = Object.hasOwn(MEDIA_ACTIONS, payload.kind) ? MEDIA_ACTIONS[payload.kind] : undefined;
+  if (range === undefined) return undefined;
+  if (payload.arg === undefined) return payload;
+  if (!range) return undefined;
+  if (!guard.isNumber(payload.arg, range[0], range[1])) return undefined;
   return payload;
 };
 /** A slider position is a whole percent; anything else is not a volume. */
@@ -1874,9 +1892,15 @@ function startServices() {
     maxBytes: 512,
   });
 
-  guard.guardedHandle('media:control', ['island'], (payload) => {
-    media.command(payload.kind, Number(payload.arg) || 0);
-    return media.current();
+  /*
+   * The reply carries the player's answer, not just the last frame: pressing
+   * 1.5x on a player that refuses has to look different from one that obeys.
+   * `control.ok` is that answer, and the frame fields beside it stay the truth
+   * about what the player actually did.
+   */
+  guard.guardedHandle('media:control', ['island'], async (payload) => {
+    const control = await media.command(payload.kind, Number(payload.arg) || 0);
+    return { ...media.current(), control };
   }, { check: checkMedia, maxBytes: 1024 });
 
   // Master volume: a read is cheap once the watcher is warm, and the set path
