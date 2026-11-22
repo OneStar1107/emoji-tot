@@ -373,6 +373,13 @@ function defaultPosition(dim) {
 
 /* ---------------------------------------------------------------- window */
 
+/*
+ * The preload asks for this synchronously (sendSync) before the page runs.
+ * The renderer cannot read the OS build, and the answer has to be final
+ * before the first paint or the page draws its own blur over the system
+ * one and then has to take it back.
+ */
+guard.guardedSync('island:material', ['island'], () => systemMaterial(), { fallback: 'none' });
 /**
  * The window material this build of Windows can actually draw.
  *
@@ -435,6 +442,11 @@ function createWindow() {
       // The preload only uses contextBridge and ipcRenderer, so the renderer
       // has no reason to share a process with Node.
       sandbox: true,
+      /* The material is decided in main (only it knows the OS build) and handed
+         to the preload as an argv flag, so the first paint already knows whether
+         the window behind it is real DWM acrylic. A bootstrap round-trip was one
+         frame too late and the page painted its own blur over the system one. */
+      additionalArguments: ['--emojitot-material=' + systemMaterial()],
       /* Nothing here is typeable text, and the spellchecker loads a dictionary
          per language into every renderer for a feature the island cannot use. */
       spellcheck: false,

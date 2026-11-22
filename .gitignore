@@ -20,3 +20,6 @@ docs/shots/
 # Browser acceptance leaves a Chrome profile behind.
 .chrome-check/
 *.orig
+
+# scratch workspace: screenshots, one-off scripts, subagent evidence
+.agents/

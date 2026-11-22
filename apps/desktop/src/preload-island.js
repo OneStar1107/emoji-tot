@@ -5,14 +5,24 @@
  * pushes from services that already know the answer.
  */
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
-
-const on = (channel, listener) => {
-  const handler = (_event, payload) => listener(payload);
-  ipcRenderer.on(channel, handler);
-  return () => ipcRenderer.removeListener(channel, handler);
-};
-
+/*
+ * A sandboxed preload gets a cut-down process and does not see the
+ * additionalArguments a webPreferences list sets, so the argv route read
+ * none on a machine whose window really was acrylic. One synchronous IPC
+ * call before the page runs is the reliable form: it blocks for a few
+ * microseconds and the answer is final.
+ */
+const windowMaterial = (() => {
+  try {
+    const value = ipcRenderer.sendSync('island:material');
+    return typeof value === 'string' && value ? value : 'none';
+  } catch (error) {
+    return 'none';
+  }
+})();
 contextBridge.exposeInMainWorld('islandAPI', {
+  /** 'acrylic' (Windows 11 DWM blur) or 'none'. Read-only, decided at launch. */
+  material: () => windowMaterial,
   /** Content size, measured by the page. The window follows it. */
   reportBox: (box) => ipcRenderer.send('island:box', box),
   /** Size of what is drawn right now (pill, panel or strip) — the hover target. */

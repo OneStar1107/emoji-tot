@@ -73,7 +73,10 @@ html[data-mono="light"] {
   --page: #f6f5fa;
   --ink: #121118;
   --muted: #5f5e6c;
-  --faint: #6b6a77;
+  /* 9.5–10.5px labels (table headers, badges, tile numbers) sit one step darker
+     than the first pass: #6b6a77 cleared 4.5:1 by a hair, which reads as a
+     smudge at that size; this clears 6:1 on the page and on a white card. */
+  --faint: #5c5b69;
   --line: rgba(12, 10, 24, 0.1);
   --line-2: rgba(12, 10, 24, 0.2);
   --card: #ffffff;
@@ -1101,14 +1104,44 @@ html[data-mono="light"] .stage-id {
   background: radial-gradient(circle at 30% 18%, #232237, #08080d 68%);
   border-color: #22212f;
 }
+/* A paper stage is a light surface in either theme, so it carries its own ink
+   the same way the night stage carries the darkroom palette. Without this the
+   dark theme printed --ink (near-white) on #f7f2e7: a stage name at 1.02:1. */
 .stage.bg-paper {
-  background: #f7f2e7;
+  --stage-paper: #f7f2e7;
+  --stage-ink: #2a241c;
+  --stage-muted: #5f5749;
+  --stage-faint: #6b6253;
+  background: var(--stage-paper);
   background-image: radial-gradient(rgba(0, 0, 0, 0.055) 1px, transparent 1px);
   background-size: 7px 7px;
+  border-color: #ded5c4;
 }
-.stage.bg-paper .stage-name,
-.stage.bg-paper .stage-badge { color: #6a6357; }
-.stage.bg-paper .stage-id { color: rgba(30, 26, 18, 0.35); }
+.stage.bg-paper .stage-name { color: var(--stage-muted); }
+.stage.bg-paper .stage-name b { color: var(--stage-ink); }
+.stage.bg-paper .stage-name i { color: var(--stage-muted); }
+.stage.bg-paper .stage-badge {
+  color: var(--stage-muted);
+  border-color: rgba(60, 48, 26, 0.18);
+  background: color-mix(in srgb, var(--stage-paper) 72%, transparent);
+}
+.stage.bg-paper .stage-id { color: color-mix(in srgb, var(--stage-ink) 58%, transparent); }
+.stage.bg-paper .stage-bar {
+  background: color-mix(in srgb, var(--stage-paper) 82%, transparent);
+  border-color: rgba(60, 48, 26, 0.16);
+}
+.stage.bg-paper .stage-bar button { color: var(--stage-muted); }
+.stage.bg-paper .stage-bar button:hover {
+  color: var(--stage-ink);
+  background: color-mix(in srgb, var(--stage-ink) 7%, transparent);
+  border-color: rgba(60, 48, 26, 0.18);
+}
+.stage.bg-paper .stage-bar button[aria-pressed="true"] {
+  background: var(--stage-ink);
+  color: var(--stage-paper);
+  border-color: transparent;
+}
+.stage.bg-paper .who { color: var(--stage-faint); }
 .stage.bg-paper .hero-art svg { filter: drop-shadow(0 10px 18px rgba(50, 40, 20, 0.18)); }
 
 /*
@@ -1127,7 +1160,7 @@ html[data-mono="light"] .stage-id {
 }
 .stage.bg-night .stage-name { color: var(--stage-muted); }
 .stage.bg-night .stage-name b { color: var(--stage-ink); }
-.stage.bg-night .stage-id { color: rgba(255, 255, 255, 0.34); }
+.stage.bg-night .stage-id { color: rgba(255, 255, 255, 0.46); }
 .stage.bg-night .stage-bar {
   background: rgba(12, 12, 18, 0.6);
   border-color: rgba(255, 255, 255, 0.12);
@@ -1143,7 +1176,7 @@ html[data-mono="light"] .stage-id {
   color: #0b0b11;
   border-color: transparent;
 }
-.stage.bg-night .who { color: rgba(255, 255, 255, 0.46); }
+.stage.bg-night .who { color: rgba(255, 255, 255, 0.56); }
 
 /* expression strip ------------------------------------------------------- */
 
@@ -2384,8 +2417,10 @@ html[data-mono="light"] .sd-preview emojitot-ball {
   font-variant-numeric: tabular-nums;
 }
 
-.sd-session[data-kind="error"] .sd-session-rank { color: var(--err); }
-.sd-session[data-kind="done"] .sd-session-rank { color: var(--ok); }
+/* The rank keeps its kind's hue but leans on --ink: --ok alone is 3.5:1 on
+   the active card in light mode, and this is 12px text, not a dot. */
+.sd-session[data-kind="error"] .sd-session-rank { color: color-mix(in srgb, var(--err) 72%, var(--ink)); }
+.sd-session[data-kind="done"] .sd-session-rank { color: color-mix(in srgb, var(--ok) 72%, var(--ink)); }
 
 .sd-bar {
   grid-area: bar;

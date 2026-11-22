@@ -14,6 +14,7 @@
 import { CAST, FACE_META, castMember, renderCast, renderCharacter } from '@emojitot/core';
 import { EMOTIONS } from '@emojitot/protocol';
 import { createDrawer } from './drawer';
+import { faceId, faceLabel } from './faces';
 import { backgroundClass, look, onLookChange, setLook } from './store';
 import { getLang, t } from './i18n';
 import type { RouteContext, View } from './main';
@@ -69,19 +70,6 @@ function hero(size = stageSize): string {
   });
 }
 
-/** The expression's own name, from the protocol — zh and en both live there. */
-function faceLabel(state: string): string {
-  const emotion = EMOTIONS.find((item) => item.state === state);
-  if (!emotion) return state;
-  return getLang() === 'zh' ? emotion.name.zh : emotion.name.en;
-}
-
-/** The two-digit protocol id the wall and the docs both print. */
-function faceId(state: string): string {
-  const emotion = EMOTIONS.find((item) => item.state === state);
-  return emotion ? emotion.id : '';
-}
-
 /**
  * The element that reproduces the stage, in the element's own precedence:
  * cast wins, otherwise body/color/traits describe the genome. Printing
@@ -119,13 +107,19 @@ function genome(): string {
   );
 }
 
+/** ` · #33`, or nothing for a state the protocol does not number. */
+function chipId(state: string): string {
+  const id = faceId(state);
+  return id ? ' · #' + id : '';
+}
+
 /** One cell of the expression grid: the current character wearing that face. */
 function faceChip(state: string): string {
   const art = renderCharacter({ body: look.body, color: look.color, traits: look.traits, state, size: 30 });
   return (
     '<button type="button" class="face-chip" data-face="' + state + '" aria-pressed="' +
     (look.state === state) +
-    '" title="' + faceLabel(state) + ' · #' + faceId(state) + '">' +
+    '" title="' + faceLabel(state) + chipId(state) + '">' +
     '<span class="face-chip-art">' + art + '</span>' +
     '<span class="face-chip-name">' + faceLabel(state) + '</span>' +
     '</button>'
@@ -189,7 +183,7 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
           <div class="stage-grid" aria-hidden="true"></div>
           <div class="stage-orbit" aria-hidden="true">${orbit()}</div>
           <span class="stage-badge" data-stage-badge>path · closed</span>
-          <span class="stage-id" data-stage-id>#${faceId(look.state)}</span>
+          <span class="stage-id" data-stage-id>${faceId(look.state) ? '#' + faceId(look.state) : '—'}</span>
           <div class="stage-center">
             <div class="hero" data-hero><div class="hero-art">${hero()}</div></div>
             <div class="stage-label">
@@ -411,7 +405,7 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
       : t('console.customGenome');
     stageName.innerHTML = '<b>' + (member ? (getLang() === 'zh' ? member.name.zh : member.name.en) : t('console.custom')) +
       '</b> <i>·</i> ' + faceLabel(look.state);
-    stageId.textContent = '#' + faceId(look.state);
+    stageId.textContent = faceId(look.state) ? '#' + faceId(look.state) : '—';
 
     const face = el.querySelector<HTMLElement>('[data-island-face]');
     if (face) face.innerHTML = hero(22);

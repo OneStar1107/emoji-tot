@@ -22,6 +22,15 @@ export declare class EmojiTotBall extends HTMLElement {
      */
     set finish(value: string);
     get finish(): string;
+    /**
+     * The idle loop, as an attribute (`motion="demo"`).
+     *
+     * Opt-in rather than default, so an existing embed keeps the drawing it has
+     * today; once set, the breath and the blink come from the SVG itself and the
+     * element's own breath steps aside.
+     */
+    set motion(value: string | null);
+    get motion(): string | null;
     /** One-shot motions. They do not change the state. */
     bounce(amount?: number): void;
     spin(turns?: number): void;

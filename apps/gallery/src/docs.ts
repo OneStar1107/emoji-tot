@@ -26,6 +26,7 @@ import {
 } from '@emojitot/core';
 import { EMOTIONS } from '@emojitot/protocol';
 import { SETTINGS_NAV } from '@emojitot/settings-schema';
+import { faceLabel } from './faces';
 import { getLang, t } from './i18n';
 import { look } from './store';
 import type { View } from './main';
@@ -58,14 +59,21 @@ function copy(key: CopyKey): string {
 /** The protocol id for a state: the table's own id column is the state. */
 const EMOTION_ID_BY_STATE = new Map(EMOTIONS.map((emotion) => [emotion.state, emotion.id]));
 
+/**
+ * The two-digit id, or an empty string for one of the ten engine-only states.
+ *
+ * Those ten have no protocol number; printing the state id in the id column
+ * put an English word (`powering-down`) in a column of numbers, which read as
+ * a missing translation. The copy action still copies the state id, because
+ * that is what a developer wants from that row.
+ */
 function emotionIdOf(state: string): string {
-  return EMOTION_ID_BY_STATE.get(state) ?? state;
+  return EMOTION_ID_BY_STATE.get(state) ?? '';
 }
 
 const nameOf = (meta: { name: string }, state: string): string => {
-  const emotion = EMOTIONS.find((item) => item.state === state);
-  if (!emotion) return meta.name;
-  return getLang() === 'zh' ? emotion.name.zh : emotion.name.en;
+  const label = faceLabel(state);
+  return label === state ? meta.name : label;
 };
 
 function sectionHtml(id: string, num: string, title: string, kicker: string, body: string): string {
@@ -97,13 +105,13 @@ function faceTable(metas: readonly FaceMeta[]): string {
   ];
   const rows = metas.map((meta) => {
     const emotionId = emotionIdOf(meta.id);
-    return '<tr class="sd-row" data-state="' + meta.id + '" data-emotion="' + emotionId +
-      '" tabindex="0" title="' + copy('copyHint') + '">' +
+    return '<tr class="sd-row" data-state="' + meta.id + '" data-emotion="' + (emotionId || meta.id) +
+      '" data-emotion-label="' + (emotionId || '—') + '" tabindex="0" title="' + copy('copyHint') + '">' +
       '<td>#' + meta.id + '</td>' +
       '<td>' + meta.id + '</td>' +
       '<td>' + nameOf(meta, meta.id) + '</td>' +
       '<td>' + meta.desc + '</td>' +
-      '<td class="sd-copy">' + emotionId + '</td>' +
+      '<td class="sd-copy">' + (emotionId || '—') + '</td>' +
       '<td class="sd-preview" data-preview="' + meta.id + '" aria-hidden="true"></td>' +
       '</tr>';
   });
@@ -382,6 +390,7 @@ export function createDocs(): View {
 
   async function copyRow(row: HTMLElement): Promise<void> {
     const id = row.dataset.emotion ?? '';
+    const restore = row.dataset.emotionLabel ?? id;
     const cell = row.querySelector<HTMLElement>('.sd-copy');
     if (!cell) return;
     const ok = await copyText(id);
@@ -398,7 +407,7 @@ export function createDocs(): View {
     const timer = window.setTimeout(() => {
       timeouts.delete(timer);
       flashTimers.delete(row);
-      cell.textContent = id;
+      cell.textContent = restore;
       delete cell.dataset.flash;
       row.classList.remove('is-flashed');
     }, 1200);

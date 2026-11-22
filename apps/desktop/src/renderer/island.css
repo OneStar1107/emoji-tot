@@ -3431,3 +3431,17 @@ body[data-morphing="true"] .panel-glass { filter: none; }
 /* The lighter card above is global, not gated on the material flag: the same
    alpha reads correctly whether the blur behind it comes from DWM acrylic
    (Windows 11) or from the layered CSS the other builds paint. */
+/*
+ * On a window that Windows 11 is already blurring, the card can be lighter:
+ * the depth behind it is real, so the tint only has to keep the text legible.
+ * 0.72 over a white page still clears 4.5:1 against --ink; the :root value
+ * (0.90) stays the fallback for machines without the system material.
+ */
+body[data-material="acrylic"] .pill,
+body[data-material="acrylic"] .panel {
+  --card: rgba(21, 21, 25, 0.72);
+}
+body[data-theme="light"][data-material="acrylic"] .pill,
+body[data-theme="light"][data-material="acrylic"] .panel {
+  --card: rgba(255, 255, 255, 0.80);
+}

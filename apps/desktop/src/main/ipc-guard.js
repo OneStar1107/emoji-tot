@@ -95,6 +95,29 @@ function guardedHandle(channel, roles, handler, options = {}) {
   });
 }
 
+/**
+ * The same gate for a synchronous reply (sendSync).
+ *
+ * A synchronous sender cannot be refused politely — there is no promise to
+ * reject — so a refusal hands back `fallback` instead of throwing. Only for
+ * a tiny, read-only answer the page needs before it paints.
+ */
+function guardedSync(channel, roles, handler, { fallback = null } = {}) {
+  ipcMain.on(channel, (event) => {
+    const role = roleOf(event);
+    if (!role || !roles.includes(role) || !frameMatches(role, frameOf(event))) {
+      refuse(channel, 'sender', role);
+      event.returnValue = fallback;
+      return;
+    }
+    try {
+      event.returnValue = handler();
+    } catch (error) {
+      refuse(channel, 'handler', role);
+      event.returnValue = fallback;
+    }
+  });
+}
 /** The same gate for one-way messages (send, not invoke). */
 function guardedSend(channel, roles, handler, options = {}) {
   const { check, maxBytes = DEFAULT_MAX_BYTES } = options;
@@ -164,5 +187,6 @@ module.exports = {
   frameOf,
   guardedHandle,
   guardedSend,
+  guardedSync,
   ...shape,
 };

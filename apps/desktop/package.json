@@ -1,7 +1,7 @@
 {
   "name": "@emojitot/desktop",
   "private": true,
-  "version": "0.8.11",
+  "version": "0.8.12",
   "description": "EmojiTot Studio as a desktop pet: a ball that sits on top of everything and answers to the emotion protocol",
   "author": "OneStar1107",
   "main": "src/main.js",
@@ -54,9 +54,9 @@
       "installerHeader": "../../apps/desktop/assets/installer-header.bmp",
       "installerSidebar": "../../apps/desktop/assets/installer-sidebar.bmp",
       "uninstallerSidebar": "../../apps/desktop/assets/installer-sidebar.bmp",
-      "license": "../../LICENSE",
       "runAfterFinish": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
     },
     "portable": {
       "artifactName": "EmojiTot.${version}.${ext}"

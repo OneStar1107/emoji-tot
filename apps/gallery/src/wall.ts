@@ -18,7 +18,7 @@
  * runs a task later and would leave the old count readable for a frame.
  */
 import { CAST, FACE_META, FAMILIES, castMember, renderCast } from '@emojitot/core';
-import { EMOTIONS } from '@emojitot/protocol';
+import { faceId, faceLabel } from './faces';
 import { getLang, t } from './i18n';
 import { onLookChange, selectCast } from './store';
 import type { View } from './main';
@@ -44,19 +44,6 @@ function castTile(id: string, index: number, feature: boolean): string {
     '<span class="tile-art">' + renderCast({ id, state: member.face, size: 96, motion: 'demo' }) + '</span>' +
     '<span class="tile-name">' + name + '</span>' +
     '</button>';
-}
-
-/** The expression's own name, from the protocol — zh and en both live there. */
-function faceLabel(state: string): string {
-  const emotion = EMOTIONS.find((item) => item.state === state);
-  if (!emotion) return state;
-  return getLang() === 'zh' ? emotion.name.zh : emotion.name.en;
-}
-
-/** The protocol id the docs page calls the public contract: 11, 42, … */
-function faceId(state: string): string {
-  const emotion = EMOTIONS.find((item) => item.state === state);
-  return emotion ? String(emotion.id) : '';
 }
 
 let faceTileIndex = 0;

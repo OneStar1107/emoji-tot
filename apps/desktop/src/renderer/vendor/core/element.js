@@ -14,10 +14,12 @@ const STYLE = `
   @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
   @media (prefers-reduced-motion: reduce) { .ball { animation: none; } }
   :host([data-paused]) .ball { animation-play-state: paused; }
+  /* motion="demo" puts the loop inside the drawing; a second one here would double it. */
+  :host([motion="demo"]) .ball { animation: none; }
 `;
 export class EmojiTotBall extends HTMLElement {
     static get observedAttributes() {
-        return ['cast', 'body', 'shape', 'color', 'state', 'size', 'traits', 'finish'];
+        return ['cast', 'body', 'shape', 'color', 'state', 'size', 'traits', 'finish', 'motion'];
     }
     #root;
     #style;
@@ -69,6 +71,22 @@ export class EmojiTotBall extends HTMLElement {
     }
     get finish() {
         return this.getAttribute('finish') ?? 'sticker';
+    }
+    /**
+     * The idle loop, as an attribute (`motion="demo"`).
+     *
+     * Opt-in rather than default, so an existing embed keeps the drawing it has
+     * today; once set, the breath and the blink come from the SVG itself and the
+     * element's own breath steps aside.
+     */
+    set motion(value) {
+        if (value)
+            this.setAttribute('motion', String(value));
+        else
+            this.removeAttribute('motion');
+    }
+    get motion() {
+        return this.getAttribute('motion');
     }
     /** One-shot motions. They do not change the state. */
     bounce(amount = 0.4) {
@@ -133,14 +151,15 @@ export class EmojiTotBall extends HTMLElement {
          */
         const finish = (this.getAttribute('finish') ?? 'sticker');
         const traits = (this.getAttribute('traits') ?? '').split(/\s+/).filter(Boolean);
+        const motion = this.getAttribute('motion') === 'demo' ? 'demo' : undefined;
         let svg;
         try {
             svg = cast
-                ? renderCast({ id: cast, state, size, style: finish })
-                : renderCharacter({ body, color, state, size, traits, style: finish });
+                ? renderCast({ id: cast, state, size, style: finish, motion })
+                : renderCharacter({ body, color, state, size, traits, style: finish, motion });
         }
         catch {
-            svg = renderCharacter({ body: 'circle', color, state: 'idle', size, style: finish });
+            svg = renderCharacter({ body: 'circle', color, state: 'idle', size, style: finish, motion });
         }
         let host = this.#root.querySelector('.ball');
         if (!host) {

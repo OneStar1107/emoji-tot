@@ -75,7 +75,12 @@ export declare function faceFor(state: string): FaceSpec;
 /**
  * The state table a picker reads: Chinese name, group, and one behaviour line.
  *
- * Grouping follows the three things this ball actually does — living, feeling,
+ * This table is the one place a state is named: the site's expression wall,
+ * its docs protocol table and its drawer all read it (through the gallery's
+ * faces helper), so a state cannot be called one word on one page and another
+ * on the next. Ten states are drawn but not numbered by the protocol; before
+ * the wall read this table they fell back to their English ids.
+ * * Grouping follows the three things this ball actually does — living, feeling,
  * and working — so a host can offer "what is it up to" without inventing its
  * own taxonomy.
  */

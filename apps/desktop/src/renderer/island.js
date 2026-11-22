@@ -36,6 +36,13 @@ import {
 import { glassAllowed, glassPaint } from './island-glass.mjs';
 
 const api = window.islandAPI;
+/*
+ * The window material comes from the preload synchronously, so it is known
+ * before any await: the page can paint the right surface on its very first
+ * frame instead of drawing its own blur and then taking it back when the
+ * bootstrap reply lands (or never lands, if a service is slow).
+ */
+document.body.dataset.material = api.material && api.material() === 'acrylic' ? 'acrylic' : 'none';
 
 const islandEl = document.getElementById('island');
 const frameEl = document.getElementById('frame');
@@ -4237,9 +4244,8 @@ const boot = await api.bootstrap();
 prefs = boot?.prefs ?? {};
 /* Main owns the OS check; a preference never decides this, because a Windows 10
    machine cannot paint the material no matter what the switch says. */
-if (boot?.windowMaterial) prefs.windowMaterial = boot.windowMaterial;
-/* The first paint already happened by the time this reply lands; write the
-   attribute now rather than waiting for the next theme pass. */
+/* Synchronous, from the preload argv: no round-trip, no first-frame guess. */
+prefs.windowMaterial = api.material ? api.material() : 'none';
 document.body.dataset.material = prefs.windowMaterial === 'acrylic' ? 'acrylic' : 'none';
 if (boot?.cast) {
   for (const face of document.querySelectorAll('emojitot-ball')) {

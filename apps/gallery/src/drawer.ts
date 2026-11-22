@@ -9,6 +9,7 @@
  */
 import { CAST, COLOR_IDS, COLOR_ZH, COLORS, FACES, FAMILIES, castMember, renderCast, renderCharacter } from '@emojitot/core';
 import { EMOTIONS, EMOTION_SEGMENTS } from '@emojitot/protocol';
+import { faceLabel } from './faces';
 import { look, selectCast, setLook, type BackgroundId } from './store';
 import { getLang, t } from './i18n';
 import { BACKGROUND_ZH } from './zh';
@@ -78,10 +79,7 @@ export function createDrawer(onChange: () => void): HTMLElement {
           <div class="chips" id="quick-faces">
             ${['idle', 'happy', 'excited', 'laughing', 'shy', 'sad', 'surprised', 'thinking']
               .map((s) => {
-                const emotion = EMOTIONS.find((entry) => entry.state === s);
-                const label = emotion
-                  ? getLang() === 'zh' ? emotion.name.zh : emotion.name.en
-                  : s;
+                const label = faceLabel(s);
                 return `<button type="button" class="face-chip" data-state="${s}" aria-pressed="${look.state === s}" title="${label}">
                   <span class="face-art">${faceSwatch(s)}</span>
                   <span class="face-name">${label}</span>

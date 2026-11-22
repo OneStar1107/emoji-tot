@@ -15,6 +15,15 @@
  *               occlusion at the base, and a hairline edge 22% darker.
  */
 export type RenderStyle = 'flat' | 'sticker' | 'glow' | 'dots' | 'line' | 'candy' | 'emoji';
+/**
+ * How the drawing moves.
+ *
+ * - `demo` — the idle loop plays on its own: a breath, a small sway, a blink.
+ *
+ * One value, because there is one loop worth drawing. Anything else (a hop, a
+ * spin) is a one-shot a host drives, not a resting state.
+ */
+export type MotionMode = 'demo';
 export interface RenderOptions {
     /** A body id from BODIES. */
     body?: string;
@@ -29,6 +38,11 @@ export interface RenderOptions {
     outline?: boolean;
     /** Finish. Defaults to flat. */
     style?: RenderStyle;
+    /**
+     * Play the idle loop: a breath, a sway and an occasional blink, drawn by CSS
+     * that ships inside the SVG. Absent means a still drawing.
+     */
+    motion?: MotionMode;
 }
 /** Render a cast member by id, with an optional expression override. */
 export interface CastRenderOptions {
@@ -36,6 +50,8 @@ export interface CastRenderOptions {
     state?: string;
     size?: number;
     style?: RenderStyle;
+    /** Same idle loop as RenderOptions.motion. */
+    motion?: MotionMode;
 }
 /**
  * The face is never the same colour as the body.
@@ -46,11 +62,17 @@ export interface CastRenderOptions {
  * choice per character, which is what a picker wants.
  */
 export declare function inkFor(bodyHex: string): string;
-/** The face of one expression, positioned inside the body. */
+/**
+ * The face of one expression, positioned inside the body.
+ *
+ * `motion: 'demo'` groups the two eyes so the idle loop can blink them. The
+ * group carries its own transform origin (the eye line) as an inline style,
+ * because that origin depends on the body the face sits on.
+ */
 export declare function renderFace(state: string, face: {
     x: number;
     y: number;
-}, ink: string, baseEyeScale?: number, weight?: number): string;
+}, ink: string, baseEyeScale?: number, weight?: number, motion?: MotionMode): string;
 /** One character, as a standalone SVG string. */
 export declare function renderCharacter(options: RenderOptions): string;
 /** Render a member of the cast by id. Unknown ids fall back to the first one. */

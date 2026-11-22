@@ -161,7 +161,12 @@ export function faceFor(state: string): FaceSpec {
 /**
  * The state table a picker reads: Chinese name, group, and one behaviour line.
  *
- * Grouping follows the three things this ball actually does — living, feeling,
+ * This table is the one place a state is named: the site's expression wall,
+ * its docs protocol table and its drawer all read it (through the gallery's
+ * faces helper), so a state cannot be called one word on one page and another
+ * on the next. Ten states are drawn but not numbered by the protocol; before
+ * the wall read this table they fell back to their English ids.
+ * * Grouping follows the three things this ball actually does — living, feeling,
  * and working — so a host can offer "what is it up to" without inventing its
  * own taxonomy.
  */
@@ -170,14 +175,14 @@ export const FACE_META: readonly FaceMeta[] = [
   { id: 'idle', name: '待机放空', group: 'life', desc: '左看看右看看，安静地等着' },
   { id: 'waking', name: '唤醒', group: 'life', desc: '眼皮慢慢抬起，先迷糊地眨两下' },
   { id: 'sleeping', name: '睡眠', group: 'life', desc: '闭眼成细线，右上角飘起 zzz' },
-  { id: 'drowsy', name: '犯困', group: 'life', desc: '眼皮半垂，脑袋一点一点' },
-  { id: 'bored', name: '发呆', group: 'life', desc: '两眼各望各的，时间像停住了' },
+  { id: 'drowsy', name: '迷糊', group: 'life', desc: '眼皮半垂，脑袋一点一点' },
+  { id: 'bored', name: '无聊', group: 'life', desc: '两眼各望各的，时间像停住了' },
   { id: 'spacing-out', name: '出神', group: 'life', desc: '半合的眼看不住焦点，嘴缩成一个小点' },
   { id: 'booting', name: '加载苏醒', group: 'life', desc: '两眼一先一后地亮起来，像系统在自检' },
   { id: 'dormant', name: '休眠', group: 'life', desc: '眼皮半掩，呼吸浅到几乎看不见' },
   { id: 'shake-awake', name: '抖动唤醒', group: 'life', desc: '整只一抖，眼睛猛地睁开' },
   { id: 'spawning', name: '登场', group: 'life', desc: '从一点光里出现，先眨眼再看向你' },
-  { id: 'powering-down', name: '停止终止', group: 'life', desc: '眼睛慢慢收成一条线，然后不动了' },
+  { id: 'powering-down', name: '休息', group: 'life', desc: '眼睛慢慢收成一条线，然后不动了' },
 
   // ---- 情绪反应：它的心情 ----
   { id: 'happy', name: '开心', group: 'emotion', desc: '弯眼笑，身体轻快地上下起伏' },
@@ -188,12 +193,12 @@ export const FACE_META: readonly FaceMeta[] = [
   { id: 'celebrate', name: '庆祝', group: 'emotion', desc: '星星眼加撒花，整只弹起来' },
   { id: 'bouncing', name: '雀跃', group: 'emotion', desc: '原地一下一下地弹' },
   { id: 'shy', name: '害羞', group: 'emotion', desc: '目光躲向一边，脸颊慢慢泛红' },
-  { id: 'sad', name: '失落', group: 'emotion', desc: '眼睛下沉，眼角挂一滴泪' },
+  { id: 'sad', name: '难过', group: 'emotion', desc: '眼睛下沉，眼角挂一滴泪' },
   { id: 'angry', name: '生气', group: 'emotion', desc: '横眉怒目，额角冒出怒筋' },
   { id: 'confused', name: '困惑', group: 'emotion', desc: '两眼大小不一，注视方向对不齐' },
   { id: 'suspicious', name: '怀疑', group: 'emotion', desc: '眯起一只眼斜着打量' },
   { id: 'surprised', name: '惊讶', group: 'emotion', desc: '双眼猛地放大，嘴巴张成 O' },
-  { id: 'scared', name: '慌张', group: 'emotion', desc: '瞳孔放大，整只在轻轻发抖' },
+  { id: 'scared', name: '惊恐', group: 'emotion', desc: '瞳孔放大，整只在轻轻发抖' },
   { id: 'curious', name: '好奇', group: 'emotion', desc: '头一歪，目光上上下下地打量' },
   { id: 'humming', name: '哼歌', group: 'emotion', desc: '闭眼微笑，脑袋跟着节拍摇' },
   { id: 'puzzled', name: '疑惑', group: 'emotion', desc: '一边抬眼一边斜眼，眉毛一高一低' },
@@ -208,8 +213,8 @@ export const FACE_META: readonly FaceMeta[] = [
   { id: 'thinking', name: '思考中', group: 'agent', desc: '目光在上方打转，头顶绕着一条彩带' },
   { id: 'searching', name: '检索资料', group: 'agent', desc: '目光左右快速扫过，像在翻页' },
   { id: 'reading', name: '阅读', group: 'agent', desc: '视线一行一行往下走' },
-  { id: 'writing', name: '输出回复', group: 'agent', desc: '跟着输出节奏轻微缩放' },
-  { id: 'working', name: '处理中忙碌', group: 'agent', desc: '目光小幅循环，身体几乎不动' },
+  { id: 'writing', name: '写入', group: 'agent', desc: '跟着输出节奏轻微缩放' },
+  { id: 'working', name: '忙碌', group: 'agent', desc: '目光小幅循环，身体几乎不动' },
   { id: 'loading', name: '联网加载', group: 'agent', desc: '左右眼轮流眨，像信号在两端跳' },
   { id: 'progress', name: '进度推进', group: 'agent', desc: '一格一格往前挪，看得见走了多少' },
   { id: 'radar', name: '扫描环境', group: 'agent', desc: '目光一圈一圈地扫过四周' },
@@ -223,7 +228,7 @@ export const FACE_META: readonly FaceMeta[] = [
   { id: 'listening', name: '聆听', group: 'agent', desc: '目光轻轻上下扫读，像在听你说话' },
   { id: 'composing', name: '组织回复', group: 'agent', desc: '先在脑子里排好，再开口' },
   { id: 'dragging', name: '被拖动', group: 'agent', desc: '被拎起来，晃着脑袋' },
-  { id: 'alerting', name: '出错', group: 'agent', desc: '脸色急促闪烁，最后定格成警示色' },
+  { id: 'alerting', name: '告警', group: 'agent', desc: '脸色急促闪烁，最后定格成警示色' },
   { id: 'notifying', name: '提示提醒', group: 'agent', desc: '轻轻跳一下，引起你的注意' },
   { id: 'refusing', name: '拒绝受限', group: 'agent', desc: '斜眼下压并摇头，明确表示不行' },
   { id: 'busy', name: '处理中', group: 'agent', desc: '眼睛压成专注的横线，嘴抿紧，几乎不动' },
