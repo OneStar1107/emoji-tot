@@ -1238,7 +1238,7 @@ function weatherPage() {
   return `<div class="wx">
     <div class="wx-now">
       <button type="button" class="wx-city" data-city-menu aria-expanded="${cityMenuOpen}" aria-haspopup="menu" title="切换城市">
-        <span class="wx-city-name"><b>${place}</b>${svg('<path d="m7 10 5 5 5-5"/>', 'wx-caret')}</span>
+        <span class="wx-city-name" title="${escapeHtml(weather.place.district || weather.place.name || '')}"><b>${place}</b>${svg('<path d="m7 10 5 5 5-5"/>', 'wx-caret')}</span>
         <em>${escapeHtml(now.text)}${country}</em>
       </button>
       <div class="wx-temp">${show(now.temp)}<sup>°</sup></div>
@@ -2787,22 +2787,39 @@ const clamp01 = (value) => Math.min(1, Math.max(0, value));
 /** 0→1 with no corners: carries opacity, never the box. */
 const smoothstep = (t) => { const x = clamp01(t); return x * x * (3 - 2 * x); };
 
-/** cubic-bezier(0.22, 1, 0.36, 1): the curve the CSS morph used. expo-out, no overshoot. */
+/*
+ * The morph is a spring, not a curve.
+ *
+ * stiffness 520, damping 32, mass 1 gives zeta ~0.70 and wn ~22.8 rad/s: the
+ * set Apple own controls land on, and the closest a single parameter pair gets
+ * to "quick, but it has weight". It settles in ~420ms with one 4.5% overshoot,
+ * which is the difference between a card appearing and a surface being
+ * stretched — a cubic-bezier can be fast but it cannot overshoot and come back,
+ * and that return is most of what the eye reads as physical.
+ *
+ * Same numbers as the --spring token in island.css (linear() there, sampling
+ * here), so a hover and a morph move on one rhythm.
+ */
+const SPRING_ZETA = 0.7;
+const SPRING_OMEGA = Math.sqrt(520);
+const SPRING_SETTLE_MS = 420;
+
+/**
+ * Spring position at normalised time u (0 to 1 over SPRING_SETTLE_MS).
+ *
+ * Capped at 1.02 rather than 1.045: a window bounds change of +4.5% is a few
+ * pixels of edge the user did not ask for, and it lands against screen edges.
+ * The cap keeps the return leg (1.02 to 1.0) while the approach stays honest.
+ */
 function easeMorph(u) {
   const x = clamp01(u);
-  if (x === 0 || x === 1) return x;
-  const bezier = (a, b, t) => 3 * a * t * (1 - t) * (1 - t) + 3 * b * t * t * (1 - t) + t * t * t;
-  let low = 0;
-  let high = 1;
-  let t = x;
-  for (let i = 0; i < 8; i += 1) {
-    const at = bezier(0.22, 0.36, t);
-    if (Math.abs(at - x) < 0.0001) break;
-    if (at < x) low = t;
-    else high = t;
-    t = (low + high) / 2;
-  }
-  return bezier(1, 1, t);
+  if (x === 0) return 0;
+  if (x >= 1) return 1;
+  const t = (x * SPRING_SETTLE_MS) / 1000;
+  const wd = SPRING_OMEGA * Math.sqrt(1 - SPRING_ZETA * SPRING_ZETA);
+  const decay = Math.exp(-SPRING_ZETA * SPRING_OMEGA * t);
+  const value = 1 - decay * (Math.cos(wd * t) + ((SPRING_ZETA * SPRING_OMEGA) / wd) * Math.sin(wd * t));
+  return Math.max(0, Math.min(1.02, value));
 }
 
 /** The radius the panel rests at, read from the preference the stylesheet publishes. */

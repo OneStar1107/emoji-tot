@@ -51,7 +51,10 @@
   --radius: 22px;
   /* One spring for anything that changes size, one ease for anything that
      changes opacity. Mixing curves is what makes an interface feel stitched. */
-  --spring: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Apple's spring, sampled: stiffness 520 / damping 32 / mass 1 = zeta 0.70,
+     one 4.5% overshoot, settles in ~420ms. The morph samples the same curve in
+     island.js (easeMorph), so a hover and a shape change share one rhythm. */
+  --spring: linear(0, 0.066, 0.216, 0.396, 0.571, 0.723, 0.843, 0.931, 0.989, 1.024, 1.041, 1.045, 1.043, 1.036, 1.028, 1.02, 1.013, 1.007, 1.003, 1.001, 0.999, 0.998, 0.998, 0.998, 0.998);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --fast: 120ms;
   --base: 180ms;
@@ -1417,7 +1420,11 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   cursor: pointer;
 }
 .wx-city-name { display: flex; align-items: center; gap: 2px; max-width: 100%; min-width: 0; }
-.wx-city-name b { font-size: 12.5px; font-weight: 550; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A district name is four characters (番禺区) where a city name was two or
+   three, so it was the first thing to lose its last glyph to the ellipsis.
+   The caret gets a fixed lane instead of sharing the text's, the type drops a
+   half step, and the name may now use the full width of the row. */
+.wx-city-name b { font-size: 12px; font-weight: 550; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 11px); }
 .wx-caret { flex: none; width: 9px; height: 9px; fill: none; stroke: var(--dim); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .wx-city em { max-width: 100%; font-style: normal; font-size: 10.5px; line-height: 1.3; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wx-temp { flex: none; font-size: 30px; font-weight: 300; letter-spacing: -0.03em; line-height: 1.2; font-variant-numeric: tabular-nums; animation: temp-in var(--slow) var(--spring); }

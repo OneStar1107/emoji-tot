@@ -44,16 +44,20 @@ const PANEL = { x: 32, y: 36, w: 420, h: 324 };
 
 describe('backdrop: capture size follows the display DPI', () => {
   it('asks for the physical pixels, not the DIP ones', () => {
-    assert.deepEqual(backdrop.thumbnailFor(PRIMARY), { width: 2560, height: 1440 });
-    assert.deepEqual(backdrop.thumbnailFor(SECOND), { width: 2560, height: 1440 });
+    /* Below the cap on purpose: this test is about the DIP → physical step, so
+       the display has to be small enough that the cap does not hide it. */
+    const small = { size: { width: 400, height: 300 }, scaleFactor: 2 };
+    assert.deepEqual(backdrop.thumbnailFor(small), { width: 800, height: 600 });
+    assert.deepEqual(backdrop.thumbnailFor({ size: { width: 800, height: 600 } }), { width: 800, height: 600 });
   });
 
-  it('caps the long edge so a 4K screen is not a multi-megabyte frame', () => {
+  it('caps the long edge at half a screen, because the frame is blurred anyway', () => {
     const hidpi = { size: { width: 2560, height: 1440 }, scaleFactor: 2 };
     const thumbnail = backdrop.thumbnailFor(hidpi);
     assert.equal(Math.max(thumbnail.width, thumbnail.height), backdrop.MAX_EDGE);
-    assert.equal(thumbnail.width, 2560);
-    assert.equal(thumbnail.height, 1440);
+    assert.equal(backdrop.MAX_EDGE, 1280);
+    assert.equal(thumbnail.width, 1280);
+    assert.equal(thumbnail.height, 720);
   });
 
   it('treats a missing or broken scale factor as 1', () => {

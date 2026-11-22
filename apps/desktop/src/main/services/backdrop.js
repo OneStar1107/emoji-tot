@@ -37,7 +37,13 @@ const CAPTURE_TIMEOUT_MS = 2000;
  * around 400 KB of base64 instead of several megabytes, and nothing visible
  * is lost.
  */
-const MAX_EDGE = 2560;
+/*
+ * Half a screen is enough. The picture is blurred to a 20px radius and then
+ * covered by the tint, so the detail a full-resolution frame would carry is
+ * thrown away downstream anyway — while a 2560-wide JPEG is four times the
+ * base64 through IPC and four times the texture the compositor keeps alive.
+ */
+const MAX_EDGE = 1280;
 /**
  * How far the blurred layer reaches past the panel on every side.
  *

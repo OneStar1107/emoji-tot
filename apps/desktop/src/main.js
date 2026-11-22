@@ -1850,11 +1850,33 @@ function startServices() {
     const target = BrowserWindow.fromWebContents(event.sender);
     if (!target || target.isDestroyed()) return null;
     const bounds = target.getBounds();
-    return desktopBackdrop.capture({
-      display: screen.getDisplayMatching(bounds),
-      panel: rect,
-      window: bounds,
-    });
+    /*
+     * The island is on the screen, so a plain capture photographs the panel
+     * too and the glass ends up showing a blurred picture of itself: the card
+     * reads as a dark block, its own text bleeds through as a highlight, and
+     * the layer flickers as the photograph and the real frame disagree.
+     * WDA_EXCLUDEFROMCAPTURE takes the window out of the frame for the length
+     * of the capture; hiding the window instead would flash, and moving it
+     * would lie about the coordinates.
+     */
+    let protectedNow = false;
+    try {
+      target.setContentProtection(true);
+      protectedNow = true;
+    } catch {
+      /* Older Windows builds reject the flag; the frame is still usable. */
+    }
+    try {
+      return await desktopBackdrop.capture({
+        display: screen.getDisplayMatching(bounds),
+        panel: rect,
+        window: bounds,
+      });
+    } finally {
+      if (protectedNow && !target.isDestroyed()) {
+        try { target.setContentProtection(false); } catch { /* already gone */ }
+      }
+    }
   }, { check: guard.checkRect, maxBytes: 512 });
 
   /*

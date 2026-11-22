@@ -277,7 +277,11 @@ describe('glass: the layer is only visible after a capture', () => {
 
 describe('glass: the capture stays local and island-only', () => {
   it('is a guarded channel for the island alone', () => {
-    const handler = mainJs.slice(mainJs.indexOf("'island:backdrop'"), mainJs.indexOf("'island:backdrop'") + 1200);
+    /* The handler grew a capture-protection try/finally; cut it at the next
+       guarded handle instead of a fixed character window. */
+    const start = mainJs.indexOf("'island:backdrop'");
+    const end = mainJs.indexOf('guardedHandle', start + 40);
+    const handler = mainJs.slice(start, end > start ? end : start + 2400);
     const body = handler;
     assert.ok(body.includes("['island']"), 'no other window may photograph the screen');
     assert.ok(body.includes('check: guard.checkRect'));
