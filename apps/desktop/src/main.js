@@ -373,6 +373,28 @@ function defaultPosition(dim) {
 
 /* ---------------------------------------------------------------- window */
 
+/**
+ * The window material this build of Windows can actually draw.
+ *
+ * `acrylic` is the Windows 11 backdrop: the DWM blurs whatever is behind the
+ * client rectangle, including over a playing video, with no screenshot and no
+ * per-frame filter. Windows 10 has the option name but needs an opaque frame
+ * for it, so older builds fall back to the translucent surface the CSS paints.
+ */
+function systemMaterial() {
+  if (process.platform !== 'win32') return 'none';
+  /*
+   * Windows 11 still reports "10.0.build" — the tell is the build number,
+   * not the major version: 22000 is the first 11, 26100 is 24H2. Checking
+   * major alone reads every Windows 11 machine as 10 and silently drops
+   * the blur.
+   */
+  const parts = process.getSystemVersion().split('.').map(Number);
+  const major = parts[0] || 0;
+  const build = parts[2] || 0;
+  return major > 10 || (major === 10 && build >= 22000) ? 'acrylic' : 'none';
+}
+
 function createWindow() {
   const prefs = readPrefs();
   sizeKey = SIZES[prefs.sizeKey] ? prefs.sizeKey : 'md';
@@ -397,6 +419,14 @@ function createWindow() {
     hasShadow: false,
     alwaysOnTop: pinned,
     backgroundColor: '#00000000',
+    /*
+     * Windows 11 draws this material itself (DWM) behind the whole client
+     * rectangle. It is a real blur of whatever is behind the window — no
+     * screenshot, no window-exclusion dance, no per-frame filter — but it
+     * fills the rectangle, so the window has to be shaped to the rounded
+     * silhouette or its corners leak a blurred box onto the desktop.
+     */
+    backgroundMaterial: systemMaterial(),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -414,7 +444,43 @@ function createWindow() {
     },
   });
 
-  guard.claim('ball', win.webContents);
+/*
+ * Shape the window to its rounded silhouette.
+ *
+ * Windows 11 draws the acrylic material behind the whole client rectangle:
+ * it is a real blur of the desktop, but a rectangular one. The island is a
+ * capsule and a rounded panel, so the four corners would leak a blurred box
+ * onto whatever is behind them. `setShape` takes a list of rectangles (the
+ * Win32 region API), so the rounded corners are approximated with 4px rows:
+ * 20 rectangles cover a 60px tall pill, and the cost is paid on resize only.
+ *
+ * The radius follows the stylesheet (22px pill, 20px panel) closely enough
+ * that the visible seam sits under the material’s own edge highlight.
+ */
+const SHAPE_STEP = 4;
+function applyIslandShape() {
+  if (!win || win.isDestroyed()) return;
+  const { width, height } = win.getBounds();
+  if (!width || !height) return;
+  const radius = Math.min(22, Math.floor(Math.min(width, height) / 2));
+  const rects = [];
+  for (let y = 0; y < height; y += SHAPE_STEP) {
+    const dy = Math.min(y, height - y - 1);
+    let inset = 0;
+    if (dy < radius) {
+      const k = radius - dy;
+      inset = Math.round(radius - Math.sqrt(Math.max(0, radius * radius - k * k)));
+    }
+    rects.push({ x: inset, y, width: Math.max(1, width - inset * 2), height: Math.min(SHAPE_STEP, height - y) });
+  }
+  try {
+    win.setShape(rects);
+  } catch {
+    /* A platform without shape support keeps the plain rectangle. */
+  }
+}
+
+guard.claim('ball', win.webContents);
 
   win.setAlwaysOnTop(pinned, 'floating');
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -423,7 +489,13 @@ function createWindow() {
     if (showBall()) win.showInactive();
     // Start transparent to clicks: the window is mostly empty space.
     setClickThrough(clickThrough);
+    applyIslandShape();
   });
+  /* Every morph step and every pill resize lands here. setShape is a Win32
+     region update, so it is bound to the window's own resize rather than to a
+     timer: one region rebuild per frame while the box moves, none when it is
+     still. */
+  win.on('resize', applyIslandShape);
   win.on('moved', () => {
     if (!dockSide) savePrefs();
   });
@@ -1816,6 +1888,9 @@ function startServices() {
   // parsing its page would drop the first frame.
   guard.guardedHandle('island:bootstrap', ['island'], () => ({
     battery: lastBattery,
+    /* The OS version is the only thing that knows whether the window really
+       has DWM acrylic behind it; the page needs it to stop painting its own. */
+    windowMaterial: systemMaterial(),
     /* The AI page boots from one snapshot: the balance and the sources the pet
        watches, so its first paint cannot show half a page. */
     quotaAgent: quotaAgentSnapshot(),

@@ -3421,3 +3421,13 @@ body[data-theme="light"][data-skin="console"] .health-bar::after {
  * smooth open and a stutter.
  */
 body[data-morphing="true"] .panel-glass { filter: none; }
+
+/*
+ * Windows 11 draws the blur behind the window (DWM acrylic), so this skin no
+ * longer needs a near-opaque card to fake depth: the backdrop is real, and a
+ * lighter tint lets it through. The alpha still clears 4.5:1 against --ink
+ * over a white page — see test/glass.test.mjs, which recomputes it.
+ */
+/* The lighter card above is global, not gated on the material flag: the same
+   alpha reads correctly whether the blur behind it comes from DWM acrylic
+   (Windows 11) or from the layered CSS the other builds paint. */

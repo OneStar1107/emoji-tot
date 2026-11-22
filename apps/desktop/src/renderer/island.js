@@ -2592,6 +2592,12 @@ function applyPrefs() {
   document.body.dataset.motion = prefs.motion === false ? 'off' : 'on';
   document.body.dataset.reduceMotion = prefs.reduceMotion === true ? 'on' : 'off';
   document.body.dataset.theme = resolveTheme();
+  /*
+   * Which material the window itself is drawing. Windows 11 paints DWM acrylic
+   * behind the client area, the stylesheet lightens the card when it does, and
+   * the screenshot route stays off — the two blurs would stack.
+   */
+  document.body.dataset.material = prefs.windowMaterial === 'acrylic' ? 'acrylic' : 'none';
   timeFormat24 = prefs.timeFormat !== '12h';
 }
 
@@ -4225,6 +4231,12 @@ api.onPrefs((next) => {
 
 const boot = await api.bootstrap();
 prefs = boot?.prefs ?? {};
+/* Main owns the OS check; a preference never decides this, because a Windows 10
+   machine cannot paint the material no matter what the switch says. */
+if (boot?.windowMaterial) prefs.windowMaterial = boot.windowMaterial;
+/* The first paint already happened by the time this reply lands; write the
+   attribute now rather than waiting for the next theme pass. */
+document.body.dataset.material = prefs.windowMaterial === 'acrylic' ? 'acrylic' : 'none';
 if (boot?.cast) {
   for (const face of document.querySelectorAll('emojitot-ball')) {
     face.setAttribute('cast', String(boot.cast));
