@@ -36,3 +36,14 @@ npm / pnpm / electron-builder 只接受三段 semver（`MAJOR.MINOR.PATCH`），
 ## 四、历史
 
 - 0.5.0 → 0.6.0 是规则定稿前的一次 minor 跳升，保留不改写。
+
+## 五、Windows 更新后的本机收尾
+
+每次在本机安装或发布新版后都要执行，不能只完成 GitHub Release：
+
+1. 先确认当前安装目录和 `EmojiTot.exe` 的完整版本号，例如 `0.8.18.14`。安装目录可能是自定义盘符，不能假设它一定在 `%LOCALAPPDATA%\Programs`。
+2. 保留当前安装目录，以及 `%APPDATA%\EmojiTot` 中的 `prefs.json`、`state.json`、`avoidance.json`、`shelf`、todo/focus 等用户数据。
+3. 关闭正在运行的 EmojiTot 后再清理；不得结束其他程序或仅凭名称结束无关进程。
+4. 删除旧安装目录、旧安装包/便携包、旧 `%LOCALAPPDATA%\EmojiTot\app-runtime`、`electron-runtime`、`portable`、`probe`、测试临时目录，以及 `%APPDATA%\EmojiTot` 下可再生成的浏览器缓存和天气、设备、健康、歌词缓存。
+5. 保留 `release\EmojiTot.exe`、`release\EmojiTot.exe.blockmap`、`release\EmojiTot.Portable.exe` 和 `release\win-unpacked` 中当前版本的文件；旧版本生成物可以清理。
+6. 清理后再次核对安装版本，并确认程序能够启动。报告中写明删除位置、释放空间和是否可恢复。

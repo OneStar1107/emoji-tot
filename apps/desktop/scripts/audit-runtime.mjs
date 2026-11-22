@@ -1,6 +1,6 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve, win32 } from 'node:path';
 
 import { isAsciiPath } from './electron-runtime.mjs';
 
@@ -11,7 +11,12 @@ import { isAsciiPath } from './electron-runtime.mjs';
  * same behavior so a repository under `E:\项目\...` can still be tested.
  */
 export function auditRuntimePlan(exePath, platform = process.platform) {
-  const exe = resolve(exePath);
+  // Unit tests simulate Windows paths on Linux. Resolve drive-letter and UNC
+  // paths with Windows semantics so the host filesystem does not turn an
+  // absolute path such as C:\EmojiTot into a relative path.
+  const windowsAbsolute =
+    platform === 'win32' && (/^[A-Za-z]:[\\/]/.test(exePath) || exePath.startsWith('\\\\'));
+  const exe = windowsAbsolute ? win32.resolve(exePath) : resolve(exePath);
   return {
     exe,
     needsStage: platform === 'win32' && !isAsciiPath(exe),

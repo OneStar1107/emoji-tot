@@ -54,7 +54,13 @@ describe('desktop packaging runtime', () => {
   it('uses the installed Electron distribution instead of downloading it again', () => {
     const desktopRoot = fileURLToPath(new URL('..', import.meta.url));
     const pkg = JSON.parse(readFileSync(join(desktopRoot, 'package.json'), 'utf8'));
+    const electronBinary =
+      process.platform === 'win32'
+        ? 'electron.exe'
+        : process.platform === 'darwin'
+          ? 'Electron.app/Contents/MacOS/Electron'
+          : 'electron';
     assert.equal(pkg.build.electronDist, 'node_modules/electron/dist');
-    assert.equal(existsSync(resolve(desktopRoot, pkg.build.electronDist, 'electron.exe')), true);
+    assert.equal(existsSync(resolve(desktopRoot, pkg.build.electronDist, electronBinary)), true);
   });
 });
