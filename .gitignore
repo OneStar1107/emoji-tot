@@ -23,3 +23,4 @@ docs/shots/
 
 # scratch workspace: screenshots, one-off scripts, subagent evidence
 .agents/
+build/cert/

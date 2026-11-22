@@ -32,11 +32,11 @@ Folded, it is just a face; click it and it grows into a 420px panel in place. Th
 <!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot.Setup.0.8.15.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.15/EmojiTot.Setup.0.8.15.exe) | Installer — starts from the Start menu |
-| [EmojiTot.0.8.15.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.15/EmojiTot.0.8.15.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.Setup.0.8.16.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.16/EmojiTot.Setup.0.8.16.exe) | Installer — starts from the Start menu |
+| [EmojiTot.0.8.16.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.16/EmojiTot.0.8.16.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
-Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases) · current <!--facts:version-->0.8.15<!--/facts-->
+Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases) · current <!--facts:version-->0.8.16<!--/facts-->
 
 The version here is kept in sync with `package.json` by `pnpm docs:sync`. If that release has not been tagged yet the links 404 — take the current published build from all releases.
 

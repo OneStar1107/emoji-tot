@@ -2892,14 +2892,24 @@ function paintMorph(w, h, elapsed) {
    * of text on screen during the fold — unreadable, but painted for all 240ms.
    */
   if (panelBodyEl) {
-    panelBodyEl.style.transform = `scale(${1 / scaleX}, ${1 / scaleY})`;
+    /*
+     * The card is laid out centred in the window, so while the window grows
+     * its left edge moves: panel.left goes from (w - panelW)/2 to 0. The
+     * counter-scale keeps the page at its natural size but does not cancel
+     * that translation, so the whole page slid right by (panelW - w)/2 over
+     * the open — the character visibly drifting to the right. Pushing the
+     * content back by exactly that amount keeps it still:
+     *   panel.left + shift + x = (w - panelW)/2 + (panelW - w)/2 + x = x
+     */
+    const shift = (m.panelW - w) / 2;
+    panelBodyEl.style.transform = `translateX(${shift}px) scale(${1 / scaleX}, ${1 / scaleY})`;
     /*
      * Text leaves before the pill's text arrives: this layer is opaque for the
      * first 45% of the close (108ms of 240) and gone by then, while the pill's
      * own text starts at 55% (132ms). Two layers of text are never on screen in
      * the same frame, and the surface alone carries the hand-over.
      */
-    const bodyMs = m.open ? 180 : MORPH_CLOSE.total * 0.45;
+    const bodyMs = m.open ? 240 : MORPH_CLOSE.total * 0.45;
     const bodyTo = m.open ? 1 : 0;
     const bodyAt = clamp01(elapsed / bodyMs);
     m.bodyOpacity = m.bodyFrom + (bodyTo - m.bodyFrom) * smoothstep(bodyAt);

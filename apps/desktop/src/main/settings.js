@@ -8,6 +8,7 @@
  */
 const { BrowserWindow, ipcMain, screen, shell, app } = require('electron');
 const path = require('node:path');
+const os = require('node:os');
 const { readPrefs, writePrefs, userDir, statePath } = require('./paths');
 const guard = require('./ipc-guard');
 const avoidance = require('./services/avoidance');
@@ -88,7 +89,22 @@ function create(page) {
     minHeight: 620,
     frame: false,
     transparent: false,
-    backgroundColor: '#111114',
+    /*
+     * The settings window is a plain rectangle, so unlike the island it can
+     * take the system's own blur: DWM paints acrylic behind the whole client
+     * area and everything the page leaves translucent shows the desktop. It
+     * replaces the opaque #111114 slab the window used to be — the "plastic
+     * board" that stayed flat while the island was glass.
+     *
+     * No shaping is needed here for the same reason: a rectangle is already
+     * the shape of the material, so its corners do not leak a blurred box the
+     * way the capsule's did.
+     */
+    backgroundMaterial: process.platform === 'win32' && Number(String(os.release()).split('.')[2] || 0) >= 22621 ? 'acrylic' : 'none',
+    /* Nearly transparent: on an opaque window this is the only channel the DWM
+       material shows through. A solid colour here hides it completely, which is
+       exactly what the #111114 slab did. */
+    backgroundColor: '#01000000',
     show: false,
     title: 'EmojiTot 设置',
     webPreferences: {

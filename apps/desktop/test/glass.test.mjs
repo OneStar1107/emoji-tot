@@ -249,8 +249,11 @@ describe('glass: the layer is only visible after a capture', () => {
       body.includes('.backdrop({ x: rect.left, y: rect.top, w: rect.width, h: rect.height })'),
       'the ask carries the panel box in CSS pixels',
     );
-    /* A late answer from an older ask must not repaint a newer one. */
-    assert.ok(body.includes('token !== glassToken || !open'));
+    /* A late answer from an older ask must not repaint a newer one. The
+       `|| !open` in that condition was also why a folded capsule never got a
+       photograph — the answer was discarded for the surface that asked. */
+    assert.ok(body.includes('token !== glassToken'));
+    assert.ok(!body.includes('token !== glassToken || !open'), 'a folded ask must not be discarded');
     const settle = islandJs.slice(islandJs.indexOf('function settleMorph'));
     assert.ok(settle.slice(0, settle.indexOf('\n}')).includes('requestGlass()'), 'the fold lands before the first ask');
   });
