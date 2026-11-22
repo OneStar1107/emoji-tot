@@ -90,21 +90,15 @@ function create(page) {
     frame: false,
     transparent: false,
     /*
-     * The settings window is a plain rectangle, so unlike the island it can
-     * take the system's own blur: DWM paints acrylic behind the whole client
-     * area and everything the page leaves translucent shows the desktop. It
-     * replaces the opaque #111114 slab the window used to be — the "plastic
-     * board" that stayed flat while the island was glass.
+     * Opaque, deliberately.
      *
-     * No shaping is needed here for the same reason: a rectangle is already
-     * the shape of the material, so its corners do not leak a blurred box the
-     * way the capsule's did.
+     * This window used to ask DWM for acrylic and paint near-transparent so the
+     * material showed. It is a reading surface — long lists, tables of devices,
+     * small labels — and a blurred desktop behind it made all of that harder to
+     * read. The user asked for the flat board back; --bg now carries the colour
+     * and nothing is composited under it.
      */
-    backgroundMaterial: process.platform === 'win32' && Number(String(os.release()).split('.')[2] || 0) >= 22621 ? 'acrylic' : 'none',
-    /* Nearly transparent: on an opaque window this is the only channel the DWM
-       material shows through. A solid colour here hides it completely, which is
-       exactly what the #111114 slab did. */
-    backgroundColor: '#01000000',
+    backgroundColor: '#111114',
     show: false,
     title: 'EmojiTot 设置',
     webPreferences: {

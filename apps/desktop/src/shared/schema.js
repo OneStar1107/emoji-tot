@@ -205,7 +205,7 @@ export const DEFAULTS = {
    * stack for `backdrop-filter` to sample. Off by default: the capture route
    * needs the window excluded from its own frame, and on some GPU drivers that
    * flag makes the window flicker. It needs the frost skin with blur on to mean
-   * anything (island-glass.mjs checks all three). The frame lives in memory
+   * anything (the skin switch now paints a flat card). The frame lives in memory
    * only: never written, never uploaded.
    */
   uiScale: 100,

@@ -43,7 +43,6 @@ contextBridge.exposeInMainWorld('islandAPI', {
    * paint it at — the page never guesses where the desktop is. A failed capture
    * is null, and the CSS material stays.
    */
-  backdrop: (rect) => ipcRenderer.invoke('island:backdrop', rect),
   openSettings: (page) => ipcRenderer.invoke('settings:open', page),
   /**
    * The weather page's city switcher: one preference write, the same channel
@@ -104,7 +103,7 @@ contextBridge.exposeInMainWorld('islandAPI', {
   /** Fallback for a drag that yields bytes but no path (virtual files). */
   shelfAddBuffer: (name, bytes) => ipcRenderer.invoke('local:do', { service: 'shelf', action: 'addBuffer', data: { name, bytes } }),
   onHover: (listener) => on('island:hover', listener),
-  /** The island window moved: the desktop under it changed, re-shoot the glass. */
+  /** The island window moved. */
   onMoved: (listener) => on('island:moved', listener),
   onAvoid: (listener) => on('island:avoid', listener),
   onPrefs: (listener) => on('settings:changed', listener),

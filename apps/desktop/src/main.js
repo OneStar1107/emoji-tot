@@ -45,7 +45,6 @@ const mail = require('./main/services/mail');
 const calendar = require('./main/services/calendar');
 const fullscreen = require('./main/services/fullscreen');
 const avoidance = require('./main/services/avoidance');
-const backdrop = require('./main/services/backdrop');
 const guard = require('./main/ipc-guard');
 const { safeSend } = guard;
 const platform = require('./main/platform');
@@ -59,17 +58,8 @@ const { createFaceBus } = require('./main/face-bus');
 // owner — and restored here, where that owner lives.
 const { createIdleMoods } = require('./main/idle-mood');
 
-/**
- * The real-glass backdrop, created once.
- *
- * One instance for the process, not one per request: its 500ms cache is what
- * turns "open, then the window resizes" into a single photograph. Its log
- * callback only ever receives a failure message — the frame itself is never
- * logged, written or sent anywhere except the island window that asked.
- */
-const desktopBackdrop = backdrop.createBackdrop({
-  log: (message) => console.warn('[backdrop]', message),
-});
+/* The backdrop service is no longer instantiated: the island paints a flat
+   card, so nothing captures the display. */
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -391,19 +381,17 @@ guard.guardedSync('island:material', ['island'], () => systemMaterial(), { fallb
  */
 function systemMaterial() {
   /*
-   * The glass, and the only glass.
+   * No system material, on any build.
    *
-   * The screenshot route needed a preference and a capture per open; this is
-   * what it was standing in for. DWM blurs whatever is behind the window, so
-   * the window has to be opaque with no page fill of its own, and the visible
-   * silhouette comes from the region built in applyIslandShape.
+   * The island's silhouette is drawn with setShape on a transparent window,
+   * and a shaped transparent window cannot carry a DWM material: the blur only
+   * fills a client rectangle, so it would either be clipped away or leak a
+   * rectangle of blur behind the capsule. The surfaces paint --card-solid.
    *
-   * 22621 is the first Windows 11 build (22H2) with the acrylic material;
-   * older builds keep the CSS material.
+   * The function stays because the window creation path and the island:material
+   * channel both ask for it; returning 'none' is the whole answer.
    */
-  if (process.platform !== 'win32') return 'none';
-  const build = Number(String(os.release()).split('.')[2] || 0);
-  return build >= 22621 ? 'acrylic' : 'none';
+  return 'none';
 }
 
 function createWindow() {
@@ -1957,52 +1945,8 @@ function startServices() {
     prefs: readPrefs(),
   }));
 
-  /*
-   * The real-glass backdrop: one screenshot of the display the island sits on,
-   * handed to the renderer to blur behind the panel.
-   *
-   * Three deliberate gates. The channel is island-only; the preference is
-   * re-read here, so a renderer that asks after the switch was turned off gets
-   * nothing; and the display is the one the window is actually on, not the
-   * primary one, so a second monitor's offsets are measured against its own
-   * origin. A failed capture is null — the island keeps its CSS material.
-   *
-   * The window bounds are read here rather than in the page because
-   * window.screenX and display.bounds are only guaranteed to share a coordinate
-   * space inside the main process.
-   */
-  guard.guardedHandle('island:backdrop', ['island'], async (rect, event) => {
-    const target = BrowserWindow.fromWebContents(event.sender);
-    if (!target || target.isDestroyed()) return null;
-    const bounds = target.getBounds();
-    /*
-     * The island is on the screen, so a plain capture photographs the panel
-     * too and the glass ends up showing a blurred picture of itself: the card
-     * reads as a dark block, its own text bleeds through as a highlight, and
-     * the layer flickers as the photograph and the real frame disagree.
-     * WDA_EXCLUDEFROMCAPTURE takes the window out of the frame for the length
-     * of the capture; hiding the window instead would flash, and moving it
-     * would lie about the coordinates.
-     */
-    let protectedNow = false;
-    try {
-      target.setContentProtection(true);
-      protectedNow = true;
-    } catch {
-      /* Older Windows builds reject the flag; the frame is still usable. */
-    }
-    try {
-      return await desktopBackdrop.capture({
-        display: screen.getDisplayMatching(bounds),
-        panel: rect,
-        window: bounds,
-      });
-    } finally {
-      if (protectedNow && !target.isDestroyed()) {
-        try { target.setContentProtection(false); } catch { /* already gone */ }
-      }
-    }
-  }, { check: guard.checkRect, maxBytes: 512 });
+  /* The backdrop channel is gone: the island paints a flat card now, so
+     nothing ever asks for a screenshot of the desktop. */
 
   /*
    * The devices page's star: one device name in, the merged prefs out.

@@ -4,6 +4,12 @@ SemVer 规则见 docs/RELEASING.md。MINOR 及以上必须在本文件中列出�
 
 > 面向用户的完整历史见 [CHANGELOG.md](CHANGELOG.md)（README 只引用那一份）；本文件保留 0.6.0 起的逐版详细条目，`pnpm version:check` 读这里。
 
+## 0.8.18
+
+- **毛玻璃整套拆掉了，界面回到实色板**：胶囊、面板、设置窗口都只画 `--card-solid`，不再抓屏、不再叠色调层。抓屏那条路带来的闪烁、移动窗口后残留旧照片、以及 `setContentProtection` 开关引起的整窗重合成，一起消失。
+- 岛和球窗口都不再请求系统材质（`systemMaterial()` 恒返回 none）：异形透明窗口本来也铺不了 DWM 模糊，设了只会漏出一块矩形。
+- 设置窗口回到不透明 `#111114`：它是用来读长列表和小标签的，背后透出桌面反而更难读。
+- 删掉了 `island-glass.mjs`、`main/services/backdrop.js`、`island:backdrop` 通道与两组对应测试（测试 378 → 332，其余全绿）。
 ## 0.8.17
 
 - 修安装/卸载向导左侧栏里的方块乱码：上一版侧栏位图用 Python 画了中文小字，而渲染时选的是拉丁字体（segoeui），没有中文字形，于是全部变成空心方块。现在侧栏只放图形与英文（EmojiTot / SETUP / UNINSTALL / OneStar1107），不再依赖任何中文字体。
