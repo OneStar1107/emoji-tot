@@ -2020,7 +2020,10 @@ document.getElementById('btn-close').addEventListener('click', () => api.close()
 api.onDevices?.((value) => {
   if (!value || !Array.isArray(value.devices)) return;
   devicesState = value;
-  if (page === 'devices') paintContent();
+  /* A probe lands on its own clock; rebuilding the rows mid-drag would orphan
+     the node under the pointer and the saved order would be the rebuilt one,
+     not the one the person dragged. The snapshot is kept either way. */
+  if (page === 'devices' && !deviceDrag) paintContent();
 });
 
 api.onChanged((next) => {

@@ -297,7 +297,17 @@ let batteryTimer = null;
 function batteryEntries() {
   const entries = [];
   if (battery && Number.isFinite(Number(battery.level))) entries.push({ name: '电脑', level: Number(battery.level) });
-  for (const device of devicesState?.devices ?? []) {
+  /*
+   * The status row is a view of the device list, so it obeys the same rules:
+   * a device hidden from the island does not get a turn here either, and the
+   * order someone dragged in settings is the order this cycles through.
+   */
+  const pinned = Array.isArray(prefs.devices?.pinned) ? prefs.devices.pinned : [];
+  const visible = orderDevices(visibleDevices(devicesState?.devices ?? [], prefs.devices?.hidden), {
+    pinned,
+    order: prefs.devices?.order,
+  });
+  for (const device of visible) {
     if (device.battery === null || device.battery === undefined) continue;
     entries.push({ name: device.name, level: Number(device.battery) });
   }
@@ -4244,7 +4254,12 @@ const bootPages = enabledPages();
 const preferred = bootPages.findIndex((page) => page.key === prefs.defaultPage);
 pageIndex = preferred >= 0 ? preferred : 0;
 setOpen(false);
-setInterval(renderPillStatus, 20000);
+/* Skip the repaint while the window is not on screen: a hidden window still
+   runs timers, and rebuilding the status row for nobody is pure garbage. */
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  renderPillStatus();
+}, 20000);
 /*
  * A live stream's frames are identical from one second to the next (there is no
  * position to advance), so the page cannot lean on them for its second hand.

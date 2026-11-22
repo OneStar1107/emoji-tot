@@ -405,6 +405,12 @@ function createWindow() {
       // The preload only uses contextBridge and ipcRenderer, so the renderer
       // has no reason to share a process with Node.
       sandbox: true,
+      /* Nothing here is typeable text, and the spellchecker loads a dictionary
+         per language into every renderer for a feature the island cannot use. */
+      spellcheck: false,
+      /* The island repaints continuously; letting Chromium keep a spare
+         snapshot of an always-on-top window buys nothing. */
+      backgroundThrottling: true,
     },
   });
 
@@ -917,7 +923,12 @@ function startAgentWatch(prefs) {
       pushQuotaAgent();
     };
     tick();
-    agentWatch[source.id] = setInterval(tick, 350);
+    /* One stat per second, not three. The tick wakes the main process and
+       walks the same file; at 350ms that is a permanent 3Hz heartbeat for a
+       number that changes a few times a minute. A file caught mid-write is
+       retried on the next tick either way, so the worst case is 650ms more
+       latency on a status flip nobody is timing. */
+    agentWatch[source.id] = setInterval(tick, 1000);
   }
 }
 

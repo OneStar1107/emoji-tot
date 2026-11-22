@@ -235,6 +235,15 @@ async function load(city, autoLocate) {
       const known = cachedPlace();
       if (known) {
         data = normalize(await fetchCoordinates(known));
+        /*
+         * The -Lat/-Lon branch of the script answers with coordinates only —
+         * no reverse geocode, so no district. Refreshing a cached place every
+         * half hour therefore dropped 番禺区 back to 广州市 and re-added it on
+         * the next full locate. The district is still known here; put it back.
+         */
+        if (known.district && data?.place && !data.place.district) {
+          data.place.district = String(known.district);
+        }
       } else {
         const raw = await fetchAuto();
         data = normalize(raw);
