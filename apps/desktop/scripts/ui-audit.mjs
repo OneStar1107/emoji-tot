@@ -13,14 +13,14 @@
  *
  * What it measures
  * ----------------
- *   island (10 pages)   .pages is a fixed 217px box with 12px of top padding,
+ *   island (all pages)  .pages is a fixed 217px box with 12px of top padding,
  *                       so 205px of content is visible and 200px is the working
  *                       budget (every page leaves the bottom 5px clear).
  *                       scrollHeight above the box, content that spills out of
  *                       it, text that is clipped without an ellipsis, scroll
  *                       areas that collapsed to zero height, and interactive
  *                       controls under 20px.
- *   settings (14 pages) horizontal overflow of the content column, elements
+ *   settings (all pages) horizontal overflow of the content column, elements
  *                       that escape their card, clipped text, and controls
  *                       under 20px. The settings window scrolls vertically by
  *                       design, so only the horizontal axis is a bug there.
@@ -38,8 +38,8 @@
  *   pnpm ui:audit -- --port 9580  # another CDP port (default 9576)
  *   pnpm ui:audit -- --exe <path> # another installed build
  *   pnpm ui:audit -- --skin solid # one skin; written to prefs.json before launch
- *   pnpm ui:audit -- --skins all  # all five skins, 10 island pages each
- *   pnpm ui:audit -- --skins all --stress  # skin × stress matrix: 5 × 10 island pages
+ *   pnpm ui:audit -- --skins all  # all five skins, every island page each
+ *   pnpm ui:audit -- --skins all --stress  # skin × stress matrix over every island page
  *
  * A first launch can be measured before the island has a box: pages then read
  * scrollHeight 0, and a half-ready window shows up as a few real measurements
@@ -60,6 +60,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { removeStagedAuditRuntime, stageAsciiAuditRuntime } from './audit-runtime.mjs';
 
 const DEFAULT_PORT = 9576;
 /**
@@ -100,7 +102,11 @@ async function loadSchema() {
 
 function defaultExe() {
   if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
-    return join(process.env.LOCALAPPDATA, 'Programs', '@emojitotdesktop', 'EmojiTot.exe');
+    const installed = join(process.env.LOCALAPPDATA, 'Programs', '@emojitotdesktop', 'EmojiTot.exe');
+    if (existsSync(installed)) return installed;
+    const packed = resolve(DESKTOP_ROOT, '..', '..', 'release', 'win-unpacked', 'EmojiTot.exe');
+    if (existsSync(packed)) return packed;
+    return installed;
   }
   return '';
 }
@@ -112,13 +118,13 @@ function usage() {
     '  --stress        measure with mono font, weight 600, 140% scale; combines with --skin/--skins',
     '  --json          print one JSON document on stdout (nothing else on stdout)',
     '  --port <n>      CDP port (default 9576; the default moves to the next free port)',
-    '  --exe <path>    installed EmojiTot.exe (default %LOCALAPPDATA%\\Programs\\@emojitotdesktop\\EmojiTot.exe)',
+    '  --exe <path>    installed or packed EmojiTot.exe (defaults to the installed app, then release/win-unpacked)',
     '  --skin <key>    one island skin: ' + SKINS.join(', '),
     '  --skins all     all five island skins; settings pages are measured once',
     '  -h, --help      this text',
     '',
     '  --skin cannot be combined with --skins.',
-    '  --stress with --skins all measures the five-skin matrix: 5 × 10 island pages,',
+    '  --stress with --skins all measures the five-skin matrix over every island page,',
     '  all at mono / 600 / 140%; the settings pages are still measured once.',
   ].join('\n');
 }
@@ -528,15 +534,21 @@ function forceKillTree(pid) {
 
 let activeChild = null;
 let activeProfile = null;
+let activeRuntime = null;
 
 function cleanupSync() {
   const child = activeChild;
   const profile = activeProfile;
+  const runtime = activeRuntime;
   activeChild = null;
   activeProfile = null;
+  activeRuntime = null;
   if (child && child.exitCode === null) forceKillTree(child.pid);
   if (profile) {
     try { rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* best effort on exit */ }
+  }
+  if (runtime?.stagingDir) {
+    try { removeStagedAuditRuntime(runtime); } catch { /* best effort on exit */ }
   }
 }
 
@@ -549,9 +561,10 @@ for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129]
 }
 
 async function launchApp(options) {
-  if (!options.exe || !existsSync(options.exe)) {
+  const exe = options.launchExe || options.exe;
+  if (!exe || !existsSync(exe)) {
     throw new Error(
-      'installed EmojiTot.exe not found' + (options.exe ? ' at ' + options.exe : '') +
+      'installed EmojiTot.exe not found' + (exe ? ' at ' + exe : '') +
       '. Build and install it, or pass --exe <path>.',
     );
   }
@@ -572,7 +585,7 @@ async function launchApp(options) {
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.ELECTRON_NO_ATTACH_CONSOLE;
 
-  const child = spawn(options.exe, ['--remote-debugging-port=' + options.port, '--user-data-dir=' + profile], {
+  const child = spawn(exe, ['--remote-debugging-port=' + options.port, '--user-data-dir=' + profile], {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -835,7 +848,7 @@ async function runPass(options, name, skin, measureSettings, stress) {
     let settings = null;
     /*
      * Skins only restyle the island window; the settings window keeps one
-     * layout. So --skins all measures the 14 settings pages once, on the
+     * layout. So --skins all measures all settings pages once, on the
      * first skin, instead of re-reading the same layout five times.
      */
     if (measureSettings) {
@@ -1018,6 +1031,13 @@ async function main() {
     return;
   }
   jsonMode = options.json;
+  activeRuntime = stageAsciiAuditRuntime(options.exe);
+  options.launchExe = activeRuntime.exe;
+  if (activeRuntime.staged) {
+    console.error(
+      '[ui-audit] non-ASCII app path; staged an ASCII runtime at ' + activeRuntime.stagingDir,
+    );
+  }
   if (!options.portExplicit) {
     const requested = options.port;
     options.port = await freePort(requested);
@@ -1039,6 +1059,7 @@ async function main() {
     tool: 'ui-audit',
     generatedAt: new Date().toISOString(),
     exe: options.exe,
+    runtimeExe: options.launchExe,
     port: options.port,
     passes: [],
     issues: [],
@@ -1048,7 +1069,7 @@ async function main() {
 
   const passes = [];
   for (const item of plan) {
-    console.error('[ui-audit] ' + item.name + ' pass: launching ' + options.exe);
+    console.error('[ui-audit] ' + item.name + ' pass: launching ' + options.launchExe);
     let pass;
     let retried = false;
     try {
