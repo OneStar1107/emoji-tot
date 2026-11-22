@@ -2,6 +2,11 @@
 
 已发布的版本，新的在上。版本号规则见 [RELEASING.md](RELEASING.md)。
 
+- 毛玻璃统一为一层整窗桌面照片：胶囊（收起）与面板（展开）共用同一层，只叠 64% 色调，位置一致；旧结构是面板专用 .panel-glass/.panel-veil，胶囊只有 90% 实色。
+- 色调 66% → 64%，这是白底文字 4.5:1 的下限。
+- 修缩放时角色漂移：.panel-body 的逆缩放补 transform-origin: top center，与面板同原点。
+- 删除自绘安装界面全部残留（installer-header/sidebar 位图、配置、文档引用），只用 NSIS 默认向导。
+
 ## 0.8.14
 
 - 安装器回到 electron-builder 默认向导：移除自绘欢迎页、自定义 header/sidebar 位图与 installer.nsh 注入；这三样会让安装过程在部分机器上不出现或卡住。

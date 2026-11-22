@@ -39,7 +39,18 @@
      what keeps light ink at 4.5:1 over a white page, which lands at 66% with
      the photograph darkened to 0.90. Below ~64% the glass reads better but the
      text stops being readable on a bright desktop. */
-  --glass-veil: color-mix(in srgb, var(--card) 66%, transparent);
+  --glass-veil: color-mix(in srgb, var(--card) 64%, transparent);
+  /*
+   * The one fill both surfaces paint with.
+   *
+   * The capsule and the panel used to disagree here: the panel sat on a
+   * photographed backdrop with the veil over it, while the capsule painted
+   * --card at 0.90 with a `backdrop-filter` that a transparent window cannot
+   * honour — so the same material read as glass when open and as a plastic
+   * slab when closed. Both now take --glass-fill, and the glass switch below
+   * is the only thing that changes it.
+   */
+  --glass-fill: var(--card);
   /* Native widgets (select popups, scrollbars) follow the theme instead of
      drawing a white menu with white text in dark mode. */
   color-scheme: dark;
@@ -397,7 +408,7 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
     radial-gradient(120% 140% at 50% -40%, var(--glass-key), rgba(255, 255, 255, 0) 66%),
     linear-gradient(180deg, var(--glass-sheen), rgba(255, 255, 255, 0) 42%),
-    var(--card);
+    var(--glass-fill);
   color: var(--ink);
   /*
    * One ring, one highlight, one lift. At 34px tall the old 24px blur read as a
@@ -412,7 +423,13 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
   transition: transform var(--base) var(--spring), box-shadow var(--base) var(--ease), border-color var(--base) var(--ease);
   cursor: pointer;
   white-space: nowrap;
+  position: relative;
+  /* The photograph sits at a negative index inside this context, so it
+     paints over the decorative background and under the face and status. */
+  isolation: isolate;
 }
+
+
 
 /* A 2% lift, not a 3.5% pop: the pill is a resting object, not a button that
    jumps when the pointer crosses it. */
@@ -602,6 +619,13 @@ body[data-skin="plain"] .pill:focus-visible::after { opacity: 1; }
 body[data-blur="off"] .panel,
 body[data-blur="off"] .pill { background: var(--card-solid); backdrop-filter: none; }
 
+/*
+ * With a photographed desktop behind the window, the fill is the veil and
+ * nothing else: the card tint would sit on top of the photograph and hide
+ * the very thing the glass is there to show.
+ */
+
+
 /* The light theme needs the same three ideas in light surfaces. */
 /* Shadows read far heavier on a light surface: soften them or the island
    looks like it is floating on soot. */
@@ -649,7 +673,7 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
     radial-gradient(140% 92% at 50% -22%, var(--glass-key), rgba(255, 255, 255, 0) 62%),
     linear-gradient(180deg, var(--glass-sheen), rgba(255, 255, 255, 0) 34%),
-    var(--card);
+    var(--glass-fill);
   /*
    * Kept inside the window margin on purpose. The shadow used to be 44px of
    * blur with 18px of offset while the window padding was only 28/18, so the
@@ -698,6 +722,17 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
   isolation: isolate;
 }
 
+/*
+ * The page inside the card is counter-scaled during the fold (paintMorph in
+ * island.js), and the inverse only cancels the panel's scale if it turns
+ * about the same origin. The panel turns about its top centre; this layer
+ * used to turn about its own centre, so the two transforms disagreed by
+ * (1 - 1/scale) times half the layer's height — the character sat still on
+ * the first frame and then slid upwards through the whole open, which is the
+ * drift that was reported.
+ */
+.panel-body { transform-origin: top center; }
+
 /* --------------------------------------------------------------- real glass */
 
 /*
@@ -706,58 +741,48 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
  * In a transparent window `backdrop-filter` filters the page's own pixels and
  * the page paints nothing outside this card, so the frost skin has always shown
  * the wallpaper *sharp* through a translucent tint. These two layers are the
- * honest version: #panel-glass is a photograph of the desktop behind the panel
- * (services/backdrop.js), blurred; .panel-veil is the theme's tint over it.
+ * honest version: .glass-root is a photograph of the desktop behind the window
+ * (services/backdrop.js), blurred, and each surface paints its tint over it.
  *
  * Neither exists until island.js receives a capture and writes
  * `body[data-glass="on"]`, so a refusal, a failure or a slow capture leaves the
  * CSS material below untouched — no black box, no half-painted layer.
  */
-.panel-glass,
-.panel-veil {
+/*
+ * The glass, shared by both surfaces.
+ *
+ * The capsule and the panel used to disagree: only the panel owned a
+ * photograph, so the folded surface could do nothing but paint an opaque tint
+ * and the two states read as different materials. One class, one photograph,
+ * one tint — the surfaces differ only in the box the layer is clipped to.
+ *
+ * The layer is bleed-px wider than its surface so the blur's own fade lands
+ * outside the box (each surface has overflow:hidden, which cuts that strip).
+ */
+.glass-layer {
   display: none;
   position: absolute;
-  pointer-events: none;
-}
-
-/*
- * 24px wider than the panel on every side.
- *
- * The blur samples past its own box, so its edge fades; with the layer exactly
- * panel-sized that fade is the first 20-odd pixels inside the card and the
- * glass goes pale along all four edges. Pushed out by --glass-bleed, the fade
- * lands in the strip the panel's `overflow: hidden` cuts away.
- */
-.panel-glass {
   inset: calc(-1 * var(--glass-bleed));
   z-index: -2;
-  /*
-   * Position and size are written by island.js in CSS pixels, against the
-   * display the window is on, so the blurred desktop element lands under the
-   * real one. 26px is the blur; saturate keeps a wallpaper's colour from
-   * greying out in the wash, and 0.94 keeps a white page from glowing.
-   */
+  pointer-events: none;
   background-repeat: no-repeat;
   filter: blur(20px) saturate(155%) brightness(0.9);
 }
 
-/* The tint, over the photograph: dark themes press it down, the light theme
-   lifts it, and both come from --card so a skin or theme change carries. */
-.panel-veil {
+/* The tint, over the photograph: same colour both states. */
+.glass-layer::after {
+  content: '';
+  position: absolute;
   inset: 0;
-  z-index: -1;
   background: var(--glass-veil);
 }
 
-/*
- * Only while the panel is actually open, only in the skin that promises
- * translucency, and only after a capture has landed. Everything else keeps the
- * card it had before this feature existed.
- */
-body[data-glass="on"][data-skin="frost"] #island[data-open="true"] .panel-glass,
-body[data-glass="on"][data-skin="frost"] #island[data-open="true"] .panel-veil {
-  display: block;
-}
+body[data-glass="on"][data-skin="frost"] .glass-layer { display: block; }
+
+/* The photograph carries the fill; the card tint would sit on top of it. */
+body[data-glass="on"][data-skin="frost"] { --glass-fill: transparent; }
+
+/* The two per-panel layers are gone: one window-wide .glass-root replaces them. */
 
 /*
  * The fold's content layer (see paintMorph in island.js).
@@ -3420,7 +3445,7 @@ body[data-theme="light"][data-skin="console"] .health-bar::after {
  * visible (the panel is scaling anyway) and is the difference between a
  * smooth open and a stutter.
  */
-body[data-morphing="true"] .panel-glass { filter: none; }
+body[data-morphing="true"] .glass-root { filter: none; }
 
 /*
  * Windows 11 draws the blur behind the window (DWM acrylic), so this skin no

@@ -55,6 +55,7 @@ const panelBodyEl = document.getElementById('panel-body');
 /* The blurred photograph of the desktop; its fill arrives asynchronously (see
    the real-glass section below). */
 const glassLayerEl = document.getElementById('panel-glass');
+const pillGlassEl = document.getElementById('pill-glass');
 const pagesEl = document.getElementById('pages');
 const dotsEl = document.getElementById('dots');
 const titleEl = document.getElementById('page-title');
@@ -3114,41 +3115,69 @@ function clearGlass() {
     glassTimer = 0;
   }
   document.body.dataset.glass = 'off';
-  if (!glassLayerEl) return;
+  glassTarget = null;
   /* Clearing the inline background is what drops the decoded bitmap; leaving
-     it set would keep a full screenshot alive behind a hidden panel. */
-  glassLayerEl.style.backgroundImage = '';
-  glassLayerEl.style.backgroundPosition = '';
-  glassLayerEl.style.backgroundSize = '';
+     it set would keep a full screenshot alive behind a hidden surface. */
+  for (const layer of [glassLayerEl, pillGlassEl]) {
+    if (!layer) continue;
+    layer.style.backgroundImage = '';
+    layer.style.backgroundPosition = '';
+    layer.style.backgroundSize = '';
+  }
 }
 
 function paintGlass(payload) {
   const paint = glassPaint(payload);
-  if (!paint || !glassLayerEl) {
+  const layer = glassTarget ?? glassLayerEl;
+  if (!paint || !layer) {
     /* Nothing paintable: keep the material that is already on screen. */
     clearGlass();
     return;
   }
-  glassLayerEl.style.backgroundImage = paint.image;
-  glassLayerEl.style.backgroundPosition = paint.position;
-  glassLayerEl.style.backgroundSize = paint.size;
+  layer.style.backgroundImage = paint.image;
+  layer.style.backgroundPosition = paint.position;
+  layer.style.backgroundSize = paint.size;
   /* Only now does the layer become visible (island.css). */
   document.body.dataset.glass = 'on';
 }
 
+/**
+ * The layer the next answer belongs to.
+ *
+ * A capture takes 50-200ms, and the surface can change under it: asking for
+ * the capsule and landing after the card opened would paint a capsule-sized
+ * rectangle into the card. `glassToken` already drops replies from an older
+ * ask, and this names the layer for the answer that is still current.
+ */
+let glassTarget = null;
+
 /** Ask for the desktop behind the panel, at the panel's current box. */
 function requestGlass() {
-  if (!open || !glassAllowed(prefs)) {
+  if (!glassAllowed(prefs)) {
     clearGlass();
     return;
   }
-  /* The fold owns the panel's box until it lands; settleMorph asks again. */
+  /* The fold owns the window's box until it lands; settleMorph asks again. */
   if (morph || closing) return;
-  const rect = panelEl.getBoundingClientRect();
+  /*
+   * Whichever surface is on screen, not just the panel.
+   *
+   * The two states each own a layer and each asks for its own rectangle, so
+   * both get a photograph that lands under their real box. Asking only for
+   * the panel is what left the folded capsule with an opaque tint while the
+   * open card had real glass — the two-state mismatch that was reported.
+   *
+   * The captures share the main process's 500ms cache, so folding and opening
+   * in quick succession is one photograph, and only the offset is recomputed.
+   */
+  const surface = open ? panelEl : pillEl;
+  const layer = open ? glassLayerEl : pillGlassEl;
+  const rect = surface.getBoundingClientRect();
   if (!rect.width || !rect.height) {
     clearGlass();
     return;
   }
+  glassTarget = layer;
   const token = (glassToken += 1);
   /* Ask without clearing: 'pending' hid the previous frame for the length of
      the capture, which is 600ms of flicker on every expand. The old frame
@@ -3157,8 +3186,8 @@ function requestGlass() {
   api
     .backdrop({ x: rect.left, y: rect.top, w: rect.width, h: rect.height })
     .then((payload) => {
-      /* A newer ask or a closed panel owns the layer now. */
-      if (token !== glassToken || !open) return;
+      /* A newer ask owns the layer now; a folded surface is still a surface. */
+      if (token !== glassToken) return;
       paintGlass(payload);
     })
     .catch(() => {
@@ -3179,12 +3208,16 @@ function syncGlassMaterial() {
   if (key === appliedGlass) return;
   appliedGlass = key;
   if (!glassAllowed(prefs)) clearGlass();
-  else if (open) scheduleGlassRefresh();
+  /*
+   * Both states refresh. This used to be `else if (open)` — the capsule was
+   * never given a photograph, which is the whole reason the folded surface
+   * looked like a different material.
+   */
+  else scheduleGlassRefresh();
 }
 
-/** The window moved or resized, so the desktop under the panel changed too. */
+/** The window moved, resized or unfolded, so the desktop underneath changed. */
 function scheduleGlassRefresh() {
-  if (!open) return;
   if (glassTimer) clearTimeout(glassTimer);
   glassTimer = setTimeout(() => {
     glassTimer = 0;

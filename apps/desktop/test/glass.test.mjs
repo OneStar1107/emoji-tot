@@ -104,8 +104,7 @@ describe('glass: a failure paints nothing', () => {
 
   it('lays the panel material out under the layer, never over it', () => {
     assert.match(islandCss, /\.panel\s*\{[^}]*isolation:\s*isolate/, 'the panel must be a stacking context');
-    assert.match(islandCss, /\.panel-glass\s*\{[^}]*z-index:\s*-2/, 'the photograph sits above the panel background');
-    assert.match(islandCss, /\.panel-veil\s*\{[^}]*z-index:\s*-1/, 'the tint sits above the photograph');
+    assert.match(islandCss, /\.glass-layer\s*\{[^}]*z-index:\s*-2/, 'the photograph sits under every surface');
   });
 });
 
@@ -166,7 +165,7 @@ describe('glass: the tint keeps body text readable', () => {
 
   it('is the card tint at a stated fraction, not a second colour', () => {
     assert.match(vein, /color-mix\(in srgb, var\(--card\) \d+%, transparent\)/);
-    assert.equal(ratio, 66, 'the fraction and the contrast numbers below are one decision');
+    assert.equal(ratio, 64, 'the fraction and the contrast numbers below are one decision');
   });
 
   /*
@@ -199,25 +198,29 @@ describe('glass: the tint keeps body text readable', () => {
 
   it('pads the layer by the distance the geometry subtracts', () => {
     assert.equal(declaration(dark, 'glass-bleed'), GLASS_BLEED + 'px');
-    assert.match(islandCss, /\.panel-glass\s*\{[^}]*inset:\s*calc\(-1 \* var\(--glass-bleed\)\)/);
+    assert.match(islandCss, /\.glass-layer\s*\{[^}]*inset:\s*calc\(-1 \* var\(--glass-bleed\)\)/);
   });
 });
 
 /* ------------------------------------------------------------------ wiring */
 
 describe('glass: the layer is only visible after a capture', () => {
-  it('has the two layers inside the panel', () => {
-    assert.match(islandHtml, /<div class="panel-glass" id="panel-glass" aria-hidden="true"><\/div>/);
-    assert.match(islandHtml, /<div class="panel-veil" aria-hidden="true"><\/div>/);
+  it('gives both surfaces a layer of the same class', () => {
+    assert.match(islandHtml, /<span class="glass-layer" id="pill-glass" aria-hidden="true"><\/span>/);
+    assert.match(islandHtml, /<div class="glass-layer" id="panel-glass" aria-hidden="true"><\/div>/);
   });
 
   it('gates display on the open panel, the frost skin and a landed capture', () => {
-    const rule = islandCss.slice(islandCss.indexOf('body[data-glass="on"][data-skin="frost"]'));
+    /* The switch appears twice: once to pick the fill token, once to show the
+       window-wide photograph. The display rule is the second one. */
+    const rule = islandCss.slice(islandCss.indexOf('body[data-glass="on"][data-skin="frost"] .glass-layer'));
     const selector = rule.slice(0, rule.indexOf('{'));
-    for (const token of ['data-glass="on"', 'data-skin="frost"', '#island[data-open="true"]', '.panel-glass', '.panel-veil']) {
+    for (const token of ['data-glass="on"', 'data-skin="frost"', '.glass-layer']) {
       assert.ok(selector.includes(token), 'the display rule must require ' + token);
     }
-    assert.match(islandCss, /\.panel-glass,\s*\n?\.panel-veil\s*\{\s*\n?\s*display:\s*none/, 'hidden until painted');
+    /* One window-wide layer: it covers the capsule and the card at once, so
+       there is no per-open condition left to gate on. */
+    assert.match(islandCss, /\.glass-layer\s*\{\s*\n?\s*display:\s*none/, 'hidden until painted');
   });
 
   it('sets data-glass="on" in one place, after a payload', () => {
@@ -237,10 +240,10 @@ describe('glass: the layer is only visible after a capture', () => {
     assert.ok(landed.slice(0, landed.indexOf('\n}')).includes('clearGlass()'));
   });
 
-  it('asks only while open, and not in the middle of the fold', () => {
+  it('asks for whichever surface is on screen, and not in the middle of the fold', () => {
     const request = islandJs.slice(islandJs.indexOf('function requestGlass'));
     const body = request.slice(0, request.indexOf('\n}'));
-    assert.ok(body.includes('if (!open || !glassAllowed(prefs))'));
+    assert.ok(body.includes('if (!glassAllowed(prefs))'));
     assert.ok(body.includes('if (morph || closing) return;'), 'painting mid-fold would scale the desktop');
     assert.ok(
       body.includes('.backdrop({ x: rect.left, y: rect.top, w: rect.width, h: rect.height })'),

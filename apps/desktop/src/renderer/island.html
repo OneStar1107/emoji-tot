@@ -12,6 +12,10 @@
     <div id="frame">
     <!-- Collapsed: one pill. The face is the character; the rest is status. -->
     <button class="pill" id="pill" type="button" aria-expanded="false" aria-label="展开 EmojiTot">
+      <!-- The same photographed desk the open card uses, at capsule scale.
+           Without it the folded surface could only paint an opaque tint, and
+           the two states read as different materials. -->
+      <span class="glass-layer" id="pill-glass" aria-hidden="true"></span>
       <span class="pill-face"><emojitot-ball cast="tot" size="24" state="idle"></emojitot-ball></span>
       <span class="pill-status" id="pill-status"></span>
       <span class="pill-live" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
@@ -24,8 +28,7 @@
            main/services/backdrop.js). Both paint under the content; the fill is
            written by island.js only after a capture has arrived, so a failed or
            slow capture leaves the CSS material exactly as it was. -->
-      <div class="panel-glass" id="panel-glass" aria-hidden="true"></div>
-      <div class="panel-veil" aria-hidden="true"></div>
+      <div class="glass-layer" id="panel-glass" aria-hidden="true"></div>
       <!-- The page and its chrome, as one layer the fold clips against the
            card's animated box (see paintMorph in island.js). The paging
            arrows stay outside: they are chrome that scales with the surface. -->
