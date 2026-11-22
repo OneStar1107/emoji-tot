@@ -239,12 +239,15 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 /*
  * The rail opens with the live character, not with a search box.
  *
- * A 64px round portrait: 2px ring, 56px ball inside, name underneath. It is a
- * button that opens 角色与表情 — the face answers "who is this", the click
- * answers "where do I change it". The focus ring is drawn on the button with
- * 2px offset, outside the circle, so the round clip cannot eat it. When the
- * cast table has no member for the current id, railCast() emits nothing — the
- * page list moves up and there is no empty circle.
+ * The picture is the character on its own: no ring, no plate. A 64px circle
+ * was only ever right for the round tot — a star, a pear or an egg inside one
+ * reads as cropped, and the ring competes with a body that already has an
+ * outline of its own. So the frame is gone; hover lifts the character instead.
+ * It is still a button that opens 角色与表情 — the face answers "who is this",
+ * the click answers "where do I change it". The focus ring is drawn outside the
+ * picture, so nothing can clip it. When the cast table has no member for the
+ * current id, railCast() emits nothing — the page list moves up and there is
+ * no empty placeholder.
  */
 .rail-cast {
   display: flex;
@@ -259,17 +262,19 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
   width: 64px;
   height: 64px;
   padding: 0;
-  border: 2px solid var(--line-strong);
-  border-radius: 50%;
+  border: 0;
+  border-radius: 14px;
   background: transparent;
   color: var(--ink);
   cursor: pointer;
-  overflow: hidden;
-  transition: border-color var(--fast) var(--ease);
+  transition: transform var(--fast) var(--ease);
 }
-.rail-cast-btn:hover,
-.rail-cast-btn:focus-visible { border-color: var(--accent); }
-.rail-cast-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rail-cast-btn:hover { transform: scale(1.06); }
+.rail-cast-btn:active { transform: scale(0.98); }
+.rail-cast-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
 .rail-cast-name {
   max-width: 100%;
   overflow: hidden;
@@ -920,6 +925,12 @@ html[data-preview="off"] .preview { display: none; }
   color: var(--faint);
   opacity: 0.7;
 }
+/* 英文的「桌面」比中文长，字号与字距收一点，角落这块标签就不会顶到岛。
+   The English label is longer; a tighter size keeps it out of the island. */
+html:lang(en) .pv-stage::after {
+  content: "DESKTOP";
+  letter-spacing: 0.06em;
+}
 html[data-theme="light"] .pv-stage {
   background-color: #e7e7ec;
   background-image:
@@ -1334,3 +1345,118 @@ input[type="range"].ctl { width: 150px; accent-color: var(--accent); }
 }
 .avoid-confirm p { margin: 0 0 8px; font-size: 11.5px; }
 .avoid-confirm-actions { display: flex; gap: 8px; }
+
+
+/* ---------------------------------------------------------------- devices */
+
+/*
+ * 设备页：一行一台外设。
+ *
+ * 行是 .row 的变体，所以边框、悬停和 48px 的高度节奏都沿用页面已有的一套；
+ * 它多出两列——电量与星标——由行的 flex 布局自己排。列表在卡片内滚动，
+ * 窗口高度不会随配对的设备数增长；滚动条就是全局那条 6px 的细条。
+ */
+.dev-rows {
+  max-height: min(52vh, 400px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.dev-row { gap: 10px; }
+.dev-row.off .dev-glyph,
+.dev-row.off .dev-main,
+.dev-row.off .dev-bat { opacity: 0.5; }
+.dev-glyph {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-2);
+}
+.dev-glyph svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dev-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.dev-main b {
+  font-size: 12.5px;
+  font-weight: 520;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dev-main span {
+  font-size: 11px;
+  color: var(--faint);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dev-bat {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 66px;
+  flex: none;
+  color: var(--dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.dev-bat b { min-width: 30px; text-align: right; font-weight: 400; }
+.dev-meter {
+  display: block;
+  width: 40px;
+  height: 3px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+.dev-meter i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+.dev-meter.warn i { background: #e0a14a; }
+.dev-meter.bad i { background: var(--bad); }
+html[data-theme="light"] .dev-meter.warn i { background: #b97612; }
+
+/* 显示开关与置顶星标是这一页唯一的两个行操作。开关按 34×20 缩小，行高
+   才能留在 48px 一档；星标用同一枚描边/填充切换，和岛上的设备页一致。 */
+.dev-row .switch { width: 34px; height: 20px; }
+.dev-row .switch::after { width: 16px; height: 16px; }
+.dev-row .switch[aria-checked="true"]::after { transform: translateX(14px); }
+.dev-star {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  flex: none;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.dev-star svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.dev-star:hover { background: var(--surface-2); color: var(--ink); }
+.dev-star.on { color: var(--accent-2); }
+.dev-star.on svg { fill: currentColor; }
+.dev-star:disabled { opacity: 0.32; cursor: not-allowed; }
+.dev-star:disabled:hover { background: transparent; color: var(--faint); }

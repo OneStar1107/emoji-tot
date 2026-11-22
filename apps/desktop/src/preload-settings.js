@@ -27,6 +27,16 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   openState: () => ipcRenderer.invoke('settings:open-state'),
   openData: () => ipcRenderer.invoke('settings:open-data'),
   openRepo: () => ipcRenderer.invoke('settings:open-repo'),
+  /** The devices page's live rows: the same snapshot the island devices page gets. */
+  devices: () => ipcRenderer.invoke('settings:devices'),
+  devicesRefresh: () => ipcRenderer.invoke('settings:devices-refresh'),
+  /** The devices page is on screen: start the probe it reads, and stop on leave. */
+  devicesWatch: (active) => ipcRenderer.invoke('settings:devices-watch', active === true),
+  /** Main owns the three-pin cap; it replies with the merged prefs. */
+  pinDevice: (name) => ipcRenderer.invoke('settings:devices-pin', name),
+  /** Show or hide one device on the island, by name; replies with merged prefs. */
+  hideDevice: (name, hidden) => ipcRenderer.invoke('settings:devices-hidden', { name, hidden: hidden === true }),
+  onDevices: (listener) => on('settings:devices', listener),
   quota: () => ipcRenderer.invoke('quota:get'),
   quotaDo: (action, data) => ipcRenderer.invoke('quota:do', { action, data }),
   mail: () => ipcRenderer.invoke('mail:get'),

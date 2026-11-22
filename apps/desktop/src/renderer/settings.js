@@ -7,9 +7,11 @@
  */
 import {
   DEFAULTS,
+  DEVICE_PIN_LIMIT,
   PAGE_MANIFEST,
   PRESET_MANIFEST,
   STATUS_MANIFEST,
+  deviceKind,
   withDefaults,
   orderedPageKeys,
   orderedStatusKeys,
@@ -17,6 +19,7 @@ import {
   SETTINGS_NAV,
   setStatusItemEnabled,
 } from '../shared/schema.js';
+import { LANGS, translate } from './i18n.js';
 
 /** The rail, from the one manifest. */
 const NAV = SETTINGS_NAV;
@@ -40,6 +43,7 @@ const ICON = {
   coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4a2 2 0 0 1 0 4H9"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   plug: '<path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
+  tray: '<path d="M3 13h4l2 3h6l2-3h4"/><path d="M5 5h14l2 8v6H3v-6z"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
 };
 
@@ -49,12 +53,22 @@ const ICON = {
  * had no row in this table, so the page could not be switched on from the UI
  * even though the island knew how to draw it.
  */
-const PAGES_TABLE = PAGE_MANIFEST.map((page) => ({
+/*
+ * 页面表与状态表在每次渲染时重建，不是模块常量。
+ *
+ * 它们要把 manifest 的中文标签换成当前语言；常量会在模块加载时求值一次，
+ * 之后切到英文，这张表还停在中文。函数化以后「标签属于当前语言」是结构上
+ * 的保证，而不是靠记得重载窗口。
+ */
+const pagesTable = () => PAGE_MANIFEST.map((page) => ({
   key: page.key,
-  label: page.title,
-  sub: page.sub,
+  label: T('island.' + page.key + '.label', null, page.title),
+  sub: T('island.' + page.key + '.sub', null, page.sub),
 }));
-const STATUS_TABLE = STATUS_MANIFEST.map((item) => ({ key: item.key, label: item.label }));
+const statusTable = () => STATUS_MANIFEST.map((item) => ({
+  key: item.key,
+  label: T('status.' + item.key, null, item.label),
+}));
 
 let prefs = { ...DEFAULTS };
 let page = 'general';
@@ -65,6 +79,34 @@ let version = '0.0.0';
 let quotaState = { accounts: [], current: null, last: null };
 let mailState = { accounts: [], messages: [], error: '', lastSync: 0, syncing: false };
 let calendarState = { events: [], upcoming: [] };
+/**
+ * The devices page's live rows: name, status, battery and source per device,
+ * plus when the last probe finished. Empty until the page asks for a probe;
+ * the main process pushes a new snapshot when one lands.
+ */
+let devicesState = { devices: [], withBattery: 0, probedAt: 0 };
+/** Whether this window currently holds the devices probe open. */
+let devicesWatching = false;
+/** Where the device list was scrolled, so a repaint does not jump to the top. */
+let devicesScrollTop = 0;
+
+/* --------------------------------------------------------------- 文案 / copy */
+
+/**
+ * 本窗口正在用的语言 / The language this window is drawing in.
+ *
+ * prefs.lang 是唯一的开关：切换即写 prefs，回包触发重绘，重绘时每次 T() 都读
+ * 一次当前值，所以不存在「语言变量和词典不同步」的第二份状态。
+ */
+const currentLang = () => (prefs.lang === 'en' ? 'en' : 'zh');
+
+/**
+ * 取一条文案：当前语言 → zh → 调用方给的兜底 → 键名。
+ *
+ * 第二、三层是给 schema 这类外部数据留的路：新增一条页面/状态条目、词典还没
+ * 跟上时，宁可显示它的中文原名，也不显示一个 dot.path。
+ */
+const T = (key, vars, fallback) => translate(currentLang(), key, vars, fallback);
 
 const rail = document.getElementById('rail');
 const content = document.getElementById('content');
@@ -109,20 +151,20 @@ const rowSeg = (label, sub, key, options) =>
  * 点击、Tab + Enter 和 aria-pressed 因此只有一条路径，两种控件不会各说各话。
  */
 const SKIN_PREVIEWS = [
-  ['frost', '毛玻璃', '半透明浅蓝，桌面会透出来'],
-  ['solid', '实色', '不透明深色卡片'],
-  ['plain', '极简', '收起时只剩一条细线'],
-  ['magazine', '杂志', '暖金衬线标题'],
-  ['console', '控制台', '冷蓝网格与等宽读数'],
+  ['frost', 'skin.frost.label', 'skin.frost.hint'],
+  ['solid', 'skin.solid.label', 'skin.solid.hint'],
+  ['plain', 'skin.plain.label', 'skin.plain.hint'],
+  ['magazine', 'skin.magazine.label', 'skin.magazine.hint'],
+  ['console', 'skin.console.label', 'skin.console.hint'],
 ];
 
 const skinPreviewCards = () =>
-  '<div class="skin-previews" role="group" aria-label="皮肤预览">' +
-  SKIN_PREVIEWS.map(([value, label, hint]) =>
+  '<div class="skin-previews" role="group" aria-label="' + escapeHtml(T('appearance.skin.previews')) + '">' +
+  SKIN_PREVIEWS.map(([value, labelKey, hintKey]) =>
     '<button type="button" class="skin-card" data-act="seg" data-key="skin" data-value="' + value +
-      '" aria-pressed="' + (String(valueOf('skin')) === value) + '" title="' + escapeHtml(hint) + '">' +
+      '" aria-pressed="' + (String(valueOf('skin')) === value) + '" title="' + escapeHtml(T(hintKey)) + '">' +
       '<span class="skin-thumb skin-thumb-' + value + '" aria-hidden="true"></span>' +
-      '<span class="skin-card-name">' + escapeHtml(label) + '</span>' +
+      '<span class="skin-card-name">' + escapeHtml(T(labelKey)) + '</span>' +
     '</button>').join('') +
   '</div>';
 
@@ -134,9 +176,9 @@ const skinPreviewCards = () =>
  * 盒子在下一帧就是新皮肤。用变量画而不是放图：皮肤一改，预览不会过期。
  */
 const skinPreviewRow = () =>
-  row('实时预览', '与岛同源，换皮肤立即更新',
+  row(T('appearance.livePreview.label'), T('appearance.livePreview.sub'),
     '<span class="skin-preview" data-skin-preview="' + escapeHtml(prefs.skin ?? 'frost') +
-      '" role="img" aria-label="当前皮肤实时预览">' +
+      '" role="img" aria-label="' + escapeHtml(T('appearance.livePreview.aria')) + '">' +
       '<span class="sp-pill"><i class="sp-dot"></i></span>' +
       '<span class="sp-body"><span class="sp-title">EmojiTot</span><span class="sp-bar"></span></span>' +
     '</span>');
@@ -192,7 +234,7 @@ const countRows = (body) => (String(body).match(/class="row[" ]/g) ?? []).length
 const group = (title, body) => {
   const count = countRows(body);
   return '<section class="group"><header class="ch"><h2>' + escapeHtml(title) + '</h2>' +
-    (count ? '<span class="cnum">' + count + ' 项</span>' : '') + '</header>' +
+    (count ? '<span class="cnum">' + T('count.items', { n: count }) + '</span>' : '') + '</header>' +
     '<div class="gbody">' + body + '</div></section>';
 };
 
@@ -201,13 +243,19 @@ const group = (title, body) => {
  * it back instead of every renderer carrying the same icon name around.
  */
 const HEAD_META = new Map();
-NAV.forEach((navGroup) => navGroup.items.forEach((item) => HEAD_META.set(item.key, { icon: item.icon, group: navGroup.title })));
+NAV.forEach((navGroup) => navGroup.items.forEach((item) =>
+  HEAD_META.set(item.key, {
+    icon: item.icon,
+    group: navGroup.title,
+    groupId: navGroup.id,
+  })));
 
 const head = (title, sub) => {
-  const meta = HEAD_META.get(page) ?? { icon: 'gear', group: '' };
+  const meta = HEAD_META.get(page) ?? { icon: 'gear', group: '', groupId: '' };
+  const groupName = meta.groupId ? T('nav.' + meta.groupId, null, meta.group) : meta.group;
   return '<header class="page-head">' +
     '<span class="head-icon" aria-hidden="true"><svg viewBox="0 0 24 24">' + (ICON[meta.icon] ?? ICON.gear) + '</svg></span>' +
-    '<div class="head-text"><p class="crumb">' + escapeHtml(meta.group) + ' · ' + escapeHtml(title) + '</p>' +
+    '<div class="head-text"><p class="crumb">' + escapeHtml(groupName) + ' · ' + escapeHtml(title) + '</p>' +
     '<h1>' + escapeHtml(title) + '</h1>' +
     (sub ? '<p class="sub">' + escapeHtml(sub) + '</p>' : '') + '</div></header>';
 };
@@ -223,7 +271,7 @@ const formError = (scope) =>
 function showFormError(scope, message) {
   const el = content.querySelector('[data-form-error="' + scope + '"]');
   if (!el) return;
-  el.textContent = String(message || '操作失败');
+  el.textContent = String(message || T('error.actionFailed'));
   el.hidden = false;
 }
 
@@ -237,79 +285,98 @@ function clearFormError(scope) {
 /* ------------------------------------------------------------------ pages */
 
 function pageGeneral() {
-  return head('常规', '形态、启动与基础外观') +
-    group('快速方案', '<div class="preset-grid">' +
+  return head(T('general.title'), T('general.lead')) +
+    /* 语言开关放在最上面：它是这一页唯一一个「先看懂、再改别的」的选项，
+       改完这一格，下面所有页立即用新语言重绘。 */
+    group(T('general.language.title'), card([
+      rowSeg(T('general.language.label'), T('general.language.sub'), 'lang', LANGS.map((code) => [code, code === 'zh' ? '中文' : 'English'])),
+    ])) +
+    group(T('general.presets.title'), '<div class="preset-grid">' +
       PRESET_MANIFEST.map((preset) =>
         '<button type="button" class="preset-card" data-act="preset" data-key="' + preset.key + '">' +
-          '<b>' + escapeHtml(preset.label) + '</b>' +
-          '<span>' + escapeHtml(preset.description) + '</span>' +
+          '<b>' + escapeHtml(T('preset.' + preset.key + '.label', null, preset.label)) + '</b>' +
+          '<span>' + escapeHtml(T('preset.' + preset.key + '.desc', null, preset.description)) + '</span>' +
         '</button>').join('') +
-      '</div><p class="note">只调整页面、状态组件和桌面形态，不改账号、密钥或隐私选项。</p>') +
-    group('显示方式', card([
-      rowSeg('桌面形态', '同时决定当前显示和下次启动', 'displayMode', [
-        ['island', '灵动岛'],
-        ['ball', '桌面球'],
-        ['both', '两者'],
+      '</div><p class="note">' + T('general.presets.note') + '</p>') +
+    group(T('general.display.title'), card([
+      rowSeg(T('general.displayMode.label'), T('general.displayMode.sub'), 'displayMode', [
+        ['island', T('general.displayMode.island')],
+        ['ball', T('general.displayMode.ball')],
+        ['both', T('general.displayMode.both')],
       ]),
     ])) +
-    group('窗口', card([
-      rowActionSeg('贴边收起', '把球收到屏幕边缘，移到边缘就贴上去', 'dock',
-        [['top', '顶部'], ['left', '左侧'], ['right', '右侧'], ['none', '不收']], meta?.dockSide ?? 'none'),
+    group(T('general.window.title'), card([
+      rowActionSeg(T('general.dock.label'), T('general.dock.sub'), 'dock',
+        [['top', T('general.dock.top')], ['left', T('general.dock.left')], ['right', T('general.dock.right')], ['none', T('general.dock.none')]], meta?.dockSide ?? 'none'),
     ])) +
-    group('启动', card([
-      rowToggle('开机启动', '登录系统时自动打开 EmojiTot', 'launchAtLogin'),
+    group(T('general.startup.title'), card([
+      rowToggle(T('general.launchAtLogin.label'), T('general.launchAtLogin.sub'), 'launchAtLogin'),
     ]));
 }
 
 function pageAppearance() {
-  return head('外观', '主题、材质、字体与动画') +
-    group('主题', card([
-      rowSeg('配色', '跟随系统时随桌面主题切换', 'theme', [['system', '跟随系统'], ['light', '浅色'], ['dark', '深色']]),
-      rowSeg('时间制式', '', 'timeFormat', [['24h', '24 小时'], ['12h', '12 小时']]),
+  return head(T('appearance.title'), T('appearance.lead')) +
+    group(T('appearance.theme.title'), card([
+      rowSeg(T('appearance.colorMode.label'), T('appearance.colorMode.sub'), 'theme', [['system', T('appearance.colorMode.system')], ['light', T('appearance.colorMode.light')], ['dark', T('appearance.colorMode.dark')]]),
+      rowSeg(T('appearance.timeFormat.label'), '', 'timeFormat', [['24h', T('appearance.timeFormat.h24')], ['12h', T('appearance.timeFormat.h12')]]),
     ])) +
-    group('灵动岛样式', card([
+    group(T('appearance.island.title'), card([
       /* The cards carry the name and the look of every skin; the text segment row
          above them repeated the same five labels, so it is gone. */
-      rowStack('皮肤', '毛玻璃半透明、实色卡片、极简收成一条线、杂志衬线版、控制台仪表', skinPreviewCards()),
+      rowStack(T('appearance.skin.label'), T('appearance.skin.sub'), skinPreviewCards()),
       skinPreviewRow(),
-      rowToggle('背景模糊', '关掉后是纯色卡片', 'blur'),
-      rowRange('圆角', '卡片的圆角半径', 'radius', 12, 30, 1, 'px'),
-      rowRange('界面缩放', '岛与球按此比例绘制', 'uiScale', 80, 140, 5, '%'),
+      rowToggle(T('appearance.blur.label'), T('appearance.blur.sub'), 'blur'),
+      rowRange(T('appearance.radius.label'), T('appearance.radius.sub'), 'radius', 12, 30, 1, 'px'),
+      rowRange(T('appearance.uiScale.label'), T('appearance.uiScale.sub'), 'uiScale', 80, 140, 5, '%'),
     ])) +
-    group('位置行为', card([
-      rowToggle('避开顶栏', '顶部有系统栏时，岛放在它下方', 'avoidTopBar'),
-      rowToggle('OLED 防烧屏', '收起静止时缓慢左右移动几个像素，减少静态痕迹', 'oledShift'),
+    group(T('appearance.position.title'), card([
+      rowToggle(T('appearance.avoidTopBar.label'), T('appearance.avoidTopBar.sub'), 'avoidTopBar'),
+      rowToggle(T('appearance.oledShift.label'), T('appearance.oledShift.sub'), 'oledShift'),
     ])) +
-    group('字体', card([
-      rowSelect('字体', '影响岛与设置窗口', 'font', [
-        ['system', '系统默认'], ['pingfang', '苹方'], ['yahei', '微软雅黑'], ['mono', '等宽'],
+    group(T('appearance.type.title'), card([
+      rowSelect(T('appearance.fontFamily.label'), T('appearance.fontFamily.sub'), 'font', [
+        ['system', T('appearance.fontFamily.system')], ['pingfang', T('appearance.fontFamily.pingfang')], ['yahei', T('appearance.fontFamily.yahei')], ['mono', T('appearance.fontFamily.mono')],
       ]),
-      rowSelect('字重', '', 'weight', [['400', '标准'], ['500', '中黑'], ['600', '粗体']]),
-      rowRange('字号', '0 表示跟随系统', 'fontSize', 0, 20, 1, 'px'),
+      rowSelect(T('appearance.weight.label'), '', 'weight', [['400', T('appearance.weight.400')], ['500', T('appearance.weight.500')], ['600', T('appearance.weight.600')]]),
+      rowRange(T('appearance.fontSize.label'), T('appearance.fontSize.sub'), 'fontSize', 0, 20, 1, 'px'),
     ])) +
-    group('动画', card([
-      rowToggle('界面动画', '展开、切页与悬停的过渡', 'motion'),
-      rowToggle('减少动态效果', '关掉呼吸与跳动，保留状态变化', 'reduceMotion'),
+    group(T('appearance.animation.title'), card([
+      rowToggle(T('appearance.motion.label'), T('appearance.motion.sub'), 'motion'),
+      rowToggle(T('appearance.reduceMotion.label'), T('appearance.reduceMotion.sub'), 'reduceMotion'),
     ]));
 }
 
+/**
+ * 屏幕名字 / A display's name.
+ *
+ * 主进程给的是 Electron 的 display.label，Windows 上常常是空的；空的时候主进程
+ * 回退成「显示器 <id>」这个固定格式。这句回退也是给人看的文案，所以在渲染时
+ * 换成当前语言；用户自己起的名字（display.label 有值）原样保留，不翻译。
+ */
+const displayLabel = (display) => {
+  const label = String(display.label ?? '');
+  const generated = label.match(/^显示器\s*(\d+)$/);
+  if (generated) return T('layout.displayId.display', { n: generated[1] });
+  return label || T('layout.displayId.display', { n: display.id });
+};
+
 function pageLayout() {
-  const displayOptions = [['null', '跟随主屏']].concat(
-    displays.map((d) => [String(d.id), d.label + (d.primary ? '（主屏）' : '')]),
+  const displayOptions = [['null', T('layout.displayId.followPrimary')]].concat(
+    displays.map((d) => [String(d.id), displayLabel(d) + (d.primary ? T('layout.displayId.primarySuffix') : '')]),
   );
-  return head('尺寸与位置', '岛和球各自多大、放在哪') +
-    group('灵动岛', card([
-      rowRange('面板宽度', '展开状态的宽度', 'islandWidth', 360, 560, 10, 'px'),
-      rowRange('收起高度', '折叠时只留脸的那条：越小越窄', 'pillHeight', 30, 44, 1, 'px'),
-      rowRange('顶部留白', '岛与屏幕顶边之间留出的空隙', 'islandTopGap', 0, 24, 1, 'px'),
+  return head(T('layout.title'), T('layout.lead')) +
+    group(T('layout.island.title'), card([
+      rowRange(T('layout.islandWidth.label'), T('layout.islandWidth.sub'), 'islandWidth', 360, 560, 10, 'px'),
+      rowRange(T('layout.pillHeight.label'), T('layout.pillHeight.sub'), 'pillHeight', 30, 44, 1, 'px'),
+      rowRange(T('layout.islandTopGap.label'), T('layout.islandTopGap.sub'), 'islandTopGap', 0, 24, 1, 'px'),
     ])) +
-    group('桌面球', card([
-      rowSeg('尺寸', '球的直径', 'sizeKey', [['xs', '64'], ['sm', '88'], ['md', '120'], ['lg', '160'], ['xl', '220']]),
-      rowToggle('始终置顶', '飘在所有窗口之上', 'pinned'),
-      rowToggle('点击穿透', '点到球以外的位置交给桌面', 'clickThrough'),
+    group(T('layout.ball.title'), card([
+      rowSeg(T('layout.size.label'), T('layout.size.sub'), 'sizeKey', [['xs', '64'], ['sm', '88'], ['md', '120'], ['lg', '160'], ['xl', '220']]),
+      rowToggle(T('layout.pinned.label'), T('layout.pinned.sub'), 'pinned'),
+      rowToggle(T('layout.clickThrough.label'), T('layout.clickThrough.sub'), 'clickThrough'),
     ])) +
-    group('显示屏', card([
-      rowSelect('显示在哪块屏', '拔掉外接屏时自动回到主屏', 'displayId', displayOptions, String(prefs.displayId ?? 'null')),
+    group(T('layout.display.title'), card([
+      rowSelect(T('layout.displayId.label'), T('layout.displayId.sub'), 'displayId', displayOptions, String(prefs.displayId ?? 'null')),
     ]));
 }
 
@@ -352,13 +419,13 @@ function sameExe(a, b) {
 
 function avoidAppsRow() {
   const apps = avoidApps();
-  if (!apps.length) return '<div class="avoid-empty">添加需要自动避让的其他应用</div>';
+  if (!apps.length) return '<div class="avoid-empty">' + T('behavior.customApps.empty') + '</div>';
   const cells = apps.map((app) => {
     const label = app.name || app.path;
     const face = avoidIconHtml(app.path);
-    return '<div class="avoid-app" title="' + escapeHtml(label + '\n所有窗口\n' + app.path) + '">' + face +
+    return '<div class="avoid-app" title="' + escapeHtml(T('avoid.app.tooltip', { name: label, path: app.path })) + '">' + face +
       '<button type="button" class="avoid-x" data-act="avoid-remove" data-path="' + escapeHtml(app.path) +
-        '" aria-label="移除 ' + escapeHtml(label) + '">×</button></div>';
+        '" aria-label="' + escapeHtml(T('avoid.app.remove', { name: label })) + '">×</button></div>';
   });
   return '<div class="avoid-grid">' + cells.join('') + '</div>';
 }
@@ -404,8 +471,8 @@ function closeAvoidDialog() {
 }
 
 function avoidCandidateReason(app) {
-  if (prefs.avoidBrowsers !== false && app.browser === true) return '浏览器规则已覆盖';
-  if (avoidApps().some((item) => sameExe(item.path, app.path))) return '已添加';
+  if (prefs.avoidBrowsers !== false && app.browser === true) return T('avoid.reason.browser');
+  if (avoidApps().some((item) => sameExe(item.path, app.path))) return T('avoid.reason.added');
   return '';
 }
 
@@ -417,7 +484,7 @@ function avoidMatches() {
 
 function avoidListHtml(rows) {
   if (!rows.length) {
-    return '<p class="avoid-none">' + (avoidLoading ? '正在读取应用…' : '未找到匹配的应用，请先打开应用后刷新。') + '</p>';
+    return '<p class="avoid-none">' + (avoidLoading ? T('avoid.empty.loading') : T('avoid.empty.none')) + '</p>';
   }
   return rows.map((app) => {
     const reason = avoidCandidateReason(app);
@@ -434,9 +501,9 @@ function avoidListHtml(rows) {
 
 function avoidConfirmHtml(addable) {
   if (!avoidConfirmAll) return '';
-  return '<div class="avoid-confirm"><p>将把当前列表中 ' + addable.length + ' 个应用全部加入自动避让，确定吗？</p>' +
-    '<div class="avoid-confirm-actions"><button type="button" class="btn primary" data-act="avoid-confirm-all">确定添加</button>' +
-    '<button type="button" class="btn" data-act="avoid-cancel-all">再想想</button></div></div>';
+  return '<div class="avoid-confirm"><p>' + T('avoid.confirm.text', { n: addable.length }) + '</p>' +
+    '<div class="avoid-confirm-actions"><button type="button" class="btn primary" data-act="avoid-confirm-all">' + T('avoid.confirm.yes') + '</button>' +
+    '<button type="button" class="btn" data-act="avoid-cancel-all">' + T('avoid.confirm.cancel') + '</button></div></div>';
 }
 
 /** Re-render the list and footer without touching the search box. */
@@ -481,26 +548,26 @@ function paintAvoidDialog() {
           (reason ? '<span class="avoid-reason">' + escapeHtml(reason) + '</span>' : '') +
           '</button>';
       }).join('')
-    : '<p class="avoid-none">' + (avoidLoading ? '正在读取应用…' : '未找到匹配的应用，请先打开应用后刷新。') + '</p>';
+    : '<p class="avoid-none">' + (avoidLoading ? T('avoid.empty.loading') : T('avoid.empty.none')) + '</p>';
   const confirm = avoidConfirmAll
-    ? '<div class="avoid-confirm"><p>将把当前列表中 ' + addable.length + ' 个应用全部加入自动避让，确定吗？</p>' +
-      '<div class="avoid-confirm-actions"><button type="button" class="btn primary" data-act="avoid-confirm-all">确定添加</button>' +
-      '<button type="button" class="btn" data-act="avoid-cancel-all">再想想</button></div></div>'
+    ? '<div class="avoid-confirm"><p>' + T('avoid.confirm.text', { n: addable.length }) + '</p>' +
+      '<div class="avoid-confirm-actions"><button type="button" class="btn primary" data-act="avoid-confirm-all">' + T('avoid.confirm.yes') + '</button>' +
+      '<button type="button" class="btn" data-act="avoid-cancel-all">' + T('avoid.confirm.cancel') + '</button></div></div>'
     : '';
   avoidDialog.innerHTML =
-    '<div class="avoid-modal" role="dialog" aria-modal="true" aria-label="添加应用">' +
-      '<header class="avoid-head"><h2>添加应用</h2>' +
-        '<button type="button" class="avoid-close" data-act="avoid-close" aria-label="关闭">×</button></header>' +
-      '<p class="avoid-sub">选择正在运行的应用，添加后自动记住。</p>' +
-      '<input class="ctl avoid-search" id="avoid-search" type="search" placeholder="搜索应用或窗口标题" value="' + escapeHtml(avoidQuery) + '" />' +
+    '<div class="avoid-modal" role="dialog" aria-modal="true" aria-label="' + escapeHtml(T('avoid.dialog.title')) + '">' +
+      '<header class="avoid-head"><h2>' + escapeHtml(T('avoid.dialog.title')) + '</h2>' +
+        '<button type="button" class="avoid-close" data-act="avoid-close" aria-label="' + escapeHtml(T('win.close')) + '">×</button></header>' +
+      '<p class="avoid-sub">' + escapeHtml(T('avoid.dialog.sub')) + '</p>' +
+      '<input class="ctl avoid-search" id="avoid-search" type="search" placeholder="' + escapeHtml(T('avoid.search.placeholder')) + '" value="' + escapeHtml(avoidQuery) + '" />' +
       '<div class="avoid-list">' + list + '</div>' +
-      '<div class="avoid-foot"><span class="avoid-hint">没有找到？先打开应用，再</span>' +
-        '<button type="button" class="btn" data-act="avoid-refresh">刷新列表</button>' +
+      '<div class="avoid-foot"><span class="avoid-hint">' + escapeHtml(T('avoid.foot.hint')) + '</span>' +
+        '<button type="button" class="btn" data-act="avoid-refresh">' + escapeHtml(T('avoid.foot.refresh')) + '</button>' +
       '</div>' +
       '<div class="avoid-actions">' +
-        '<button type="button" class="btn" data-act="avoid-close">取消</button>' +
-        '<button type="button" class="btn" data-act="avoid-add-all"' + (addable.length && !avoidConfirmAll ? '' : ' disabled') + '>全部添加</button>' +
-        '<button type="button" class="btn primary" data-act="avoid-add-one"' + (avoidSelected ? '' : ' disabled') + '>添加</button>' +
+        '<button type="button" class="btn" data-act="avoid-close">' + escapeHtml(T('action.cancel')) + '</button>' +
+        '<button type="button" class="btn" data-act="avoid-add-all"' + (addable.length && !avoidConfirmAll ? '' : ' disabled') + '>' + escapeHtml(T('action.addAll')) + '</button>' +
+        '<button type="button" class="btn primary" data-act="avoid-add-one"' + (avoidSelected ? '' : ' disabled') + '>' + escapeHtml(T('action.add')) + '</button>' +
       '</div>' + confirm +
     '</div>';
   const box = avoidDialog.querySelector('#avoid-search');
@@ -548,28 +615,28 @@ function pageBehavior() {
    */
   ensureAvoidIcons(avoidApps().map((app) => app.path), { force: Date.now() - avoidIconsAt > 3000 });
   avoidIconsAt = Date.now();
-  return head('隐藏与交互', '什么情况下出现，什么情况下让开') +
-    group('显示', card([
-      rowToggle('全屏时隐藏', '看视频、演示时不挡住画面', 'hideFullscreen'),
-      rowToggle('托盘图标', '关掉后只能从任务管理器退出', 'trayIcon'),
-      rowRange('悬停展开延迟', '鼠标进入后多久展开，0 为关闭悬停', 'hoverOpenDelay', 0, 500, 20, 'ms'),
-      rowToggle('移开自动收起', '鼠标离开岛后收成胶囊', 'hoverAutoHide'),
-      rowRange('收起延迟', '离开后多久收起，越接近 0 越干脆', 'hoverCloseDelay', 60, 1200, 60, 'ms'),
+  return head(T('behavior.title'), T('behavior.lead')) +
+    group(T('behavior.show.title'), card([
+      rowToggle(T('behavior.hideFullscreen.label'), T('behavior.hideFullscreen.sub'), 'hideFullscreen'),
+      rowToggle(T('behavior.trayIcon.label'), T('behavior.trayIcon.sub'), 'trayIcon'),
+      rowRange(T('behavior.hoverOpenDelay.label'), T('behavior.hoverOpenDelay.sub'), 'hoverOpenDelay', 0, 500, 20, 'ms'),
+      rowToggle(T('behavior.hoverAutoHide.label'), T('behavior.hoverAutoHide.sub'), 'hoverAutoHide'),
+      rowRange(T('behavior.hoverCloseDelay.label'), T('behavior.hoverCloseDelay.sub'), 'hoverCloseDelay', 60, 1200, 60, 'ms'),
     ])) +
-    group('自动避让', card([
-      rowToggle('自动避让', '下列应用遮住岛时，岛会收成细线', 'avoidEnabled'),
-      rowToggle('常用浏览器', '前台浏览器窗口遮住岛时避让', 'avoidBrowsers'),
-      '<div class="row"><span class="row-label"><b>自定义应用</b></span><span class="row-control">' +
-        '<button type="button" class="btn" data-act="avoid-add">＋ 添加应用</button></span></div>',
+    group(T('behavior.avoid.title'), card([
+      rowToggle(T('behavior.avoidEnabled.label'), T('behavior.avoidEnabled.sub'), 'avoidEnabled'),
+      rowToggle(T('behavior.avoidBrowsers.label'), T('behavior.avoidBrowsers.sub'), 'avoidBrowsers'),
+      '<div class="row"><span class="row-label"><b>' + escapeHtml(T('behavior.customApps.label')) + '</b></span><span class="row-control">' +
+        '<button type="button" class="btn" data-act="avoid-add">' + escapeHtml(T('behavior.customApps.add')) + '</button></span></div>',
       avoidAppsRow(),
-      '<p class="hint">切到插件浮窗时，宿主窗口仍遮住岛就会继续避让。</p>',
+      '<p class="hint">' + T('behavior.customApps.note') + '</p>',
     ])) +
-    group('交互', card([
-      rowToggle('滚轮换页', '在面板上横向滚动切换页面', 'wheelPaging'),
-      rowToggle('失焦收起', '点到别的窗口时自动收起', 'blurCollapse'),
+    group(T('behavior.interaction.title'), card([
+      rowToggle(T('behavior.wheelPaging.label'), T('behavior.wheelPaging.sub'), 'wheelPaging'),
+      rowToggle(T('behavior.blurCollapse.label'), T('behavior.blurCollapse.sub'), 'blurCollapse'),
     ])) +
-    group('快捷键', card([
-      rowToggle('全局快捷键', 'Alt+Shift+T 展开或收起岛', 'hotkey'),
+    group(T('behavior.hotkey.title'), card([
+      rowToggle(T('behavior.hotkey.label'), T('behavior.hotkey.sub'), 'hotkey'),
     ])) +
     '';
 }
@@ -584,9 +651,9 @@ function orderList(listId, items, enabledOf, toggleAction = 'toggle-nested') {
         (item.sub ? '<em>' + escapeHtml(item.sub) + '</em>' : '') +
       '</span>' +
       '<span class="order-move">' +
-        '<button type="button" data-order-move="-1" aria-label="上移 ' + escapeHtml(item.label) + '"' +
+        '<button type="button" data-order-move="-1" aria-label="' + escapeHtml(T('pages.order.up', { name: item.label })) + '"' +
           (index === 0 ? ' disabled' : '') + '><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5"/></svg></button>' +
-        '<button type="button" data-order-move="1" aria-label="下移 ' + escapeHtml(item.label) + '"' +
+        '<button type="button" data-order-move="1" aria-label="' + escapeHtml(T('pages.order.down', { name: item.label })) + '"' +
           (index === items.length - 1 ? ' disabled' : '') + '><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>' +
       '</span>' +
       (enabledOf ? '<button type="button" class="switch" role="switch" aria-checked="' + Boolean(enabledOf(item.key)) +
@@ -597,76 +664,67 @@ function orderList(listId, items, enabledOf, toggleAction = 'toggle-nested') {
 }
 
 function pagePages() {
+  const pageTable = pagesTable();
+  const statusTableRows = statusTable();
   const pageItems = orderedPageKeys(prefs)
-    .map((key) => PAGES_TABLE.find((p) => p.key === key))
+    .map((key) => pageTable.find((p) => p.key === key))
     .filter(Boolean);
   const statusItems = orderedStatusKeys(prefs)
-    .map((key) => STATUS_TABLE.find((item) => item.key === key))
+    .map((key) => statusTableRows.find((item) => item.key === key))
     .filter(Boolean);
 
-  const pinned = Array.isArray(prefs.devices?.pinned) ? prefs.devices.pinned : [];
   const defaultOptions = pageItems.map((item) => [item.key, item.label]);
-  return head('页面管理', '决定岛上有哪些页，以及它们出现的顺序') +
-    group('状态组件 · 常驻胶囊', '<div class="card">' +
+  return head(T('pages.title'), T('pages.lead')) +
+    group(T('pages.status.title'), '<div class="card">' +
       orderList('status', statusItems, (key) => prefs.statusItems.includes(key), 'toggle-status') + '</div>') +
-    group('功能页面 · 展开后左右翻', '<div class="card">' + orderList('pages', pageItems, (key) => prefs.pages[key] !== false) + '</div>') +
-    group('设备页', card([
-      rowToggle('显示电量', '关掉后只显示名称与连接状态', 'devices.showBattery'),
-      row('置顶设备',
-        pinned.length
-          ? '已置顶 ' + pinned.length + ' 台 · 最多 3 台，在设备页点行尾星标切换'
-          : '在设备页点行尾的星标置顶，最多 3 台',
-        pinned.length
-          ? '<button type="button" class="btn" data-act="button" data-key="devices-unpin">全部取消</button>'
-          : ''),
+    group(T('pages.pages.title'), '<div class="card">' + orderList('pages', pageItems, (key) => prefs.pages[key] !== false) + '</div>') +
+    group(T('pages.open.title'), card([
+      rowSelect(T('pages.defaultPage.label'), T('pages.defaultPage.sub'), 'defaultPage', defaultOptions, prefs.defaultPage),
     ])) +
-    group('打开时', card([
-      rowSelect('默认页', '每次打开面板先停在这一页', 'defaultPage', defaultOptions, prefs.defaultPage),
-    ])) +
-    '<p class="note">拖动排序。关掉的页面既不在岛上出现，也不再在后台运行——它的服务会一起停掉，除非胶囊里有状态组件还要用它。</p>';
+    '<p class="note">' + T('pages.note') + '</p>';
 }
 
 function pageMusic() {
-  return head('媒体与歌词', '跟随系统正在播放的媒体') +
-    group('歌词', card([
-      rowToggle('展开时显示歌词', '在播放器右侧同步滚动显示', 'music.lyrics'),
-      rowToggle('岛上歌词', '收起时显示当前句', 'music.islandLyrics'),
-      rowRange('时间偏移', '正数提前，负数延后', 'music.offset', -1, 2, 0.05, ' 秒'),
+  return head(T('music.title'), T('music.lead')) +
+    group(T('music.lyrics.title'), card([
+      rowToggle(T('music.lyrics.label'), T('music.lyrics.sub'), 'music.lyrics'),
+      rowToggle(T('music.islandLyrics.label'), T('music.islandLyrics.sub'), 'music.islandLyrics'),
+      rowRange(T('music.offset.label'), T('music.offset.sub'), 'music.offset', -1, 2, 0.05, T('unit.seconds')),
     ])) +
-    '<p class="note">歌词按时间轴滚动；时间偏移用来校正平台之间的延迟。</p>';
+    '<p class="note">' + T('music.note') + '</p>';
 }
 
 function pageFocus() {
-  return head('专注与饮水', '番茄钟、休息与提醒') +
-    group('专注', card([
-      rowToggle('启用专注', '开启后可以在岛上开始番茄钟', 'focus.enabled'),
-      rowRange('专注时长', '', 'focus.work', 10, 60, 5, ' 分钟'),
-      rowRange('休息时长', '', 'focus.rest', 3, 20, 1, ' 分钟'),
+  return head(T('focus.title'), T('focus.lead')) +
+    group(T('focus.focus.title'), card([
+      rowToggle(T('focus.enabled.label'), T('focus.enabled.sub'), 'focus.enabled'),
+      rowRange(T('focus.work.label'), '', 'focus.work', 10, 60, 5, T('unit.minutes')),
+      rowRange(T('focus.rest.label'), '', 'focus.rest', 3, 20, 1, T('unit.minutes')),
     ])) +
-    group('健康提醒', card([
-      rowToggle('启用提醒', '喝水与久坐', 'health.enabled'),
-      rowRange('喝水间隔', '', 'health.waterMin', 20, 120, 5, ' 分钟'),
-      rowRange('久坐提醒', '', 'health.standMin', 30, 180, 10, ' 分钟'),
+    group(T('focus.health.title'), card([
+      rowToggle(T('health.enabled.label'), T('health.enabled.sub'), 'health.enabled'),
+      rowRange(T('health.waterMin.label'), '', 'health.waterMin', 20, 120, 5, T('unit.minutes')),
+      rowRange(T('health.standMin.label'), '', 'health.standMin', 30, 180, 10, T('unit.minutes')),
     ])) +
-    '<p class="note">计时以「结束时间戳」存盘，关掉设置窗口或重启应用都还在走。</p>';
+    '<p class="note">' + T('focus.note') + '</p>';
 }
 
 function pageTodo() {
-  return head('待办与置物', '清单、到期提醒与临时收纳') +
-    group('待办', card([
-      rowToggle('启用待办', '岛上显示下一条到期任务', 'todo.enabled'),
-      rowToggle('到期提醒', '到时间弹出通知', 'todo.notify'),
+  return head(T('todo.title'), T('todo.lead')) +
+    group(T('todo.todo.title'), card([
+      rowToggle(T('todo.enabled.label'), T('todo.enabled.sub'), 'todo.enabled'),
+      rowToggle(T('todo.notify.label'), T('todo.notify.sub'), 'todo.notify'),
     ])) +
-    group('置物架', card([
-      rowToggle('启用置物架', '把文件拖到岛上暂存', 'shelf.enabled'),
-      rowInput('收纳目录', '留空使用默认目录', 'shelf.dir', prefs.shelf?.dir ?? '', '默认：资料库/EmojiTot/shelf'),
+    group(T('todo.shelf.title'), card([
+      rowToggle(T('shelf.enabled.label'), T('shelf.enabled.sub'), 'shelf.enabled'),
+      rowInput(T('shelf.dir.label'), T('shelf.dir.sub'), 'shelf.dir', prefs.shelf?.dir ?? '', T('shelf.dir.placeholder')),
     ])) +
-    group('文字剪贴板', card([
-      rowToggle('记录剪贴板', '默认关。开启后保留最近复制的文字；关掉时清空未固定的记录', 'shelf.clipboard'),
-      row('保存位置', 'clipboard.json，只在本机', '<span class="badge">本机</span>'),
-      row('清除全部记录', '删除所有剪贴板历史，包括已固定的条目', '<button type="button" class="btn" data-act="button" data-key="clipboard-clear">清除</button>'),
+    group(T('todo.clipboard.title'), card([
+      rowToggle(T('shelf.clipboard.label'), T('shelf.clipboard.sub'), 'shelf.clipboard'),
+      row(T('todo.clipboardWhere.label'), T('todo.clipboardWhere.sub'), '<span class="badge">' + T('badge.local') + '</span>'),
+      row(T('todo.clipboardClear.label'), T('todo.clipboardClear.sub'), '<button type="button" class="btn" data-act="button" data-key="clipboard-clear">' + T('action.clear') + '</button>'),
     ])) +
-    '<p class="note">数据只写在本机 JSON 文件里，不联云。剪贴板历史默认关闭；关掉开关会清掉未固定的记录，固定项要在这里手动清除。</p>';
+    '<p class="note">' + T('todo.note') + '</p>';
 }
 
 function pageComm() {
@@ -676,19 +734,19 @@ function pageComm() {
         .map((account) =>
           row(
             account.address,
-            `${account.provider} · ${account.enabled === false ? '已停用' : '已连接'}`,
-            `<button type="button" class="btn" data-act="button" data-key="mail-remove" data-id="${account.id}">删除</button>`,
+            `${account.provider} · ${account.enabled === false ? T('comm.mail.disabled') : T('comm.mail.connected')}`,
+            `<button type="button" class="btn" data-act="button" data-key="mail-remove" data-id="${account.id}">${T('action.remove')}</button>`,
           ),
         )
         .join('')
-    : '<div class="row"><span class="row-label"><b>还没有添加邮箱</b><span>支持 163、QQ、Gmail 与自定义 IMAP</span></span></div>';
+    : '<div class="row"><span class="row-label"><b>' + T('comm.mail.empty.label') + '</b><span>' + T('comm.mail.empty.sub') + '</span></span></div>';
 
   const mailStatus =
     mailState.lastSync || mailState.error
       ? row(
-          '同步状态',
-          mailState.error ? escapeHtml(mailState.error) : `${mailState.messages.length} 封邮件 · 最近更新 ${stamp(mailState.lastSync)}`,
-          '<button type="button" class="btn" data-act="button" data-key="mail-refresh">立即同步</button>',
+          T('comm.mail.syncStatus.label'),
+          mailState.error ? escapeHtml(mailState.error) : T('comm.mail.count', { n: mailState.messages.length, time: stamp(mailState.lastSync) }),
+          '<button type="button" class="btn" data-act="button" data-key="mail-refresh">' + T('comm.mail.syncNow') + '</button>',
         )
       : '';
 
@@ -698,12 +756,12 @@ function pageComm() {
         .map((sub) =>
           row(
             sub.name,
-            sub.error ? '拉取失败：' + sub.error : '已同步 ' + (sub.lastSync ? stamp(sub.lastSync) : '尚未'),
-            '<button type="button" class="btn" data-act="button" data-key="cal-unsubscribe" data-id="' + escapeHtml(sub.id) + '">删除</button>',
+            sub.error ? T('comm.subs.failed', { error: sub.error }) : T('comm.subs.synced', { time: sub.lastSync ? stamp(sub.lastSync) : T('comm.subs.never') }),
+            '<button type="button" class="btn" data-act="button" data-key="cal-unsubscribe" data-id="' + escapeHtml(sub.id) + '">' + T('action.remove') + '</button>',
           ),
         )
         .join('')
-    : '<div class="row"><span class="row-label"><b>还没有订阅</b><span>添加一个 ICS 链接，日程会自动合并进岛上</span></span></div>';
+    : '<div class="row"><span class="row-label"><b>' + T('comm.subs.empty.label') + '</b><span>' + T('comm.subs.empty.sub') + '</span></span></div>';
 
   const events = (calendarState.events ?? []).slice(0, 6);
   const eventRows = events.length
@@ -712,47 +770,47 @@ function pageComm() {
           const date = new Date(event.start);
           const label = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
           return row(event.title, label + (event.location ? ' · ' + event.location : ''),
-            `<button type="button" class="btn" data-act="button" data-key="cal-remove" data-id="${event.id}">删除</button>`);
+            `<button type="button" class="btn" data-act="button" data-key="cal-remove" data-id="${event.id}">${T('action.remove')}</button>`);
         })
         .join('')
-    : '<div class="row"><span class="row-label"><b>还没有日程</b><span>手动添加，或从邮件邀请里自动导入</span></span></div>';
+    : '<div class="row"><span class="row-label"><b>' + T('comm.calendar.empty.label') + '</b><span>' + T('comm.calendar.empty.sub') + '</span></span></div>';
 
-  return head('通知、邮箱与日程', '什么要提醒你，提醒到什么程度') +
-    group('通知', card([
-      rowToggle('系统通知', '任务完成、提醒到点时发通知', 'notify.system'),
-      rowToggle('通知显示正文', '关闭后只显示来源', 'notify.body'),
+  return head(T('comm.title'), T('comm.lead')) +
+    group(T('comm.notify.title'), card([
+      rowToggle(T('notify.system.label'), T('notify.system.sub'), 'notify.system'),
+      rowToggle(T('notify.body.label'), T('notify.body.sub'), 'notify.body'),
     ])) +
-    group('消息应用', card([
-      rowToggle('微信', '未读数读自窗口标题，不读聊天内容', 'messenger.wechat'),
-      rowToggle('QQ', 'QQ 不在标题里显示未读数，只显示是否在运行', 'messenger.qq'),
-      rowToggle('企业微信', '', 'messenger.wecom'),
-      rowToggle('飞书', '', 'messenger.feishu'),
-      rowToggle('钉钉', '', 'messenger.dingtalk'),
+    group(T('comm.messenger.title'), card([
+      rowToggle(T('messenger.wechat.label'), T('messenger.wechat.sub'), 'messenger.wechat'),
+      rowToggle(T('messenger.qq.label'), T('messenger.qq.sub'), 'messenger.qq'),
+      rowToggle(T('messenger.wecom.label'), '', 'messenger.wecom'),
+      rowToggle(T('messenger.feishu.label'), '', 'messenger.feishu'),
+      rowToggle(T('messenger.dingtalk.label'), '', 'messenger.dingtalk'),
     ])) +
-    group('邮箱', '<div class="card">' + accountRows + mailStatus + '</div>') +
-    group('添加邮箱', card([
-      rowSelect('服务商', '163 / QQ 需要授权码，不是登录密码', 'mailProvider', [
-        ['163', '163 邮箱'], ['qq', 'QQ 邮箱'], ['gmail', 'Gmail'], ['outlook', 'Outlook'], ['custom', '自定义 IMAP'],
+    group(T('comm.mail.title'), '<div class="card">' + accountRows + mailStatus + '</div>') +
+    group(T('comm.mail.add.title'), card([
+      rowSelect(T('comm.mail.provider.label'), T('comm.mail.provider.sub'), 'mailProvider', [
+        ['163', T('comm.mail.provider.163')], ['qq', T('comm.mail.provider.qq')], ['gmail', 'Gmail'], ['outlook', 'Outlook'], ['custom', T('comm.mail.provider.custom')],
       ], prefs.mailProvider ?? '163'),
-      row('邮箱地址', '', '<input class="ctl" data-mail-input="address" placeholder="you@163.com" spellcheck="false" />'),
-      row('授权码', '邮箱设置里生成的 IMAP 授权码', '<input class="ctl" type="password" data-mail-input="secret" placeholder="授权码" spellcheck="false" />'),
-      row('IMAP 主机', '自定义服务商才需要填', '<input class="ctl" data-mail-input="host" placeholder="imap.example.com" spellcheck="false" />'),
-      row('', '拉取最近 10 封，凭证用系统加密保存', '<button type="button" class="btn primary" data-act="button" data-key="mail-add">添加并同步</button>'),
+      row(T('comm.mail.address.label'), '', '<input class="ctl" data-mail-input="address" placeholder="you@163.com" spellcheck="false" />'),
+      row(T('comm.mail.secret.label'), T('comm.mail.secret.sub'), '<input class="ctl" type="password" data-mail-input="secret" placeholder="' + T('comm.mail.secret.placeholder') + '" spellcheck="false" />'),
+      row(T('comm.mail.host.label'), T('comm.mail.host.sub'), '<input class="ctl" data-mail-input="host" placeholder="imap.example.com" spellcheck="false" />'),
+      row('', T('comm.mail.add.sub'), '<button type="button" class="btn primary" data-act="button" data-key="mail-add">' + T('comm.mail.add.action') + '</button>'),
     ]) + formError('mail-add')) +
-    group('日程', '<div class="card">' + eventRows + '</div>') +
-    group('日历订阅', '<div class="card">' + subscriptionRows + '</div>') +
-    group('添加订阅', card([
-      row('名称', '显示在岛上的来源名', '<input class="ctl" data-cal-input="subName" placeholder="飞书 / iCloud" spellcheck="false" />'),
-      row('ICS 链接', '飞书、钉钉、企业微信、Outlook、iCloud 都能导出订阅地址', '<input class="ctl" data-cal-input="subUrl" placeholder="https://…/calendar.ics" spellcheck="false" />'),
-      row('', '只读同步，每 30 分钟拉取一次', '<button type="button" class="btn primary" data-act="button" data-key="cal-subscribe">添加订阅</button>'),
+    group(T('comm.calendar.title'), '<div class="card">' + eventRows + '</div>') +
+    group(T('comm.subs.title'), '<div class="card">' + subscriptionRows + '</div>') +
+    group(T('comm.subs.add.title'), card([
+      row(T('comm.subs.name.label'), T('comm.subs.name.sub'), '<input class="ctl" data-cal-input="subName" placeholder="' + T('comm.subs.name.placeholder') + '" spellcheck="false" />'),
+      row(T('comm.subs.url.label'), T('comm.subs.url.sub'), '<input class="ctl" data-cal-input="subUrl" placeholder="https://…/calendar.ics" spellcheck="false" />'),
+      row('', T('comm.subs.add.sub'), '<button type="button" class="btn primary" data-act="button" data-key="cal-subscribe">' + T('comm.subs.add.action') + '</button>'),
     ]) + formError('calendar-subscribe')) +
-    group('添加日程', card([
-      row('标题', '', '<input class="ctl" data-cal-input="title" placeholder="周会" spellcheck="false" />'),
-      row('时间', '', '<input class="ctl" type="datetime-local" data-cal-input="start" />'),
-      row('地点', '可留空', '<input class="ctl" data-cal-input="location" placeholder="会议室 / 线上" spellcheck="false" />'),
-      row('', '邮件邀请里的 .ics 会自动导入', '<button type="button" class="btn primary" data-act="button" data-key="cal-add">添加日程</button>'),
+    group(T('comm.event.add.title'), card([
+      row(T('comm.event.title.label'), '', '<input class="ctl" data-cal-input="title" placeholder="' + T('comm.event.title.placeholder') + '" spellcheck="false" />'),
+      row(T('comm.event.time.label'), '', '<input class="ctl" type="datetime-local" data-cal-input="start" />'),
+      row(T('comm.event.place.label'), T('comm.event.place.sub'), '<input class="ctl" data-cal-input="location" placeholder="' + T('comm.event.place.placeholder') + '" spellcheck="false" />'),
+      row('', T('comm.event.add.sub'), '<button type="button" class="btn primary" data-act="button" data-key="cal-add">' + T('comm.event.add.action') + '</button>'),
     ]) + formError('calendar-add')) +
-    '<p class="note">邮箱每 5 分钟同步一次；验证码会从邮件正文里识别出来，在岛上直接显示。</p>';
+    '<p class="note">' + T('comm.note') + '</p>';
 }
 
 const stamp = (ms) => {
@@ -766,99 +824,182 @@ function pageQuota() {
     .map((account) =>
       row(
         account.name,
-        account.current ? '当前账号' : account.provider,
+        account.current ? T('quota.currentAccount') : account.provider,
         `<span class="row-control">
-          <button type="button" class="btn" data-act="button" data-key="quota-select" data-id="${account.id}" ${account.current ? 'disabled' : ''}>${account.current ? '使用中' : '切换'}</button>
-          <button type="button" class="btn" data-act="button" data-key="quota-remove" data-id="${account.id}">删除</button>
+          <button type="button" class="btn" data-act="button" data-key="quota-select" data-id="${account.id}" ${account.current ? 'disabled' : ''}>${account.current ? T('action.inUse') : T('action.switch')}</button>
+          <button type="button" class="btn" data-act="button" data-key="quota-remove" data-id="${account.id}">${T('action.remove')}</button>
         </span>`,
       ),
     )
     .join('');
   const last = state.last;
   const balance = last && !last.error && last.total !== undefined
-    ? row('当前余额', `更新于 ${stamp(last.at)} · ${last.available ? '可用' : '不可用'}`, `<b>¥${escapeHtml(last.total)}</b>`)
-    : row('当前余额', last?.error ? escapeHtml(last.error) : '还没有查询', `<button type="button" class="btn" data-act="button" data-key="quota-refresh">查询</button>`);
+    ? row(T('quota.balance.label'), T('quota.balance.updated', { time: stamp(last.at), state: last.available ? T('quota.balance.available') : T('quota.balance.unavailable') }), `<b>¥${escapeHtml(last.total)}</b>`)
+    : row(T('quota.balance.label'), last?.error ? escapeHtml(last.error) : T('quota.notQueried'), `<button type="button" class="btn" data-act="button" data-key="quota-refresh">${T('action.query')}</button>`);
 
   const agents = meta?.agents ?? [];
-  return head('AI 额度', '余额、账号与 Agent 联动') +
-    group('账号', '<div class="card">' + (accounts || emptyCardRow()) + balance + '</div>') +
-    group('添加账号', card([
-      row('服务商', '余额接口各不相同，选错会查询失败', '<select class="ctl" data-quota-input="provider">' +
-        [['deepseek', 'DeepSeek'], ['moonshot', 'Kimi（Moonshot）'], ['siliconflow', 'SiliconFlow'], ['openrouter', 'OpenRouter']]
+  return head(T('quota.title'), T('quota.lead')) +
+    group(T('quota.accounts.title'), '<div class="card">' + (accounts || emptyCardRow()) + balance + '</div>') +
+    group(T('quota.add.title'), card([
+      row(T('quota.provider.label'), T('quota.provider.sub'), '<select class="ctl" data-quota-input="provider">' +
+        [['deepseek', 'DeepSeek'], ['moonshot', T('quota.provider.moonshot')], ['siliconflow', 'SiliconFlow'], ['openrouter', 'OpenRouter']]
           .map(([value, text]) => '<option value="' + value + '">' + text + '</option>').join('') + '</select>'),
-      row('名称', '显示在岛上的名字，留空用服务商名字', '<input class="ctl" data-quota-input="name" placeholder="可选" spellcheck="false" />'),
-      row('API Key', '在对应平台的 API Keys 页面生成，只保存在本机', '<input class="ctl" type="password" data-quota-input="key" placeholder="sk-..." spellcheck="false" />'),
-      row('', '密钥用系统凭据加密，不写进 prefs.json', '<button type="button" class="btn primary" data-act="button" data-key="quota-add">添加并查询</button>'),
+      row(T('quota.name.label'), T('quota.name.sub'), '<input class="ctl" data-quota-input="name" placeholder="' + T('quota.name.placeholder') + '" spellcheck="false" />'),
+      row('API Key', T('quota.key.sub'), '<input class="ctl" type="password" data-quota-input="key" placeholder="sk-..." spellcheck="false" />'),
+      row('', T('quota.add.sub'), '<button type="button" class="btn primary" data-act="button" data-key="quota-add">' + T('quota.add.action') + '</button>'),
     ]) + formError('quota-add')) +
-    group('刷新', card([
-      rowRange('刷新间隔', '两次余额查询之间', 'quota.intervalMin', 5, 120, 5, ' 分钟'),
-      rowToggle('低余额提醒', '低于阈值时在岛上提示', 'quota.alert'),
-      rowRange('提醒阈值', '余额低于这个数就提醒一次', 'quota.threshold', 1, 50, 1, ' 元'),
+    group(T('quota.refresh.title'), card([
+      rowRange(T('quota.intervalMin.label'), T('quota.intervalMin.sub'), 'quota.intervalMin', 5, 120, 5, T('unit.minutes')),
+      rowToggle(T('quota.alert.label'), T('quota.alert.sub'), 'quota.alert'),
+      rowRange(T('quota.threshold.label'), T('quota.threshold.sub'), 'quota.threshold', 1, 50, 1, T('unit.yuan')),
     ])) +
     /* The linkage used to have a page of its own. It is a second switch set on
        this page now: the island's workbench already draws both halves from one
        snapshot, and a separate page made a person hunt for the switches the
        workbench pointed at. The hairline is the group boundary. */
     '<div class="group-sep" role="separator"></div>' +
-    group('Agent 联动', card(agents.length
-      ? agents.map((agent) => rowActionToggle(agent.label, '读取它的状态文件来驱动表情', 'agent', agent.on, agent.id))
-      : [row('状态来源', '主进程没有提供 Agent 清单', '<span class="badge">未加载</span>')])) +
-    '<p class="note">余额来自 DeepSeek <code>/user/balance</code>；子进程携带密钥，命令参数里看不到它。Agent 联动每 350 毫秒读一次状态文件，工作台和球用的是同一份快照。</p>';
+    group(T('quota.agents.title'), card(agents.length
+      ? agents.map((agent) => rowActionToggle(agent.label, T('quota.agents.sub'), 'agent', agent.on, agent.id))
+      : [row(T('quota.agents.missing.label'), T('quota.agents.missing.sub'), '<span class="badge">' + T('badge.notLoaded') + '</span>')])) +
+    '<p class="note">' + T('quota.note') + '</p>';
 }
 
 function emptyCardRow() {
-  return '<div class="row"><span class="row-label"><b>还没有连接账号</b><span>在下面填入 API Key 就能看到余额</span></span></div>';
+  return '<div class="row"><span class="row-label"><b>' + T('quota.empty.label') + '</b><span>' + T('quota.empty.sub') + '</span></span></div>';
 }
 
 function pageWeather() {
-  return head('天气', '城市、单位与刷新') +
-    group('位置', card([
-      rowToggle('自动定位', '优先用系统定位，未授权时按 IP 归属地识别', 'weather.autoLocate'),
-      rowInput('城市', '手动填写会关掉自动定位；中文或英文都行', 'weather.city', prefs.weather.city, '香港'),
-      rowSeg('单位', '', 'weather.unit', [['c', '摄氏'], ['f', '华氏']]),
+  return head(T('weather.title'), T('weather.lead')) +
+    group(T('weather.location.title'), card([
+      rowToggle(T('weather.autoLocate.label'), T('weather.autoLocate.sub'), 'weather.autoLocate'),
+      rowInput(T('weather.city.label'), T('weather.city.sub'), 'weather.city', prefs.weather.city, T('weather.city.placeholder')),
+      rowSeg(T('weather.unit.label'), '', 'weather.unit', [['c', T('weather.unit.c')], ['f', T('weather.unit.f')]]),
     ])) +
-    '<p class="note">定位只用来决定天气城市；不上传位置、不记录轨迹、不写入任何服务器。</p>' +
-    group('数据', card([
-      rowRange('刷新间隔', 'Open-Meteo 免费额度足够', 'weather.intervalMin', 5, 60, 5, ' 分钟'),
-      row('立即刷新', '重新拉一次当前城市', '<button type="button" class="btn" data-act="button" data-key="refresh-weather">刷新</button>'),
+    '<p class="note">' + T('weather.privacy.note') + '</p>' +
+    group(T('weather.data.title'), card([
+      rowRange(T('weather.intervalMin.label'), T('weather.intervalMin.sub'), 'weather.intervalMin', 5, 60, 5, T('unit.minutes')),
+      row(T('weather.refreshNow.label'), T('weather.refreshNow.sub'), '<button type="button" class="btn" data-act="button" data-key="refresh-weather">' + T('weather.refreshNow.action') + '</button>'),
     ])) +
-    '<p class="note">无需 API Key。自动定位先问 Windows 定位，未授权时依次尝试 ipinfo、ipip、ipapi；城市解析用 Open-Meteo geocoding，失败时保留上一次结果。</p>';
+    '<p class="note">' + T('weather.note') + '</p>';
+}
+
+
+/*
+ * 设备：设置里的外设清单。
+ *
+ * 这一页和岛的设备页读同一份快照、写同一组偏好（showBattery / pinned /
+ * hidden），区别在读写面：这里列出**全部**外设，包括被隐藏的——"藏起来"
+ * 必须能在这里反悔；岛上则只画没被隐藏的。数据由主进程在页面打开时启动
+ * 探测，探测结果通过 settings:devices 推过来，所以这一页不自己轮询。
+ */
+const DEVICE_GLYPHS = {
+  /* 探针只给名字、状态、电量与来源，没有图标字段。按名字归到五类通用符号；
+     归不到的设备用中性外设符号，绝不用首字母——那是替设备起的缩写。 */
+  audio: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="2.5" y="13" width="4.5" height="7" rx="2"/><rect x="17" y="13" width="4.5" height="7" rx="2"/>',
+  keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M8.5 10h.01M11 10h.01M13.5 10h.01M16 10h.01M18.5 10h.01M8 14h8"/>',
+  mouse: '<rect x="7" y="2.5" width="10" height="19" rx="5"/><path d="M12 6.5v4"/>',
+  gamepad: '<path d="M7 7h10a5 5 0 0 1 5 5v1a4 4 0 0 1-7 2.6l-1-1H10l-1 1A4 4 0 0 1 2 13v-1a5 5 0 0 1 5-5z"/><path d="M8 10v3M6.5 11.5h3"/><circle cx="16.5" cy="10.5" r=".6"/><circle cx="18.5" cy="12.5" r=".6"/>',
+  phone: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+  other: '<rect x="3" y="7" width="18" height="12" rx="2.5"/><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7"/><circle cx="12" cy="13.4" r="1.4"/>',
+};
+/* 与岛设备页同一套来源文案，让两个窗口对同一行的解释一致；
+   键在 i18n.js 的 devices.source.* 下，语言切换时两个窗口一起换。 */
+const DEVICE_SOURCE_LABEL = {
+  bluetooth: 'devices.source.bluetooth',
+  'hid-wireless': 'devices.source.hid-wireless',
+  hid: 'devices.source.hid',
+  wmi: 'devices.source.wmi',
+};
+const STAR_ICON = '<path d="m12 3.4 2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8z"/>';
+
+function pageDevices() {
+  const list = Array.isArray(devicesState?.devices) ? devicesState.devices : [];
+  const hidden = Array.isArray(prefs.devices?.hidden) ? prefs.devices.hidden : [];
+  const pinned = Array.isArray(prefs.devices?.pinned) ? prefs.devices.pinned : [];
+  const showBattery = prefs.devices?.showBattery !== false;
+  const probedAt = Number(devicesState?.probedAt) || 0;
+  const pinFull = pinned.length >= DEVICE_PIN_LIMIT;
+  const levelOf = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const level = Number(value);
+    if (!Number.isFinite(level)) return null;
+    return Math.max(0, Math.min(100, Math.round(level)));
+  };
+
+  const rows = list.map((device) => {
+    const name = String(device.name ?? '');
+    const shown = !hidden.includes(name);
+    const isPinned = pinned.includes(name);
+    const level = levelOf(device.battery);
+    const tone = level === null ? '' : level < 20 ? ' bad' : level < 50 ? ' warn' : '';
+    const state = device.status === 'OK' ? T('devices.row.connected') : String(device.status || T('devices.row.connected'));
+    const source = DEVICE_SOURCE_LABEL[device.source] ? T(DEVICE_SOURCE_LABEL[device.source]) : '';
+    const battery = showBattery
+      ? level === null
+        ? '<span class="dev-bat" title="' + escapeHtml(T('devices.row.noLevel')) + '">—</span>'
+        : '<span class="dev-bat" title="' + escapeHtml(T('devices.row.level', { n: level })) + '"><span class="dev-meter' + tone + '" aria-hidden="true"><i style="width:' + level + '%"></i></span><b>' + level + '%</b></span>'
+      : '<span class="dev-bat" title="' + escapeHtml(T('devices.row.levelOff')) + '">—</span>';
+    const pinTitle = isPinned
+      ? T('devices.row.unpinTitle')
+      : pinFull ? T('devices.row.pinFull', { max: DEVICE_PIN_LIMIT }) : T('devices.row.pinTitle', { max: DEVICE_PIN_LIMIT });
+    return '<div class="row dev-row' + (shown ? '' : ' off') + '" title="' + escapeHtml([name, state, source, level === null ? T('devices.row.unreadable') : T('devices.row.level', { n: level })].filter(Boolean).join(' · ')) + '">' +
+      '<span class="dev-glyph" aria-hidden="true"><svg viewBox="0 0 24 24">' + (DEVICE_GLYPHS[deviceKind(name)] ?? DEVICE_GLYPHS.other) + '</svg></span>' +
+      '<span class="dev-main"><b>' + escapeHtml(name) + '</b><span>' + escapeHtml(state) + (source ? ' · ' + escapeHtml(source) : '') + '</span></span>' +
+      battery +
+      '<button type="button" class="switch" role="switch" aria-checked="' + shown + '" data-act="device-show" data-name="' + escapeHtml(name) + '" aria-label="' + escapeHtml(T('devices.row.show', { name })) + '" title="' + (shown ? escapeHtml(T('devices.row.show', { name })) : escapeHtml(T('devices.row.hidden'))) + '"></button>' +
+      '<button type="button" class="dev-star' + (isPinned ? ' on' : '') + '" data-act="device-pin" data-name="' + escapeHtml(name) + '" aria-pressed="' + isPinned + '" aria-label="' + (isPinned ? escapeHtml(T('devices.row.unpin', { name })) : escapeHtml(T('devices.row.pin', { name }))) + '" title="' + escapeHtml(pinTitle) + '"' + (!isPinned && pinFull ? ' disabled' : '') + '>' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + STAR_ICON + '</svg></button>' +
+      '</div>';
+  }).join('');
+
+  return head(T('devices.title'), T('devices.lead')) +
+    group(T('devices.probe.title'), card([
+      rowToggle(T('devices.showBattery.label'), T('devices.showBattery.sub'), 'devices.showBattery'),
+      row(T('devices.refresh.label'), probedAt ? T('devices.refresh.sub', { time: stamp(probedAt) }) : T('devices.refresh.never'), '<button type="button" class="btn" data-act="button" data-key="devices-refresh">' + escapeHtml(T('devices.refresh.action')) + '</button>'),
+      pinned.length
+        ? row(T('devices.pin.title'), T('devices.pin.some', { n: pinned.length, max: DEVICE_PIN_LIMIT }), '<button type="button" class="btn" data-act="button" data-key="devices-unpin">' + escapeHtml(T('devices.pin.clear')) + '</button>')
+        : null,
+    ])) +
+    (list.length
+      ? group(T('devices.list.title'), '<div class="card dev-rows">' + rows + '</div>')
+      : emptyCard(T('devices.empty.title'), T('devices.empty.sub'), 'devices-refresh', T('devices.refresh.action'))) +
+    '<p class="note">' + T('devices.note', { max: DEVICE_PIN_LIMIT }) + '</p>';
 }
 
 function pagePlugins() {
-  return head('插件', '预留：用脚本扩展岛的内容') +
-    emptyCard('插件系统还没开放', '计划支持一份 JSON 描述的自定义页面：数据源、刷新间隔、一个渲染函数。', null, null) +
-    '<p class="note">先把内置页面做稳，再开放扩展点。</p>';
+  return head(T('plugins.title'), T('plugins.lead')) +
+    emptyCard(T('plugins.empty.title'), T('plugins.empty.text'), null, null) +
+    '<p class="note">' + T('plugins.note') + '</p>';
 }
 
 function pageAbout() {
   const caps = meta?.platform?.features ?? {};
   const missing = Object.entries(caps).filter(([, on]) => !on).map(([name]) => name);
   const platformRow = missing.length
-    ? row('平台', '部分功能在当前系统不可用：' + escapeHtml(missing.join('、')), '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>')
-    : row('平台', '全部功能可用', '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>');
-  return head('关于', 'EmojiTot') +
-    group('版本', card([
+    ? row(T('about.platform.label'), T('about.platform.missing', { list: missing.join(T('list.separator')) }), '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>')
+    : row(T('about.platform.label'), T('about.platform.ok'), '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>');
+  return head(T('about.title'), T('about.lead')) +
+    group(T('about.version.title'), card([
       platformRow,
-      row('当前版本', '双形态、十个功能页、设置十四个分区', '<span class="badge">v' + escapeHtml(version) + '</span>'),
-      row('数据目录', 'prefs.json、state.json 与缓存', '<button type="button" class="btn" data-act="button" data-key="open-data">打开</button>'),
-      row('状态文件', '当前表情与状态，可给别的工具读', '<button type="button" class="btn" data-act="button" data-key="open-state">打开</button>'),
-      row('项目主页', 'MIT 许可，代码与美术全部自研', '<button type="button" class="btn" data-act="button" data-key="open-repo">GitHub</button>'),
+      row(T('about.currentVersion.label'), T('about.currentVersion.sub'), '<span class="badge">v' + escapeHtml(version) + '</span>'),
+      row(T('about.dataDir.label'), T('about.dataDir.sub'), '<button type="button" class="btn" data-act="button" data-key="open-data">' + T('action.open') + '</button>'),
+      row(T('about.stateFile.label'), T('about.stateFile.sub'), '<button type="button" class="btn" data-act="button" data-key="open-state">' + T('action.open') + '</button>'),
+      row(T('about.repo.label'), T('about.repo.sub'), '<button type="button" class="btn" data-act="button" data-key="open-repo">GitHub</button>'),
     ])) +
-    group('能力与数据', card([
-      row('托盘', '只有设置 / 置顶 / 退出，其余在设置里', '<span class="badge">精简</span>'),
-      row('消息未读', '读窗口标题，不读聊天内容', '<span class="badge">本机</span>'),
-      row('剪贴板', '最近 60 条，存在 clipboard.json', '<span class="badge">本机</span>'),
-      row('AI 余额', 'DeepSeek / Kimi / SiliconFlow / OpenRouter', '<span class="badge">环境变量</span>'),
-      row('日历订阅', 'ICS 链接，按来源整体替换', '<span class="badge">只读</span>'),
+    group(T('about.caps.title'), card([
+      row(T('about.tray.label'), T('about.tray.sub'), '<span class="badge">' + T('badge.compact') + '</span>'),
+      row(T('about.unread.label'), T('about.unread.sub'), '<span class="badge">' + T('badge.local') + '</span>'),
+      row(T('about.clipboard.label'), T('about.clipboard.sub'), '<span class="badge">' + T('badge.local') + '</span>'),
+      row(T('about.credit.label'), T('about.credit.sub'), '<span class="badge">' + T('badge.env') + '</span>'),
+      row(T('about.feed.label'), T('about.feed.sub'), '<span class="badge">' + T('badge.readonly') + '</span>'),
     ])) +
-    group('素材与许可', card([
-      row('角色引擎', '@emojitot/core · MIT', '<span class="badge">自研</span>'),
-      row('两位协议', '@emojitot/protocol · MIT', '<span class="badge">自研</span>'),
-      row('天气', 'Open-Meteo · 免费 API', '<span class="badge">外部</span>'),
-      row('歌词', 'LRCLIB · 公开曲库', '<span class="badge">外部</span>'),
+    group(T('about.assets.title'), card([
+      row(T('about.engine.label'), '@emojitot/core · MIT', '<span class="badge">' + T('badge.inhouse') + '</span>'),
+      row(T('about.protocol.label'), '@emojitot/protocol · MIT', '<span class="badge">' + T('badge.inhouse') + '</span>'),
+      row(T('about.weather.label'), T('about.weather.sub'), '<span class="badge">' + T('badge.external') + '</span>'),
+      row(T('about.lyrics.label'), T('about.lyrics.sub'), '<span class="badge">' + T('badge.external') + '</span>'),
     ])) +
-    '<p class="note">窗口与媒体桥的实现思路来自对公开 MIT 项目的调研（结论与许可证核对见仓库 docs/RESEARCH.md），代码与美术按本项目风格重写，未复制。</p>';
+    '<p class="note">' + T('about.note') + '</p>';
 }
 
 function pageCast() {
@@ -872,7 +1013,7 @@ function pageCast() {
           '<emojitot-ball cast="' + escapeHtml(member.id) + '" size="46" state="idle"></emojitot-ball>' +
           '<span>' + escapeHtml(member.label) + '</span>' +
         '</button>').join('') + '</div>'
-    : '<div class="row"><span class="row-label"><b>角色表还没加载</b><span>主进程没有提供角色清单</span></span></div>';
+    : '<div class="row"><span class="row-label"><b>' + T('cast.missing.label') + '</b><span>' + T('cast.missing.sub') + '</span></span></div>';
   const faceGrid = demos.length
     ? '<div class="face-grid">' + demos.map((demo) =>
         '<button type="button" class="face-cell" data-act="action" data-kind="demo" data-value="' + escapeHtml(demo.id) + '" title="' + escapeHtml(demo.label) + '">' +
@@ -880,12 +1021,12 @@ function pageCast() {
           '<span>' + escapeHtml(demo.label) + '</span>' +
         '</button>').join('') + '</div>'
     : '';
-  return head('角色与表情', '点一个就换，表情会直接播放') +
-    group('角色', castGrid) +
-    group('表情', faceGrid) +
-    group('自动表情', card([
-      rowToggle('媒体情绪', '播放、直播、游戏、暂停与媒体出错时自动换表情', 'mediaEmotion'),
-      rowToggle('空闲小动作', '静置时每 7–16 秒借一个待机表情，1.8–4.4 秒后还回待机', 'idleMoods'),
+  return head(T('cast.title'), T('cast.lead')) +
+    group(T('cast.roles.title'), castGrid) +
+    group(T('cast.faces.title'), faceGrid) +
+    group(T('cast.auto.title'), card([
+      rowToggle(T('cast.mediaEmotion.label'), T('cast.mediaEmotion.sub'), 'mediaEmotion'),
+      rowToggle(T('cast.idleMoods.label'), T('cast.idleMoods.sub'), 'idleMoods'),
     ]));
 }
 
@@ -902,6 +1043,7 @@ const RENDERERS = {
   comm: pageComm,
   quota: pageQuota,
   weather: pageWeather,
+  devices: pageDevices,
   plugins: pagePlugins,
   about: pageAbout,
 };
@@ -934,16 +1076,17 @@ function railCast() {
   const member = (meta.casts ?? []).flatMap((family) => family.members).find((item) => item.id === id);
   if (!member) return '';
   /*
-   * The character as a round portrait: a 64px ring with the 56px ball inside
-   * and the name underneath. It is a button, not a picture — clicking it opens
+   * The character as a portrait: the 56px ball on its own — no ring, no plate,
+   * because a circle only flatters the round tot and crops every other body —
+   * with the name underneath. It is a button, not a picture: clicking it opens
    * the page where the rest of the cast lives, which is also where a first-time
    * reader would look for "who is this". The ring and the ball share the same
    * face payload the island draws (face:apply), so the portrait is never a
    * still image of some earlier mood.
    */
   return '<div class="rail-cast">' +
-    '<button type="button" class="rail-cast-btn" data-nav="cast" aria-label="当前角色：' +
-      escapeHtml(member.label) + '，打开角色与表情">' +
+    '<button type="button" class="rail-cast-btn" data-nav="cast" aria-label="' +
+      escapeHtml(T('rail.castAria', { name: member.label })) + '">' +
       '<emojitot-ball cast="' + escapeHtml(id) + '" size="56" state="' + escapeHtml(faceState) + '"></emojitot-ball>' +
     '</button>' +
     '<b class="rail-cast-name">' + escapeHtml(member.label) + '</b></div>';
@@ -952,11 +1095,12 @@ function railCast() {
 function paintRail() {
   let html = railCast();
   for (const navGroup of NAV) {
-    html += '<div class="rail-group"><p class="rail-heading">' + escapeHtml(navGroup.title) + '</p>';
+    html += '<div class="rail-group"><p class="rail-heading">' +
+      escapeHtml(T('nav.' + navGroup.id, null, navGroup.title)) + '</p>';
     for (const item of navGroup.items) {
       html += '<button type="button" class="rail-item" data-nav="' + item.key + '" aria-current="' +
         (page === item.key) + '">' + '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[item.icon] + '</svg>' +
-        '<span>' + escapeHtml(item.label) + '</span></button>';
+        '<span>' + escapeHtml(T(item.key + '.title', null, item.label)) + '</span></button>';
     }
     html += '</div>';
   }
@@ -990,7 +1134,6 @@ function applyFace(payload) {
  * preference: it only mirrors them, so the pane cannot drift from the window
  * it describes, and a hidden pane costs nothing.
  */
-const SKIN_LABELS = Object.fromEntries(SKIN_PREVIEWS.map(([key, label]) => [key, label]));
 
 /** 360–560 px of island maps onto 216–264 px of preview: same proportion, less glass. */
 const previewIslandWidth = () => {
@@ -1007,22 +1150,28 @@ function paintPreview() {
   const opacity = previewOpacity(skin);
   const accent = (getComputedStyle(document.documentElement).getPropertyValue('--accent') || '').trim() || '#9683ff';
   preview.innerHTML =
-    '<div class="pv-head"><b>实时预览</b><span>与岛同源</span></div>' +
+    '<div class="pv-head"><b>' + escapeHtml(T('preview.title')) + '</b><span>' +
+      escapeHtml(T('preview.sameSource')) + '</span></div>' +
     '<div class="pv-stage"><div class="pv-island" data-skin="' + escapeHtml(skin) + '" style="--pv-w:' +
       previewIslandWidth() + 'px;--pv-radius:' + Math.round(radius * 0.68) + 'px;--pv-opacity:' + opacity + '">' +
       '<div class="pv-pill"><span class="pv-dot"></span><span class="pv-line"></span></div>' +
       '<div class="pv-main"><div class="pv-row"><span class="pv-ava">t</span><span class="pv-name">EmojiTot</span></div>' +
-        '<p class="pv-big">设置 · 预览</p><p class="pv-sub">皮肤、圆角、不透明度与岛宽</p>' +
+        '<p class="pv-big">' + escapeHtml(T('preview.island.big')) + '</p><p class="pv-sub">' +
+          escapeHtml(T('preview.island.sub')) + '</p>' +
         '<div class="pv-bars"><i></i><i></i><i></i></div></div>' +
     '</div></div>' +
     '<dl class="pv-meta">' +
-      '<div class="pv-mrow"><dt>皮肤</dt><dd>' + escapeHtml(SKIN_LABELS[skin] ?? skin) + '</dd></div>' +
-      '<div class="pv-mrow"><dt>圆角</dt><dd>' + radius + ' px</dd></div>' +
-      '<div class="pv-mrow"><dt title="由当前皮肤决定">不透明度</dt><dd>' + Math.round(opacity * 100) + ' %</dd></div>' +
-      '<div class="pv-mrow"><dt>强调色</dt><dd><i class="pv-swatch"></i>' + escapeHtml(accent.toUpperCase()) + '</dd></div>' +
-      '<div class="pv-mrow"><dt>岛宽</dt><dd>' + (Number(prefs.islandWidth) || 420) + ' px</dd></div>' +
+      '<div class="pv-mrow"><dt>' + escapeHtml(T('preview.meta.skin')) + '</dt><dd>' +
+        escapeHtml(T('skin.' + skin + '.label', null, skin)) + '</dd></div>' +
+      '<div class="pv-mrow"><dt>' + escapeHtml(T('preview.meta.radius')) + '</dt><dd>' + radius + ' px</dd></div>' +
+      '<div class="pv-mrow"><dt title="' + escapeHtml(T('preview.meta.opacityTitle')) + '">' +
+        escapeHtml(T('preview.meta.opacity')) + '</dt><dd>' + Math.round(opacity * 100) + ' %</dd></div>' +
+      '<div class="pv-mrow"><dt>' + escapeHtml(T('preview.meta.accent')) + '</dt><dd><i class="pv-swatch"></i>' +
+        escapeHtml(accent.toUpperCase()) + '</dd></div>' +
+      '<div class="pv-mrow"><dt>' + escapeHtml(T('preview.meta.width')) + '</dt><dd>' +
+        (Number(prefs.islandWidth) || 420) + ' px</dd></div>' +
     '</dl>' +
-    '<p class="pv-note"><b>预览读的是同一套 token</b>：皮肤、圆角、不透明度、强调色与岛宽都写进这里的 CSS 变量，改一项动一帧。</p>';
+    '<p class="pv-note">' + T('preview.note') + '</p>';
 }
 
 /*
@@ -1040,8 +1189,24 @@ const FONT_STACKS = {
 };
 
 /** Theme, scale and type are applied before the first paint, from prefs. */
+/** 静态外壳：窗口标题、标题栏、三个窗口按钮、预览栏 aria。 */
+function applyStaticLabels() {
+  document.documentElement.lang = currentLang() === 'en' ? 'en' : 'zh-CN';
+  document.title = T('app.title');
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    node.textContent = T(node.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((node) => {
+    node.title = T(node.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach((node) => {
+    node.setAttribute('aria-label', T(node.dataset.i18nAria));
+  });
+}
+
 function applyChrome() {
   const html = document.documentElement;
+  applyStaticLabels();
   const theme = prefs.theme ?? 'dark';
   const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
   const light = theme === 'light' || (theme === 'system' && prefersLight);
@@ -1064,12 +1229,44 @@ window.addEventListener('resize', () => applyChrome());
 
 let paintedPage = '';
 
+/**
+ * Keep the devices probe open exactly while this page is on screen.
+ *
+ * The list is live data, not a preference: opening the page asks main for a
+ * snapshot and starts the probe (the island page may be switched off), leaving
+ * hands the demand back. Idempotent, so every repaint can call it.
+ */
+function syncDevicesWatch() {
+  const want = page === 'devices' && typeof api.devicesWatch === 'function';
+  if (want === devicesWatching) return;
+  devicesWatching = want;
+  api.devicesWatch?.(want);
+  /* One snapshot on entry only. Re-reading it on every repaint would make the
+     snapshot repaint schedule the next read — a loop, not a refresh. The probe
+     pushes its own result through settings:devices after that. */
+  if (want && typeof api.devices === 'function') {
+    api.devices().then((value) => {
+      if (!value || !Array.isArray(value.devices)) return;
+      devicesState = value;
+      if (page === 'devices') paintContent();
+    }).catch(() => {});
+  }
+}
+
 function paintContent() {
   const renderer = RENDERERS[page] ?? RENDERERS.general;
   const changedPage = paintedPage !== page;
+  /* A repaint (a probe landing, a switch flipped) must not throw away where the
+     device list was scrolled to: the rows below the fold are the point of the
+     list scrolling at all. */
+  const previous = content.querySelector('.dev-rows');
+  if (previous) devicesScrollTop = previous.scrollTop;
   paintedPage = page;
   content.innerHTML = renderer();
   content.scrollTop = 0;
+  syncDevicesWatch();
+  const next = content.querySelector('.dev-rows');
+  if (next) next.scrollTop = devicesScrollTop;
   if (changedPage) {
     content.classList.remove('page-swap');
     void content.offsetWidth;
@@ -1293,6 +1490,23 @@ content.addEventListener('click', async (event) => {
     await patch({ statusItems: setStatusItemEnabled(prefs, key, !enabled) });
     return;
   }
+  if (act === 'device-show') {
+    /* The switch says whether the row is on the island, so flipping it from
+       shown asks main to hide. Main writes the group from current prefs and
+       replies with the merged object, like the pin star. */
+    const name = target.dataset.name;
+    const shown = target.getAttribute('aria-checked') === 'true';
+    const next = await api.hideDevice?.(name, shown);
+    if (next) prefs = merge(next);
+    paint();
+    return;
+  }
+  if (act === 'device-pin') {
+    const next = await api.pinDevice?.(target.dataset.name);
+    if (next) prefs = merge(next);
+    paint();
+    return;
+  }
   if (act === 'seg') {
     const value = target.dataset.value;
     const numeric = ['uiScale', 'radius', 'fontSize', 'pillHeight', 'islandWidth', 'hoverOpenDelay', 'hoverCloseDelay'].includes(key);
@@ -1305,19 +1519,30 @@ content.addEventListener('click', async (event) => {
     return;
   }
   if (act === 'button') {
+    if (key === 'devices-refresh') {
+      /* The probe is a PowerShell sweep of PnP properties, seconds not frames.
+         The button only asks for it and repaints from the snapshot at hand-off;
+         the finished result arrives as a settings:devices push. */
+      target.disabled = true;
+      target.textContent = '探测中…';
+      const snapshot = await api.devicesRefresh?.();
+      if (snapshot && Array.isArray(snapshot.devices)) devicesState = snapshot;
+      paint();
+      return;
+    }
     if (key === 'refresh-weather') {
-      target.textContent = '刷新中…';
+      target.textContent = T('weather.refreshNow.busy');
       const result = await api.refreshWeather?.();
-      target.textContent = result?.ok ? '已刷新' : '失败';
-      setTimeout(() => { target.textContent = '刷新'; }, 1600);
+      target.textContent = result?.ok ? T('weather.refreshNow.done') : T('weather.refreshNow.failed');
+      setTimeout(() => { target.textContent = T('weather.refreshNow.action'); }, 1600);
       return;
     }
     if (key === 'clipboard-clear') {
       // The only control that deletes data, so it asks first.
-      if (!window.confirm('删除全部剪贴板历史（包括固定的条目）？')) return;
+      if (!window.confirm(T('todo.clipboardClear.confirm'))) return;
       await api.clipboardClear?.();
-      target.textContent = '已清除';
-      setTimeout(() => { target.textContent = '清除'; }, 1600);
+      target.textContent = T('action.done');
+      setTimeout(() => { target.textContent = T('action.clear'); }, 1600);
       return;
     }
     if (key === 'devices-unpin') {
@@ -1513,6 +1738,15 @@ rail.addEventListener('click', (event) => {
 document.getElementById('btn-min').addEventListener('click', () => api.minimize());
 document.getElementById('btn-max').addEventListener('click', () => api.maximize());
 document.getElementById('btn-close').addEventListener('click', () => api.close());
+
+/* Live device rows: a finished probe pushes its snapshot. Repainting only while
+   this page is visible keeps a background probe from touching another page's
+   DOM — and from stealing focus from a control the user is on. */
+api.onDevices?.((value) => {
+  if (!value || !Array.isArray(value.devices)) return;
+  devicesState = value;
+  if (page === 'devices') paintContent();
+});
 
 api.onChanged((next) => {
   const merged = merge(next);

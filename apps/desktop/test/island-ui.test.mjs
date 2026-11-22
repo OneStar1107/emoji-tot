@@ -75,8 +75,54 @@ describe('island mailbox page fits its 205px budget', () => {
   });
 
   it('does not flip pages when the wheel is over that column', () => {
-    const wheel = islandJs.slice(islandJs.indexOf("document.addEventListener(\n  'wheel'"), islandJs.indexOf("document.addEventListener(\n  'wheel'") + 420);
-    assert.match(wheel, /closest\('\.clip-list, \.shelf-list, \.todo-list, \.mail-page, \.mail'\)/, 'the wheel over the mailbox belongs to the mailbox: ' + wheel);
+    assert.match(
+      islandJs,
+      /const WHEEL_OWNERS =\s*'\.clip-list, \.shelf-list, \.todo-list, \.dev-list, \.msg-list, \.mail-page, \.mail'/,
+      'the wheel over the mailbox belongs to the mailbox',
+    );
+    const handler = islandJs.slice(islandJs.indexOf('function wheelOwner'));
+    assert.match(handler, /const named = target\.closest\(WHEEL_OWNERS\)/, 'the wheel stop reads the list');
+  });
+});
+
+/*
+ * The device list scrolls inside the page, not the page itself: five 26px rows
+ * are the viewport of a 130px cap and the rest stay one wheel away. That cap is
+ * why the wheel over the sixth device flipped the page instead of scrolling —
+ * .dev-list was the only inner scroller missing from the wheel-owner list.
+ */
+describe('island devices page owns its own wheel', () => {
+  it('names the device list as a wheel owner', () => {
+    const owners = islandJs.match(/const WHEEL_OWNERS =[\s\S]{0,200}?;/);
+    assert.ok(owners, 'the wheel-owner list must be a named constant');
+    assert.match(owners[0], /\.dev-list\b/, 'the device list is a wheel owner: ' + owners[0]);
+  });
+
+  it('keeps the device list scrollable inside the 217px page', () => {
+    const block = islandCss.slice(islandCss.indexOf('.dev-list {'));
+    const rule = block.slice(0, block.indexOf('}'));
+    assert.match(rule, /max-height:\s*130px/, 'the cap is five 26px rows');
+    assert.match(rule, /overflow-y:\s*auto/, 'the list scrolls itself');
+    assert.match(rule, /overscroll-behavior:\s*contain/, 'the list never chains its scroll to the page');
+  });
+
+  it('swallows the wheel at either end instead of leaking it to the pager', () => {
+    const handler = islandJs.slice(
+      islandJs.indexOf("document.addEventListener(\n  'wheel'"),
+      islandJs.indexOf('{ capture: true }'),
+    );
+    assert.match(handler, /if \(list && list\.scrollHeight > list\.clientHeight \+ 1\) event\.stopPropagation\(\)/, 'a scrolling list swallows the wheel even at its start or end: ' + handler);
+    assert.doesNotMatch(handler, /scrollTop/, 'no boundary check re-arms paging at the ends');
+  });
+
+  it('does not disable paging for the page box itself', () => {
+    const fallback = islandJs.slice(islandJs.indexOf('function wheelOwner'), islandJs.indexOf('{ capture: true }'));
+    assert.match(fallback, /el !== pagesEl/, '#pages must stay outside the general rule');
+  });
+
+  it('covers the message centre list the same way', () => {
+    const owners = islandJs.match(/const WHEEL_OWNERS =[\s\S]{0,200}?;/);
+    assert.match(owners[0], /\.msg-list\b/, '.msg-list scrolls inside the page too');
   });
 });
 

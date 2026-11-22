@@ -9,15 +9,15 @@
 </head>
 <body>
   <header class="titlebar">
-    <span class="titlebar-name">EmojiTot 设置</span>
+    <span class="titlebar-name" data-i18n="app.title">EmojiTot 设置</span>
     <span class="titlebar-spacer"></span>
-    <button type="button" class="win-btn" id="btn-min" title="最小化" aria-label="最小化">
+    <button type="button" class="win-btn" id="btn-min" title="最小化" aria-label="最小化" data-i18n-title="win.minimize" data-i18n-aria="win.minimize">
       <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6h7"/></svg>
     </button>
-    <button type="button" class="win-btn" id="btn-max" title="最大化" aria-label="最大化">
+    <button type="button" class="win-btn" id="btn-max" title="最大化" aria-label="最大化" data-i18n-title="win.maximize" data-i18n-aria="win.maximize">
       <svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.6" y="2.6" width="6.8" height="6.8" rx="1.2"/></svg>
     </button>
-    <button type="button" class="win-btn close" id="btn-close" title="关闭" aria-label="关闭">
+    <button type="button" class="win-btn close" id="btn-close" title="关闭" aria-label="关闭" data-i18n-title="win.close" data-i18n-aria="win.close">
       <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 3 6 6M9 3l-6 6"/></svg>
     </button>
   </header>
@@ -25,7 +25,7 @@
   <div class="shell">
     <aside class="rail" id="rail"></aside>
     <main class="content" id="content"></main>
-    <aside class="preview" id="preview" aria-label="实时预览"></aside>
+    <aside class="preview" id="preview" aria-label="实时预览" data-i18n-aria="preview.title"></aside>
   </div>
 
   <script type="module" src="./vendor/core/element.js"></script>

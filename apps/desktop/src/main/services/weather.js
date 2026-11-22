@@ -192,6 +192,12 @@ function cached() {
 /**
  * Resolve a city and its forecast. Cached for ten minutes per city, so opening
  * the island repeatedly costs one child process, not one per open.
+ *
+ * A failed auto-locate is a degraded refresh, not an empty page: it falls back
+ * to the last reading the locator produced, then to the city preference. The
+ * fallback is remembered in memory for FAILURE_TTL so a burst of window opens
+ * does not repeat both lookups, but it is never written to the cache file, so
+ * the refresh after that window asks the locator again.
  */
 async function load(city, autoLocate) {
   const file = cacheFile();
@@ -199,16 +205,12 @@ async function load(city, autoLocate) {
   // reuse the coordinates the locator happened to find.
   const key = autoLocate ? 'auto' : city;
   const saved = readJson(file, null);
-  if (
-    saved &&
-    saved.city === key &&
-    saved.v === CACHE_VERSION &&
-    saved.data &&
-    Date.now() - saved.data.fetchedAt < CACHE_TTL
-  ) {
-    return saved.data;
+  const stored = saved && saved.city === key && saved.v === CACHE_VERSION && saved.data ? saved.data : null;
+  if (stored && Date.now() - stored.fetchedAt < CACHE_TTL) {
+    return stored;
   }
   if (failure && failure.key === key && Date.now() - failure.at < FAILURE_TTL) {
+    if (failure.data) return failure.data;
     throw new Error(failure.message);
   }
   let data;
@@ -226,7 +228,30 @@ async function load(city, autoLocate) {
       }
     }
   } catch (error) {
-    failure = { key, at: Date.now(), message: String(error?.message ?? error) };
+    const message = String(error?.message ?? error);
+    /*
+     * The machine has not moved: last half hour's city still describes it, so
+     * keep that reading while the locator is unreachable. Only a machine that
+     * has never located anything falls back to the manual city, which is 香港
+     * until a person picks one. A named city never falls back — the person
+     * asked for that exact place and a guess would be worse than the error.
+     */
+    if (autoLocate) {
+      if (stored) {
+        console.warn('[weather] locate failed, keeping the last reading:', message);
+        failure = { key, at: Date.now(), message, data: stored };
+        return stored;
+      }
+      try {
+        const fallback = normalize(await fetchCity(city));
+        console.warn('[weather] locate failed, using the city preference ' + city + ':', message);
+        failure = { key, at: Date.now(), message, data: fallback };
+        return fallback;
+      } catch {
+        // Both halves are down; the locator's reason is the one worth showing.
+      }
+    }
+    failure = { key, at: Date.now(), message };
     throw error;
   }
   failure = null;

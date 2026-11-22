@@ -5,6 +5,13 @@
  * a sweep is slow by design (property reads are ~1.8s each), so it runs every
  * five minutes and the module keeps the last answer in between. A device with
  * no battery property is still listed — "connected" is useful on its own.
+ *
+ * One sweep prints two lines, and each one is pushed as a whole snapshot:
+ * "list" arrives in ~1.5s with the names and connection state (battery null),
+ * "battery" follows in ~2.5s more with the levels. The renderer replaces its
+ * list per push, so the page draws rows as soon as it has rows instead of
+ * waiting out the slow half of the sweep. The vendor probe is merged on read,
+ * so a receiver's level can still land between or after the two.
  */
 const platform = require('../platform');
 const path = require('node:path');
@@ -16,6 +23,16 @@ const RESPAWN_MS = 30000;
 let child = null;
 let buffer = '';
 let devices = [];
+/**
+ * Cold start is the whole point of the two-stage push, so the first sweep is
+ * printed: "the page was empty for N seconds" is answerable from the app's own
+ * output instead of by timing a screenshot. Two lines per process, not per
+ * sweep - a five-minute clock does not need a log line each time.
+ */
+let startedAt = 0;
+let firstPushesLogged = 0;
+/** Which half of the sweep the last line was: 'list' or 'battery'. */
+let phase = 'list';
 let stopped = true;
 const listeners = new Set();
 
@@ -24,6 +41,7 @@ const scriptPath = () => scriptFile('devices.ps1');
 function emit() {
   const value = snapshot();
   for (const fn of listeners) fn(value);
+  return value;
 }
 
 function snapshot() {
@@ -48,11 +66,20 @@ function snapshot() {
     /* Counted from the merged rows: a level the vendor probe supplied is on
      * screen, so leaving it out of the count was the one place the page said
      * "0 devices with a level" while the list showed one. */
-    withBattery: rows.filter((device) => Number.isFinite(Number(device.battery))).length,
+    /* Number(null) is 0, so a null level has to be excluded before the numeric
+     * test: the list phase pushes every row at null and the count has to say
+     * "none yet", not "all of them". */
+    withBattery: rows.filter(
+      (device) => device.battery !== null && Number.isFinite(Number(device.battery)),
+    ).length,
     /* When the vendor probe last finished. It advances on the five-minute
      * background clock even with the page closed, which is what makes "the
      * reading is fresh without opening the page" observable. */
     probedAt: deviceBattery.status().probedAt,
+    /* 'list' = names and connection only, 'battery' = the levels as well. The
+     * page does not draw it; it is what makes the two-stage push observable in
+     * a log or a test. */
+    phase,
   };
 }
 
@@ -64,6 +91,9 @@ function handleLine(line) {
     return;
   }
   if (!parsed || !Array.isArray(parsed.devices)) return;
+  /* Every line is a complete list, not a delta: the sweep prints the fast half
+   * first and the levels second, and each push replaces the page's rows. */
+  phase = parsed.phase === 'battery' ? 'battery' : 'list';
   /*
    * One device can appear as several PnP nodes (an audio node and a transport
    * node share a name, and a Bluetooth keyboard and its 2.4G receiver both
@@ -93,12 +123,18 @@ function handleLine(line) {
     if (!existing || (existing.battery === null && entry.battery !== null)) byName.set(name, entry);
   }
   devices = Array.from(byName.values());
-  emit();
+  const value = emit();
+  if (firstPushesLogged < 2) {
+    firstPushesLogged += 1;
+    console.log('[devices]', phase, `rows=${value.devices.length}`, `levels=${value.withBattery}`, `+${Date.now() - startedAt}ms`, `at=${Date.now()}`);
+  }
 }
 
 function start() {
   if (!stopped) return;
   stopped = false;
+  startedAt = Date.now();
+  firstPushesLogged = 0;
   spawnChild();
   /* The vendor probe has its own clock; repainting when it lands is what
    * turns a late answer into a number on the page. */

@@ -129,6 +129,41 @@ describe('schema: defaults', () => {
   });
 });
 
+/*
+ * Auto-locate used to be opt-in, and the one step between a fresh install and
+ * a weather page was typing a city. It is on by default now. What must not
+ * change is the explicit off: withDefaults merges the group one level deep, so
+ * a stored false survives, while a profile that predates the key picks the new
+ * default up without its manual city being touched.
+ */
+describe('schema: weather locates by default', () => {
+  it('is on for a fresh profile', () => {
+    assert.equal(withDefaults({}).weather.autoLocate, true);
+    assert.equal(DEFAULTS.weather.city, '香港', 'the manual city stays the documented fallback');
+  });
+
+  it('keeps a stored switch-off, because that is a decision, not a missing key', () => {
+    assert.equal(withDefaults({ weather: { autoLocate: false } }).weather.autoLocate, false);
+    assert.equal(withDefaults({ weather: { city: '广州', autoLocate: false } }).weather.autoLocate, false);
+  });
+
+  it('gives a profile that predates the key the new default', () => {
+    const upgraded = withDefaults({ weather: { city: '广州', unit: 'f', intervalMin: 30 } });
+    assert.equal(upgraded.weather.autoLocate, true);
+    assert.equal(upgraded.weather.city, '广州', 'an upgrade must not overwrite the manual city');
+    assert.equal(upgraded.weather.unit, 'f');
+  });
+
+  it('turns the locator off when a city is picked in either window', () => {
+    const settings = src('renderer/settings.js');
+    const typing = settings.slice(settings.indexOf("if (key === 'weather.city')"));
+    assert.match(typing.slice(0, 400), /autoLocate: false/, 'typing a city must outrank the locator');
+    const island = src('renderer/island.js');
+    const picking = island.slice(island.indexOf('function selectCity'));
+    assert.match(picking.slice(0, 900), /autoLocate: false/, 'picking a city must outrank the locator');
+  });
+});
+
 describe('schema: patches', () => {
   it('rejects keys the schema does not define', () => {
     const { accepted, rejected } = filterPatch({ theme: 'light', 'focus.enabled': true, nope: 1 });

@@ -8,6 +8,7 @@
 import {
   PAGE_MANIFEST as PAGES,
   STATUS_MANIFEST as STATUS_ITEMS,
+  visibleDevices,
 } from '../shared/schema.js';
 import { islandHeaderState, pagingVisibility } from './island-header.mjs';
 
@@ -2054,7 +2055,14 @@ function refreshDevices() {
 }
 
 function devicesPage() {
-  const list = devicesState?.devices ?? [];
+  const probed = devicesState?.devices ?? [];
+  /*
+   * Hidden is a display decision, not a probe result: a hidden device stays
+   * paired, keeps its level and keeps its pin, it just has no row here. The
+   * filter lives in the schema so the settings page (which must still list it)
+   * and this page agree on what "hidden" means.
+   */
+  const list = visibleDevices(probed, prefs.devices?.hidden);
   const showBattery = prefs.devices?.showBattery !== false;
   const pinned = Array.isArray(prefs.devices?.pinned) ? prefs.devices.pinned : [];
   /* One source for both the number and the bar: a missing battery is "-", not 0. */
@@ -2072,7 +2080,7 @@ function devicesPage() {
    * that opens the system Bluetooth sheet to make room for a fifth device was
    * the wrong trade: the level block is already 64px of mostly empty width.
    */
-  const bluetoothOn = list.length ? ' on' : '';
+  const bluetoothOn = probed.length ? ' on' : '';
   const systemButton = systemOpenError
     ? '<button type="button" class="dev-foot" data-open-system="bluetooth" disabled><span class="dev-bt"><i class="' + bluetoothOn + '"></i>蓝牙</span><span class="dev-foot-note">' + escapeHtml(systemOpenError) + '</span></button>'
     : '<button type="button" class="dev-foot" data-open-system="bluetooth" title="打开系统蓝牙设置"><span class="dev-bt"><i class="' + bluetoothOn + '"></i>蓝牙</span><span class="dev-foot-note">系统设置</span></button>';
@@ -2093,10 +2101,19 @@ function devicesPage() {
     </div>
     <div class="dev-power${toneOf(level)}" aria-hidden="true"><i style="width:${level === null ? 0 : level}%"></i></div>`;
   if (!list.length) {
+    /*
+     * "Nothing paired" and "everything hidden" are different problems with
+     * different ways back. Claiming no device is connected while the user hid
+     * three of them would send them to the system Bluetooth sheet to fix a
+     * setting on this app's own settings page.
+     */
+    const empty = probed.length
+      ? stateBlock('good', '设备都隐藏了', '在设置 → 设备里重新显示', '去设置', 'data-action="settings:devices"')
+      : stateBlock('good', '没有已连接的蓝牙设备', '在系统蓝牙里配对后会显示', '去设置', 'data-action="settings:general"');
     /* The state line goes first, against the top: the battery block below it is
        this machine's own reading, not a device answer, and it stays. */
     return `<div class="dev">
-      ${stateBlock('good', '没有已连接的蓝牙设备', '在系统蓝牙里配对后会显示', '去设置', 'data-action="settings:general"')}
+      ${empty}
       ${hero}
     </div>`;
   }
@@ -2109,10 +2126,11 @@ function devicesPage() {
     .filter(Boolean)
     .concat(list.filter((device) => !pinned.includes(device.name)));
   /*
-   * Every row is rendered. The page is the scroll container (see .pages), so
-   * the fifth row is where the viewport ends, not where the list ends: a
+   * Every row is rendered. .dev-list is the scroll container (see island.css),
+   * so the fifth row is where the viewport ends, not where the list ends: a
    * device below it stays reachable by scrolling instead of disappearing into
-   * a count line that nothing can open.
+   * a count line that nothing can open. Because the list scrolls itself, its
+   * selector is in WHEEL_OWNERS — otherwise the same wheel also turns the page.
    */
   const shown = ordered;
   const full = pinned.length >= DEVICE_PINS;
@@ -2350,14 +2368,43 @@ function renderPage(animate = false) {
 /*
  * Scrolling inside a scrollable block must stay there.
  *
- * The pages container is the island's own scroller and the wheel handler that
- * flips pages sits above it, so a wheel over the clipboard both scrolled the
- * list and turned the page. Stopping propagation at the list is the narrowest
- * fix: everywhere else the wheel still pages as before.
+ * The wheel handler that flips pages sits on #panel, above every page, so a
+ * wheel over an inner list both scrolled that list and turned the page. Stopping
+ * propagation at the list is the narrowest fix: everywhere else the wheel still
+ * pages as before.
  *
- * The todo list joins them now that it scrolls itself instead of growing the
- * page: a wheel over a long list should scroll the list, not flip away from it.
+ * The named lists are every block that scrolls inside the 217px page today —
+ * clipboard, shelf, todo, mailbox, devices, message centre. Devices belonged to
+ * this rule from the day .dev-list got its own scrollbar and did not get the
+ * name: a wheel over the sixth device turned the page under the pointer.
+ *
+ * The second arm states the rule the names cannot: anything inside #pages that
+ * scrolls vertically owns its own wheel, so the next page that caps a block and
+ * lets it scroll is isolated without editing this list. #pages is excluded on
+ * purpose — that box is where paging itself lives, and swallowing its wheel
+ * would kill paging on any page whose content overflows it.
+ *
+ * The scrollHeight gate is what makes the boundary absolute: once the list is
+ * at its end the wheel is still swallowed, so it never leaks to the pager, and
+ * a wheel over a list with nothing to scroll still pages as it always did.
  */
+const WHEEL_OWNERS =
+  '.clip-list, .shelf-list, .todo-list, .dev-list, .msg-list, .mail-page, .mail';
+
+/** The page-level scroll block under the pointer, or null when the wheel pages. */
+function wheelOwner(target) {
+  if (!(target instanceof Element)) return null;
+  const named = target.closest(WHEEL_OWNERS);
+  if (named) return named;
+  for (let el = target; el && el !== pagesEl; el = el.parentElement) {
+    const overflowY = getComputedStyle(el).overflowY;
+    if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
+      return el;
+    }
+  }
+  return null;
+}
+
 document.addEventListener(
   'wheel',
   (event) => {
@@ -2367,10 +2414,7 @@ document.addEventListener(
       event.stopPropagation();
       return;
     }
-    const list =
-      event.target instanceof Element
-        ? event.target.closest('.clip-list, .shelf-list, .todo-list, .mail-page, .mail')
-        : null;
+    const list = wheelOwner(event.target);
     if (list && list.scrollHeight > list.clientHeight + 1) event.stopPropagation();
   },
   { capture: true },

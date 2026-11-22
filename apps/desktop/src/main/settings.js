@@ -28,6 +28,12 @@ let actionHook = null;
  * the same face payload the ball and the island receive.
  */
 let faceLoader = null;
+/**
+ * Injected by boot: the window closed, so anything it was keeping alive for
+ * its own page can be released. Only the devices page asks for such a thing —
+ * its probe is started on demand because the island page may be switched off.
+ */
+let closedHook = null;
 
 function setWeatherRefresher(fn) {
   refreshWeatherHook = fn;
@@ -39,6 +45,22 @@ function setActionHook(fn) {
 
 function setFaceLoader(fn) {
   faceLoader = typeof fn === 'function' ? fn : null;
+}
+
+function setClosedHook(fn) {
+  closedHook = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * Push one devices snapshot to the open settings window.
+ *
+ * The devices page is the only settings page whose rows are live data rather
+ * than preferences: a probe can finish while the window sits on it, and the
+ * levels should not wait for the next page switch.
+ */
+function sendDevices(payload) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('settings:devices', payload);
 }
 
 /**
@@ -89,6 +111,7 @@ function create(page) {
   });
   win.on('closed', () => {
     win = null;
+    closedHook?.();
   });
   return win;
 }
@@ -287,7 +310,9 @@ module.exports = {
   onPrefs,
   applyPatch,
   sendFace,
+  sendDevices,
   setWeatherRefresher,
   setActionHook,
   setFaceLoader,
+  setClosedHook,
 };

@@ -87,6 +87,19 @@ describe('device-battery: three read layers', () => {
     battery.stop();
   });
 
+  it('a second start is not a second clock', async () => {
+    const battery = fresh();
+    battery.start();
+    battery.start();
+    await flush();
+    assert.equal(stats.spawn, 1, 'the second start() finds the probe already running');
+
+    mock.timers.tick(5 * 60 * 1000);
+    await flush();
+    assert.equal(stats.spawn, 2, 'one tick, one probe: the clock was not stacked');
+    battery.stop();
+  });
+
   it('probing the page open three times, spaced, not once', async () => {
     const battery = fresh();
     battery.start();

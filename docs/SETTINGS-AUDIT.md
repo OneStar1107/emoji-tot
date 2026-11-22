@@ -47,6 +47,7 @@
 | `launchAtLogin` | `false` | 常规 | 主进程 | `main/settings.js app.setLoginItemSettings` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `cast` | `tot` | 常规 | 主进程 | `main.js setCast() · island:cast · cast:changed` | 即时 | 当前角色 | has a SERVICE_PLAN entry · lists every path |
 | `position` | `null` | 常规 | 主进程 | `main.js createWindow() / savePrefs()` | 即时 | 非控件：球拖拽后自动写入 | has a SERVICE_PLAN entry · lists every path |
+| `lang` | `zh` | 常规 | 渲染进程 | `settings.js applyChrome() → documentElement.lang · T()` | 即时 | 设置窗口界面语言；本批只影响设置窗口 | lists every path · writes dotted keys through setPath |
 | `theme` | `dark` | 外观 | 渲染进程 | `island.js resolveTheme() · settings.js applyChrome()` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `skin` | `frost` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-skin]` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `blur` | `true` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-blur]` | 即时 |  | lists every path · writes dotted keys through setPath |
@@ -84,12 +85,13 @@
 | `pages` | 10/11 项开 | 页面管理 | 主进程 | `main.js applyServicePlan() · island.js enabledPages()` | 即时 | 同时控制渲染入口与后台服务 | pages drive services |
 | `pageOrder` | `[music, weather, quota, mail, focus, todo, health, shelf, devices, calendar, messenger]` | 页面管理 | 渲染进程 | `island.js enabledPages()` | 即时 |  | pages drive services |
 | `defaultPage` | `music` | 页面管理 | 渲染进程 | `island.js initial page selection` | 重启后 | 下次打开生效 | lists every path · writes dotted keys through setPath |
-| `devices.showBattery` | `true` | 页面管理 | 渲染进程 | `island.js devicesPage() → 行的电量条与百分比` | 即时 | 关掉后只画名称与连接状态 | lists every path · writes dotted keys through setPath |
-| `devices.pinned` | `[]` | 页面管理 | 渲染进程 | `island.js devicesPage() → 置顶排序与星标` | 即时 | 最多 3 台；在设备页行尾星标切换 | lists every path · writes dotted keys through setPath |
+| `devices.showBattery` | `true` | devices | 渲染进程 | `island.js devicesPage() · settings.js pageDevices() → 电量条与百分比` | 即时 | 关掉后只画名称与连接状态 | lists every path · writes dotted keys through setPath |
+| `devices.pinned` | `[]` | devices | 渲染进程 | `island.js devicesPage() · settings.js pageDevices() · main.js island:devices-pin / settings:devices-pin` | 即时 | 最多 3 台；岛设备页行尾或设置·设备页星标切换 | lists every path · writes dotted keys through setPath |
+| `devices.hidden` | `[]` | devices | 渲染进程 | `island.js devicesPage() → visibleDevices() · settings.js pageDevices() 行的显示开关` | 即时 | 隐藏的设备不在岛设备页出现，设置页仍列出 | lists every path · writes dotted keys through setPath |
 | `weather.city` | `香港` | 天气 | 主进程 | `main.js refreshWeather()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `weather.unit` | `c` | 天气 | 渲染进程 | `island.js renderPillStatus() / weather card` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `weather.intervalMin` | `15` | 天气 | 主进程 | `main.js scheduleWeather()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
-| `weather.autoLocate` | `false` | 天气 | 主进程 | `main.js refreshWeather()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
+| `weather.autoLocate` | `true` | 天气 | 主进程 | `main.js refreshWeather()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `music.lyrics` | `true` | 音乐与歌词 | 渲染进程 | `island.js music page` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `music.islandLyrics` | `true` | 音乐与歌词 | 渲染进程 | `island.js renderPillStatus()` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `music.offset` | `0.35` | 音乐与歌词 | 渲染进程 | `island.js lyric sync` | 即时 |  | lists every path · writes dotted keys through setPath |

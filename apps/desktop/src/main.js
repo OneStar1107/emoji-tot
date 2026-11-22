@@ -62,6 +62,17 @@ const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
 
 /** Mirrors DEFAULTS.devices.pinned's documented cap (see shared/schema.js). */
 const DEVICE_PIN_LIMIT = 3;
+/**
+ * The settings window has its 设备 page open.
+ *
+ * The island's devices page decides whether the probe runs in the background,
+ * but the two decisions the settings page holds (what to show, what to pin)
+ * belong to the user, not to that page — so opening 设置 → 设备 must start the
+ * probe even while 页面管理 has the island page switched off. The flag is a
+ * demand, not a second service plan: applyServicePlan() unions it in and the
+ * window's close hook drops it.
+ */
+let devicesWatch = 0;
 const SIZE_ORDER = Object.keys(SIZES);
 
 /** Room above the ball for the speech bubble; the window is taller than the ball. */
@@ -1543,6 +1554,52 @@ const SERVICE_PLAN = {
 
 const runningServices = new Set();
 
+/* ------------------------------------------------------------ device prefs */
+
+/**
+ * One device name as the row controls send it: non-empty, bounded.
+ *
+ * 120 is longer than any PnP name Windows reports; anything bigger is not a
+ * device, and refusing it keeps a corrupt value out of prefs.json for good.
+ */
+const checkDeviceName = (name) => (typeof name === 'string' && name.length > 0 && name.length <= 120 ? name : undefined);
+
+/**
+ * Pin or unpin one device, enforcing the cap from shared/schema.js.
+ *
+ * Both windows call this: the island's row star and the settings page's star
+ * are the same decision, so they must not each own a copy of the cap. The
+ * group is rebuilt from current prefs so showBattery/hidden cannot be dropped
+ * by a writer holding an older snapshot.
+ */
+function writeDevicePin(name) {
+  const current = readPrefs().devices ?? {};
+  const pinned = Array.isArray(current.pinned) ? current.pinned : [];
+  const limit = SCHEMA?.DEVICE_PIN_LIMIT ?? DEVICE_PIN_LIMIT;
+  const nextPinned = SCHEMA?.togglePinnedDevice
+    ? SCHEMA.togglePinnedDevice(pinned, name, limit)
+    : pinned.includes(name)
+      ? pinned.filter((item) => item !== name)
+      : pinned.length >= limit ? pinned : pinned.concat(name);
+  return settings.applyPatch({ devices: { ...current, pinned: nextPinned } });
+}
+
+/**
+ * Show or hide one device on the island; hiding keeps its pin.
+ *
+ * Like the pin star, this rebuilds the devices group rather than accepting a
+ * whole object from the renderer — the settings page lists every probed device,
+ * so its snapshot is the longest-lived copy of this group in the app.
+ */
+function writeDeviceHidden(message) {
+  const current = readPrefs().devices ?? {};
+  const hidden = Array.isArray(current.hidden) ? current.hidden : [];
+  const nextHidden = message.hidden
+    ? (hidden.includes(message.name) ? hidden : hidden.concat(message.name))
+    : hidden.filter((item) => item !== message.name);
+  return settings.applyPatch({ devices: { ...current, hidden: nextHidden } });
+}
+
 /**
  * Start what should run, stop what should not.
  *
@@ -1560,6 +1617,10 @@ function applyServicePlan() {
   } else {
     wanted = new Set(Object.keys(SERVICE_PLAN));
   }
+  /* 设置 → 设备 is a consumer even when the island page is off: the rows it
+     lists come from the same probe, and showing an empty page because another
+     page was switched off would be a lie about the hardware. */
+  if (devicesWatch > 0) wanted.add('devices');
 
   for (const [name, control] of Object.entries(SERVICE_PLAN)) {
     const shouldRun = wanted.has(name) && (!control.feature || platform.supports(control.feature));
@@ -1615,7 +1676,10 @@ function startServices() {
   clipboardHistory.onChange((value) => island.send('island:clipboard', value));
   messenger.setPrefsReader(readPrefs);
   messenger.onChange((value) => island.send('island:messenger', value));
-  devices.onChange((value) => island.send('island:devices', value));
+  devices.onChange((value) => {
+    island.send('island:devices', value);
+    settings.sendDevices(value);
+  });
   quota.onChange(pushQuotaAgent);
   mail.onChange((value) => island.send('island:mail', value));
   // Same shape as the bootstrap payload: the page reads .events, and a bare
@@ -1744,15 +1808,8 @@ function startServices() {
    * device. Reading current prefs and rebuilding the group also keeps the
    * other members of the group (showBattery) from being dropped by the write.
    */
-  guard.guardedHandle('island:devices-pin', ['island'], (name) => {
-    const current = readPrefs().devices ?? {};
-    const pinned = Array.isArray(current.pinned) ? current.pinned : [];
-    const nextPinned = pinned.includes(name)
-      ? pinned.filter((item) => item !== name)
-      : pinned.length >= DEVICE_PIN_LIMIT ? pinned : pinned.concat(name);
-    return settings.applyPatch({ devices: { ...current, pinned: nextPinned } });
-  }, {
-    check: (name) => (typeof name === 'string' && name.length > 0 && name.length <= 120 ? name : undefined),
+  guard.guardedHandle('island:devices-pin', ['island'], (name) => writeDevicePin(name), {
+    check: checkDeviceName,
     maxBytes: 512,
   });
 
@@ -1774,6 +1831,47 @@ function startServices() {
   guard.guardedHandle('island:devices-refresh', ['island'], () => {
     devices.refresh();
     return devices.snapshot();
+  });
+
+  /*
+   * The settings window's 设备 page.
+   *
+   * It reads the same snapshot the island does, starts the probe while it is
+   * open (the island page may be off), and writes through two narrow channels
+   * that rebuild the devices group from current prefs. Writing the group from
+   * the renderer's copy would let a stale snapshot in this window drop a pin
+   * the island wrote a moment earlier.
+   */
+  guard.guardedHandle('settings:devices', ['settings'], () => devices.snapshot());
+
+  guard.guardedHandle('settings:devices-refresh', ['settings'], () => {
+    devices.refresh();
+    return devices.snapshot();
+  });
+
+  guard.guardedHandle('settings:devices-watch', ['settings'], (active) => {
+    const next = active === true ? 1 : 0;
+    if (next !== devicesWatch) {
+      devicesWatch = next;
+      applyServicePlan();
+      if (next) devices.refresh();
+    }
+    return true;
+  }, { maxBytes: 32 });
+
+  guard.guardedHandle('settings:devices-pin', ['settings'], (name) => writeDevicePin(name), {
+    check: checkDeviceName,
+    maxBytes: 512,
+  });
+
+  guard.guardedHandle('settings:devices-hidden', ['settings'], (message) => writeDeviceHidden(message), {
+    check: (message) => {
+      if (!guard.isPlainObject(message)) return undefined;
+      if (!checkDeviceName(message.name)) return undefined;
+      if (typeof message.hidden !== 'boolean') return undefined;
+      return message;
+    },
+    maxBytes: 512,
   });
 
   guard.guardedHandle('media:control', ['island'], (payload) => {
@@ -1936,6 +2034,14 @@ if (!gotTheLock) {
     // Any window may change prefs; the tray and the visible form follow.
     settings.setWeatherRefresher(refreshWeather);
     settings.setActionHook(handleSettingsAction);
+    /* 设置 → 设备 asks for the probe while it is open. The window owns that
+       demand; closing it must release the probe exactly like leaving the page,
+       or a closed window would keep a PowerShell child alive until prefs change. */
+    settings.setClosedHook(() => {
+      if (devicesWatch === 0) return;
+      devicesWatch = 0;
+      applyServicePlan();
+    });
     island.startOledShift();
     island.setBoundsHook((rect) => avoidance.setIslandRect(rect));
     // The window was placed before this hook existed, so hand over the current

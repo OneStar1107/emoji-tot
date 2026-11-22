@@ -53,7 +53,7 @@ export const PAGE_MANIFEST = [
  * there is a test that walks this table and fails on a key nothing draws.
  */
 /**
- * The settings window's left rail: three groups, fourteen pages.
+ * The settings window's left rail: three groups, fifteen pages.
  *
  * It lives here rather than in the renderer because the site's docs page
  * prints the page count, and two copies of a list like this is exactly how a
@@ -82,6 +82,12 @@ export const SETTINGS_NAV = [
       { key: 'comm', label: '通知、邮箱与日程', icon: 'mail' },
       { key: 'quota', label: 'AI 额度', icon: 'coin' },
       { key: 'weather', label: '天气', icon: 'sun' },
+      /* The devices list used to have no page of its own: its two decisions
+         (may a level be shown, which rows come first) were rows on 页面管理.
+         It is a content page now — the rail's third group is the one that
+         grows. The pages.devices switch on 页面管理 stays: it decides whether
+         the island shows the page at all. */
+      { key: 'devices', label: '设备', icon: 'tray' },
     ],
   },
   {
@@ -176,6 +182,15 @@ export const DEFAULTS = {
   cast: 'tot',
   /** Last window position; written by the ball itself, not by a control. */
   position: null,
+
+  /*
+   * 设置窗口的界面语言 / The settings window's interface language.
+   *
+   * 这一批只有设置窗口读它：岛、托盘、更新卡与引导窗的文案还没接，所以切到
+   * 英文不会让桌面上的岛半中半英。它是一个普通设置项，因此进了 DEFAULTS，
+   * writePrefs 的 filterPatch 才认这条写请求。
+   */
+  lang: 'zh',
 
   /* appearance */
   theme: 'dark',
@@ -272,11 +287,21 @@ export const DEFAULTS = {
    *                The page shows five rows; pinning more than three would
    *                push the rest below the fold, so the fourth pin is ignored
    *                rather than silently reordering the page.
+   *   hidden       device names the devices page leaves out. Hiding is not
+   *                forgetting: the row keeps its pin, and the settings page
+   *                still lists the device so it can be shown again.
    */
-  devices: { showBattery: true, pinned: [] },
+  devices: { showBattery: true, pinned: [], hidden: [] },
 
   /* grouped */
-  weather: { city: '香港', unit: 'c', intervalMin: 15, autoLocate: false },
+  /*
+   * The place is the first thing the weather page needs, and asking every new
+   * person to type a city was the one step between install and a reading. It
+   * is on by default; the manual city stays as the fallback the locator falls
+   * back to, and a person who picks a city (or switches this off) stores an
+   * explicit false, which the merge below never overwrites.
+   */
+  weather: { city: '香港', unit: 'c', intervalMin: 15, autoLocate: true },
   music: { lyrics: true, islandLyrics: true, offset: 0.35 },
   focus: { work: 25, rest: 5, enabled: false },
   health: { waterMin: 45, standMin: 60, enabled: false },
@@ -328,6 +353,14 @@ export function withDefaults(raw) {
   if (!Array.isArray(source.statusItems)) next.statusItems = [...DEFAULTS.statusItems];
   if (!Array.isArray(source.pageOrder)) next.pageOrder = [...DEFAULTS.pageOrder];
   if (!Array.isArray(source.avoidApps)) next.avoidApps = [...DEFAULTS.avoidApps];
+  /* The devices group holds two lists, and both are copied on every call:
+     merging a group copies its members shallowly, so without this the default
+     object's arrays would be mutated by whichever window toggled first. */
+  next.devices = {
+    ...next.devices,
+    pinned: [...(Array.isArray(next.devices.pinned) ? next.devices.pinned : DEFAULTS.devices.pinned)],
+    hidden: [...(Array.isArray(next.devices.hidden) ? next.devices.hidden : DEFAULTS.devices.hidden)],
+  };
   return next;
 }
 
@@ -510,6 +543,68 @@ export function serviceChanges(before, after) {
   };
 }
 
+/* --------------------------------------------------------------- devices */
+
+/**
+ * How many device names 置顶 can hold.
+ *
+ * Main enforces the cap, the island and the settings page both draw it, so the
+ * number lives here once instead of being copied into three renderers.
+ */
+export const DEVICE_PIN_LIMIT = 3;
+
+/**
+ * Toggle one device in the pin list, never past the cap.
+ *
+ * Pinning a fourth device is a no-op, not a silent eviction of the first: the
+ * user asked for one more row, and reordering rows they did not touch is the
+ * same failure as ignoring the click, only harder to notice.
+ */
+export function togglePinnedDevice(pinned, name, limit = DEVICE_PIN_LIMIT) {
+  const list = (Array.isArray(pinned) ? pinned : []).filter((item) => typeof item === 'string' && item);
+  const key = typeof name === 'string' ? name : '';
+  if (!key) return list;
+  if (list.includes(key)) return list.filter((item) => item !== key);
+  if (list.length >= limit) return list;
+  return list.concat(key);
+}
+
+/**
+ * The rows an island may draw: every probed device the user did not hide.
+ *
+ * The probe keeps returning a hidden device (it is still paired); filtering is
+ * a display decision made here, so un-hiding one puts its row back with its
+ * pin and its level intact.
+ */
+export function visibleDevices(list, hidden) {
+  const hide = new Set((Array.isArray(hidden) ? hidden : []).filter((name) => typeof name === 'string'));
+  return (Array.isArray(list) ? list : []).filter(
+    (device) => device && typeof device.name === 'string' && device.name && !hide.has(device.name),
+  );
+}
+
+/**
+ * A device's category, for the row's generic glyph.
+ *
+ * The probe reports a name, a status, a level and a source — no icon, no form
+ * factor. The row therefore draws one of a handful of category marks. The name
+ * decides the category; a name that matches nothing gets the neutral mark
+ * rather than its first letter, which reads as an abbreviation nobody chose.
+ */
+const DEVICE_KIND_RULES = [
+  ['audio', /耳机|耳麦|音箱|扬声器|麦克风|headset|headphone|earbud|airpod|buds|speaker|audio|hands[- ]?free|hfp/i],
+  ['keyboard', /键盘|keyboard|kbd/i],
+  ['mouse', /鼠标|mouse|trackball|trackpad/i],
+  ['gamepad', /手柄|gamepad|controller|joystick|dualsense|dualshock|xbox/i],
+  ['phone', /手机|phone|iphone|android|pixel|galaxy|xiaomi|redmi|huawei|honor|oppo|vivo|oneplus/i],
+];
+
+export function deviceKind(name) {
+  const text = String(name ?? '');
+  for (const [kind, pattern] of DEVICE_KIND_RULES) if (pattern.test(text)) return kind;
+  return 'other';
+}
+
 /** The page a preference path belongs to, for grouping an audit. */
 export function pageOfPath(path) {
   const head = String(path).split('.')[0];
@@ -560,7 +655,7 @@ export function pageOfPath(path) {
     shelf: 'todo',
     calendar: 'comm',
     quota: 'quota',
-    devices: 'pages',
+    devices: 'devices',
     notify: 'comm',
     updatePrompt: 'general',
     messenger: 'comm',
@@ -586,6 +681,7 @@ export function pageOfPath(path) {
  * without a restart.
  */
 export const CONSUMERS = {
+  lang: { scope: 'renderer', at: 'settings.js applyChrome() → documentElement.lang · T()', live: true, note: '设置窗口界面语言；本批只影响设置窗口' },
   cast: { scope: 'main', at: 'main.js setCast() · island:cast · cast:changed', live: true, note: '当前角色' },
   position: { scope: 'main', at: 'main.js createWindow() / savePrefs()', live: true, note: '非控件：球拖拽后自动写入' },
   displayMode: { scope: 'main', at: 'main.js applyForm()', live: true, note: '岛 / 球 / 双形态' },
@@ -655,8 +751,9 @@ export const CONSUMERS = {
   'shelf.dir': { scope: 'main', at: 'services/shelf.js dir()', live: true, note: '留空用默认的资料库/shelf' },
   'shelf.clipboard': { scope: 'main', at: 'main.js applyServicePlan() clipboardHistory', live: true, note: '默认关；关闭时清掉未固定条目' },
 
-  'devices.showBattery': { scope: 'renderer', at: 'island.js devicesPage() → 行的电量条与百分比', live: true, note: '关掉后只画名称与连接状态' },
-  'devices.pinned': { scope: 'renderer', at: 'island.js devicesPage() → 置顶排序与星标', live: true, note: '最多 3 台；在设备页行尾星标切换' },
+  'devices.showBattery': { scope: 'renderer', at: 'island.js devicesPage() · settings.js pageDevices() → 电量条与百分比', live: true, note: '关掉后只画名称与连接状态' },
+  'devices.pinned': { scope: 'renderer', at: 'island.js devicesPage() · settings.js pageDevices() · main.js island:devices-pin / settings:devices-pin', live: true, note: '最多 3 台；岛设备页行尾或设置·设备页星标切换' },
+  'devices.hidden': { scope: 'renderer', at: 'island.js devicesPage() → visibleDevices() · settings.js pageDevices() 行的显示开关', live: true, note: '隐藏的设备不在岛设备页出现，设置页仍列出' },
 
   'calendar.leadMin': { scope: 'main', at: 'services/calendar.js lead time', live: true },
   'calendar.fromMail': { scope: 'main', at: 'services/calendar.js ics import', live: true },
