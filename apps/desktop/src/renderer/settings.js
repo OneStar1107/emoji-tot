@@ -1158,7 +1158,7 @@ let faceState = 'idle';
  *
  * It used to open with a search box. Without a width of its own the icon was
  * laid out at the SVG default 300x150 — the black circle — and the box pushed
- * the page list 208px down. Fourteen rows fit any window, so the slot now
+ * the page list 208px down. Fifteen rows fit any window, so the slot now
  * shows the cast instead: the same 46px renderer 角色与表情 uses, drawing the
  * state handed over by the main process. With no cast member there is no
  * preview — never an empty circle.

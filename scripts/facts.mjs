@@ -10,7 +10,7 @@
  * Run `pnpm facts` to print the current values.
  */
 import { readFileSync } from 'node:fs';
-import { SETTINGS_PAGE_KEYS } from '../apps/desktop/src/shared/schema.js';
+import { PAGE_MANIFEST, SETTINGS_PAGE_KEYS } from '../apps/desktop/src/shared/schema.js';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -85,6 +85,7 @@ export const FACTS = {
   segments: EMOTION_SEGMENTS.length,
   eyeStyles: unionSize('packages/core/src/face.ts', 'EyeStyle'),
   mouthStyles: unionSize('packages/core/src/face.ts', 'MouthStyle'),
+  islandPages: PAGE_MANIFEST.length,
   settingsPages: settingsPageCount(),
   sitePages: sitePageCount(),
   sceneHerd: sceneHerdCount(),

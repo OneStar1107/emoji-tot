@@ -8,6 +8,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PAGE_MANIFEST, SETTINGS_PAGE_KEYS } from '../apps/desktop/src/shared/schema.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => readFileSync(resolve(root, file), 'utf8');
@@ -24,18 +25,23 @@ function rejectText(file, needle, why) {
 
 for (const file of ['README.md', 'README.en.md']) {
   expectText(file, `EmojiTot.Setup.${version}.exe`, 'installer link must match artifactName');
-  expectText(file, `EmojiTot.${version}.exe`, 'portable link must match artifactName');
+  expectText(file, `EmojiTot.${version}.portable.exe`, 'portable link must match artifactName');
   expectText(file, 'pnpm smoke:desktop', 'document the real-window smoke command');
 }
 
 rejectText('README.md', '23 个测试', 'protocol suite now has 33 tests');
-rejectText('README.md', '13 个导航项', 'settings rail has 14 items');
-rejectText('README.md', '十一个功能页', 'page manifest has 10 pages');
+rejectText('README.md', `13 个导航项`, `settings rail has ${SETTINGS_PAGE_KEYS.length} items`);
+rejectText('README.md', `14 个导航项`, `settings rail has ${SETTINGS_PAGE_KEYS.length} items`);
+rejectText('README.md', '十个功能页', `page manifest has ${PAGE_MANIFEST.length} pages`);
 rejectText('README.md', '两个窗口都提前创建', 'the island is created lazily');
 rejectText('README.en.md', 'both windows are created up front', 'the island is created lazily');
-rejectText('README.en.md', 'Thirteen', 'settings rail has 14 items');
+rejectText('README.en.md', 'Thirteen', `settings rail has ${SETTINGS_PAGE_KEYS.length} items`);
+rejectText('README.en.md', 'Fourteen', `settings rail has ${SETTINGS_PAGE_KEYS.length} items`);
+rejectText('README.en.md', '**Ten pages**', `page manifest has ${PAGE_MANIFEST.length} pages`);
 rejectText('README.en.md', '23 tests', 'protocol suite now has 33 tests');
 rejectText('README.md', 'EmojiTot Setup 0.3.0.exe', 'packaged artifacts now use the versioned dotted name');
+expectText('README.en.md', 'EmojiTot Noncommercial License', 'English README must match the root license');
+rejectText('README.en.md', '**MIT.**', 'the project license is noncommercial, not MIT');
 
 rejectText('docs/PROTOCOL.md', '27 个测试', 'protocol suite now has 33 tests');
 rejectText('docs/SETTINGS.md', '"anchor"', 'anchor is not a schema key');
@@ -50,7 +56,8 @@ rejectText('docs/ISLAND.md', 'island:expand', 'the island has no expand IPC chan
 rejectText('docs/ISLAND.md', '左右 14px', 'actual horizontal padding is 32px');
 rejectText('docs/ISLAND.md', '上下 10px', 'actual vertical padding is 36px');
 rejectText('apps/gallery/index.html', '71 cast members', 'current cast has 15 members');
-rejectText('apps/desktop/src/renderer/settings.js', '十一个功能页', 'page manifest has 10 pages');
+rejectText('apps/desktop/src/renderer/settings.js', 'Fourteen rows', 'settings rail now has 15 pages');
+rejectText('apps/desktop/src/renderer/settings.js', '十个功能页', `page manifest has ${PAGE_MANIFEST.length} pages`);
 
 expectText('docs/SETTINGS.md', 'mailProvider', 'mail provider is persisted');
 expectText('apps/gallery/index.html', '15 characters', 'social metadata must describe the current cast');

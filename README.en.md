@@ -33,7 +33,7 @@ Folded, it is just a face; click it and it grows into a 420px panel in place. Th
 | File | For |
 | --- | --- |
 | [EmojiTot.Setup.0.8.18.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18/EmojiTot.Setup.0.8.18.exe) | Installer — starts from the Start menu |
-| [EmojiTot.0.8.18.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18/EmojiTot.0.8.18.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.0.8.18.portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18/EmojiTot.0.8.18.portable.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases) · current <!--facts:version-->0.8.18<!--/facts-->
@@ -58,7 +58,7 @@ Electron 45 cannot start from a repository path containing non-ASCII characters:
 ## Five things it does
 
 1. **Two forms** — an island pill at the top of the screen, or a ball that docks to an edge; switch from the tray or settings without a restart and without losing the current page.
-2. **Ten pages** — music, weather, focus, todos, health, shelf, AI quota, mail, calendar and devices, flipped sideways; every empty state offers one line and one action.
+2. **<!--facts:islandPages-->11<!--/facts--> pages** — media, weather, focus, todos, health, shelf, AI quota, mail, calendar, devices and messages, flipped sideways; every empty state offers one line and one action.
 3. **One engine** — <!--facts:cast-->15<!--/facts--> characters and <!--facts:faceStates-->61<!--/facts--> expressions computed from hand-written SVG outlines, zero image assets, shared by the app and the site.
 4. **One two-digit number** — an agent (DeepSeek Harness / Claude Code / Codex) sends an id and the host turns it into a face; an unknown id falls back inside its decade instead of blanking. `%APPDATA%/EmojiTot/state.json` is the whole interface.
 5. **Settings** — <!--facts:settingsPages-->15<!--/facts--> pages and four presets; every control writes straight to `prefs.json`, and there is no save button.

@@ -16,6 +16,7 @@ import { execSync } from 'node:child_process';
 import { readFileSync, statSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const SELF = 'scripts/scan-sensitive.mjs';
 const SKIP_DIR = /(^|\/)(vendor|node_modules|release|dist)\//;
@@ -49,8 +50,23 @@ function localUserNames() {
 
 const users = localUserNames();
 
+const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+/**
+ * The README, LICENSE and release notes intentionally publish one project
+ * contact for commercial licensing. That address is not leaked personal data.
+ * Keep this list exact; every unrelated address still fails the scan.
+ */
+const PUBLIC_CONTACT_EMAILS = new Set(['hyx110702@163.com']);
+const PLACEHOLDER_EMAILS = new Set(['you@163.com', 'you@example.com', 'person@example.com']);
+
+export function emailAllowed(address) {
+  const normalized = String(address).trim().toLowerCase();
+  if (PUBLIC_CONTACT_EMAILS.has(normalized) || PLACEHOLDER_EMAILS.has(normalized)) return true;
+  return /^noreply@/i.test(normalized) || /@example\.(com|org)$/i.test(normalized);
+}
+
 const textRules = [
-  { id: 'email', test: (line) => /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(line), allow: /noreply|example\.(com|org)|you@|user@|someone@|@example/i },
+  { id: 'email', test: (line) => /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(line), email: true },
   { id: 'phone', test: (line) => /(^|[^\d])1[3-9]\d{9}([^\d]|$)/.test(line), allow: /0{8,}|1234567890/ },
   { id: 'api-key', test: (line) => /(sk-[A-Za-z0-9_-]{16,}|gh[opsur]_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,})/.test(line), allow: /sk-\.\.\.|sk-xxx|placeholder|your[_-]?key/i },
   { id: 'local-path', test: (line) => /[A-Za-z]:\\Users\\[^\\\s"']+|\/Users\/[^/\s"']+|\/home\/[^/\s"']+/.test(line), allow: /Users\\Public|\\Users\\<|Users\\…|Users\\\.\.\.|Example/i },
@@ -91,7 +107,11 @@ function scanText(files) {
       if (line.length > 4000) continue;
       for (const rule of textRules) {
         if (!rule.test(line)) continue;
-        if (rule.allow && rule.allow.test(line)) continue;
+        if (rule.email) {
+          const addresses = line.match(EMAIL_PATTERN) ?? [];
+          EMAIL_PATTERN.lastIndex = 0;
+          if (addresses.every(emailAllowed)) continue;
+        } else if (rule.allow && rule.allow.test(line)) continue;
         findings.push({ file, line: i + 1, rule: rule.id, text: line.trim().slice(0, 160) });
       }
       for (const name of users) {
@@ -180,44 +200,51 @@ function scanAuthors() {
   return bad;
 }
 
-const files = execSync('git ls-files', { encoding: 'utf8' })
-  .split('\n')
-  .filter((file) => file && !SKIP_DIR.test(file));
+function main() {
+  const files = execSync('git ls-files', { encoding: 'utf8' })
+    .split('\n')
+    .filter((file) => file && !SKIP_DIR.test(file));
 
-const findings = scanText(files);
-const large = scanImages(files);
-const unreviewed = scanDesktopScreenshots(files);
-const authors = scanAuthors();
+  const findings = scanText(files);
+  const large = scanImages(files);
+  const unreviewed = scanDesktopScreenshots(files);
+  const authors = scanAuthors();
 
-console.log('scanned ' + files.length + ' tracked files');
-console.log('');
+  console.log('scanned ' + files.length + ' tracked files');
+  console.log('');
 
-console.log('FAIL (must remove before publishing): ' + (findings.length + unreviewed.length));
-for (const f of findings.slice(0, 40)) {
-  console.log('  ' + f.file + ':' + f.line + ' [' + f.rule + '] ' + f.text);
+  console.log('FAIL (must remove before publishing): ' + (findings.length + unreviewed.length));
+  for (const f of findings.slice(0, 40)) {
+    console.log('  ' + f.file + ':' + f.line + ' [' + f.rule + '] ' + f.text);
+  }
+  if (findings.length > 40) console.log('  … ' + (findings.length - 40) + ' more');
+  for (const img of unreviewed) {
+    console.log('  ' + img.file + ' ' + img.width + 'x' + img.height + ' [unreviewed screenshot]');
+  }
+  if (unreviewed.length) {
+    console.log('  → open each one, confirm it shows no desktop, window title, folder or path,');
+    console.log('    then add a line to ' + REVIEWED + ': "<path> <why it is safe>"');
+  }
+
+  console.log('');
+  console.log('WARN (large images — open each and confirm no desktop, names or paths): ' + large.length);
+  for (const img of large) {
+    console.log('  ' + img.file + ' ' + img.width + 'x' + img.height + ' ' + img.kb + 'KB');
+  }
+
+  console.log('');
+  console.log('WARN (commit authors with a real email): ' + authors.length);
+  for (const email of authors) console.log('  ' + email);
+
+  console.log('');
+  if (findings.length + unreviewed.length > 0) {
+    console.log('RESULT: FAIL — do not push or release until the lines above are gone.');
+    process.exitCode = 1;
+    return;
+  }
+  console.log('RESULT: PASS — text is clean; still open the images above if the count is not 0.');
 }
-if (findings.length > 40) console.log('  … ' + (findings.length - 40) + ' more');
-for (const img of unreviewed) {
-  console.log('  ' + img.file + ' ' + img.width + 'x' + img.height + ' [unreviewed screenshot]');
-}
-if (unreviewed.length) {
-  console.log('  → open each one, confirm it shows no desktop, window title, folder or path,');
-  console.log('    then add a line to ' + REVIEWED + ': "<path> <why it is safe>"');
-}
 
-console.log('');
-console.log('WARN (large images — open each and confirm no desktop, names or paths): ' + large.length);
-for (const img of large) {
-  console.log('  ' + img.file + ' ' + img.width + 'x' + img.height + ' ' + img.kb + 'KB');
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
 }
-
-console.log('');
-console.log('WARN (commit authors with a real email): ' + authors.length);
-for (const email of authors) console.log('  ' + email);
-
-console.log('');
-if (findings.length + unreviewed.length > 0) {
-  console.log('RESULT: FAIL — do not push or release until the lines above are gone.');
-  process.exit(1);
-}
-console.log('RESULT: PASS — text is clean; still open the images above if the count is not 0.');

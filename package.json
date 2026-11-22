@@ -15,6 +15,7 @@
     "dev": "pnpm --filter @emojitot/gallery dev",
     "desktop": "pnpm --filter @emojitot/desktop start",
     "test": "pnpm -r test",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "typecheck": "pnpm -r typecheck",
     "preview": "pnpm build && node apps/gallery/scripts/preview.mjs",
     "dist": "pnpm build && pnpm --filter @emojitot/desktop dist",
@@ -27,7 +28,7 @@
     "docs:check": "pnpm build && node scripts/sync-docs.mjs --check && node scripts/docs-consistency.mjs",
     "settings:audit": "node scripts/settings-audit.mjs",
     "settings:check": "node scripts/settings-audit.mjs --check",
-    "check": "pnpm typecheck && pnpm build && pnpm test && pnpm docs:check && pnpm settings:check && pnpm preview && pnpm check:gallery && pnpm smoke:desktop && pnpm audit:ci && pnpm scan",
+    "check": "pnpm test:scripts && pnpm typecheck && pnpm build && pnpm test && pnpm docs:check && pnpm settings:check && pnpm preview && pnpm check:gallery && pnpm smoke:desktop && pnpm audit:ci && pnpm scan",
     "ui:audit": "node apps/desktop/scripts/ui-audit.mjs",
     "version:check": "node scripts/check-version.mjs"
   },
