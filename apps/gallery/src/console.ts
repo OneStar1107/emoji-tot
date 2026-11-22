@@ -1,19 +1,17 @@
 /**
- * The studio: one character, its genes below, its code beside.
+ * The studio: one character on a lit stage, its genome below, its code beside.
  *
- * The stage is the largest thing on the page and the snippet sits next to it,
- * because the point of the page is "this is what you get and this is how you
- * ask for it". The stage draws the character as SVG directly rather than
- * through the custom element, so the editor is not limited by what an
- * attribute can express; the element is what the snippet hands you.
+ * The stage is the largest object on the page and the one thing the other
+ * pages keep pointing at: it draws the character as SVG directly, so the
+ * editor is not limited by what an attribute can express, while the snippet
+ * beside it shows the element that hands you the same drawing.
  *
- * The page is meant to be played with, so three things answer the pointer at
- * once: the eyes (through two CSS variables on the hero, never through
- * per-frame attributes), the expression grid, and the code block — which only
- * flashes when the text it shows actually changed, because a flash on every
- * re-render is noise, not feedback.
+ * Three things answer the pointer at once: the character (parallax through
+ * two custom properties, never per-frame attributes), the key light on the
+ * stage floor, and the expression strip. The code block only flashes when the
+ * text it shows actually changed — a flash on every re-render is noise.
  */
-import { castMember, renderCast, renderCharacter } from '@emojitot/core';
+import { CAST, FACE_META, castMember, renderCast, renderCharacter } from '@emojitot/core';
 import { EMOTIONS } from '@emojitot/protocol';
 import { createDrawer } from './drawer';
 import { backgroundClass, look, onLookChange, setLook } from './store';
@@ -21,15 +19,15 @@ import { getLang, t } from './i18n';
 import type { RouteContext, View } from './main';
 
 /** The hero's default size. The snippet only prints a size that differs. */
-const DEFAULT_SIZE = 260;
+const DEFAULT_SIZE = 360;
 
 /** Three stage sizes: small enough for a phone, large enough to read the face. */
-const SIZES = [160, 260, 320];
+const SIZES = [220, 360, 480];
 
 /** Where the chosen stage size survives a page change. */
 const SIZE_KEY = 'es.stage.size';
 
-/** How far the pupils may travel, in CSS pixels. */
+/** How far the character may lean toward the pointer, in CSS pixels. */
 const LOOK_RANGE = 6;
 
 function storedSize(): number {
@@ -57,11 +55,17 @@ function faceLabel(state: string): string {
   return getLang() === 'zh' ? emotion.name.zh : emotion.name.en;
 }
 
+/** The two-digit protocol id the wall and the docs both print. */
+function faceId(state: string): string {
+  const emotion = EMOTIONS.find((item) => item.state === state);
+  return emotion ? emotion.id : '';
+}
+
 function snippet(): string {
   const id = look.cast || 'tot';
   const finish = look.finish === 'flat' ? ' finish="flat"' : '';
   const size = stageSize === DEFAULT_SIZE ? '' : ' size="' + stageSize + '"';
-  return '`emojitot-ball cast="' + id + '"' + finish + size + ' state="' + look.state + '"></emojitot-ball>';
+  return '\u0060emojitot-ball cast="' + id + '"' + finish + size + ' state="' + look.state + '"></emojitot-ball>\u0060';
 }
 
 function genome(): string {
@@ -74,13 +78,40 @@ function genome(): string {
 function faceChip(state: string): string {
   const art = renderCharacter({ body: look.body, color: look.color, traits: look.traits, state, size: 30 });
   return (
-    '<button type="button" class="chip face-chip" data-face="' + state + '" aria-pressed="' +
+    '<button type="button" class="face-chip" data-face="' + state + '" aria-pressed="' +
     (look.state === state) +
-    '" title="' + faceLabel(state) + '">' +
+    '" title="' + faceLabel(state) + ' · #' + faceId(state) + '">' +
     '<span class="face-chip-art">' + art + '</span>' +
     '<span class="face-chip-name">' + faceLabel(state) + '</span>' +
     '</button>'
   );
+}
+
+/**
+ * The traced path around the hero.
+ *
+ * Every character in this app is a closed path sampled by hand, so the one
+ * abstract graphic on the site is that fact: a closed outline that draws
+ * itself, a dashed orbit that turns underneath it, and four crop ticks.
+ */
+function orbit(): string {
+  const ticks = [0, 90, 180, 270]
+    .map((angle) => {
+      const rad = (angle * Math.PI) / 180;
+      const x1 = 100 + Math.cos(rad) * 96;
+      const y1 = 100 + Math.sin(rad) * 96;
+      const x2 = 100 + Math.cos(rad) * 88;
+      const y2 = 100 + Math.sin(rad) * 88;
+      return '<line class="orbit-tick" x1="' + x1.toFixed(2) + '" y1="' + y1.toFixed(2) +
+        '" x2="' + x2.toFixed(2) + '" y2="' + y2.toFixed(2) + '"/>';
+    })
+    .join('');
+  return '<svg viewBox="0 0 200 200" fill="none" aria-hidden="true">' +
+    '<circle class="orbit-dash" cx="100" cy="100" r="96"/>' +
+    '<path class="orbit-trace" d="M100 8 C150.8 8 192 49.2 192 100 C192 150.8 150.8 192 100 192 C49.2 192 8 150.8 8 100 C8 49.2 49.2 8 100 8 Z"/>' +
+    '<circle class="orbit-ring" cx="100" cy="100" r="78" opacity=".16"/>' +
+    ticks +
+    '</svg>';
 }
 
 export function createConsole(ctx: RouteContext = { route: 'console' }): View {
@@ -89,57 +120,101 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
   if (ctx.state) setLook({ state: ctx.state });
 
   const el = document.createElement('div');
-  el.className = 'studio';
+  el.className = 'studio-view';
 
   el.innerHTML = `
-    <section class="studio-main">
-      <div class="stage ${backgroundClass()}" id="stage">
-        <div class="hero" data-hero>${hero()}</div>
+    <header class="page-head">
+      <div>
+        <div class="eyebrow"><b>01</b><i></i>Console<i></i>Stage</div>
+        <h1 class="page-title">${t('console.title')}<span>one face, drawn not exported</span></h1>
       </div>
-      <div class="stage-bar">
-        <div class="actions">
-          <button type="button" data-act="spin">${t('console.act.spin')}</button>
-          <button type="button" data-act="bounce">${t('console.act.bounce')}</button>
-          <button type="button" data-act="burst">${t('console.act.burst')}</button>
-          <span class="sep"></span>
-          <button type="button" data-finish="sticker" aria-pressed="true">${t('console.finish.sticker')}</button>
-          <button type="button" data-finish="flat" aria-pressed="false">${t('console.finish.flat')}</button>
-          <span class="sep"></span>
-          ${SIZES.map(
-            (size) =>
-              '<button type="button" data-size="' + size + '" aria-pressed="' + (size === stageSize) +
-              '" title="' + size + ' px">' + size + '</button>',
-          ).join('')}
+      <div>
+        <p class="page-lead">${t('console.lead')}</p>
+        <div class="page-stats">
+          <div class="stat"><b>${CAST.length}</b><span>cast</span></div>
+          <div class="stat"><b>${FACE_META.length}</b><span>faces</span></div>
+          <div class="stat"><b>0</b><span>images</span></div>
         </div>
-        <div class="who" id="who"></div>
       </div>
-      <div class="chips face-grid" id="faceGrid" role="group" aria-label="${t('drawer.face')}"></div>
-      <div class="island-demo">
-        <button type="button" class="island-pill" id="island-pill" aria-expanded="false">
-          <span class="island-face" data-island-face></span>
-          <span>09:41</span><span data-island-temp>19°</span>
-        </button>
-        <div class="island-panel" id="island-panel" hidden>
-          <div class="island-top"><b data-island-title>${t('console.islandTitle')}</b><span>09:41</span></div>
-          <div class="island-body">
-            <figure data-island-art></figure>
-            <div><b data-island-song>${t('console.islandSong')}</b><span>${t('console.islandHint')}</span></div>
+    </header>
+
+    <div class="studio">
+      <section class="studio-main">
+        <div class="stage ${backgroundClass()}" id="stage">
+          <div class="stage-grid" aria-hidden="true"></div>
+          <div class="stage-orbit" aria-hidden="true">${orbit()}</div>
+          <span class="stage-badge" data-stage-badge>path · closed</span>
+          <span class="stage-id" data-stage-id>#${faceId(look.state)}</span>
+          <div class="stage-center">
+            <div class="hero" data-hero><div class="hero-art">${hero()}</div></div>
+            <div class="stage-label">
+              <span class="stage-name" data-stage-name></span>
+            </div>
+          </div>
+          <div class="stage-bar">
+            <div class="actions">
+              <button type="button" data-act="spin">${t('console.act.spin')}</button>
+              <button type="button" data-act="bounce">${t('console.act.bounce')}</button>
+              <button type="button" data-act="burst">${t('console.act.burst')}</button>
+              <span class="sep"></span>
+              <button type="button" data-finish="sticker" aria-pressed="true">${t('console.finish.sticker')}</button>
+              <button type="button" data-finish="flat" aria-pressed="false">${t('console.finish.flat')}</button>
+              <span class="sep"></span>
+              ${SIZES.map(
+                (size) =>
+                  '<button type="button" data-size="' + size + '" aria-pressed="' + (size === stageSize) +
+                  '" title="' + size + ' px">' + size + '</button>',
+              ).join('')}
+            </div>
+            <div class="who" id="who"></div>
           </div>
         </div>
-        <p class="island-note">${t('console.islandNote')}</p>
-      </div>
-    </section>
 
-    <aside class="studio-side">
-      <div class="code-card">
-        <div class="code-head"><span>${t('console.snippet')}</span><button type="button" class="btn" id="copy">${t('console.copy')}</button></div>
-        <pre class="snippet code" data-code><code data-snippet>${snippet()}</code></pre>
-      </div>
-      <div class="code-card">
-        <div class="code-head"><span>${t('console.genome')}</span><button type="button" class="btn" id="copy-json">${t('console.copy')}</button></div>
-        <pre class="snippet code" data-code><code data-genome>${genome()}</code></pre>
-      </div>
-    </aside>
+        <div class="face-strip">
+          <div class="strip-head">
+            <span class="strip-title">${t('drawer.face')} <b>${EMOTIONS.length}</b></span>
+            <span class="strip-hint">00 — 60 · protocol</span>
+          </div>
+          <div class="face-grid" id="faceGrid" role="group" aria-label="${t('drawer.face')}"></div>
+        </div>
+
+        <div class="island-demo">
+          <button type="button" class="island-pill" id="island-pill" aria-expanded="false">
+            <span class="island-face" data-island-face></span>
+            <span>09:41</span><span data-island-temp>19°</span>
+          </button>
+          <div class="island-panel" id="island-panel" hidden>
+            <div class="island-top"><b data-island-title>${t('console.islandTitle')}</b><span>09:41</span></div>
+            <div class="island-body">
+              <figure data-island-art></figure>
+              <div><b data-island-song>${t('console.islandSong')}</b><span>${t('console.islandHint')}</span></div>
+            </div>
+          </div>
+          <p class="island-note"><span>desktop · island</span>${t('console.islandNote')}</p>
+        </div>
+      </section>
+
+      <aside class="studio-side">
+        <div class="code-card">
+          <div class="term-bar">
+            <span class="term-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="term-name">snippet.html</span>
+            <button type="button" class="btn" id="copy">${t('console.copy')}</button>
+          </div>
+          <pre class="snippet" data-code><code data-snippet>${snippet()}</code></pre>
+        </div>
+        <div class="code-card">
+          <div class="term-bar">
+            <span class="term-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="term-name">genome.json</span>
+            <button type="button" class="btn" id="copy-json">${t('console.copy')}</button>
+          </div>
+          <pre class="snippet" data-code><code data-genome>${genome()}</code></pre>
+        </div>
+      </aside>
+
+      <div class="drawer-slot"></div>
+    </div>
   `;
 
   const stage = el.querySelector<HTMLElement>('#stage')!;
@@ -148,6 +223,8 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
   const faceGrid = el.querySelector<HTMLElement>('#faceGrid')!;
   const snippetEl = el.querySelector<HTMLElement>('[data-snippet]')!;
   const genomeEl = el.querySelector<HTMLElement>('[data-genome]')!;
+  const stageId = el.querySelector<HTMLElement>('[data-stage-id]')!;
+  const stageName = el.querySelector<HTMLElement>('[data-stage-name]')!;
 
   /** Timers this view owns; dispose() clears them. */
   const timers = new Set<number>();
@@ -158,24 +235,31 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
   /** The genome the chips were drawn from; the chip art is that genome. */
   let chipGenome = '';
 
-  /* --- the pointer moves the eyes ------------------------------------- */
+  /** The hero's box, kept in sync with the size preference. */
+  heroEl.style.setProperty('--hero-size', stageSize + 'px');
+
+  /* --- the pointer moves the character and the key light --------------- */
 
   /*
-   * The stage writes two custom properties and nothing else.
+   * The stage writes four custom properties and nothing else.
    *
-   * mousemove can fire far more often than the screen refreshes, so the
+   * pointermove can fire far more often than the screen refreshes, so the
    * handler only records the latest position and one rAF per frame does the
    * write. Setting attributes or rebuilding the SVG here would cost a layout
    * per event for an effect that is a couple of pixels.
    */
   let lookX = 0;
   let lookY = 0;
+  let spotX = 50;
+  let spotY = 24;
   let lookFrame = 0;
 
   function paintLook(): void {
     lookFrame = 0;
     heroEl.style.setProperty('--look-x', lookX + 'px');
     heroEl.style.setProperty('--look-y', lookY + 'px');
+    stage.style.setProperty('--spot-x', spotX.toFixed(1) + '%');
+    stage.style.setProperty('--spot-y', spotY.toFixed(1) + '%');
   }
 
   function queueLook(): void {
@@ -190,12 +274,16 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     const y = clamp(((event.clientY - rect.top) / rect.height) * 2 - 1);
     lookX = Math.round(x * LOOK_RANGE * 100) / 100;
     lookY = Math.round(y * LOOK_RANGE * 100) / 100;
+    spotX = ((event.clientX - rect.left) / rect.width) * 100;
+    spotY = ((event.clientY - rect.top) / rect.height) * 100;
     queueLook();
   }
 
   function resetLook(): void {
     lookX = 0;
     lookY = 0;
+    spotX = 50;
+    spotY = 24;
     queueLook();
   }
 
@@ -203,10 +291,10 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
   stage.addEventListener('pointerleave', resetLook);
   paintLook();
 
-  /* --- feedback ------------------------------------------------------- */
+  /* --- feedback -------------------------------------------------------- */
 
   /**
-   * Flash the code block whose text just changed.
+   * Flash the code card whose text just changed.
    *
    * The attribute is removed and re-added around a forced reflow so a second
    * change inside the flash window restarts it instead of being swallowed.
@@ -220,11 +308,11 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     const id = window.setTimeout(() => {
       timers.delete(id);
       block.removeAttribute('data-flash');
-    }, 240);
+    }, 520);
     timers.add(id);
   }
 
-  /** Mark the hero for one 200ms expression cross-fade. */
+  /** Mark the hero for one 220ms expression cross-fade. */
   function swapFace(): void {
     heroEl.removeAttribute('data-swap');
     void heroEl.offsetWidth;
@@ -232,7 +320,7 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     const id = window.setTimeout(() => {
       timers.delete(id);
       heroEl.removeAttribute('data-swap');
-    }, 200);
+    }, 220);
     timers.add(id);
   }
 
@@ -257,23 +345,28 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     };
     shownState = look.state;
 
-    heroEl.innerHTML = hero();
+    heroEl.innerHTML = '<div class="hero-art">' + hero() + '</div>';
     if (change.state) swapFace();
 
     stage.className = 'stage ' + backgroundClass();
     if (change.snippet) {
       snippetEl.textContent = nextSnippet;
-      flash(snippetEl.closest('[data-code]'));
+      flash(snippetEl.closest('.code-card'));
     }
     if (change.genome) {
       genomeEl.textContent = nextGenome;
-      flash(genomeEl.closest('[data-code]'));
+      flash(genomeEl.closest('.code-card'));
     }
 
     const member = look.cast ? castMember(look.cast) : undefined;
+    // The stage caption stays short: the name is already on the stage label,
+    // so this line carries the character's own description instead.
     who.textContent = member
-      ? member.name.zh + ' · ' + member.name.en + ' · ' + member.desc
+      ? member.desc
       : t('console.customGenome');
+    stageName.innerHTML = '<b>' + (member ? (getLang() === 'zh' ? member.name.zh : member.name.en) : t('console.custom')) +
+      '</b> <i>·</i> ' + faceLabel(look.state);
+    stageId.textContent = '#' + faceId(look.state);
 
     const face = el.querySelector<HTMLElement>('[data-island-face]');
     if (face) face.innerHTML = hero(22);
@@ -299,6 +392,7 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
   function setStageSize(size: number): void {
     if (size === stageSize || !SIZES.includes(size)) return;
     stageSize = size;
+    heroEl.style.setProperty('--hero-size', size + 'px');
     try {
       localStorage.setItem(SIZE_KEY, String(size));
     } catch {
@@ -377,7 +471,7 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
   });
 
   apply();
-  el.append(createDrawer(apply));
+  el.querySelector('.drawer-slot')!.replaceWith(createDrawer(apply));
   const unsubscribe = onLookChange(apply);
 
   return {

@@ -51,7 +51,7 @@
 | `theme` | `dark` | 外观 | 渲染进程 | `island.js resolveTheme() · settings.js applyChrome()` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `skin` | `frost` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-skin]` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `blur` | `true` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-blur]` | 即时 |  | lists every path · writes dotted keys through setPath |
-| `glassBackdrop` | `true` | 外观 | 渲染进程 | `island.js requestGlass() → island:backdrop · main.js 关闭时拒抓` | 即时 | 抓一次屏幕作模糊背景，只在本机内存 | lists every path · writes dotted keys through setPath |
+| `glassBackdrop` | `false` | 外观 | 渲染进程 | `island.js requestGlass() → island:backdrop · main.js 关闭时拒抓` | 即时 | 抓一次屏幕作模糊背景，只在本机内存 | lists every path · writes dotted keys through setPath |
 | `uiScale` | `100` | 外观 | 渲染进程 | `island.js --ui-scale · settings.js zoom` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `radius` | `22` | 外观 | 渲染进程 | `island.js --radius` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `font` | `system` | 外观 | 渲染进程 | `island.js --ui-font / settings.js applyChrome` | 即时 |  | lists every path · writes dotted keys through setPath |

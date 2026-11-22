@@ -1,5 +1,5 @@
 /**
- * The scene: a stage with a crowd on it, and the arbiter in front of it.
+ * The scene: nine sessions reporting into one face, and a crowd behind them.
  *
  * The crowd is the fun part — twelve characters each picking their own face.
  * The panel above it is the honest part: nine sessions report into one
@@ -7,12 +7,11 @@
  * dwell, everything else queues. That is the protocol's actual behaviour, and
  * this page used to describe it without demonstrating it.
  *
- * Presentation only, on top of that: the nine chips are cards, each showing
- * its own session's state and the priority the arbiter gives it, and clicking
- * one makes that session report. The strip under the panel names the session
- * currently on screen and rolls its priority number when the winner changes,
- * so a takeover is visible instead of inferred from a label. None of this
- * touches the arbitration itself — createArbiter still owns every decision.
+ * Presentation only, on top of that: each session is a card with a priority
+ * bar, the centre holds the face that actually won, and the number under it
+ * rolls when the winner changes — so a takeover is visible instead of
+ * inferred from a label. None of this touches the arbitration itself:
+ * createArbiter still owns every decision.
  */
 import { CAST, castMember, renderCast } from '@emojitot/core';
 import { DEFAULT_PRIORITY, EMOTIONS, createArbiter, type ArbiterResult } from '@emojitot/protocol';
@@ -34,6 +33,9 @@ const WORK_IDS = ['30', '32', '36', '37', '39', '40', '42', '43', '47', '48'];
 const ERROR_ID = '34';
 const DONE_ID = '33';
 
+/** The highest priority the protocol hands out; the bar is scaled against it. */
+const MAX_PRIORITY = 9;
+
 /** The three faces of a session, as far as a card is concerned. */
 type SessionKind = 'working' | 'idle' | 'error' | 'done';
 
@@ -45,10 +47,11 @@ const COPY = {
   pause: { zh: '暂停自动上报', en: 'Pause auto-report' },
   resume: { zh: '继续自动上报', en: 'Resume auto-report' },
   from: { zh: '当前显示来自', en: 'Shown from' },
-  priority: { zh: '优先级', en: 'priority' },
   noReport: { zh: '未上报', en: 'no report' },
   hint: { zh: '点击让这个会话上报一次', en: 'Click to make this session report' },
   sessions: { zh: '九个会话', en: 'Nine sessions' },
+  showing: { zh: '当前显示', en: 'Now showing' },
+  priority: { zh: '优先级', en: 'Priority' },
 } as const;
 
 type CopyKey = keyof typeof COPY;
@@ -85,118 +88,6 @@ function kindOf(state: string): SessionKind {
   return 'working';
 }
 
-/*
- * A small stylesheet for this page's own additions.
- *
- * Structure and motion only, no palette: the shared style.css describes the
- * screen, and these selectors are scoped to the .sd- nodes this view creates.
- * It lives here so the demo is presentable before the shared sheet is
- * rewritten; the class names are listed in the hand-off report.
- */
-const STYLE_ID = 'sd-scene-style';
-const CSS = String.raw`
-.sd-sessions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-.card.sd-session {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "head rank" "state rank";
-  gap: 2px 8px;
-  align-items: center;
-  padding: 9px 11px;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  transition: transform 120ms cubic-bezier(.2,.8,.2,1),
-    border-color 120ms cubic-bezier(.2,.8,.2,1),
-    box-shadow 120ms cubic-bezier(.2,.8,.2,1);
-}
-.card.sd-session:hover { transform: translateY(-2px); }
-.card.sd-session:active { transform: scale(.98); }
-.card.sd-session.is-active {
-  border-color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--ink);
-}
-.sd-session-head {
-  grid-area: head;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.sd-session-state { grid-area: state; font-size: 11px; color: var(--muted); }
-.sd-session-rank {
-  grid-area: rank;
-  align-self: center;
-  font: 600 13px/1 ui-monospace, monospace;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.sd-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-  opacity: .45;
-  flex: none;
-}
-.card.sd-session[data-kind="working"] .sd-dot { background: var(--ink); opacity: 1; }
-.card.sd-session[data-kind="done"] .sd-dot { background: #2f9e6e; opacity: 1; }
-.card.sd-session[data-kind="error"] .sd-dot { background: #d64545; opacity: 1; }
-.sd-session[data-kind="error"] .sd-session-rank { color: #d64545; }
-.sd-session[data-kind="done"] .sd-session-rank { color: #2f9e6e; }
-
-.card.sd-source {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.sd-source b { color: var(--ink); font-weight: 600; }
-.sd-rank {
-  display: inline-flex;
-  position: relative;
-  overflow: hidden;
-  height: 1.1em;
-  min-width: 1.6em;
-  font: 600 13px/1.1 ui-monospace, monospace;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-.sd-rank-in { display: block; }
-.sd-rank-out { position: absolute; inset: 0; display: block; }
-.sd-rank.is-rolling .sd-rank-in { animation: sd-rank-in 120ms cubic-bezier(.2,.8,.2,1) both; }
-.sd-rank.is-rolling .sd-rank-out { animation: sd-rank-out 120ms cubic-bezier(.2,.8,.2,1) both; }
-@keyframes sd-rank-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
-@keyframes sd-rank-out { from { transform: translateY(0); } to { transform: translateY(-100%); } }
-.sd-toggle[aria-pressed="true"] { border-color: var(--ink); }
-@media (max-width: 720px) {
-  .sd-sessions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .card.sd-session,
-  .sd-rank.is-rolling .sd-rank-in,
-  .sd-rank.is-rolling .sd-rank-out { transition: none; animation: none; }
-}
-`;
-
-function ensureStyle(): void {
-  if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = CSS;
-  document.head.append(style);
-}
-
 function reducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
@@ -224,37 +115,53 @@ export function createScene(): View {
   const el = document.createElement('div');
   el.className = 'scene-view';
 
-  ensureStyle();
-
   el.innerHTML = `
-    <header class="scene-head">
-      <h2>${t('scene.heading')}</h2>
-      <p>${t('scene.lead')}</p>
+    <header class="page-head">
+      <div>
+        <div class="eyebrow"><b>03</b><i></i>Scene<i></i>Arbitration</div>
+        <h1 class="page-title">${t('scene.heading')}<span>nine sessions, one face</span></h1>
+      </div>
+      <div>
+        <p class="page-lead">${t('scene.lead')}</p>
+        <div class="page-stats">
+          <div class="stat"><b>${SESSIONS.length}</b><span>sessions</span></div>
+          <div class="stat"><b>1</b><span>face</span></div>
+          <div class="stat"><b>${CAST.length}</b><span>cast</span></div>
+        </div>
+      </div>
     </header>
 
     <section class="arbiter" id="arbiter">
-      <div class="arbiter-face" id="arbiter-face"></div>
-      <div class="arbiter-now">
-        <b id="arbiter-state">${t('scene.idle')}</b>
-        <span id="arbiter-from">${t('scene.noSession')}</span>
+      <div class="arbiter-stage">
+        <div class="arbiter-rays" aria-hidden="true"></div>
+        <div class="arbiter-halo" aria-hidden="true"></div>
+        <div class="arbiter-face" id="arbiter-face"></div>
+        <div class="arbiter-read">
+          <span class="kicker">${copy('showing')}</span>
+          <b id="arbiter-state">${t('scene.idle')}</b>
+          <span id="arbiter-from">${t('scene.noSession')}</span>
+        </div>
+        <div class="arbiter-priority">
+          <span>${copy('priority')}</span>
+          <span class="sd-rank-slot" id="arbiter-rank">—</span>
+        </div>
       </div>
-      <div class="arbiter-actions">
-        <button type="button" class="btn btn-primary" data-act="report">${t('scene.act.report')}</button>
-        <button type="button" class="btn" data-act="error">${t('scene.act.error')}</button>
-        <button type="button" class="btn" data-act="done">${t('scene.act.done')}</button>
-        <button type="button" class="btn" data-act="reset">${t('scene.act.reset')}</button>
-        <button type="button" class="btn sd-toggle" id="arbiter-toggle" data-act="toggle" aria-pressed="false">${copy('pause')}</button>
-      </div>
-      <div class="arbiter-sessions sd-sessions" id="arbiter-sessions" role="group" aria-label="${copy('sessions')}"></div>
-    </section>
 
-    <div class="card sd-source" id="arbiter-source">
-      <span>${copy('from')}</span>
-      <b id="arbiter-owner">—</b>
-      <span>·</span>
-      <span>${copy('priority')}</span>
-      <span class="sd-rank" id="arbiter-rank">—</span>
-    </div>
+      <div class="arbiter-side">
+        <div class="arbiter-sessions sd-sessions" id="arbiter-sessions" role="group" aria-label="${copy('sessions')}"></div>
+        <div class="card sd-source" id="arbiter-source">
+          <span>${copy('from')}</span>
+          <b id="arbiter-owner">—</b>
+        </div>
+        <div class="arbiter-actions">
+          <button type="button" class="btn btn-primary" data-act="report">${t('scene.act.report')}</button>
+          <button type="button" class="btn" data-act="error">${t('scene.act.error')}</button>
+          <button type="button" class="btn" data-act="done">${t('scene.act.done')}</button>
+          <button type="button" class="btn" data-act="reset">${t('scene.act.reset')}</button>
+          <button type="button" class="btn sd-toggle" id="arbiter-toggle" data-act="toggle" aria-pressed="false">${copy('pause')}</button>
+        </div>
+      </div>
+    </section>
 
     <div class="scene-actions">
       <button type="button" class="btn" data-act="shuffle">${t('scene.act.shuffle')}</button>
@@ -311,12 +218,13 @@ export function createScene(): View {
       const node = document.createElement('button');
       node.type = 'button';
       node.className = 'actor';
-      node.style.left = `${8 + col * 15 + Math.random() * 4}%`;
-      node.style.top = `${30 + row * 26 + Math.random() * 6}%`;
+      node.style.left = (8 + col * 15 + Math.random() * 4) + '%';
+      node.style.top = (32 + row * 34 + Math.random() * 5) + '%';
       node.style.setProperty('--scale', String(0.7 + Math.random() * 0.5));
       node.dataset.id = id;
-      node.title = `${getLang() === 'zh' ? member.name.zh : member.name.en} · ${member.desc}`;
-      node.innerHTML = `<span class="actor-svg">${renderCast({ id, state: 'idle', size: 110 })}</span><span class="actor-name">${getLang() === 'zh' ? member.name.zh : member.name.en}</span>`;
+      node.title = (getLang() === 'zh' ? member.name.zh : member.name.en) + ' · ' + member.desc;
+      node.innerHTML = '<span class="actor-svg">' + renderCast({ id, state: 'idle', size: 110 }) + '</span>' +
+        '<span class="actor-name">' + (getLang() === 'zh' ? member.name.zh : member.name.en) + '</span>';
       herd.append(node);
       const timer = window.setInterval(() => {
         const mood = MOODS[Math.floor(Math.random() * MOODS.length)];
@@ -329,21 +237,30 @@ export function createScene(): View {
 
   /* ----------------------------------------------------------- arbiter */
 
+  faceEl.innerHTML = renderCast({ id: look.cast || 'tot', state: 'idle', size: 148, style: look.finish });
+
   const arbiter = createArbiter({
     onApply: (result) => {
       const id = look.cast || 'tot';
-      faceEl.innerHTML = renderCast({ id, state: result.state, size: 54, style: look.finish });
+      faceEl.innerHTML = renderCast({ id, state: result.state, size: 148, style: look.finish });
       stateEl.textContent = stateLabel(result.state);
       fromEl.textContent = result.sessionId
-        ? `${result.sessionId} · #${result.emotionId}`
+        ? result.sessionId + ' · #' + result.emotionId
         : t('scene.noSession');
       shownSession = result.sessionId ?? '';
+      // The face lands with a beat: 220ms, once, and only when a report came in.
+      if (result.sessionId && !reducedMotion()) {
+        faceEl.removeAttribute('data-beat');
+        void faceEl.offsetWidth;
+        faceEl.setAttribute('data-beat', '');
+        later(() => faceEl.removeAttribute('data-beat'), 240);
+      }
       paintSource(result);
       queueMicrotask(() => paintSessions());
     },
   });
 
-  /** The strip under the panel: who is on screen, and their priority. */
+  /** The strip under the stage: who is on screen, and their priority. */
   function paintSource(result: ArbiterResult | null): void {
     const sessionId = result?.sessionId ?? '';
     ownerEl.textContent = sessionId || '—';
@@ -360,7 +277,7 @@ export function createScene(): View {
     rollTo(rank);
   }
 
-  /** Roll the number up: 120ms, transform only, off under reduced motion. */
+  /** Roll the number up: 140ms, transform only, off under reduced motion. */
   function rollTo(value: number): void {
     const text = String(value);
     const previous = rankEl.dataset.value ?? '';
@@ -369,13 +286,13 @@ export function createScene(): View {
       rankEl.textContent = text;
       return;
     }
-    rankEl.innerHTML = `<span class="sd-rank-out">${previous}</span><span class="sd-rank-in">${text}</span>`;
+    rankEl.innerHTML = '<span class="sd-rank-out">' + previous + '</span><span class="sd-rank-in">' + text + '</span>';
     void rankEl.offsetWidth;
     rankEl.classList.add('is-rolling');
     later(() => {
       rankEl.classList.remove('is-rolling');
       rankEl.textContent = text;
-    }, 140);
+    }, 160);
   }
 
   function paintSessions(): void {
@@ -387,11 +304,15 @@ export function createScene(): View {
       const label = session ? stateLabel(state) : copy('noReport');
       const rank = session ? priorityOf(state) : null;
       const isActive = name === active;
-      return `<button type="button" class="card sd-session${isActive ? ' is-active' : ''}" data-session="${name}" data-kind="${kindOf(state)}" aria-pressed="${isActive}" title="${name} · ${copy('hint')}">
-        <span class="sd-session-head"><i class="sd-dot" aria-hidden="true"></i><b>${name}</b></span>
-        <span class="sd-session-state">${label}</span>
-        <span class="sd-session-rank" title="${copy('priority')}">${rank === null ? '—' : rank}</span>
-      </button>`;
+      const value = rank === null ? 0 : Math.min(1, rank / MAX_PRIORITY);
+      return '<button type="button" class="card sd-session' + (isActive ? ' is-active' : '') +
+        '" data-session="' + name + '" data-kind="' + kindOf(state) + '" aria-pressed="' + isActive +
+        '" title="' + name + ' · ' + copy('hint') + '">' +
+        '<span class="sd-session-head"><i class="sd-dot" aria-hidden="true"></i><b>' + name + '</b></span>' +
+        '<span class="sd-session-state">' + label + '</span>' +
+        '<span class="sd-session-rank">' + (rank === null ? '—' : rank) + '</span>' +
+        '<span class="sd-bar" aria-hidden="true"><i style="--v:' + value.toFixed(2) + '"></i></span>' +
+        '</button>';
     }).join('');
   }
 
@@ -410,6 +331,11 @@ export function createScene(): View {
       : roll < 0.85 ? ERROR_ID : DONE_ID;
     arbiter.update({ sessionId: name, emotionId });
     paintSessions();
+    const card = sessionsEl.querySelector<HTMLElement>('[data-session="' + name + '"]');
+    if (card && !reducedMotion()) {
+      card.setAttribute('data-beat', '');
+      later(() => card.removeAttribute('data-beat'), 540);
+    }
   }
 
   function reportAll(emotionId: string): void {
@@ -501,7 +427,6 @@ export function createScene(): View {
       for (const id of timeouts) window.clearTimeout(id);
       timeouts.clear();
       arbiter.dispose();
-      document.getElementById(STYLE_ID)?.remove();
     },
   };
 }

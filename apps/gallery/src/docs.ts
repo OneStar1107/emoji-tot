@@ -33,12 +33,19 @@ import type { View } from './main';
 /** The section ids are stable: they are the anchors a deep link points at. */
 const SECTION_IDS = ['what', 'genome', 'families', 'protocol', 'desktop', 'extend', 'call'] as const;
 
+/** A literal newline for the code samples, kept out of the source as escapes. */
+const NL = String.fromCharCode(10);
+
 const COPY = {
   toc: { zh: '目录', en: 'Contents' },
   copyHint: { zh: '点击复制 emotionId', en: 'Click to copy the emotionId' },
   copied: { zh: '已复制', en: 'Copied' },
   copyFail: { zh: '复制失败', en: 'Copy failed' },
   toggle: { zh: '展开或折叠这一组', en: 'Expand or collapse this group' },
+  lead: {
+    zh: '从一条闭合路径到一个两位数协议，再到桌面端的两种形态。这一页写给要把它装进产品的人。',
+    en: 'From one closed path to a two-digit protocol, and out to two desktop forms. Written for the person shipping it.',
+  },
 } as const;
 
 type CopyKey = keyof typeof COPY;
@@ -61,169 +68,22 @@ const nameOf = (meta: { name: string }, state: string): string => {
   return getLang() === 'zh' ? emotion.name.zh : emotion.name.en;
 };
 
-/*
- * A small stylesheet for this page's own additions.
- *
- * Structure and motion only, no palette: the shared style.css describes the
- * screen, and these selectors are scoped to the .sd- nodes this view creates.
- * It lives here so the two interactions are presentable before the shared
- * sheet is rewritten; the class names are listed in the hand-off report.
- */
-const STYLE_ID = 'sd-docs-style';
-const CSS = String.raw`
-.sd-docs-shell {
-  display: grid;
-  grid-template-columns: 208px minmax(0, 1fr);
-  gap: 26px;
-  align-items: start;
-}
-.sd-toc {
-  position: sticky;
-  top: 58px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 10px;
-}
-.sd-toc-title {
-  margin: 0;
-  font-size: 11px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.sd-toc-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.sd-toc-link {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 12px;
-  color: var(--muted);
-  padding: 5px 8px;
-  border-radius: 7px;
-  cursor: pointer;
-  transition: color 120ms cubic-bezier(.2,.8,.2,1),
-    background 120ms cubic-bezier(.2,.8,.2,1),
-    transform 120ms cubic-bezier(.2,.8,.2,1);
-}
-.sd-toc-link:hover {
-  color: var(--ink);
-  background: color-mix(in oklab, var(--ink) 6%, transparent);
-}
-.sd-toc-link.is-active {
-  color: var(--ink);
-  font-weight: 600;
-  transform: translateX(2px);
-}
-.sd-toc-link.is-active::before { content: "—"; margin-right: 5px; opacity: .6; }
-
-.sd-doc-body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 26px;
-  /* Room for the last section to reach the top of the viewport. */
-  padding-bottom: 45vh;
-}
-.sd-section {
-  /* Clear the fixed top bar when a section is scrolled to. */
-  scroll-margin-top: 64px;
-  transition: opacity 220ms cubic-bezier(.2,.8,.2,1), transform 220ms cubic-bezier(.2,.8,.2,1);
-}
-.sd-section:not(.in) { opacity: 0; transform: translateY(12px); }
-
-.card.sd-group {
-  display: block;
-  padding: 10px 12px 2px;
-  margin-top: 8px;
-}
-.card.sd-group > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  list-style: none;
-}
-.card.sd-group > summary::-webkit-details-marker { display: none; }
-.sd-group-head b { font-size: 11px; font-weight: 600; color: var(--muted); }
-.sd-group-hint { margin-left: auto; font-size: 11px; color: var(--muted); }
-.sd-group-hint::before { content: "▾"; }
-.sd-group[open] .sd-group-hint::before { content: "▴"; }
-.sd-group[data-group="life"] .sd-dot { background: #2f7fd6; opacity: 1; }
-.sd-group[data-group="emotion"] .sd-dot { background: #d68a2f; opacity: 1; }
-.sd-group[data-group="agent"] .sd-dot { background: var(--ink); opacity: 1; }
-
-.sd-faces { margin-top: 4px; }
-.sd-th-preview { width: 40px; }
-.sd-row {
-  cursor: pointer;
-  transition: background 120ms cubic-bezier(.2,.8,.2,1);
-}
-.sd-row:hover, .sd-row:focus-visible { background: color-mix(in oklab, var(--ink) 5%, transparent); }
-.sd-row:focus-visible { outline: 1px solid var(--ink); outline-offset: -1px; }
-.sd-row.is-flashed { background: color-mix(in oklab, var(--ink) 9%, transparent); }
-.sd-copy { color: var(--muted); font-variant-numeric: tabular-nums; }
-.sd-copy[data-flash] { color: var(--ink); font-weight: 600; }
-.sd-preview { width: 40px; }
-.sd-preview emojitot-ball {
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: opacity 140ms cubic-bezier(.2,.8,.2,1), transform 140ms cubic-bezier(.2,.8,.2,1);
-}
-.sd-row:hover .sd-preview emojitot-ball,
-.sd-row:focus-visible .sd-preview emojitot-ball { opacity: 1; transform: none; }
-.sd-live {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  margin: 0;
-}
-.sd-sink { position: fixed; top: -1000px; left: 0; opacity: 0; }
-
-@media (max-width: 900px) {
-  .sd-docs-shell { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .sd-toc { position: static; }
-  .sd-toc-list { flex-direction: row; flex-wrap: wrap; }
-  .sd-toc-link { width: auto; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sd-section { transition: none; }
-  .sd-section:not(.in) { opacity: 1; transform: none; }
-  .sd-toc-link, .sd-row, .sd-preview emojitot-ball { transition: none; }
-}
-`;
-
-function ensureStyle(): void {
-  if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = CSS;
-  document.head.append(style);
-}
-
-function sectionHtml(id: string, title: string, body: string): string {
-  return `<section class="doc-section sd-section" id="sec-${id}" data-section="${id}"><h2 id="h-${id}">${title}</h2>${body}</section>`;
+function sectionHtml(id: string, num: string, title: string, kicker: string, body: string): string {
+  return '<section class="doc-section sd-section" id="sec-' + id + '" data-section="' + id +
+    '" data-num="' + num + '"><h2 id="h-' + id + '">' + title +
+    '<em>' + kicker + '</em></h2>' + body + '</section>';
 }
 
 function table(head: string[], rows: string[][]): string {
-  return `<table class="doc-table"><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
-    .map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`)
-    .join('')}</tbody></table>`;
+  return '<table class="doc-table"><thead><tr>' + head.map((h) => '<th>' + h + '</th>').join('') +
+    '</tr></thead><tbody>' + rows
+      .map((r) => '<tr>' + r.map((c) => '<td>' + c + '</td>').join('') + '</tr>')
+      .join('') + '</tbody></table>';
+}
+
+/** An HTML-escaped code sample, one line per array entry. */
+function code(lines: string[]): string {
+  return '<pre><code>' + lines.join(NL) + '</code></pre>';
 }
 
 /** The protocol table for one group: folding, hover preview, click to copy. */
@@ -237,16 +97,20 @@ function faceTable(metas: readonly FaceMeta[]): string {
   ];
   const rows = metas.map((meta) => {
     const emotionId = emotionIdOf(meta.id);
-    return `<tr class="sd-row" data-state="${meta.id}" data-emotion="${emotionId}" tabindex="0" title="${copy('copyHint')}">
-      <td>#${meta.id}</td>
-      <td>${meta.id}</td>
-      <td>${nameOf(meta, meta.id)}</td>
-      <td>${meta.desc}</td>
-      <td class="sd-copy">${emotionId}</td>
-      <td class="sd-preview" data-preview="${meta.id}" aria-hidden="true"></td>
-    </tr>`;
+    return '<tr class="sd-row" data-state="' + meta.id + '" data-emotion="' + emotionId +
+      '" tabindex="0" title="' + copy('copyHint') + '">' +
+      '<td>#' + meta.id + '</td>' +
+      '<td>' + meta.id + '</td>' +
+      '<td>' + nameOf(meta, meta.id) + '</td>' +
+      '<td>' + meta.desc + '</td>' +
+      '<td class="sd-copy">' + emotionId + '</td>' +
+      '<td class="sd-preview" data-preview="' + meta.id + '" aria-hidden="true"></td>' +
+      '</tr>';
   });
-  return `<table class="doc-table sd-faces"><thead><tr>${head.map((label) => `<th>${label}</th>`).join('')}<th class="sd-th-preview" aria-hidden="true"></th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  return '<table class="doc-table sd-faces"><thead><tr>' +
+    head.map((label) => '<th>' + label + '</th>').join('') +
+    '<th class="sd-th-preview" aria-hidden="true"></th></tr></thead><tbody>' +
+    rows.join('') + '</tbody></table>';
 }
 
 const FACE_GROUPS: { id: FaceGroup; label: string }[] = [
@@ -257,9 +121,7 @@ const FACE_GROUPS: { id: FaceGroup; label: string }[] = [
 
 export function createDocs(): View {
   const el = document.createElement('div');
-  el.className = 'docs-view sd-docs';
-
-  ensureStyle();
+  el.className = 'docs-view';
 
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const timeouts = new Set<number>();
@@ -274,109 +136,137 @@ export function createDocs(): View {
         .slice(0, 3)
         .map((member) => (getLang() === 'zh' ? member.name.zh : member.name.en))
         .join(', ');
-      return [`${family.zh} / ${family.en}`, String(members.length), bodies, sample];
+      return [family.zh + ' / ' + family.en, String(members.length), bodies, sample];
     }),
   );
 
   const sample = breed(castMember('lizi')!, castMember('yinghua')!, 7);
 
-  const intro = `<p>${t('docs.whatP1')}</p><p>${t('docs.whatP2', {
+  const intro = '<p>' + t('docs.whatP1') + '</p><p>' + t('docs.whatP2', {
     cast: CAST.length,
     faces: FACE_META.length,
     bodies: BODIES.length,
-  })}</p>`;
+  }) + '</p>';
 
-  const genomeDoc = `<p>${t('docs.genomeIntro')}</p>
-      <ul>
-        <li><b>body</b> — ${t('docs.genomeBody', { bodies: BODIES.length, sample: BODIES.slice(0, 6).map((body) => body.id).join(', ') })}</li>
-        <li><b>color</b> — ${t('docs.genomeColor')}</li>
-        <li><b>traits</b> — ${t('docs.genomeTrait', { traits: TRAIT_IDS.length })}</li>
-        <li><b>face</b> — ${t('docs.genomeFace', { faces: FACE_META.length })}</li>
-      </ul>
-      <h3>${t('docs.finishHeading')}</h3>
-      <p>${t('docs.finishBody')}</p>
-      <pre class="snippet"><code>renderCast({ id: 'lizi', state: 'happy', style: 'sticker', size: 96 })</code></pre>
-      <h3>${t('docs.breedHeading')}</h3>
-      <p>${t('docs.breedBody')}</p>
-      <pre class="snippet"><code>breed(castMember('lizi'), castMember('yinghua'), 7)
-// → ${sample.name.zh} · ${sample.body} · ${sample.color}</code></pre>`;
+  const genomeDoc = '<p>' + t('docs.genomeIntro') + '</p>' +
+    '<ul>' +
+    '<li><b>body</b> — ' + t('docs.genomeBody', {
+      bodies: BODIES.length,
+      sample: BODIES.slice(0, 6).map((body) => body.id).join(', '),
+    }) + '</li>' +
+    '<li><b>color</b> — ' + t('docs.genomeColor') + '</li>' +
+    '<li><b>traits</b> — ' + t('docs.genomeTrait', { traits: TRAIT_IDS.length }) + '</li>' +
+    '<li><b>face</b> — ' + t('docs.genomeFace', { faces: FACE_META.length }) + '</li>' +
+    '</ul>' +
+    '<h3>' + t('docs.finishHeading') + '</h3>' +
+    '<p>' + t('docs.finishBody') + '</p>' +
+    code(['renderCast({ id: \'lizi\', state: \'happy\', style: \'sticker\', size: 96 })']) +
+    '<h3>' + t('docs.breedHeading') + '</h3>' +
+    '<p>' + t('docs.breedBody') + '</p>' +
+    code([
+      'breed(castMember(\'lizi\'), castMember(\'yinghua\'), 7)',
+      '// → ' + sample.name.zh + ' · ' + sample.body + ' · ' + sample.color,
+    ]);
 
   const groupsHtml = FACE_GROUPS.map((group) => {
     const metas = FACE_META.filter((meta) => meta.group === group.id);
-    return `<details class="card sd-group" data-group="${group.id}" open>
-        <summary class="sd-group-head" title="${copy('toggle')}">
-          <i class="sd-dot" aria-hidden="true"></i>
-          <span>${group.label}</span>
-          <b>${metas.length}</b>
-          <span class="sd-group-hint" aria-hidden="true"></span>
-        </summary>
-        ${faceTable(metas)}
-      </details>`;
+    return '<details class="card sd-group" data-group="' + group.id + '"' + (group.id === 'life' ? ' open' : '') + '>' +
+      '<summary class="sd-group-head" title="' + copy('toggle') + '">' +
+      '<i class="sd-dot" aria-hidden="true"></i>' +
+      '<span>' + group.label + '</span>' +
+      '<b>' + metas.length + '</b>' +
+      '<span class="sd-group-hint" aria-hidden="true"></span>' +
+      '</summary>' +
+      faceTable(metas) +
+      '</details>';
   }).join('');
 
-  const callDoc = `<pre class="snippet"><code>&lt;emojitot-ball cast="lizi" finish="sticker" state="happy"&gt;&lt;/emojitot-ball&gt;
+  const callDoc = code([
+    '&lt;emojitot-ball cast="lizi" finish="sticker" state="happy"&gt;&lt;/emojitot-ball&gt;',
+    '',
+    'import { renderCast, faceMeta, facesInGroup } from \'@emojitot/core\';',
+    '',
+    'renderCast({ id: \'lizi\', state: \'happy\', size: 96 });',
+    'faceMeta(\'sleeping\');        // { id, name, group, desc }',
+    'facesInGroup(\'agent\');       // every agent state, in table order',
+  ]) +
+    '<p>' + t('docs.groupsSummary', {
+      life: FACE_META.filter((meta) => meta.group === 'life').length,
+      emotion: FACE_META.filter((meta) => meta.group === 'emotion').length,
+      agent: FACE_META.filter((meta) => meta.group === 'agent').length,
+    }) + '</p>';
 
-import { renderCast, faceMeta, facesInGroup } from '@emojitot/core';
+  const desktopDoc = '<p>' + t('docs.desktopP1') + '</p>' +
+    '<table class="doc-table"><thead><tr><th>' + t('docs.tableForm') + '</th><th>' + t('docs.tableWhere') +
+    '</th><th>' + t('docs.tableWhat') + '</th></tr></thead><tbody>' +
+    '<tr><td><b>' + t('docs.desktopIsland') + '</b></td><td>' + t('docs.islandWhere') + '</td><td>' +
+    t('docs.islandWhat') + '</td></tr>' +
+    '<tr><td><b>' + t('docs.desktopBall') + '</b></td><td>' + t('docs.ballWhere') + '</td><td>' +
+    t('docs.ballWhat') + '</td></tr>' +
+    '</tbody></table>' +
+    '<p>' + t('docs.desktopP2') + '</p>' +
+    '<h3>' + t('docs.sizeHeading') + '</h3>' +
+    '<p>' + t('docs.sizeBody') + '</p>' +
+    '<h3>' + t('docs.settingsHeading') + '</h3>' +
+    '<p>' + t('docs.settingsBody', { pages: SETTINGS_NAV.reduce((total, group) => total + group.items.length, 0) }) + '</p>';
 
-renderCast({ id: 'lizi', state: 'happy', size: 96 });
-faceMeta('sleeping');        // { id, name, group, desc }
-facesInGroup('agent');       // every agent state, in table order</code></pre>
-      <p>${t('docs.groupsSummary', {
-        life: FACE_META.filter((meta) => meta.group === 'life').length,
-        emotion: FACE_META.filter((meta) => meta.group === 'emotion').length,
-        agent: FACE_META.filter((meta) => meta.group === 'agent').length,
-      })}</p>`;
-
-  const desktopDoc = `<p>${t('docs.desktopP1')}</p>
-      <table class="doc-table"><thead><tr><th>${t('docs.tableForm')}</th><th>${t('docs.tableWhere')}</th><th>${t('docs.tableWhat')}</th></tr></thead><tbody>
-        <tr><td><b>${t('docs.desktopIsland')}</b></td><td>${t('docs.islandWhere')}</td><td>${t('docs.islandWhat')}</td></tr>
-        <tr><td><b>${t('docs.desktopBall')}</b></td><td>${t('docs.ballWhere')}</td><td>${t('docs.ballWhat')}</td></tr>
-      </tbody></table>
-      <p>${t('docs.desktopP2')}</p>
-      <h3>${t('docs.sizeHeading')}</h3>
-      <p>${t('docs.sizeBody')}</p>
-      <h3>${t('docs.settingsHeading')}</h3>
-      <p>${t('docs.settingsBody', { pages: SETTINGS_NAV.reduce((total, group) => total + group.items.length, 0) })}</p>`;
-
-  const extendDoc = `<p>${t('docs.extendIntro')}</p>
-      <pre class="snippet"><code>// apps/desktop/src/shared/schema.js
-{ key: 'focus', title: '焦点', sub: '番茄钟', icon: 'timer', service: 'focus' }
-
-// renderer/island.js
-function focusPage() { return '&lt;div class=&quot;focus&quot;&gt;…&lt;/div&gt;'; }
-const RENDERERS = { focus: focusPage };
-
-// main/services/focus.js — owns its data, pushes on change
-focus.onChange((value) =&gt; island.send('island:focus', value));</code></pre>
-      <p>${t('docs.extendP')}</p>`;
-
+  const extendDoc = '<p>' + t('docs.extendIntro') + '</p>' +
+    code([
+      '// apps/desktop/src/shared/schema.js',
+      '{ key: \'focus\', title: \'焦点\', sub: \'番茄钟\', icon: \'timer\', service: \'focus\' }',
+      '',
+      '// renderer/island.js',
+      'function focusPage() { return \'&lt;div class=&quot;focus&quot;&gt;…&lt;/div&gt;\'; }',
+      'const RENDERERS = { focus: focusPage };',
+      '',
+      '// main/services/focus.js — owns its data, pushes on change',
+      'focus.onChange((value) =&gt; island.send(\'island:focus\', value));',
+    ]) +
+    '<p>' + t('docs.extendP') + '</p>';
 
   const sections = [
-    { id: SECTION_IDS[0], title: t('docs.what'), body: intro },
-    { id: SECTION_IDS[1], title: t('docs.genome'), body: genomeDoc },
-    { id: SECTION_IDS[2], title: t('docs.families'), body: familyTable },
+    { id: SECTION_IDS[0], num: '01', kicker: 'What', title: t('docs.what'), body: intro },
+    { id: SECTION_IDS[1], num: '02', kicker: 'Genome', title: t('docs.genome'), body: genomeDoc },
+    { id: SECTION_IDS[2], num: '03', kicker: 'Families', title: t('docs.families'), body: familyTable },
     {
       id: SECTION_IDS[3],
+      num: '04',
+      kicker: 'Protocol',
       title: t('docs.protocol'),
-      body: `<p>${t('docs.protocolLead')}</p>${groupsHtml}`,
+      body: '<p>' + t('docs.protocolLead') + '</p>' + groupsHtml,
     },
-    { id: SECTION_IDS[4], title: t('docs.desktop'), body: desktopDoc },
-    { id: SECTION_IDS[5], title: t('docs.extend'), body: extendDoc },
-    { id: SECTION_IDS[6], title: t('docs.call'), body: callDoc },
+    { id: SECTION_IDS[4], num: '05', kicker: 'Desktop', title: t('docs.desktop'), body: desktopDoc },
+    { id: SECTION_IDS[5], num: '06', kicker: 'Extend', title: t('docs.extend'), body: extendDoc },
+    { id: SECTION_IDS[6], num: '07', kicker: 'API', title: t('docs.call'), body: callDoc },
   ];
 
-  el.innerHTML = `<div class="sd-docs-shell">
-    <nav class="card sd-toc" aria-label="${copy('toc')}">
-      <p class="sd-toc-title">${copy('toc')}</p>
-      <ol class="sd-toc-list">
-        ${sections.map((section) => `<li><button type="button" class="sd-toc-link" data-goto="${section.id}">${section.title}</button></li>`).join('')}
-      </ol>
-    </nav>
-    <div class="sd-doc-body">
-      <p class="sd-live" aria-live="polite"></p>
-      ${sections.map((section) => sectionHtml(section.id, section.title, section.body)).join('')}
-    </div>
-  </div>`;
+  el.innerHTML = '<header class="page-head">' +
+    '<div>' +
+    '<div class="eyebrow"><b>04</b><i></i>Manual<i></i>Protocol</div>' +
+    '<h1 class="page-title">' + t('docs.title') + '<span>read it, then ship a face</span></h1>' +
+    '</div>' +
+    '<div>' +
+    '<p class="page-lead">' + copy('lead') + '</p>' +
+    '<div class="page-stats">' +
+    '<div class="stat"><b>' + sections.length + '</b><span>sections</span></div>' +
+    '<div class="stat"><b>' + FACE_META.length + '</b><span>faces</span></div>' +
+    '<div class="stat"><b>' + BODIES.length + '</b><span>bodies</span></div>' +
+    '</div>' +
+    '</div>' +
+    '</header>' +
+    '<div class="sd-docs-shell">' +
+    '<nav class="card sd-toc" aria-label="' + copy('toc') + '">' +
+    '<p class="sd-toc-title">' + copy('toc') + '</p>' +
+    '<ol class="sd-toc-list">' +
+    sections.map((section) => '<li><button type="button" class="sd-toc-link" data-goto="' + section.id +
+      '">' + section.title + '</button></li>').join('') +
+    '</ol>' +
+    '</nav>' +
+    '<div class="sd-doc-body">' +
+    '<p class="sd-live" aria-live="polite"></p>' +
+    sections.map((section) => sectionHtml(section.id, section.num, section.title, section.kicker, section.body)).join('') +
+    '</div>' +
+    '</div>';
 
   const live = el.querySelector<HTMLElement>('.sd-live')!;
   const tocLinks = new Map<string, HTMLElement>();
@@ -399,14 +289,14 @@ focus.onChange((value) =&gt; island.send('island:focus', value));</code></pre>
   function rememberSection(id: string): void {
     try {
       const route = location.hash.split('?')[0] || '#/docs';
-      history.replaceState(null, '', `${route}?section=${encodeURIComponent(id)}`);
+      history.replaceState(null, '', route + '?section=' + encodeURIComponent(id));
     } catch {
       /* sandboxed or file:// — the jump still works */
     }
   }
 
   function goTo(id: string, smooth = true): void {
-    const target = el.querySelector<HTMLElement>(`#sec-${id}`);
+    const target = el.querySelector<HTMLElement>('#sec-' + id);
     if (!target) return;
     target.scrollIntoView({ behavior: smooth && !reduced ? 'smooth' : 'auto', block: 'start' });
     setActiveToc(id);
@@ -495,7 +385,7 @@ focus.onChange((value) =&gt; island.send('island:focus', value));</code></pre>
     const cell = row.querySelector<HTMLElement>('.sd-copy');
     if (!cell) return;
     const ok = await copyText(id);
-    const label = ok ? `${copy('copied')} ${id}` : copy('copyFail');
+    const label = ok ? copy('copied') + ' ' + id : copy('copyFail');
     cell.dataset.flash = ok ? 'ok' : 'fail';
     cell.textContent = label;
     live.textContent = label;
@@ -561,7 +451,6 @@ focus.onChange((value) =&gt; island.send('island:focus', value));</code></pre>
       for (const id of timeouts) window.clearTimeout(id);
       timeouts.clear();
       flashTimers.clear();
-      document.getElementById(STYLE_ID)?.remove();
     },
   };
 }

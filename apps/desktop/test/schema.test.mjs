@@ -344,9 +344,13 @@ describe('schema: page presets', () => {
  * asserted in test/glass.test.mjs.
  */
 describe('schema: real glass', () => {
-  it('is on by default', () => {
-    assert.equal(DEFAULTS.glassBackdrop, true);
-    assert.equal(withDefaults({}).glassBackdrop, true);
+  it('is off by default, because the capture path is the unstable one', () => {
+    /* 0.8.6 shipped it on and some Windows/GPU pairs flicker while the window is
+       excluded from its own capture. The CSS material is the default; the
+       photograph is an opt-in. Turning it on must still work. */
+    assert.equal(DEFAULTS.glassBackdrop, false);
+    assert.equal(withDefaults({}).glassBackdrop, false);
+    assert.equal(withDefaults({ glassBackdrop: true }).glassBackdrop, true);
   });
 
   it('keeps a stored switch-off, because that is a decision', () => {

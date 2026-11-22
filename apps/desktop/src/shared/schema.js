@@ -204,7 +204,15 @@ export const DEFAULTS = {
    * the frost skin with blur on to mean anything (island-glass.mjs checks all
    * three). The frame lives in memory only: never written, never uploaded.
    */
-  glassBackdrop: true,
+  /*
+   * Off by default. The photo-of-the-desktop route needs the window out of its
+   * own capture, and on some Windows builds / GPU drivers toggling that flag
+   * makes the whole window flicker between transparent and solid black, plus
+   * the blurred frame is re-rendered on every morph step. The layered CSS
+   * material is what the skin was always selling; this is the option for the
+   * people who want the literal refraction and whose machines behave.
+   */
+  glassBackdrop: false,
   uiScale: 100,
   radius: 22,
   font: 'system',

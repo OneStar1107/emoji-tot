@@ -6,10 +6,15 @@
  * jumps to the console from there. The grid is a keyboard surface too: Tab
  * walks into it, the arrows move between cells and Enter opens one.
  *
+ * The grid is deliberately not a uniform tiling: the first character is a
+ * feature card four cells wide, the rest are plates around it. A wall of
+ * identical thumbnails reads as a file list; one big face plus a rhythm of
+ * small ones reads as a catalogue.
+ *
  * Two rules shape the DOM here. The grid is rebuilt synchronously — the
  * acceptance script reads how many tiles it holds in the same task as the
  * click — so the filter animation is an overlaid copy that fades out
- * (`.wall-grid-ghost`) instead of a view transition, whose update callback
+ * ('.wall-grid-ghost') instead of a view transition, whose update callback
  * runs a task later and would leave the old count readable for a frame.
  */
 import { CAST, FACE_META, FAMILIES, castMember, renderCast } from '@emojitot/core';
@@ -18,12 +23,26 @@ import { getLang, t } from './i18n';
 import { onLookChange, selectCast } from './store';
 import type { View } from './main';
 
-function castTile(id: string): string {
+function castTile(id: string, index: number, feature: boolean): string {
   const member = castMember(id)!;
+  const zh = getLang() === 'zh';
+  const name = zh ? member.name.zh : member.name.en;
+  const family = FAMILIES.find((item) => item.id === member.family);
+  const sub = (zh ? family?.zh : family?.en) ?? member.family;
+  if (feature) {
+    return '<button type="button" class="tile is-feature" data-cast="' + id + '" data-motion="' + member.motion +
+      '" title="' + member.desc + '">' +
+      '<span class="tile-id">' + String(index + 1).padStart(2, '0') + ' / ' + String(CAST.length).padStart(2, '0') + '</span>' +
+      '<span class="tile-art">' + renderCast({ id, state: member.face, size: 220 }) + '</span>' +
+      '<span class="tile-name">' + name + '</span>' +
+      '<span class="tile-sub">' + sub + ' · ' + member.body + '</span>' +
+      '</button>';
+  }
   return '<button type="button" class="tile" data-cast="' + id + '" data-motion="' + member.motion + '" title="' +
-    member.desc + ' · ' + t('wall.hover.motion') + '">' +
+    member.desc + '">' +
+    '<span class="tile-id">' + String(index + 1).padStart(2, '0') + '</span>' +
     '<span class="tile-art">' + renderCast({ id, state: member.face, size: 96 }) + '</span>' +
-    '<span class="tile-name">' + (getLang() === 'zh' ? member.name.zh : member.name.en) + '</span>' +
+    '<span class="tile-name">' + name + '</span>' +
     '</button>';
 }
 
@@ -40,9 +59,14 @@ function faceId(state: string): string {
   return emotion ? String(emotion.id) : '';
 }
 
+let faceTileIndex = 0;
+
 function faceTile(id: string): string {
+  const index = faceTileIndex++;
+  const fid = faceId(id);
   return '<button type="button" class="tile" data-state="' + id + '" data-id="' + id +
-    '" data-motion="pop" aria-haspopup="dialog" title="' + t('wall.hover.motionShort') + '">' +
+    '" data-motion="pop" aria-haspopup="dialog" title="' + faceLabel(id) + (fid ? ' · #' + fid : '') + '">' +
+    '<span class="tile-id">' + (fid ? '#' + fid : '') + '</span>' +
     '<span class="tile-art">' + renderCast({ id: 'tot', state: id, size: 76 }) + '</span>' +
     '<span class="tile-name">' + faceLabel(id) + '</span>' +
     '</button>';
@@ -61,25 +85,41 @@ export function createWall(): View {
   let family = 'all';
 
   el.innerHTML = `
-    <header class="wall-head">
-      <h2>${t('wall.title')}</h2>
-      <p>${t('wall.lead')}</p>
+    <header class="page-head">
+      <div>
+        <div class="eyebrow"><b>02</b><i></i>Gallery<i></i>Every path</div>
+        <h1 class="page-title">${t('wall.title')}<span>a catalogue of closed paths</span></h1>
+      </div>
+      <div>
+        <p class="page-lead">${t('wall.lead')}</p>
+        <div class="page-stats">
+          <div class="stat"><b>${CAST.length}</b><span>cast</span></div>
+          <div class="stat"><b>${FACE_META.length}</b><span>faces</span></div>
+          <div class="stat"><b>2</b><span>finishes</span></div>
+        </div>
+      </div>
     </header>
-    <div class="wall-tabs">
-      <button type="button" data-tab="cast" aria-pressed="true">${t('wall.tab.cast')} <b id="castCount"></b></button>
-      <button type="button" data-tab="emotion" aria-pressed="false">${t('wall.tab.emotion')} <b>${FACE_META.length}</b></button>
+
+    <div class="wall-bar">
+      <div class="wall-tabs">
+        <button type="button" data-tab="cast" aria-pressed="true">${t('wall.tab.cast')} <b id="castCount"></b></button>
+        <button type="button" data-tab="emotion" aria-pressed="false">${t('wall.tab.emotion')} <b>${FACE_META.length}</b></button>
+      </div>
+      <div class="wall-filters" id="wallFilters"></div>
+      <span class="wall-count" id="wallCount"></span>
     </div>
-    <div class="wall-filters" id="wallFilters"></div>
+
     <div class="wall-grid-wrap" id="wallGridWrap">
       <div class="wall-grid" id="wallGrid"></div>
     </div>
-    <p class="wall-count" id="wallCount"></p>
   `;
 
   const filters = el.querySelector<HTMLElement>('#wallFilters')!;
   const wrap = el.querySelector<HTMLElement>('#wallGridWrap')!;
   const grid = el.querySelector<HTMLElement>('#wallGrid')!;
   const count = el.querySelector<HTMLElement>('#wallCount')!;
+  const castCount = el.querySelector<HTMLElement>('#castCount')!;
+  castCount.textContent = String(CAST.length);
 
   /* --- lightbox ------------------------------------------------------- */
 
@@ -97,10 +137,13 @@ export function createWall(): View {
 
   function lightboxMarkup(state: string): string {
     const id = faceId(state);
-    return '<div class="card lightbox-body" data-lightbox-body>' +
+    return '<div class="lightbox-body" data-lightbox-body>' +
+      '<button type="button" class="lb-arrow lb-prev" data-lightbox-prev aria-label="previous">‹</button>' +
+      '<button type="button" class="lb-arrow lb-next" data-lightbox-next aria-label="next">›</button>' +
       '<div class="lightbox-art">' + renderCast({ id: 'tot', state, size: 220 }) + '</div>' +
       '<b class="lightbox-name">' + faceLabel(state) + '</b>' +
-      '<span class="lightbox-id">' + (id ? '#' + id + ' · ' : '') + '<code class="code">' + state + '</code></span>' +
+      '<span class="lightbox-id">' + (id ? '#' + id + ' · ' : '') + '<code>' + state + '</code>' +
+      '<span>' + String(lightboxIndex + 1) + ' / ' + String(lightboxList.length) + '</span></span>' +
       '<div class="lightbox-actions">' +
       '<button type="button" class="btn btn-primary" data-lightbox-copy>' + t('wall.copy') + '</button>' +
       '<a class="btn" href="#/console?state=' + state + '">' + t('nav.console') + '</a>' +
@@ -158,6 +201,8 @@ export function createWall(): View {
     } else if (event.key === 'ArrowRight') {
       event.preventDefault();
       stepLightbox(1);
+    } else if (event.key === 'Escape') {
+      closeLightbox();
     }
   }
 
@@ -187,6 +232,14 @@ export function createWall(): View {
     const dialog = lightbox;
     if (!dialog) return;
     const target = event.target as HTMLElement;
+    if (target.closest('[data-lightbox-prev]')) {
+      stepLightbox(-1);
+      return;
+    }
+    if (target.closest('[data-lightbox-next]')) {
+      stepLightbox(1);
+      return;
+    }
     if (target.closest('[data-lightbox-close]')) {
       closeLightbox();
       return;
@@ -289,21 +342,33 @@ export function createWall(): View {
     ghostTimer = window.setTimeout(() => {
       ghostTimer = 0;
       layer.remove();
-    }, 240);
+    }, 260);
   }
 
-  function paintGrid(animate = false): void {
+  function paintGrid(animate = false, stagger = false): void {
     const keep = new Set<string>();
     let html = '';
+    faceTileIndex = 0;
     if (tab === 'cast') {
-      const list = family === 'all' ? CAST : CAST.filter((member) => member.family === family);
-      for (const member of list) keep.add('c:' + member.id);
-      html = list.length ? list.map((member) => castTile(member.id)).join('') : emptyMarkup();
+      const all = family === 'all';
+      const list = all ? CAST : CAST.filter((member) => member.family === family);
+      list.forEach((member, index) => {
+        keep.add('c:' + member.id);
+        const feature = all && index === 0;
+        const tile = castTile(member.id, index, feature);
+        html += stagger ? tile.replace('class="tile', 'data-enter style="--i:' + index + '" class="tile') : tile;
+      });
+      if (!list.length) html = emptyMarkup();
       count.textContent = t('wall.count.cast', { n: list.length, total: CAST.length });
     } else {
       const list = FACE_META.map((item) => item.id);
       for (const id of list) keep.add('f:' + id);
-      html = list.length ? list.map((id) => faceTile(id)).join('') : emptyMarkup();
+      html = list.length
+        ? list.map((id, index) => {
+          const tile = faceTile(id);
+          return stagger ? tile.replace('class="tile', 'data-enter style="--i:' + index + '" class="tile') : tile;
+        }).join('')
+        : emptyMarkup();
       count.textContent = t('wall.count.state', { n: list.length, total: FACE_META.length });
     }
     const ghost = animate ? ghostLayer() : null;
@@ -318,6 +383,36 @@ export function createWall(): View {
     // Family filters only make sense for characters.
     filters.hidden = tab !== 'cast';
   }
+
+  /* --- pointer light --------------------------------------------------- */
+
+  /*
+   * The tile under the pointer lights up where the pointer is. One rAF
+   * coalesces the writes; the value is a percentage, so the CSS radial
+   * gradient does the rest without a repaint of the SVG.
+   */
+  let spotFrame = 0;
+  let spotTile: HTMLElement | null = null;
+  let spotX = 50;
+  let spotY = 0;
+
+  function paintSpot(): void {
+    spotFrame = 0;
+    if (!spotTile) return;
+    spotTile.style.setProperty('--mx', spotX.toFixed(1) + '%');
+    spotTile.style.setProperty('--my', spotY.toFixed(1) + '%');
+  }
+
+  grid.addEventListener('pointermove', (event) => {
+    const tile = (event.target as HTMLElement).closest<HTMLElement>('.tile');
+    if (!tile) return;
+    const rect = tile.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    spotTile = tile;
+    spotX = ((event.clientX - rect.left) / rect.width) * 100;
+    spotY = ((event.clientY - rect.top) / rect.height) * 100;
+    if (!spotFrame) spotFrame = window.requestAnimationFrame(paintSpot);
+  });
 
   /* --- keyboard ------------------------------------------------------- */
 
@@ -394,7 +489,7 @@ export function createWall(): View {
 
   paintTabs();
   paintFilters();
-  paintGrid();
+  paintGrid(false, true);
   const unsubscribe = onLookChange(() => {
     if (tab === 'emotion') paintGrid();
   });
@@ -404,6 +499,8 @@ export function createWall(): View {
     dispose(): void {
       unsubscribe();
       grid.removeEventListener('keydown', onGridKey);
+      if (spotFrame) window.cancelAnimationFrame(spotFrame);
+      spotFrame = 0;
       if (ghostTimer) {
         window.clearTimeout(ghostTimer);
         ghostTimer = 0;

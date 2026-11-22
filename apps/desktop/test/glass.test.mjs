@@ -294,8 +294,8 @@ describe('glass: the capture stays local and island-only', () => {
     assert.ok(!preload.includes('desktopCapturer'), 'the renderer cannot capture anything itself');
   });
 
-  it('ships the preference on by default and on the appearance page', () => {
-    assert.match(schemaJs, /glassBackdrop: true/);
+  it('ships the preference off by default, on the appearance page, and switchable on', () => {
+    assert.match(schemaJs, /glassBackdrop: false/);
     assert.match(schemaJs, /glassBackdrop: 'appearance'/);
     assert.match(schemaJs, /glassBackdrop: \{ scope: 'renderer'/);
     assert.match(settingsJs, /rowToggle\(T\('appearance\.glassBackdrop\.label'\), T\('appearance\.glassBackdrop\.sub'\), 'glassBackdrop'\)/);

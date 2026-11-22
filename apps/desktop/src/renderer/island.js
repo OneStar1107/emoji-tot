@@ -2925,6 +2925,11 @@ function startMorph(open, from, fold) {
   const carriedBody = morph && Number.isFinite(morph.bodyOpacity) ? morph.bodyOpacity : 1;
   stopMorph();
   const clock = open ? MORPH_OPEN : MORPH_CLOSE;
+  /* The blurred photograph is re-rendered every frame while the box grows, at
+     a 20px radius over a 1280px frame — that is the stutter, not the screenshot.
+     island.css drops the filter for the duration; a plain backdrop is invisible
+     while the panel is scaling anyway. */
+  document.body.dataset.morphing = 'true';
   morph = {
     open,
     fromW: from.width,
@@ -2974,6 +2979,7 @@ function settleMorph() {
   morphFrame = 0;
   const wasOpen = morph ? morph.open : false;
   morph = null;
+  delete document.body.dataset.morphing;
   islandEl.style.transition = '';
   panelEl.style.transform = '';
   panelEl.style.opacity = '';
@@ -3117,7 +3123,10 @@ function requestGlass() {
     return;
   }
   const token = (glassToken += 1);
-  document.body.dataset.glass = 'pending';
+  /* Ask without clearing: 'pending' hid the previous frame for the length of
+     the capture, which is 600ms of flicker on every expand. The old frame
+     stays up until a new one lands. */
+  if (document.body.dataset.glass !== 'on') document.body.dataset.glass = 'pending';
   api
     .backdrop({ x: rect.left, y: rect.top, w: rect.width, h: rect.height })
     .then((payload) => {

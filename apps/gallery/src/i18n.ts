@@ -43,7 +43,7 @@ const MESSAGES = {
     'console.islandNote': '桌面端形态：屏幕顶部居中，收起是一条胶囊，点一下展开。',
 
     'wall.title': '表情馆',
-    'wall.lead': '44 张脸，一个两位数。',
+    'wall.lead': '61 张脸，一个两位数。',
     'wall.all': '全部',
     'wall.copy': '复制代码',
     'wall.close': '关闭',
@@ -169,7 +169,7 @@ const MESSAGES = {
     'console.islandNote': 'Desktop form: centred at the top, a pill when closed, one tap to open.',
 
     'wall.title': 'Faces',
-    'wall.lead': '44 faces, one two-digit number.',
+    'wall.lead': '61 faces, one two-digit number.',
     'wall.all': 'All',
     'wall.copy': 'Copy snippet',
     'wall.close': 'Close',

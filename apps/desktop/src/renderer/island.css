@@ -3413,3 +3413,11 @@ body[data-theme="light"][data-skin="console"] .health-bar::after {
 .more-note { margin: 0; font-size: 10px; line-height: 1.3; color: var(--dim); }
 .more-note[hidden] { display: none; }
 
+/*
+ * While the box is being resized frame by frame, the blurred photograph is
+ * re-rendered each time: a 20px blur over a 1280px frame, sixty times a
+ * second. Dropping the filter for the 400ms of the morph costs nothing
+ * visible (the panel is scaling anyway) and is the difference between a
+ * smooth open and a stutter.
+ */
+body[data-morphing="true"] .panel-glass { filter: none; }

@@ -99,3 +99,7 @@ pnpm --filter @emojitot/gallery build
 - 站点：`apps/gallery/dist` 推到 `gh-pages`，`vite base` 必须是 `/emoji-tot/`
 - 桌宠：`apps/desktop` 下跑 electron-builder，产物在 `release/`
 - 注入方式：宿主持有 `emotionId` 写进状态文件，或直接调用 `core` 的渲染函数
+
+## 一处取舍：紧急事件立即打断
+
+仲裁默认让事件排队，等当前状态的停留期结束再换。这里改成「比当前显示更紧急的事件立即打断」：出错必须马上看见，不紧急的仍然排队，避免连续事件互相闪烁（`packages/protocol/src/arbiter.ts`）。
