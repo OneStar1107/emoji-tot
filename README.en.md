@@ -67,7 +67,7 @@ Electron 45 cannot start from a repository path containing non-ASCII characters:
 
 - **One file is the interface** — `%APPDATA%/EmojiTot/state.json`. A bare id, a JSON string or a JSON object all work; malformed writes keep the current face.
 - **Everything stays local** — preferences, todos, calendar, mail cache, shelf files and clipboard history live in the local data directory and are never uploaded.
-- **Screen captures stay in memory** — the frosted glass blurs one capture of the current screen into a panel background; it is never written to disk or uploaded, and can be turned off in settings.
+- **No screen capture** — the current interface uses solid panels; it does not capture the desktop or store screen content. The `frost` skin name is historical.
 - **Location only picks a city** for the weather — no position upload, no history of where you went.
 - **Message counts only** — unread badges for WeChat, WeCom, Feishu and DingTalk come from window titles; message contents are never read.
 - **Clipboard history is off by default** — when on, recent text entries live in a local `clipboard.json`; turning it off clears unpinned entries. Filtering is length and empty-value only.
