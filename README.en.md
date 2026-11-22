@@ -22,8 +22,8 @@
 <!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot.Setup.0.8.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.1/EmojiTot.Setup.0.8.1.exe) | Installer — starts from the Start menu |
-| [EmojiTot.0.8.1.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.1/EmojiTot.0.8.1.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.Setup.0.8.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.2/EmojiTot.Setup.0.8.2.exe) | Installer — starts from the Start menu |
+| [EmojiTot.0.8.2.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.2/EmojiTot.0.8.2.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
 Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases)

@@ -26,6 +26,7 @@ import {
   filterPatch,
   knownPaths,
   orderedPageKeys,
+  pageOfPath,
   orderedStatusKeys,
   presetPatch,
   serviceChanges,
@@ -331,6 +332,40 @@ describe('schema: page presets', () => {
     assert.deepEqual(enabledPageKeys(full), PAGE_MANIFEST.map((page) => page.key));
     assert.equal(full.focus.work, 50);
     assert.equal(full.shelf.clipboard, true);
+  });
+});
+
+/*
+ * Real glass.
+ *
+ * The switch has to exist in three places at once to do anything: DEFAULTS (or
+ * the write is refused), pageOfPath (or the audit groups it wrong) and the
+ * appearance page (or there is no way to reach it). The renderer's own gate is
+ * asserted in test/glass.test.mjs.
+ */
+describe('schema: real glass', () => {
+  it('is on by default', () => {
+    assert.equal(DEFAULTS.glassBackdrop, true);
+    assert.equal(withDefaults({}).glassBackdrop, true);
+  });
+
+  it('keeps a stored switch-off, because that is a decision', () => {
+    assert.equal(withDefaults({ glassBackdrop: false }).glassBackdrop, false);
+  });
+
+  it('accepts the write and files it under appearance', () => {
+    assert.deepEqual(filterPatch({ glassBackdrop: false }), {
+      accepted: { glassBackdrop: false },
+      rejected: [],
+    });
+    assert.equal(pageOfPath('glassBackdrop'), 'appearance');
+  });
+
+  it('has a row on the appearance page', () => {
+    const settings = src('renderer/settings.js');
+    const page = settings.slice(settings.indexOf('function pageAppearance'));
+    const body = page.slice(0, page.indexOf('\n}'));
+    assert.ok(body.includes("'glassBackdrop'"), 'the switch must be reachable');
   });
 });
 

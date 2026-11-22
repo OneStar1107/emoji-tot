@@ -31,6 +31,7 @@ import {
   seekFromRatio,
   seekPercent,
 } from './media-controls.mjs';
+import { glassAllowed, glassPaint } from './island-glass.mjs';
 
 const api = window.islandAPI;
 
@@ -42,6 +43,9 @@ const panelEl = document.getElementById('panel');
 /* The page + header + dots, the layer the fold keeps at its natural size while
    the panel's box (and its rounded clip) does the folding. */
 const panelBodyEl = document.getElementById('panel-body');
+/* The blurred photograph of the desktop; its fill arrives asynchronously (see
+   the real-glass section below). */
+const glassLayerEl = document.getElementById('panel-glass');
 const pagesEl = document.getElementById('pages');
 const dotsEl = document.getElementById('dots');
 const titleEl = document.getElementById('page-title');
@@ -2565,6 +2569,9 @@ function applyPrefs() {
   appliedSkin = skin;
   document.body.dataset.skin = skin;
   document.body.dataset.blur = prefs.blur === false ? 'off' : 'on';
+  /* Skin, blur and the glass switch all decide whether the photograph is part
+     of this material; a new skin must not leave a frame painted under it. */
+  syncGlassMaterial();
   document.body.dataset.motion = prefs.motion === false ? 'off' : 'on';
   document.body.dataset.reduceMotion = prefs.reduceMotion === true ? 'on' : 'off';
   document.body.dataset.theme = resolveTheme();
@@ -2957,6 +2964,9 @@ function settleMorph() {
     reportBoxNow();
     reportHit();
     measure();
+    /* The panel is at its final box and unscaled: this is the first moment a
+       screen-positioned photograph can be painted without being scaled. */
+    requestGlass();
   } else {
     landClosed();
   }
@@ -3001,6 +3011,7 @@ function closeMorph() {
 function landClosed() {
   closing = false;
   islandEl.dataset.closing = 'false';
+  clearGlass();
   panelEl.hidden = true;
   pillEl.hidden = false;
   pillEl.style.animation = 'none';
@@ -3012,11 +3023,123 @@ function landClosed() {
   measure();
 }
 
+/* ------------------------------------------------------------- real glass */
+
+/*
+ * The panel's one non-CSS material.
+ *
+ * A transparent window cannot blur the desktop behind it, so the main process
+ * photographs the display and this paints the photograph where the desktop
+ * would have been (see island-glass.mjs for the rules, services/backdrop.js
+ * for the capture). Three things keep it honest:
+ *
+ * - One ask per open. The main process reuses a capture for 500ms, which is
+ *   what makes the request after a window resize free instead of a second
+ *   screenshot.
+ * - The layer waits for the answer *and* for the fold to land: a capture takes
+ *   50-200ms, and painting it while the panel is scaled would scale the
+ *   desktop under the card. settleMorph asks; requestGlass refuses mid-fold.
+ * - A refused, failed, late or malformed answer is not a state. `glassToken`
+ *   makes a stale reply a no-op and paintGlass() drops anything it cannot
+ *   paint, so the CSS material the panel already has simply stays.
+ */
+const GLASS_REFRESH_MS = 300;
+
+/** Bumped by every ask and every clear: a reply from an older ask is ignored. */
+let glassToken = 0;
+let glassTimer = 0;
+
+/** Release the photograph: the layer goes back to the CSS material. */
+function clearGlass() {
+  glassToken += 1;
+  if (glassTimer) {
+    clearTimeout(glassTimer);
+    glassTimer = 0;
+  }
+  document.body.dataset.glass = 'off';
+  if (!glassLayerEl) return;
+  /* Clearing the inline background is what drops the decoded bitmap; leaving
+     it set would keep a full screenshot alive behind a hidden panel. */
+  glassLayerEl.style.backgroundImage = '';
+  glassLayerEl.style.backgroundPosition = '';
+  glassLayerEl.style.backgroundSize = '';
+}
+
+function paintGlass(payload) {
+  const paint = glassPaint(payload);
+  if (!paint || !glassLayerEl) {
+    /* Nothing paintable: keep the material that is already on screen. */
+    clearGlass();
+    return;
+  }
+  glassLayerEl.style.backgroundImage = paint.image;
+  glassLayerEl.style.backgroundPosition = paint.position;
+  glassLayerEl.style.backgroundSize = paint.size;
+  /* Only now does the layer become visible (island.css). */
+  document.body.dataset.glass = 'on';
+}
+
+/** Ask for the desktop behind the panel, at the panel's current box. */
+function requestGlass() {
+  if (!open || !glassAllowed(prefs)) {
+    clearGlass();
+    return;
+  }
+  /* The fold owns the panel's box until it lands; settleMorph asks again. */
+  if (morph || closing) return;
+  const rect = panelEl.getBoundingClientRect();
+  if (!rect.width || !rect.height) {
+    clearGlass();
+    return;
+  }
+  const token = (glassToken += 1);
+  document.body.dataset.glass = 'pending';
+  api
+    .backdrop({ x: rect.left, y: rect.top, w: rect.width, h: rect.height })
+    .then((payload) => {
+      /* A newer ask or a closed panel owns the layer now. */
+      if (token !== glassToken || !open) return;
+      paintGlass(payload);
+    })
+    .catch(() => {
+      if (token === glassToken) clearGlass();
+    });
+}
+
+/**
+ * Re-read the three inputs the photograph depends on.
+ *
+ * The switch alone is not the whole gate: a solid skin and the blur switch turn
+ * the material off too, and turning it off has to release the frame rather than
+ * leave a layer painting under a card that promises opacity.
+ */
+let appliedGlass = '';
+function syncGlassMaterial() {
+  const key = (prefs.glassBackdrop !== false) + '|' + (prefs.blur !== false) + '|' + (prefs.skin ?? 'frost');
+  if (key === appliedGlass) return;
+  appliedGlass = key;
+  if (!glassAllowed(prefs)) clearGlass();
+  else if (open) scheduleGlassRefresh();
+}
+
+/** The window moved or resized, so the desktop under the panel changed too. */
+function scheduleGlassRefresh() {
+  if (!open) return;
+  if (glassTimer) clearTimeout(glassTimer);
+  glassTimer = setTimeout(() => {
+    glassTimer = 0;
+    requestGlass();
+  }, GLASS_REFRESH_MS);
+}
+
 function setOpen(next) {
   const opening = next === true && !open;
   const folding = next === false && open;
   /* Already there, or the same toggle twice: nothing to move. */
   if (!opening && !folding) return;
+  /* Folding releases the photograph in the same task: a full-screen bitmap has
+     no business outliving the panel that shows it. */
+  if (folding) clearGlass();
   /*
    * The pill's box has to be read while it is still laid out — the very next
    * line hides it. In the strip state the pill is visibility:hidden but keeps
@@ -3097,6 +3220,11 @@ function setOpen(next) {
   reportBoxNow();
   reportHit();
   measure();
+  /* No morph to wait for (reduced motion, or a fold interrupted by an avoid
+     switch): the panel is already at its final box, so ask now. When a morph is
+     running, settleMorph asks instead — painting mid-fold would scale the
+     photograph with the card. */
+  if (open && !morph) requestGlass();
 }
 
 /**
@@ -3687,6 +3815,13 @@ window.addEventListener('blur', () => {
   if (open) setOpen(false);
 });
 
+/*
+ * A resized window has a resized panel, and the desktop behind it moved with
+ * the edges. Debounced (see GLASS_REFRESH_MS): opening resizes the window once
+ * and the fold lands on its own clock, so the refresh must not fire per frame.
+ */
+window.addEventListener('resize', scheduleGlassRefresh);
+
 /* -------------------------------------------------------------------- boot */
 
 /*
@@ -4032,6 +4167,9 @@ api.onCalendar((value) => {
   calendarState = value;
   if (open && enabledPages()[pageIndex]?.key === 'calendar') renderPage();
 });
+
+/* The main process moved the window: same desktop question, new answer. */
+api.onMoved?.(scheduleGlassRefresh);
 
 api.onPrefs((next) => {
   prefs = next ?? prefs;

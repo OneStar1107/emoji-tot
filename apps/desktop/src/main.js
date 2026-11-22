@@ -44,6 +44,7 @@ const mail = require('./main/services/mail');
 const calendar = require('./main/services/calendar');
 const fullscreen = require('./main/services/fullscreen');
 const avoidance = require('./main/services/avoidance');
+const backdrop = require('./main/services/backdrop');
 const guard = require('./main/ipc-guard');
 const { safeSend } = guard;
 const platform = require('./main/platform');
@@ -56,6 +57,18 @@ const { createFaceBus } = require('./main/face-bus');
 // The idle mood clock, moved out of the renderer when 0.6.3 gave the face one
 // owner — and restored here, where that owner lives.
 const { createIdleMoods } = require('./main/idle-mood');
+
+/**
+ * The real-glass backdrop, created once.
+ *
+ * One instance for the process, not one per request: its 500ms cache is what
+ * turns "open, then the window resizes" into a single photograph. Its log
+ * callback only ever receives a failure message — the frame itself is never
+ * logged, written or sent anywhere except the island window that asked.
+ */
+const desktopBackdrop = backdrop.createBackdrop({
+  log: (message) => console.warn('[backdrop]', message),
+});
 
 /** Six steps, from a 64px dot to a 220px mascot. */
 const SIZES = { xs: 64, sm: 88, md: 120, lg: 160, xl: 220 };
@@ -1817,6 +1830,32 @@ function startServices() {
     cast: readPrefs().cast || castId,
     prefs: readPrefs(),
   }));
+
+  /*
+   * The real-glass backdrop: one screenshot of the display the island sits on,
+   * handed to the renderer to blur behind the panel.
+   *
+   * Three deliberate gates. The channel is island-only; the preference is
+   * re-read here, so a renderer that asks after the switch was turned off gets
+   * nothing; and the display is the one the window is actually on, not the
+   * primary one, so a second monitor's offsets are measured against its own
+   * origin. A failed capture is null — the island keeps its CSS material.
+   *
+   * The window bounds are read here rather than in the page because
+   * window.screenX and display.bounds are only guaranteed to share a coordinate
+   * space inside the main process.
+   */
+  guard.guardedHandle('island:backdrop', ['island'], async (rect, event) => {
+    if (readPrefs().glassBackdrop === false) return null;
+    const target = BrowserWindow.fromWebContents(event.sender);
+    if (!target || target.isDestroyed()) return null;
+    const bounds = target.getBounds();
+    return desktopBackdrop.capture({
+      display: screen.getDisplayMatching(bounds),
+      panel: rect,
+      window: bounds,
+    });
+  }, { check: guard.checkRect, maxBytes: 512 });
 
   /*
    * The devices page's star: one device name in, the merged prefs out.

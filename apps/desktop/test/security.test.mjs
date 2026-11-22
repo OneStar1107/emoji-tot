@@ -105,6 +105,22 @@ describe('ipc: geometric payloads', () => {
     assert.equal(shape.checkBox({ w: -5, h: 10 }), undefined);
     assert.equal(shape.checkBox({ w: 99999, h: 10 }), undefined);
   });
+
+  /*
+   * The backdrop request is the one payload that names a place on the desktop.
+   * Numbers only, and bounded: a string that looks like a number would be
+   * concatenated into the background position and the layer would land
+   * somewhere nobody can predict.
+   */
+  it('accepts a panel rectangle and refuses anything else', () => {
+    assert.deepEqual(shape.checkRect({ x: 32, y: 36, w: 420, h: 324 }), { x: 32, y: 36, w: 420, h: 324 });
+    assert.deepEqual(shape.checkRect({ x: -12.5, y: 0, w: 1, h: 1 }), { x: -12.5, y: 0, w: 1, h: 1 });
+    assert.equal(shape.checkRect({ x: '32', y: 36, w: 420, h: 324 }), undefined);
+    assert.equal(shape.checkRect({ x: 0, y: 0, w: 0, h: 324 }), undefined);
+    assert.equal(shape.checkRect({ x: 0, y: 0, w: 420 }), undefined);
+    assert.equal(shape.checkRect([0, 0, 420, 324]), undefined);
+    assert.equal(shape.checkRect(null), undefined);
+  });
 });
 
 describe('ipc: action payloads', () => {

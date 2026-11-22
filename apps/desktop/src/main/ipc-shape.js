@@ -113,6 +113,20 @@ const checkBox = (box) => {
   return { w: Math.round(box.w), h: Math.round(box.h) };
 };
 
+/**
+ * A rectangle in CSS pixels: the panel's box inside the island window.
+ *
+ * The backdrop channel needs it to know which piece of the desktop the panel
+ * covers. Numbers only — a string that looks like a number is a page guessing,
+ * and the geometry would silently concatenate it.
+ */
+const checkRect = (rect) => {
+  if (!isPlainObject(rect)) return undefined;
+  if (!isNumber(rect.x, -100000, 100000) || !isNumber(rect.y, -100000, 100000)) return undefined;
+  if (!isNumber(rect.w, 1, 100000) || !isNumber(rect.h, 1, 100000)) return undefined;
+  return { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+};
+
 module.exports = {
   isPlainObject,
   isString,
@@ -125,6 +139,7 @@ module.exports = {
   checkLocal,
   checkPoint,
   checkBox,
+  checkRect,
   LOCAL_ACTIONS,
   SHELF_BUFFER_LIMIT,
   BUS_LIMIT,

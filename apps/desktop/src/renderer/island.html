@@ -19,6 +19,13 @@
 
     <!-- Expanded: header, one page, dots. -->
     <section class="panel" id="panel" hidden aria-label="EmojiTot 面板">
+      <!-- Real glass: a screenshot of the desktop behind the panel, blurred,
+           and the theme's own tint over it (see island.css and
+           main/services/backdrop.js). Both paint under the content; the fill is
+           written by island.js only after a capture has arrived, so a failed or
+           slow capture leaves the CSS material exactly as it was. -->
+      <div class="panel-glass" id="panel-glass" aria-hidden="true"></div>
+      <div class="panel-veil" aria-hidden="true"></div>
       <!-- The page and its chrome, as one layer the fold clips against the
            card's animated box (see paintMorph in island.js). The paging
            arrows stay outside: they are chrome that scales with the surface. -->

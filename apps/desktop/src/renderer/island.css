@@ -18,6 +18,28 @@
    * lower values let busy wallpapers wash the text out.
    */
   --card: rgba(21, 21, 25, 0.90);
+  /*
+   * Real glass (设置 → 外观 → 真毛玻璃).
+   *
+   * `backdrop-filter` cannot see a transparent window's desktop, so the glass
+   * is a screenshot of the screen, blurred and painted behind the panel. Two
+   * numbers make it work: the layer reaches `--glass-bleed` past the panel on
+   * every side, so the blur's fade happens outside the panel's clip instead of
+   * pale bands at its edges (the main process subtracts the same distance when
+   * it works out where to paint the picture), and `--glass-veil` is the
+   * theme's own tint at 76% of the card's alpha — at the card's full 0.90 the
+   * photograph is 10% of the result and the layer is the acrylic it replaces.
+   *
+   * A test (test/glass.test.mjs) recomputes the veil's worst-case contrast
+   * against --ink from these two declarations, so a future alpha change cannot
+   * silently take body text under 4.5:1.
+   */
+  --glass-bleed: 24px;
+  /* The tint over the blurred desktop. 76% buried the picture; the floor is
+     what keeps light ink at 4.5:1 over a white page, which lands at 66% with
+     the photograph darkened to 0.90. Below ~64% the glass reads better but the
+     text stops being readable on a bright desktop. */
+  --glass-veil: color-mix(in srgb, var(--card) 66%, transparent);
   /* Native widgets (select popups, scrollbars) follow the theme instead of
      drawing a white menu with white text in dark mode. */
   color-scheme: dark;
@@ -107,9 +129,20 @@
    * ring — builds the same depth with nothing to clip. The ring is what makes a
    * translucent surface read as a material instead of as a hole in the desktop.
    */
-  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.26);
-  --ring: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.11);
+  --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.34);
+  --ring: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
+  /*
+   * Glass, as three layers instead of one flat fill.
+   *
+   * A transparent Electron window has no backdrop to blur (see .panel), so the
+   * material has to be built from light: a soft key light pooling at the top
+   * edge, a faint second highlight along the upper third, and a hairline of
+   * noise on top so the surface reads as a pane rather than as a vector shape.
+   * Alpha is deliberately small — anything stronger looks like paint.
+   */
+  --glass-key: rgba(255, 255, 255, 0.10);
+  --glass-sheen: rgba(255, 255, 255, 0.045);
   /* Radii, named so one corner is decided in one place. */
   --r-xs: 8px;
   --r-sm: 12px;
@@ -143,9 +176,11 @@ body[data-theme="light"] {
   --surface-3: rgba(0, 0, 0, 0.2);
   /* The same three shades flipped: a white highlight is invisible on a white
      card, and a black top edge read as a smudge under the header. */
-  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.05);
-  --ring: inset 0 0 0 1px rgba(0, 0, 0, 0.045);
+  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+  --ring: inset 0 0 0 1px rgba(0, 0, 0, 0.055);
+  --glass-key: rgba(255, 255, 255, 0.55);
+  --glass-sheen: rgba(0, 0, 0, 0.02);
 }
 
 * { box-sizing: border-box; }
@@ -349,15 +384,27 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--r-full);
-  background: var(--card);
+  /*
+   * The same glass stack as the panel, at capsule scale: a key light pooling at
+   * the top, a sheen along the upper third, grain, then the card tint. The
+   * grain matters most here — this is the surface that sits on a wallpaper all
+   * day, and a flat fill is what makes a pill look like a sticker.
+   */
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
+    radial-gradient(120% 140% at 50% -40%, var(--glass-key), rgba(255, 255, 255, 0) 66%),
+    linear-gradient(180deg, var(--glass-sheen), rgba(255, 255, 255, 0) 42%),
+    var(--card);
   color: var(--ink);
   /*
    * One ring, one highlight, one lift. At 34px tall the old 24px blur read as a
    * black halo, and the halo was the loudest thing on the desktop — louder than
    * the character it belongs to. The collapsed state is the state that is on
-   * screen 99% of the time, so it is the one that has to be quiet.
+   * screen 99% of the time, so it is the one that has to be quiet. The shade
+   * under the bottom edge is what replaced the halo: depth from a drawn line
+   * instead of a cloud.
    */
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34), var(--hi), var(--ring);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, 0.32), var(--hi), var(--lo), var(--ring);
   backdrop-filter: blur(18px);
   transition: transform var(--base) var(--spring), box-shadow var(--base) var(--ease), border-color var(--base) var(--ease);
   cursor: pointer;
@@ -366,7 +413,7 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
 
 /* A 2% lift, not a 3.5% pop: the pill is a resting object, not a button that
    jumps when the pointer crosses it. */
-.pill:hover { transform: translateY(-1px) scale(1.02); border-color: var(--surface-3); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38), var(--hi), var(--ring); }
+.pill:hover { transform: translateY(-1px) scale(1.02); border-color: var(--surface-3); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.36), var(--hi), var(--lo), var(--ring); }
 .pill:active { transform: translateY(0) scale(0.99); }
 
 /*
@@ -559,7 +606,7 @@ body[data-theme="light"] .pill { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14), var
 /* No outer shadow on the light panel either: a white card needs contrast, not
    a blur reaching the window edge, which the OS cuts into a straight line. The
    ring carries the separation. */
-body[data-theme="light"] .panel { box-shadow: var(--hi), var(--lo), var(--ring); }
+body[data-theme="light"] .panel { box-shadow: 0 16px 34px -22px rgba(0, 0, 0, 0.28), var(--hi), var(--lo), var(--ring); }
 body[data-theme="light"] .sheet { box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.8); }
 
 body[data-theme="light"][data-skin="solid"] .panel,
@@ -595,7 +642,11 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    * header. Layered into the background instead of drawn by a ::before, so it
    * cannot cover the content, and the solid/plain skins drop it for free.
    */
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 44%), var(--card);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E") 0 0 / 140px 140px repeat,
+    radial-gradient(140% 92% at 50% -22%, var(--glass-key), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(180deg, var(--glass-sheen), rgba(255, 255, 255, 0) 34%),
+    var(--card);
   /*
    * Kept inside the window margin on purpose. The shadow used to be 44px of
    * blur with 18px of offset while the window padding was only 28/18, so the
@@ -613,7 +664,17 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    * panel. The inset highlight stays — it is drawn inside the box, so it cannot
    * be clipped into an edge.
    */
-  box-shadow: var(--hi), var(--lo), var(--ring);
+  box-shadow:
+    0 16px 36px -20px rgba(0, 0, 0, 0.55),
+    var(--hi), var(--lo), var(--ring);
+  /*
+   * The grain that turns a gradient into a pane.
+   *
+   * Flat alpha over a desktop wallpaper reads as plastic; a 1-2% grain breaks
+   * the ramp into something the eye accepts as glass. It rides in the
+   * background stack as an inline SVG tile: no extra element to paint over the
+   * content, and it is clipped by the panel's own rounded box.
+   */
   /*
    * The morph origin, not a decoration.
    *
@@ -624,6 +685,75 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    * frame and read as the card falling into place from above.
    */
   transform-origin: top center;
+  /*
+   * The panel is its own stacking context so the two glass layers below can sit
+   * at negative z-index: inside this context they paint above the panel's own
+   * background and below every in-flow child, which is exactly "between the
+   * material and the content". Without `isolation` a negative-z child would
+   * sort behind the panel's background and never be seen. No layout effect.
+   */
+  isolation: isolate;
+}
+
+/* --------------------------------------------------------------- real glass */
+
+/*
+ * The one material CSS cannot make.
+ *
+ * In a transparent window `backdrop-filter` filters the page's own pixels and
+ * the page paints nothing outside this card, so the frost skin has always shown
+ * the wallpaper *sharp* through a translucent tint. These two layers are the
+ * honest version: #panel-glass is a photograph of the desktop behind the panel
+ * (services/backdrop.js), blurred; .panel-veil is the theme's tint over it.
+ *
+ * Neither exists until island.js receives a capture and writes
+ * `body[data-glass="on"]`, so a refusal, a failure or a slow capture leaves the
+ * CSS material below untouched — no black box, no half-painted layer.
+ */
+.panel-glass,
+.panel-veil {
+  display: none;
+  position: absolute;
+  pointer-events: none;
+}
+
+/*
+ * 24px wider than the panel on every side.
+ *
+ * The blur samples past its own box, so its edge fades; with the layer exactly
+ * panel-sized that fade is the first 20-odd pixels inside the card and the
+ * glass goes pale along all four edges. Pushed out by --glass-bleed, the fade
+ * lands in the strip the panel's `overflow: hidden` cuts away.
+ */
+.panel-glass {
+  inset: calc(-1 * var(--glass-bleed));
+  z-index: -2;
+  /*
+   * Position and size are written by island.js in CSS pixels, against the
+   * display the window is on, so the blurred desktop element lands under the
+   * real one. 26px is the blur; saturate keeps a wallpaper's colour from
+   * greying out in the wash, and 0.94 keeps a white page from glowing.
+   */
+  background-repeat: no-repeat;
+  filter: blur(20px) saturate(155%) brightness(0.9);
+}
+
+/* The tint, over the photograph: dark themes press it down, the light theme
+   lifts it, and both come from --card so a skin or theme change carries. */
+.panel-veil {
+  inset: 0;
+  z-index: -1;
+  background: var(--glass-veil);
+}
+
+/*
+ * Only while the panel is actually open, only in the skin that promises
+ * translucency, and only after a capture has landed. Everything else keeps the
+ * card it had before this feature existed.
+ */
+body[data-glass="on"][data-skin="frost"] #island[data-open="true"] .panel-glass,
+body[data-glass="on"][data-skin="frost"] #island[data-open="true"] .panel-veil {
+  display: block;
 }
 
 /*
