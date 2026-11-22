@@ -282,7 +282,10 @@ export const DEFAULTS = {
     todo: true,
     health: true,
     shelf: true,
-    devices: false,
+    /* Paired Bluetooth devices belong on the island by default: the list
+       is already populated by the probe, and a page that is off by
+       default reads as "my headphones are not detected". */
+    devices: true,
     calendar: true,
     messenger: true,
   },

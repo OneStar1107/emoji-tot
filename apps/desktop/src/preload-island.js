@@ -12,6 +12,13 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
  * call before the page runs is the reliable form: it blocks for a few
  * microseconds and the answer is final.
  */
+
+/** Subscribe to one channel; returns the unsubscribe function. */
+const on = (channel, listener) => {
+  const handler = (_event, payload) => listener(payload);
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+};
 const windowMaterial = (() => {
   try {
     const value = ipcRenderer.sendSync('island:material');

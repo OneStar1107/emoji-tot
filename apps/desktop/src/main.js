@@ -13,6 +13,7 @@
  *    the same file-watching contract the protocol already uses.
  */
 const { app, BrowserWindow, Tray, ipcMain, screen, nativeImage, nativeTheme, shell, session, globalShortcut } = require('electron');
+
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -389,17 +390,14 @@ guard.guardedSync('island:material', ['island'], () => systemMaterial(), { fallb
  * for it, so older builds fall back to the translucent surface the CSS paints.
  */
 function systemMaterial() {
-  if (process.platform !== 'win32') return 'none';
   /*
-   * Windows 11 still reports "10.0.build" — the tell is the build number,
-   * not the major version: 22000 is the first 11, 26100 is 24H2. Checking
-   * major alone reads every Windows 11 machine as 10 and silently drops
-   * the blur.
+   * System material removed on request. The DWM acrylic blurred the whole
+   * window rectangle (win.setShape only clips the corners), and on this
+   * machine it made the island read as a grey slab over the desktop. The
+   * CSS layered material is the one that ships now; the channel stays so
+   * the page and the main process still agree on what is behind it.
    */
-  const parts = process.getSystemVersion().split('.').map(Number);
-  const major = parts[0] || 0;
-  const build = parts[2] || 0;
-  return major > 10 || (major === 10 && build >= 22000) ? 'acrylic' : 'none';
+  return 'none';
 }
 
 function createWindow() {
@@ -471,6 +469,10 @@ function createWindow() {
  */
 const SHAPE_STEP = 4;
 function applyIslandShape() {
+  // No system material, no region: the CSS card already draws the rounded
+  // silhouette, and clipping it again left only a strip of the pill visible
+  // because the region is in physical pixels while the bounds are DIP here.
+  if (systemMaterial() !== 'acrylic') return;
   if (!win || win.isDestroyed()) return;
   const { width, height } = win.getBounds();
   if (!width || !height) return;
