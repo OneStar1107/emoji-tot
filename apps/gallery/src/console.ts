@@ -43,11 +43,30 @@ function storedSize(): number {
 /** Shared by every console instance: resizing the stage is a page preference. */
 let stageSize = storedSize();
 
+/**
+ * The character the stage draws.
+ *
+ * A cast member is drawn from its id; a genome edited by hand has no id, so
+ * it is drawn from its own genes. Falling back to 'tot' when there is no cast
+ * is what made an edited colour or trait disappear: the drawer stored the new
+ * gene and the stage put the old character back on screen.
+ *
+ * The stage character is the one place the app argues "this is alive": the
+ * idle loop comes from the engine, so the snippet beside it reproduces it.
+ */
 function hero(size = stageSize): string {
-  const id = look.cast || 'tot';
-  // The stage character is the one place the app argues "this is alive":
-  // the idle loop comes from the engine, so the snippet beside it reproduces it.
-  return renderCast({ id, state: look.state, size, style: look.finish, motion: 'demo' });
+  if (look.cast) {
+    return renderCast({ id: look.cast, state: look.state, size, style: look.finish, motion: 'demo' });
+  }
+  return renderCharacter({
+    body: look.body,
+    color: look.color,
+    traits: look.traits,
+    state: look.state,
+    size,
+    style: look.finish,
+    motion: 'demo',
+  });
 }
 
 /** The expression's own name, from the protocol — zh and en both live there. */
@@ -63,17 +82,41 @@ function faceId(state: string): string {
   return emotion ? emotion.id : '';
 }
 
+/**
+ * The element that reproduces the stage, in the element's own precedence:
+ * cast wins, otherwise body/color/traits describe the genome. Printing
+ * cast="tot" for an edited genome was a snippet that drew something else.
+ */
 function snippet(): string {
-  const id = look.cast || 'tot';
   const finish = look.finish === 'flat' ? ' finish="flat"' : '';
   const size = stageSize === DEFAULT_SIZE ? '' : ' size="' + stageSize + '"';
-  return '\u0060emojitot-ball cast="' + id + '"' + finish + size + ' state="' + look.state + '"></emojitot-ball>\u0060';
+  const traits = look.traits.length ? ' traits="' + look.traits.join(' ') + '"' : '';
+  const genes = look.cast
+    ? ' cast="' + look.cast + '"'
+    : ' body="' + look.body + '" color="' + look.color + '"' + traits;
+  return '\u0060emojitot-ball' + genes + finish + size + ' state="' + look.state + '"></emojitot-ball>\u0060';
 }
 
+/**
+ * The genome as data — all four genes, read from the live look.
+ *
+ * Colour and traits were missing, so editing either left both code blocks
+ * untouched, and body came from the fallback member rather than from what is
+ * being drawn. cast is null once the genome is custom.
+ */
 function genome(): string {
-  const id = look.cast || 'tot';
-  const member = castMember(id);
-  return JSON.stringify({ cast: id, state: look.state, finish: look.finish, body: member?.body }, null, 2);
+  return JSON.stringify(
+    {
+      cast: look.cast || null,
+      body: look.body,
+      color: look.color,
+      traits: look.traits,
+      state: look.state,
+      finish: look.finish,
+    },
+    null,
+    2,
+  );
 }
 
 /** One cell of the expression grid: the current character wearing that face. */
@@ -435,6 +478,27 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     }
   }
 
+  /**
+   * Play one of the three stage effects.
+   *
+   * The class comes off on a timer instead of staying on the element: a
+   * leftover fx-* class is a finished animation that replays the moment the
+   * hero re-renders for another reason — changing the face removes data-swap
+   * after 220ms and hands the animation property back to it, so the character
+   * would spin again on its own right after the expression changed.
+   */
+  function playFx(act: string): void {
+    const fx = act === 'spin' ? 'fx-spin' : act === 'bounce' ? 'fx-bounce' : 'fx-burst';
+    heroEl.classList.remove('fx-spin', 'fx-bounce', 'fx-burst');
+    void heroEl.offsetWidth;
+    heroEl.classList.add(fx);
+    const id = window.setTimeout(() => {
+      timers.delete(id);
+      heroEl.classList.remove(fx);
+    }, act === 'spin' ? 900 : 700);
+    timers.add(id);
+  }
+
   el.addEventListener('click', (event) => {
     const finishBtn = (event.target as HTMLElement).closest<HTMLElement>('[data-finish]');
     if (finishBtn) {
@@ -463,9 +527,7 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     if (!target) return;
     const act = target.dataset.act;
     if (act) {
-      heroEl.classList.remove('fx-spin', 'fx-bounce', 'fx-burst');
-      void heroEl.offsetWidth;
-      heroEl.classList.add(act === 'spin' ? 'fx-spin' : act === 'bounce' ? 'fx-bounce' : 'fx-burst');
+      playFx(act);
       return;
     }
     const text = target.id === 'copy' ? snippetEl.textContent ?? '' : genomeEl.textContent ?? '';

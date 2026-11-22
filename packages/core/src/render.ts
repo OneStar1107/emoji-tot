@@ -96,9 +96,10 @@ const BLINKABLE = new Set<EyeStyle>(['dot', 'wide', 'pill', 'heart', 'star', 'ha
  *
  * It lives inside the SVG rather than in a host stylesheet so the same markup
  * is alive wherever it lands: spliced in as innerHTML, serialised into a data
- * URL, or drawn by the custom element. Everything it touches is a transform on
- * two groups, so a frame costs no layout and no path re-render. The two
- * animations share a period and are offset by the delay the host can set.
+ * URL, or drawn by the custom element. Everything it moves is a transform on
+ * two groups: no path is re-rendered, and the layout a frame does pay for stays
+ * inside each SVG subtree, never the page. The two animations share a period
+ * and are offset by the delay a host can set.
  */
 const MOTION_STYLE = '<style>' +
   '.et-breathe{animation:et-breathe 4.8s cubic-bezier(.37,0,.63,1) infinite;transform-origin:50px 94px}' +

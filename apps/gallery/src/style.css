@@ -2825,11 +2825,13 @@ html[data-mono="light"] .sd-preview emojitot-ball {
 .card.sd-group > summary::-webkit-details-marker { display: none; }
 .card.sd-group[open] > summary { border-bottom: 1px solid var(--line); }
 
+/* The count sits on its own tinted chip, and that tint costs the headroom
+   --faint has on the page: at --faint it landed on 4.26:1 in dark. */
 .sd-group-head b {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
-  color: var(--faint);
+  color: var(--muted);
   padding: 1px 7px;
   border-radius: var(--r-full);
   background: color-mix(in srgb, var(--ink) 7%, transparent);
