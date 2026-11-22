@@ -197,20 +197,16 @@ export const DEFAULTS = {
   skin: 'frost',
   blur: true,
   /*
-   * Real frosted glass: photograph the desktop behind the panel once and blur
-   * the photograph, because a transparent window has no desktop in its
-   * compositing stack for `backdrop-filter` to sample. On by default — it is
-   * the material the frost skin has always been pretending to be — and it needs
-   * the frost skin with blur on to mean anything (island-glass.mjs checks all
-   * three). The frame lives in memory only: never written, never uploaded.
-   */
-  /*
-   * Off by default. The photo-of-the-desktop route needs the window out of its
-   * own capture, and on some Windows builds / GPU drivers toggling that flag
-   * makes the whole window flicker between transparent and solid black, plus
-   * the blurred frame is re-rendered on every morph step. The layered CSS
-   * material is what the skin was always selling; this is the option for the
-   * people who want the literal refraction and whose machines behave.
+   * The fallback frosted glass, for machines without a system blur.
+   *
+   * Windows 11 draws the real thing itself (backgroundMaterial: acrylic in
+   * main.js); everywhere else this photographs the desktop once and blurs the
+   * photograph, because a transparent window has no desktop in its compositing
+   * stack for `backdrop-filter` to sample. Off by default: the capture route
+   * needs the window excluded from its own frame, and on some GPU drivers that
+   * flag makes the window flicker. It needs the frost skin with blur on to mean
+   * anything (island-glass.mjs checks all three). The frame lives in memory
+   * only: never written, never uploaded.
    */
   glassBackdrop: false,
   uiScale: 100,

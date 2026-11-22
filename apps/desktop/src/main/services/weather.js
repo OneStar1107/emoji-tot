@@ -200,7 +200,13 @@ function normalize(raw) {
 /** Last good reading, used while the network is unreachable. */
 function cached() {
   const raw = readJson(cacheFile(), null);
-  return raw && raw.data ? raw.data : null;
+  /*
+   * load() refuses a snapshot from an older cache shape; cached() is the
+   * bootstrap path and used to hand that same snapshot to the page anyway,
+   * where the weather page then read fields the old shape never had.
+   */
+  if (!raw || raw.v !== CACHE_VERSION || !raw.data) return null;
+  return raw.data;
 }
 
 /**

@@ -1851,6 +1851,16 @@ function deviceRows() {
 async function saveDeviceOrder() {
   const names = deviceRows().map((row) => row.dataset.device).filter(Boolean);
   if (!names.length) return;
+  /* A narrow channel, not a whole-group patch: the island can pin or hide a
+     device while this drag is in flight, and a snapshot overwrite would put the
+     old group back. Main merges the names into the group it currently holds. */
+  if (api.orderDevices) {
+    const next = await api.orderDevices(names);
+    if (next) {
+      prefs = merge({ prefs: next, ...prefs });
+    }
+    return;
+  }
   await patch({ devices: { ...(prefs.devices ?? {}), order: names } });
 }
 

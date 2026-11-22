@@ -45,7 +45,9 @@ let stageSize = storedSize();
 
 function hero(size = stageSize): string {
   const id = look.cast || 'tot';
-  return renderCast({ id, state: look.state, size, style: look.finish });
+  // The stage character is the one place the app argues "this is alive":
+  // the idle loop comes from the engine, so the snippet beside it reproduces it.
+  return renderCast({ id, state: look.state, size, style: look.finish, motion: 'demo' });
 }
 
 /** The expression's own name, from the protocol — zh and en both live there. */

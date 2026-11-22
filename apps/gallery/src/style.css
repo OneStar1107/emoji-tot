@@ -24,7 +24,9 @@
   --page: #07070b;
   --ink: #f5f4f9;
   --muted: #8f8e9e;
-  --faint: #5d5c6b;
+  /* Secondary labels are 10-12px: this has to clear 4.5:1 on --card, not just
+     look quiet. It sits one step under --muted on purpose, in ratio order. */
+  --faint: #807f8f;
   --line: rgba(255, 255, 255, 0.085);
   --line-2: rgba(255, 255, 255, 0.16);
   --card: #0d0d13;
@@ -71,16 +73,18 @@ html[data-mono="light"] {
   --page: #f6f5fa;
   --ink: #121118;
   --muted: #5f5e6c;
-  --faint: #8b8a97;
+  --faint: #6b6a77;
   --line: rgba(12, 10, 24, 0.1);
   --line-2: rgba(12, 10, 24, 0.2);
   --card: #ffffff;
   --card-2: #fbfaff;
   --stage: #eeecf6;
 
-  --accent: #6a57f0;
-  --accent-soft: rgba(106, 87, 240, 0.1);
-  --accent-line: rgba(106, 87, 240, 0.32);
+  /* A step deeper than the page needs to look: accent text on --page, white
+     text on accent, and accent on --accent-soft all have to clear 4.5:1. */
+  --accent: #5f4ce9;
+  --accent-soft: rgba(95, 76, 233, 0.1);
+  --accent-line: rgba(95, 76, 233, 0.32);
   --accent-ink: #ffffff;
 
   --ok: #1f8f63;
@@ -560,6 +564,14 @@ button:active {
   transform: scale(0.97);
 }
 
+/* A copy button is disabled while the clipboard write is in flight; without
+   this it looked exactly like the idle button, so the one frame that says
+   "working" said nothing. */
+button:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 button[aria-pressed="true"] {
   border-color: var(--accent-line);
   background: var(--accent-soft);
@@ -1001,6 +1013,12 @@ html[data-mono="light"] .stage-grid {
   font-style: italic;
   color: color-mix(in srgb, var(--ink) 40%, transparent);
   letter-spacing: -0.02em;
+}
+
+/* The watermark is 30px, so it only needs 3:1 — but 40% of a dark ink on the
+   light stage lands at 2.6:1 and reads as a smudge instead of a number. */
+html[data-mono="light"] .stage-id {
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
 /* the control deck, floating on the stage floor */
@@ -1873,6 +1891,29 @@ html[data-mono="light"] .stage-grid {
   font-size: 11px;
 }
 
+/*
+ * Light mode needs an edge on the drawing itself.
+ *
+ * Four cast members (tot, 方糖, 云朵, 幽灵) are painted near-white, and on the
+ * dark page that is the whole point — a white character on ink. On the light
+ * page they were white on a white card: only the eyes survived, the silhouette
+ * was gone. The dark stage gets away without an edge because the background
+ * does the work; here the art has to cast its own, the way a die-cut sticker
+ * sits on paper. Two passes: a 1px contact shadow for the outline, a soft one
+ * for the lift.
+ */
+html[data-mono="light"] .tile-art svg,
+html[data-mono="light"] .face-chip-art svg,
+html[data-mono="light"] .face-art svg,
+html[data-mono="light"] .cast-art svg,
+html[data-mono="light"] .hero-art svg,
+html[data-mono="light"] .lightbox-art svg,
+html[data-mono="light"] .sd-preview emojitot-ball {
+  filter:
+    drop-shadow(0 1px 1px rgba(24, 18, 64, 0.24))
+    drop-shadow(0 5px 12px rgba(24, 18, 64, 0.13));
+}
+
 /* per-character idle motion on hover — the tile is alive, not a thumbnail */
 .tile svg { transition: transform var(--slow) var(--ease); }
 .tile[data-motion="bounce"]:hover svg { animation: g-hop 620ms var(--ease); }
@@ -1890,6 +1931,29 @@ html[data-mono="light"] .stage-grid {
 @keyframes g-pulse { 50% { transform: scale(1.08); } }
 @keyframes g-float { 50% { transform: translateY(-8px); } }
 @keyframes g-pop { 45% { transform: scale(1.14); } 100% { transform: scale(1); } }
+
+/*
+ * The idle loop the engine ships inside each drawing, gated by the observer
+ * in wall.ts: only cards in view breathe. The negative delay starts each card
+ * partway through its cycle, so sixty-one cards never pulse as one.
+ */
+.tile-art .et-breathe,
+.tile-art .et-eyes {
+  animation-delay: calc(var(--phase, 0) * -0.37s);
+  animation-play-state: paused;
+}
+
+.tile[data-live] .et-breathe,
+.tile[data-live] .et-eyes { animation-play-state: running; }
+
+/* pointing at a card brings it closer to life: bigger, and breathing faster */
+.tile:hover .tile-art,
+.tile:focus-visible .tile-art { transform: scale(1.06); }
+
+.tile:hover .et-breathe,
+.tile:hover .et-eyes,
+.tile:focus-visible .et-breathe,
+.tile:focus-visible .et-eyes { animation-duration: 2.2s; }
 
 .wall-empty {
   grid-column: 1 / -1;
@@ -2085,6 +2149,32 @@ html[data-mono="light"] .stage-grid {
     radial-gradient(60% 60% at 50% 42%, #24223a, #0a0a11 72%);
   isolation: isolate;
 }
+
+/*
+ * The arbitration stage is a darkroom in either theme — the face is a lit ball
+ * on ink, and the readout sits inside that ink. Everything printed on it
+ * therefore uses the darkroom palette rather than the page ink tokens: with
+ * --ink on a light page the state name was #121118 on #24223a (1.05:1), a
+ * label nobody can read.
+ */
+.arbiter-stage {
+  --stage-ink: #f4f2fb;
+  --stage-muted: rgba(255, 255, 255, 0.62);
+  --stage-faint: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.arbiter-stage .arbiter-read b { color: var(--stage-ink); }
+.arbiter-stage .arbiter-read span { color: var(--stage-muted); }
+.arbiter-stage .arbiter-read .kicker { color: var(--stage-faint); }
+
+.arbiter-stage .arbiter-priority {
+  background: rgba(10, 10, 16, 0.55);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--stage-faint);
+}
+
+.arbiter-stage .sd-rank-slot { color: #b9aaff; }
 
 /* rays behind the face: conic gradient, rotating slowly, masked to a disc */
 .arbiter-rays {
@@ -2385,13 +2475,18 @@ html[data-mono="light"] .stage-grid {
   padding-top: 2px;
 }
 
-.arbiter-actions button {
+/*
+ * :not(.btn-primary) because a filled accent button in this row takes its
+ * label from --accent-ink. A bare type selector here outranks .btn-primary,
+ * and the label rendered in the page grey on top of the accent: 1.07:1.
+ */
+.arbiter-actions button:not(.btn-primary) {
   padding: 6px 12px;
   font-size: 12px;
   color: var(--muted);
 }
 
-.arbiter-actions button:hover { color: var(--ink); }
+.arbiter-actions button:not(.btn-primary):hover { color: var(--ink); }
 
 .arbiter-actions .sd-toggle[aria-pressed="true"] {
   background: var(--accent-soft);

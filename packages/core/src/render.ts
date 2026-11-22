@@ -35,6 +35,16 @@ import { castMember } from './cast.js';
  */
 export type RenderStyle = 'flat' | 'sticker' | 'glow' | 'dots' | 'line' | 'candy' | 'emoji';
 
+/**
+ * How the drawing moves.
+ *
+ * - `demo` — the idle loop plays on its own: a breath, a small sway, a blink.
+ *
+ * One value, because there is one loop worth drawing. Anything else (a hop, a
+ * spin) is a one-shot a host drives, not a resting state.
+ */
+export type MotionMode = 'demo';
+
 export interface RenderOptions {
   /** A body id from BODIES. */
   body?: string;
@@ -49,6 +59,11 @@ export interface RenderOptions {
   outline?: boolean;
   /** Finish. Defaults to flat. */
   style?: RenderStyle;
+  /**
+   * Play the idle loop: a breath, a sway and an occasional blink, drawn by CSS
+   * that ships inside the SVG. Absent means a still drawing.
+   */
+  motion?: MotionMode;
 }
 
 /** Render a cast member by id, with an optional expression override. */
@@ -57,12 +72,41 @@ export interface CastRenderOptions {
   state?: string;
   size?: number;
   style?: RenderStyle;
+  /** Same idle loop as RenderOptions.motion. */
+  motion?: MotionMode;
 }
 
 const DARK_INK = '#1F1F1F';
 const LIGHT_INK = '#FFFFFF';
 
 const SURFACE_TRAITS = new Set(['blush', 'freckles', 'spots', 'stripes', 'patch', 'starfield', 'none']);
+
+/**
+ * Eyes that can blink.
+ *
+ * A drawn-closed eye is already shut, and a line is already a line: squashing
+ * either towards its own centre reads as a twitch, not as a blink. The half
+ * lid stays in, because closing it the rest of the way is what a tired blink
+ * looks like.
+ */
+const BLINKABLE = new Set<EyeStyle>(['dot', 'wide', 'pill', 'heart', 'star', 'half']);
+
+/**
+ * The idle loop, baked into the drawing itself.
+ *
+ * It lives inside the SVG rather than in a host stylesheet so the same markup
+ * is alive wherever it lands: spliced in as innerHTML, serialised into a data
+ * URL, or drawn by the custom element. Everything it touches is a transform on
+ * two groups, so a frame costs no layout and no path re-render. The two
+ * animations share a period and are offset by the delay the host can set.
+ */
+const MOTION_STYLE = '<style>' +
+  '.et-breathe{animation:et-breathe 4.8s cubic-bezier(.37,0,.63,1) infinite;transform-origin:50px 94px}' +
+  '.et-eyes{animation:et-blink 4.8s linear infinite}' +
+  '@keyframes et-breathe{0%,100%{transform:scale(1) rotate(0)}50%{transform:scale(1.03) rotate(-.8deg)}}' +
+  '@keyframes et-blink{0%,93%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}' +
+  '@media (prefers-reduced-motion:reduce){.et-breathe,.et-eyes{animation:none}}' +
+  '</style>';
 
 /**
  * The face is never the same colour as the body.
@@ -200,8 +244,21 @@ function brow(style: string, x: number, y: number, s: number, ink: string, weigh
   }
 }
 
-/** The face of one expression, positioned inside the body. */
-export function renderFace(state: string, face: { x: number; y: number }, ink: string, baseEyeScale = 1, weight = 1): string {
+/**
+ * The face of one expression, positioned inside the body.
+ *
+ * `motion: 'demo'` groups the two eyes so the idle loop can blink them. The
+ * group carries its own transform origin (the eye line) as an inline style,
+ * because that origin depends on the body the face sits on.
+ */
+export function renderFace(
+  state: string,
+  face: { x: number; y: number },
+  ink: string,
+  baseEyeScale = 1,
+  weight = 1,
+  motion?: MotionMode,
+): string {
   const spec = faceFor(state);
   /*
    * The face never turns: a character that looks to the side at a stranger
@@ -228,7 +285,11 @@ export function renderFace(state: string, face: { x: number; y: number }, ink: s
   const ms = baseEyeScale * (1 + ((spec.mouthScale ?? 1) - 1) * SCALE);
   const leftEye = eye(spec.eye, dx - 14.5 * baseEyeScale + wob, dy - 3 + wob * 0.4, es, ink, weight);
   const rightEye = eye(spec.eye, dx + 14.5 * baseEyeScale - wob * 0.7, dy - 3 - wob * 0.3, es * (spec.eyeAsym ?? 1), ink, weight);
-  const parts = [leftEye, rightEye, mouth(spec.mouth, dx - wob * 0.5, dy + 12, ms, ink, weight)];
+  let eyes = leftEye + rightEye;
+  if (motion === 'demo' && BLINKABLE.has(spec.eye)) {
+    eyes = `<g class="et-eyes" style="transform-origin:${dx.toFixed(1)}px ${(dy - 3).toFixed(1)}px">${eyes}</g>`;
+  }
+  const parts = [eyes, mouth(spec.mouth, dx - wob * 0.5, dy + 12, ms, ink, weight)];
   if (spec.brow) parts.push(brow(spec.brow, dx, dy - 14 * baseEyeScale, baseEyeScale, ink, weight));
   if (shake > 0) {
     // Two motion ticks at the temples: the drawn half of a tremble.
@@ -279,6 +340,7 @@ export function renderCharacter(options: RenderOptions): string {
   const head = traits.filter((t) => !SURFACE_TRAITS.has(t) && TRAITS[t]);
 
   const style = options.style ?? 'flat';
+  const motion = options.motion;
   const dark = shade(bodyHex, style === 'flat' ? -0.1 : -0.38);
   const light = shade(bodyHex, 0.45);
 
@@ -386,16 +448,26 @@ export function renderCharacter(options: RenderOptions): string {
     shell = `<path d="${body.path}" fill="${bodyHex}"${fat}/>`;
   }
 
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="emoji-tot">`,
-    defs,
+  /*
+   * The idle loop wraps the finished layers in one group, so a host can pause
+   * it by pausing one animation and a data URL still moves. The <defs> stays
+   * outside the moving group: gradients and clip paths are geometry, not
+   * something to re-evaluate per frame.
+   */
+  const layers = [
     behind,
     shell,
     partsOver,
     renderTraits(surfaces, { ink, fill: bodyHex, body }),
-    renderFace(options.state, body.face, ink, body.eyeScale ?? 1, style === 'dots' ? 1.7 : style === 'line' ? 1.15 : 1),
+    renderFace(options.state, body.face, ink, body.eyeScale ?? 1, style === 'dots' ? 1.7 : style === 'line' ? 1.15 : 1, motion),
     renderTraits(head, { ink, fill: bodyHex, body }),
     over,
+  ].join('');
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="emoji-tot">`,
+    defs,
+    motion === 'demo' ? MOTION_STYLE : '',
+    motion === 'demo' ? `<g class="et-breathe">${layers}</g>` : layers,
     `</svg>`,
   ].join('');
 }
@@ -413,6 +485,7 @@ export function renderCast(options: CastRenderOptions): string {
     state: options.state ?? member.face ?? 'idle',
     size: options.size ?? 96,
     style: options.style,
+    motion: options.motion,
   });
 }
 

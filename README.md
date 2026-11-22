@@ -6,6 +6,11 @@
 
 [控制台](https://onestar1107.github.io/emoji-tot/#/console) · [表情馆](https://onestar1107.github.io/emoji-tot/#/gallery) · [场景](https://onestar1107.github.io/emoji-tot/#/scene) · [文档](https://onestar1107.github.io/emoji-tot/#/docs) · [English](README.en.md)
 
+![最新版本](https://img.shields.io/github/v/release/OneStar1107/emoji-tot?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&color=8b5cf6)
+![平台](https://img.shields.io/badge/Windows-10%20%2F%2011-2563eb)
+![许可](https://img.shields.io/badge/License-Noncommercial-10b981)
+![技术栈](https://img.shields.io/badge/Electron-45-a855f7)
+
 ![全家福](docs/screenshots/hero.png)
 
 </div>
@@ -32,11 +37,11 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.0.8.9.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.9/EmojiTot.Setup.0.8.9.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.0.8.9.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.9/EmojiTot.0.8.9.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.0.8.10.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.10/EmojiTot.Setup.0.8.10.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.0.8.10.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.10/EmojiTot.0.8.10.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
-Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.9<!--/facts-->
+Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.10<!--/facts-->
 
 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护；它指向的版本还没打标签时链接会 404，从「全部版本」里取当前已发布的那一版。
 
@@ -82,12 +87,14 @@ pnpm smoke:desktop          # 启动真实 Electron 窗口做烟测
 - **验收**：`pnpm check` —— 类型、构建、测试、文档一致性、站点、窗口烟测、依赖审计与敏感信息扫描。
 - **反馈**：[Issues](https://github.com/OneStar1107/emoji-tot/issues)
 
-## 许可
+## 开源与许可
 
-**MIT。** 代码、形状、表情全部由本仓库自行实现：可以商用、可以闭源、可以再分发，保留版权声明即可。
+**源码公开，但不可商用。** 个人学习、研究、自用、改着玩都没问题；把它打包卖钱、放进收费产品、做成带广告的服务，这些都不行——想商用请先来谈授权。
 
-灵动岛的窗口与媒体桥方案来自对公开 MIT 项目的调研，代码按本项目风格重写；调研结论与许可证核对见 [docs/RESEARCH.md](docs/RESEARCH.md)。
+本许可**不授予服务商标使用权**：EmojiTot 这个名字、角色和画风是本项目的标识，别人用了也不代表与我合作或经我认证。
 
----
+第三方依赖各自沿用其原有许可，详见 [LICENSE](LICENSE) 与 [docs/RESEARCH.md](docs/RESEARCH.md) 里的依赖说明。
 
-Made by [OneStar1107](https://github.com/OneStar1107) · [MIT](LICENSE)
+------
+
+Made by [OneStar1107](https://github.com/OneStar1107) · [EmojiTot Noncommercial License](LICENSE)

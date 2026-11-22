@@ -491,15 +491,30 @@ guard.claim('ball', win.webContents);
     setClickThrough(clickThrough);
     applyIslandShape();
   });
-  /* Every morph step and every pill resize lands here. setShape is a Win32
-     region update, so it is bound to the window's own resize rather than to a
-     timer: one region rebuild per frame while the box moves, none when it is
-     still. */
-  win.on('resize', applyIslandShape);
+  /*
+   * One region rebuild after the box stops moving, not one per frame.
+   *
+   * setShape is a Win32 region update and the morph resizes the window 60
+   * times a second, so binding it directly to 'resize' made every open rebuild
+   * the region 25+ times — measurable as the material lagging a beat behind
+   * the pill. An 80ms trailing edge is below what the eye catches on a 400ms
+   * open, and the window paints its own rounded card regardless, so the
+   * shape only has to be right once the animation lands.
+   */
+  let shapeTimer = 0;
+  win.on('resize', () => {
+    if (shapeTimer) clearTimeout(shapeTimer);
+    shapeTimer = setTimeout(() => {
+      shapeTimer = 0;
+      applyIslandShape();
+    }, 80);
+  });
   win.on('moved', () => {
     if (!dockSide) savePrefs();
   });
   win.on('closed', () => {
+    if (shapeTimer) clearTimeout(shapeTimer);
+    shapeTimer = 0;
     win = null;
   });
 }
@@ -2023,6 +2038,30 @@ function startServices() {
     }
     return true;
   }, { maxBytes: 32 });
+
+  /*
+   * The device order, on its own narrow channel.
+   *
+   * Pinning and hiding rebuild the group from readPrefs() so a stale renderer
+   * snapshot cannot wipe a change made in the island; the drag order went the
+   * other way (a whole-group overwrite from the settings window) and could
+   * undo a pin that arrived between paint and drop. Same rebuild here: the
+   * renderer sends names, main owns the group.
+   */
+  guard.guardedHandle('settings:devices-order', ['settings'], (names) => {
+    if (!Array.isArray(names)) return null;
+    const clean = [];
+    for (const name of names.slice(0, 200)) {
+      if (!checkDeviceName(name)) return null;
+      if (!clean.includes(name)) clean.push(name);
+    }
+    const current = readPrefs();
+    settings.applyPatch({ devices: { ...(current.devices || {}), order: clean } });
+    return readPrefs();
+  }, {
+    check: (names) => (Array.isArray(names) ? names : undefined),
+    maxBytes: 8192,
+  });
 
   guard.guardedHandle('settings:devices-pin', ['settings'], (name) => writeDevicePin(name), {
     check: checkDeviceName,

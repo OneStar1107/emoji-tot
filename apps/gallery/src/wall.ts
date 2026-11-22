@@ -33,7 +33,7 @@ function castTile(id: string, index: number, feature: boolean): string {
     return '<button type="button" class="tile is-feature" data-cast="' + id + '" data-motion="' + member.motion +
       '" title="' + member.desc + '">' +
       '<span class="tile-id">' + String(index + 1).padStart(2, '0') + ' / ' + String(CAST.length).padStart(2, '0') + '</span>' +
-      '<span class="tile-art">' + renderCast({ id, state: member.face, size: 220 }) + '</span>' +
+      '<span class="tile-art">' + renderCast({ id, state: member.face, size: 220, motion: 'demo' }) + '</span>' +
       '<span class="tile-name">' + name + '</span>' +
       '<span class="tile-sub">' + sub + ' · ' + member.body + '</span>' +
       '</button>';
@@ -41,7 +41,7 @@ function castTile(id: string, index: number, feature: boolean): string {
   return '<button type="button" class="tile" data-cast="' + id + '" data-motion="' + member.motion + '" title="' +
     member.desc + '">' +
     '<span class="tile-id">' + String(index + 1).padStart(2, '0') + '</span>' +
-    '<span class="tile-art">' + renderCast({ id, state: member.face, size: 96 }) + '</span>' +
+    '<span class="tile-art">' + renderCast({ id, state: member.face, size: 96, motion: 'demo' }) + '</span>' +
     '<span class="tile-name">' + name + '</span>' +
     '</button>';
 }
@@ -67,7 +67,7 @@ function faceTile(id: string): string {
   return '<button type="button" class="tile" data-state="' + id + '" data-id="' + id +
     '" data-motion="pop" aria-haspopup="dialog" title="' + faceLabel(id) + (fid ? ' · #' + fid : '') + '">' +
     '<span class="tile-id">' + (fid ? '#' + fid : '') + '</span>' +
-    '<span class="tile-art">' + renderCast({ id: 'tot', state: id, size: 76 }) + '</span>' +
+    '<span class="tile-art">' + renderCast({ id: 'tot', state: id, size: 76, motion: 'demo' }) + '</span>' +
     '<span class="tile-name">' + faceLabel(id) + '</span>' +
     '</button>';
 }
@@ -140,7 +140,7 @@ export function createWall(): View {
     return '<div class="lightbox-body" data-lightbox-body>' +
       '<button type="button" class="lb-arrow lb-prev" data-lightbox-prev aria-label="previous">‹</button>' +
       '<button type="button" class="lb-arrow lb-next" data-lightbox-next aria-label="next">›</button>' +
-      '<div class="lightbox-art">' + renderCast({ id: 'tot', state, size: 220 }) + '</div>' +
+      '<div class="lightbox-art">' + renderCast({ id: 'tot', state, size: 220, motion: 'demo' }) + '</div>' +
       '<b class="lightbox-name">' + faceLabel(state) + '</b>' +
       '<span class="lightbox-id">' + (id ? '#' + id + ' · ' : '') + '<code>' + state + '</code>' +
       '<span>' + String(lightboxIndex + 1) + ' / ' + String(lightboxList.length) + '</span></span>' +
@@ -345,6 +345,30 @@ export function createWall(): View {
     }, 260);
   }
 
+  /*
+   * Only the cards on screen animate.
+   *
+   * Sixty-one idle loops is sixty-one SVG groups animating at once, and most
+   * of them are below the fold. An IntersectionObserver is the one thing that
+   * decides which cards play: a card that scrolls away is paused rather than
+   * merely skipped at paint. The phase offset starts each card partway through
+   * its cycle, so the wall does not breathe in unison.
+   */
+  const live = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const tile = entry.target as HTMLElement;
+      if (entry.isIntersecting) tile.setAttribute('data-live', '');
+      else tile.removeAttribute('data-live');
+    }
+  }, { rootMargin: '140px 0px' });
+
+  function markLiveTiles(): void {
+    grid.querySelectorAll<HTMLElement>('.tile').forEach((tile, index) => {
+      tile.style.setProperty('--phase', String(index % 12));
+      live.observe(tile);
+    });
+  }
+
   function paintGrid(animate = false, stagger = false): void {
     const keep = new Set<string>();
     let html = '';
@@ -373,6 +397,7 @@ export function createWall(): View {
     }
     const ghost = animate ? ghostLayer() : null;
     grid.innerHTML = html;
+    markLiveTiles();
     if (ghost) scheduleGhostExit(ghost, keep);
   }
 
@@ -501,6 +526,7 @@ export function createWall(): View {
       grid.removeEventListener('keydown', onGridKey);
       if (spotFrame) window.cancelAnimationFrame(spotFrame);
       spotFrame = 0;
+      live.disconnect();
       if (ghostTimer) {
         window.clearTimeout(ghostTimer);
         ghostTimer = 0;

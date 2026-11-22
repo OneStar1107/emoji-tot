@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   devicesWatch: (active) => ipcRenderer.invoke('settings:devices-watch', active === true),
   /** Main owns the three-pin cap; it replies with the merged prefs. */
   pinDevice: (name) => ipcRenderer.invoke('settings:devices-pin', name),
+  /* Names only: main rebuilds the devices group from its own copy, so a drag
+     that raced a pin from the island cannot undo it. */
+  orderDevices: (names) => ipcRenderer.invoke('settings:devices-order', names),
   /** Show or hide one device on the island, by name; replies with merged prefs. */
   hideDevice: (name, hidden) => ipcRenderer.invoke('settings:devices-hidden', { name, hidden: hidden === true }),
   onDevices: (listener) => on('settings:devices', listener),

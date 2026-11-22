@@ -19,7 +19,7 @@ export { LEXICON, lexiconEntry } from './lexicon.js';
 export type { LexiconEntry } from './lexicon.js';
 export { COLORS, COLOR_IDS, COLOR_ZH, colorHex } from './palette.js';
 export { renderCharacter, renderCast, renderFace, renderDataUrl, inkFor } from './render.js';
-export type { RenderOptions, RenderStyle, CastRenderOptions } from './render.js';
+export type { RenderOptions, RenderStyle, CastRenderOptions, MotionMode } from './render.js';
 
 /* The old hand-drawn shapes remain exported for stored preferences. */
 export { SHAPES, SHAPE_IDS, getShape, shapePreview } from './shapes.js';

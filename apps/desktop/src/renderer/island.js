@@ -10,6 +10,7 @@ import {
   STATUS_MANIFEST as STATUS_ITEMS,
   orderDevices,
   visibleDevices,
+  DEVICE_PIN_LIMIT,
 } from '../shared/schema.js';
 /*
  * 读数怎么长只写一份：设置页的「常驻排列」预览条读的是同一组函数。
@@ -1218,11 +1219,11 @@ function weatherPage() {
    * how far down the map the locator got. A place without one (an IP-only
    * answer, or a city a person picked by hand) falls back to the city name.
    */
-  const district = placeZh(weather.place.district || '');
-  const cityName = placeZh(weather.place.name || '');
+  const district = placeZh(weather.place?.district || '');
+  const cityName = placeZh(weather.place?.name || '');
   const place = escapeHtml(district || cityName || '当前位置');
   const subtitle = district && cityName && district !== cityName ? ' · ' + escapeHtml(cityName) : '';
-  const country = (subtitle || '') + (weather.place.country ? ' · ' + escapeHtml(countryZh(weather.place.country)) : '');
+  const country = (subtitle || '') + (weather.place?.country ? ' · ' + escapeHtml(countryZh(weather.place.country)) : '');
   const sunrise = (now.sunrise || '').slice(11, 16) || '--:--';
   const sunset = (now.sunset || '').slice(11, 16) || '--:--';
   const updated = weather.fetchedAt ? ' · ' + timeOf(weather.fetchedAt) + ' 更新' : '';
@@ -2309,7 +2310,9 @@ const DEVICE_SOURCE_LABEL = {
  */
 const DEVICE_ROWS = 5;
 /** Three pins fit above the unpinned rows without pushing the fifth row out. */
-const DEVICE_PINS = 3;
+/* The limit lives in the schema; a second copy here drifts the first time it
+   changes. Wired through the existing import block. */
+const DEVICE_PINS = DEVICE_PIN_LIMIT;
 
 /**
  * Battery first, devices second.
@@ -2647,27 +2650,6 @@ function renderPage(animate = false) {
     measure();
     return;
   }
-  if (!list.length) {
-    document.body.dataset.pages = '0';
-    /* Write the inner span, never the host: textContent on #page-title would
-       delete the span the marquee needs, and every later render would find
-       nothing to write into. */
-    const titleText = titleEl.firstElementChild;
-    if (titleText) titleText.textContent = '还没有页面';
-    titleEl.dataset.over = 'false';
-    const subText = subEl.firstElementChild;
-    if (subText) subText.textContent = '去设置里打开';
-    subEl.dataset.muted = 'false';
-    subEl.dataset.over = 'false';
-    pagesEl.innerHTML = stateBlock('warn', '页面都是关的', '在设置 → 页面管理里打开', '打开设置', 'data-action="settings:pages"');
-    dotsEl.innerHTML = '';
-    dotsEl.hidden = true;
-    for (const pager of document.querySelectorAll('.pager')) {
-      pager.hidden = true;
-    }
-    measure();
-    return;
-  }
   // Wrapping, not clamping: the arrows are a carousel, not a dead end.
   pageIndex = ((pageIndex % list.length) + list.length) % list.length;
   // One page means the paging arrows would be dead controls.
@@ -2795,6 +2777,8 @@ const MORPH_OPEN = { durW: 240, durH: 340, delayW: 0, delayH: 60, total: 400 };
 const MORPH_CLOSE = { durW: 210, durH: 190, delayW: 30, delayH: 0, total: 240 };
 
 let morphFrame = 0;
+/** Fires if the rAF chain dies mid-flight (hidden or occluded window). */
+let morphGuard = 0;
 /** True from the moment a fold starts until the pill is the surface again. */
 let closing = false;
 
@@ -2848,6 +2832,8 @@ function panelRadius() {
 function stopMorph() {
   if (morphFrame) cancelAnimationFrame(morphFrame);
   morphFrame = 0;
+  if (morphGuard) clearTimeout(morphGuard);
+  morphGuard = 0;
   morph = null;
   islandEl.style.transition = '';
   panelEl.style.transform = '';
@@ -2979,13 +2965,31 @@ function startMorph(open, from, fold) {
     const m = morph;
     if (!m) return;
     const t = now - m.startedAt;
-    const w = m.fromW + (m.toW - m.fromW) * easeMorph((t - clock.delayW) / clock.durW);
-    const h = m.fromH + (m.toH - m.fromH) * easeMorph((t - clock.delayH) / clock.durH);
+    /* The 1.02 overshoot is a "grow past the target then settle" gesture; run
+       backwards it means the fold ends 5px narrower than the pill it lands on,
+       and the last frames of the close read as a squeeze. Clamp the shrinking
+       direction, keep the bounce on the way out. */
+    const easeW = easeMorph((t - clock.delayW) / clock.durW);
+    const easeH = easeMorph((t - clock.delayH) / clock.durH);
+    const w = m.fromW + (m.toW - m.fromW) * (m.open ? easeW : Math.min(1, easeW));
+    const h = m.fromH + (m.toH - m.fromH) * (m.open ? easeH : Math.min(1, easeH));
     paintMorph(w, h, t);
     if (t >= clock.total) settleMorph();
     else morphFrame = requestAnimationFrame(step);
   };
   morphFrame = requestAnimationFrame(step);
+  /*
+   * rAF stops when the window is hidden or fully occluded, and a stopped
+   * chain leaves `morph` set — syncSize() and requestGlass() both
+   * short-circuit on it, so the window would keep the old box until the next
+   * open. measure() already learned this and moved to a microtask; the morph
+   * gets the same guard, one tick after the clock would have finished.
+   */
+  if (morphGuard) clearTimeout(morphGuard);
+  morphGuard = setTimeout(() => {
+    morphGuard = 0;
+    if (morph) settleMorph();
+  }, clock.total + 120);
   return true;
 }
 

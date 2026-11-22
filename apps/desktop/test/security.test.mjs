@@ -256,8 +256,9 @@ describe('privacy: sensitive stores', () => {
     /* The place line now leads with the district, so the escape sits on the
        composite: both names come from the same external place object. */
     assert.match(island, /escapeHtml\(\s*district \|\| cityName/);
-    assert.match(island, /placeZh\(weather\.place\.district/);
-    assert.match(island, /placeZh\(weather\.place\.name/);
+    /* Optional chaining: a cached place from an older shape may be absent. */
+    assert.match(island, /placeZh\(weather\.place\?\.district/);
+    assert.match(island, /placeZh\(weather\.place\?\.name/);
     assert.match(island, /escapeHtml\(\s*countryZh\(weather\.place\.country\)/);
     assert.ok(!island.includes('<b>${now.text}</b>'), 'weather description must not be interpolated raw');
   });
