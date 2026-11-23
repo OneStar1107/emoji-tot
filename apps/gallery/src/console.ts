@@ -11,7 +11,12 @@
  * stage floor, and the expression strip. The code block only flashes when the
  * text it shows actually changed — a flash on every re-render is noise.
  */
-import { CAST, FACE_META, castMember, renderCast, renderCharacter } from '@emojitot/core';
+import { CAST, FACE_META, castMember, faceMeta, renderCast, renderCharacter } from '@emojitot/core';
+import {
+  createCharacterRuntime,
+  type CharacterRuntime,
+  type CharacterRuntimeSnapshot,
+} from '@emojitot/core/runtime';
 import { EMOTIONS } from '@emojitot/protocol';
 import { createDrawer } from './drawer';
 import { faceId, faceLabel } from './faces';
@@ -28,8 +33,22 @@ const SIZES = [220, 360, 480];
 /** Where the chosen stage size survives a page change. */
 const SIZE_KEY = 'es.stage.size';
 
-/** How far the character may lean toward the pointer, in CSS pixels. */
-const LOOK_RANGE = 6;
+/** Persistent motion is an accessibility preference, so it survives routes. */
+const MOTION_KEY = 'es.motion.paused';
+
+const SIGNAL_STATES = new Set(['alerting', 'notifying', 'refusing', 'error']);
+
+function stateFamily(state: string): 'life' | 'emotion' | 'agent' | 'signal' {
+  return SIGNAL_STATES.has(state) ? 'signal' : faceMeta(state).group;
+}
+
+function storedMotionPaused(): boolean {
+  try {
+    return localStorage.getItem(MOTION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function storedSize(): number {
   try {
@@ -185,7 +204,9 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
           <span class="stage-badge" data-stage-badge>path · closed</span>
           <span class="stage-id" data-stage-id>${faceId(look.state) ? '#' + faceId(look.state) : '—'}</span>
           <div class="stage-center">
-            <div class="hero" data-hero><div class="hero-art">${hero()}</div></div>
+            <div class="hero" data-hero>
+              <div class="hero-art"><div class="hero-runtime" data-runtime-host>${hero()}</div></div>
+            </div>
             <div class="stage-label">
               <span class="stage-name" data-stage-name></span>
             </div>
@@ -208,6 +229,22 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
             <div class="who" id="who"></div>
           </div>
         </div>
+
+        <section class="motion-deck" data-motion-deck data-family="${stateFamily(look.state)}" aria-label="${t('console.runtime')}">
+          <div class="motion-deck-title">
+            <span class="motion-live"><i aria-hidden="true"></i>${t('console.runtime')}</span>
+            <span class="motion-transition"><b data-readout-name>${faceLabel(look.state)}</b><code data-readout-state>${look.state}</code></span>
+          </div>
+          <dl class="motion-meters">
+            <div><dt>${t('console.runtime.eye')}</dt><dd data-readout-eye>pill</dd></div>
+            <div><dt>${t('console.runtime.tilt')}</dt><dd data-readout-tilt>0.0°</dd></div>
+            <div><dt>${t('console.runtime.lift')}</dt><dd data-readout-lift>0.0</dd></div>
+          </dl>
+          <button type="button" class="motion-pause" data-motion-pause aria-pressed="${storedMotionPaused()}">
+            <span class="motion-pause-icon" aria-hidden="true"></span>
+            <span data-pause-label>${t(storedMotionPaused() ? 'console.motion.resume' : 'console.motion.pause')}</span>
+          </button>
+        </section>
 
         <div class="face-strip">
           <div class="strip-head">
@@ -258,18 +295,28 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
 
   const stage = el.querySelector<HTMLElement>('#stage')!;
   const heroEl = el.querySelector<HTMLElement>('[data-hero]')!;
+  const heroRuntimeEl = el.querySelector<HTMLElement>('[data-runtime-host]')!;
   const who = el.querySelector<HTMLElement>('#who')!;
   const faceGrid = el.querySelector<HTMLElement>('#faceGrid')!;
   const snippetEl = el.querySelector<HTMLElement>('[data-snippet]')!;
   const genomeEl = el.querySelector<HTMLElement>('[data-genome]')!;
   const stageId = el.querySelector<HTMLElement>('[data-stage-id]')!;
   const stageName = el.querySelector<HTMLElement>('[data-stage-name]')!;
+  const motionDeck = el.querySelector<HTMLElement>('[data-motion-deck]')!;
+  const pauseButton = el.querySelector<HTMLButtonElement>('[data-motion-pause]')!;
+  const pauseLabel = el.querySelector<HTMLElement>('[data-pause-label]')!;
+  const readoutName = el.querySelector<HTMLElement>('[data-readout-name]')!;
+  const readoutState = el.querySelector<HTMLElement>('[data-readout-state]')!;
+  const readoutEye = el.querySelector<HTMLElement>('[data-readout-eye]')!;
+  const readoutTilt = el.querySelector<HTMLElement>('[data-readout-tilt]')!;
+  const readoutLift = el.querySelector<HTMLElement>('[data-readout-lift]')!;
 
   /** Timers this view owns; dispose() clears them. */
   const timers = new Set<number>();
 
-  /** What the stage shows, so a real change can be told from a repaint. */
-  let shownState = look.state;
+  let motionPaused = storedMotionPaused();
+  let runtime: CharacterRuntime | null = null;
+  let runtimeKey = '';
 
   /** The genome the chips were drawn from; the chip art is that genome. */
   let chipGenome = '';
@@ -280,23 +327,15 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
   /* --- the pointer moves the character and the key light --------------- */
 
   /*
-   * The stage writes four custom properties and nothing else.
-   *
-   * pointermove can fire far more often than the screen refreshes, so the
-   * handler only records the latest position and one rAF per frame does the
-   * write. Setting attributes or rebuilding the SVG here would cost a layout
-   * per event for an effect that is a couple of pixels.
+   * Pointer movement feeds the runtime's spring instead of rebuilding the SVG.
+   * The key light still gets one rAF-coalesced write per frame.
    */
-  let lookX = 0;
-  let lookY = 0;
   let spotX = 50;
   let spotY = 24;
   let lookFrame = 0;
 
   function paintLook(): void {
     lookFrame = 0;
-    heroEl.style.setProperty('--look-x', lookX + 'px');
-    heroEl.style.setProperty('--look-y', lookY + 'px');
     stage.style.setProperty('--spot-x', spotX.toFixed(1) + '%');
     stage.style.setProperty('--spot-y', spotY.toFixed(1) + '%');
   }
@@ -311,16 +350,14 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     const clamp = (value: number): number => Math.max(-1, Math.min(1, value));
     const x = clamp(((event.clientX - rect.left) / rect.width) * 2 - 1);
     const y = clamp(((event.clientY - rect.top) / rect.height) * 2 - 1);
-    lookX = Math.round(x * LOOK_RANGE * 100) / 100;
-    lookY = Math.round(y * LOOK_RANGE * 100) / 100;
+    runtime?.setPointer(x, y);
     spotX = ((event.clientX - rect.left) / rect.width) * 100;
     spotY = ((event.clientY - rect.top) / rect.height) * 100;
     queueLook();
   }
 
   function resetLook(): void {
-    lookX = 0;
-    lookY = 0;
+    runtime?.setPointer(0, 0);
     spotX = 50;
     spotY = 24;
     queueLook();
@@ -351,16 +388,61 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     timers.add(id);
   }
 
-  /** Mark the hero for one 220ms expression cross-fade. */
-  function swapFace(): void {
-    heroEl.removeAttribute('data-swap');
-    void heroEl.offsetWidth;
-    heroEl.setAttribute('data-swap', '');
-    const id = window.setTimeout(() => {
-      timers.delete(id);
-      heroEl.removeAttribute('data-swap');
-    }, 220);
-    timers.add(id);
+  function syncMotionUi(snapshot: CharacterRuntimeSnapshot): void {
+    motionPaused = snapshot.paused;
+    pauseButton.setAttribute('aria-pressed', String(snapshot.paused));
+    pauseLabel.textContent = t(
+      snapshot.paused ? 'console.motion.resume' : 'console.motion.pause',
+    );
+    readoutName.textContent = faceLabel(snapshot.state);
+    readoutState.textContent = snapshot.state;
+    readoutEye.textContent = snapshot.eye;
+    readoutTilt.textContent = snapshot.rotation.toFixed(1) + '°';
+    readoutLift.textContent = snapshot.lift.toFixed(1);
+    motionDeck.dataset.family = stateFamily(snapshot.state);
+    stage.dataset.family = stateFamily(snapshot.state);
+    for (const button of el.querySelectorAll<HTMLButtonElement>('[data-act]')) {
+      button.disabled = snapshot.paused || snapshot.reducedMotion;
+    }
+  }
+
+  function runtimeSignature(): string {
+    return JSON.stringify([
+      look.cast,
+      look.body,
+      look.color,
+      look.traits,
+      look.finish,
+      stageSize,
+    ]);
+  }
+
+  function mountRuntime(): void {
+    runtime?.destroy();
+    runtimeKey = runtimeSignature();
+    runtime = createCharacterRuntime(heroRuntimeEl, {
+      cast: look.cast || undefined,
+      body: look.body,
+      color: look.color,
+      traits: look.traits,
+      state: look.state,
+      size: stageSize,
+      style: look.finish,
+      paused: motionPaused,
+      followPointer: false,
+      onTelemetry: syncMotionUi,
+    });
+  }
+
+  function setMotionPaused(next: boolean): void {
+    motionPaused = next;
+    runtime?.setPaused(next);
+    try {
+      localStorage.setItem(MOTION_KEY, next ? '1' : '0');
+    } catch {
+      /* private mode */
+    }
+    if (runtime) syncMotionUi(runtime.snapshot());
   }
 
   function paintFaces(): void {
@@ -380,14 +462,20 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     const change = {
       snippet: snippetEl.textContent !== nextSnippet,
       genome: genomeEl.textContent !== nextGenome,
-      state: shownState !== look.state,
     };
-    shownState = look.state;
 
-    heroEl.innerHTML = '<div class="hero-art">' + hero() + '</div>';
-    if (change.state) swapFace();
+    const signature = runtimeSignature();
+    if (!runtime || signature !== runtimeKey) {
+      mountRuntime();
+    } else {
+      runtime.setState(look.state, 'console');
+    }
 
     stage.className = 'stage ' + backgroundClass();
+    stage.dataset.family = stateFamily(look.state);
+    motionDeck.dataset.family = stateFamily(look.state);
+    readoutName.textContent = faceLabel(look.state);
+    readoutState.textContent = look.state;
     if (change.snippet) {
       snippetEl.textContent = nextSnippet;
       flash(snippetEl.closest('.code-card'));
@@ -475,28 +563,12 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     }
   }
 
-  /**
-   * Play one of the three stage effects.
-   *
-   * The class comes off on a timer instead of staying on the element: a
-   * leftover fx-* class is a finished animation that replays the moment the
-   * hero re-renders for another reason — changing the face removes data-swap
-   * after 220ms and hands the animation property back to it, so the character
-   * would spin again on its own right after the expression changed.
-   */
-  function playFx(act: string): void {
-    const fx = act === 'spin' ? 'fx-spin' : act === 'bounce' ? 'fx-bounce' : 'fx-burst';
-    heroEl.classList.remove('fx-spin', 'fx-bounce', 'fx-burst');
-    void heroEl.offsetWidth;
-    heroEl.classList.add(fx);
-    const id = window.setTimeout(() => {
-      timers.delete(id);
-      heroEl.classList.remove(fx);
-    }, act === 'spin' ? 900 : 700);
-    timers.add(id);
-  }
-
   el.addEventListener('click', (event) => {
+    const pause = (event.target as HTMLElement).closest<HTMLElement>('[data-motion-pause]');
+    if (pause) {
+      setMotionPaused(!motionPaused);
+      return;
+    }
     const finishBtn = (event.target as HTMLElement).closest<HTMLElement>('[data-finish]');
     if (finishBtn) {
       setLook({ finish: finishBtn.dataset.finish as 'sticker' | 'flat' });
@@ -524,7 +596,7 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     if (!target) return;
     const act = target.dataset.act;
     if (act) {
-      playFx(act);
+      if (act === 'spin' || act === 'bounce' || act === 'burst') runtime?.pulse(act);
       return;
     }
     const text = target.id === 'copy' ? snippetEl.textContent ?? '' : genomeEl.textContent ?? '';
@@ -539,6 +611,8 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     el,
     dispose(): void {
       unsubscribe();
+      runtime?.destroy();
+      runtime = null;
       stage.removeEventListener('pointermove', onStageMove);
       stage.removeEventListener('pointerleave', resetLook);
       if (lookFrame) window.cancelAnimationFrame(lookFrame);

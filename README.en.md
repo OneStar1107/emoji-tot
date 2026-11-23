@@ -20,6 +20,8 @@
 
 Three parts, all written from scratch in this repository: `packages/core` (hand-written outlines, expression vocabulary, finishes, SVG out), `packages/protocol` (two-digit ids, parsing, multi-session arbitration, event bridge), and `apps/desktop` / `apps/gallery` (the Windows app; the console / faces / scene / docs site).
 
+**There is a living rig above the static SVG.** `renderCharacter()` stays a deterministic pure function for exports, thumbnails and tests; the browser-only `createCharacterRuntime()` (`@emojitot/core/runtime`) owns state transitions, sixteen-point polygon-eye morphs, gaze, blinking and spring pose for the same character. Motion profiles, the spring integrator and transition history live in `packages/core/src/motion/`; page hosts choose a state instead of duplicating the character implementation.
+
 ## Demo
 
 ![Folded](docs/screenshots/island-folded-frost.png)
@@ -32,11 +34,11 @@ Folded, it is just a face; click it and it grows into a 420px panel in place. Th
 <!--downloads:start-->
 | File | For |
 | --- | --- |
-| [EmojiTot.Setup.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.28/EmojiTot.Setup.exe) | Installer — starts from the Start menu |
-| [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.28/EmojiTot.Portable.exe) | Portable — double-click, writes nothing to the registry |
+| [EmojiTot.Setup.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.19.3/EmojiTot.Setup.exe) | Installer — starts from the Start menu |
+| [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.19.3/EmojiTot.Portable.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
-Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases) · current <!--facts:version-->0.8.18<!--/facts-->
+Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases) · current <!--facts:version-->0.8.19<!--/facts-->
 
 The version here is kept in sync with `package.json` by `pnpm docs:sync`. If that release has not been tagged yet the links 404 — take the current published build from all releases.
 

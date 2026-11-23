@@ -56,4 +56,11 @@ contextBridge.exposeInMainWorld('petAPI', {
     ipcRenderer.on('size:changed', handler);
     return () => ipcRenderer.removeListener('size:changed', handler);
   },
+
+  /** Live motion follows the same preference object as the island. */
+  onPrefs: (listener) => {
+    const handler = (_event, prefs) => listener(prefs);
+    ipcRenderer.on('settings:changed', handler);
+    return () => ipcRenderer.removeListener('settings:changed', handler);
+  },
 });

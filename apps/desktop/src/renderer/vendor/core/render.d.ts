@@ -62,6 +62,29 @@ export interface CastRenderOptions {
  * choice per character, which is what a picker wants.
  */
 export declare function inkFor(bodyHex: string): string;
+export interface FaceLayout {
+    dx: number;
+    dy: number;
+    wobble: number;
+    eyeScale: number;
+    mouthScale: number;
+    leftX: number;
+    rightX: number;
+    eyeY: number;
+}
+/** Geometry shared by the still renderer and the live polygon-eye runtime. */
+export declare function faceLayout(state: string, face: {
+    x: number;
+    y: number;
+}, baseEyeScale?: number): FaceLayout;
+/**
+ * Everything around the eyes. The live runtime reuses this layer so a still
+ * export and an animated stage cannot describe the same state differently.
+ */
+export declare function renderFaceDetails(state: string, face: {
+    x: number;
+    y: number;
+}, ink: string, baseEyeScale?: number, weight?: number): string;
 /**
  * The face of one expression, positioned inside the body.
  *

@@ -17,10 +17,11 @@
  * ('.wall-grid-ghost') instead of a view transition, whose update callback
  * runs a task later and would leave the old count readable for a frame.
  */
-import { CAST, FACE_META, FAMILIES, castMember, renderCast } from '@emojitot/core';
+import { CAST, FACE_META, FAMILIES, castMember, faceMeta, renderCast } from '@emojitot/core';
+import { createCharacterRuntime, type CharacterRuntime } from '@emojitot/core/runtime';
 import { faceId, faceLabel } from './faces';
 import { getLang, t } from './i18n';
-import { onLookChange, selectCast } from './store';
+import { look, onLookChange, selectCast } from './store';
 import type { View } from './main';
 
 function castTile(id: string, index: number, feature: boolean): string {
@@ -51,8 +52,10 @@ let faceTileIndex = 0;
 function faceTile(id: string): string {
   const index = faceTileIndex++;
   const fid = faceId(id);
+  const group = faceMeta(id).group;
   return '<button type="button" class="tile" data-state="' + id + '" data-id="' + id +
-    '" data-motion="pop" aria-haspopup="dialog" title="' + faceLabel(id) + (fid ? ' · #' + fid : '') + '">' +
+    '" data-state-group="' + group + '" data-motion="pop" aria-haspopup="dialog" title="' +
+    faceLabel(id) + (fid ? ' · #' + fid : '') + '">' +
     '<span class="tile-id">' + (fid ? '#' + fid : '') + '</span>' +
     '<span class="tile-art">' + renderCast({ id: 'tot', state: id, size: 76, motion: 'demo' }) + '</span>' +
     '<span class="tile-name">' + faceLabel(id) + '</span>' +
@@ -69,7 +72,7 @@ export function createWall(): View {
   el.className = 'wall-view';
 
   let tab: 'cast' | 'emotion' = 'cast';
-  let family = 'all';
+  let filter = 'all';
 
   el.innerHTML = `
     <header class="page-head">
@@ -116,6 +119,8 @@ export function createWall(): View {
   let lightboxReturnFocus: HTMLElement | null = null;
   let copyTimer = 0;
   let ghostTimer = 0;
+  let featureRuntime: CharacterRuntime | null = null;
+  let lightboxRuntime: CharacterRuntime | null = null;
 
   /** The expressions the grid is showing right now, in grid order. */
   function visibleFaces(): string[] {
@@ -142,6 +147,8 @@ export function createWall(): View {
     const dialog = lightbox;
     lightbox = null;
     lightboxList = [];
+    lightboxRuntime?.destroy();
+    lightboxRuntime = null;
     document.removeEventListener('keydown', onLightboxKey);
     if (copyTimer) {
       window.clearTimeout(copyTimer);
@@ -153,17 +160,38 @@ export function createWall(): View {
     // Detach the close listener before closing: close() fires this same
     // teardown again, and a second pass would fight the first.
     dialog.removeEventListener('close', teardownLightbox);
+    dialog.removeEventListener('cancel', onLightboxCancel);
     if (dialog.open) dialog.close();
     dialog.remove();
     // Give the keyboard back to the tile the dialog was opened from.
     if (back && back.isConnected) back.focus();
+    if (back) {
+      window.setTimeout(() => {
+        if (!lightbox && back.isConnected && document.activeElement === document.body) {
+          back.focus({ preventScroll: true });
+        }
+      }, 0);
+    }
   }
 
   function closeLightbox(): void {
     const dialog = lightbox;
     if (!dialog) return;
-    if (dialog.open) dialog.close();
-    else teardownLightbox();
+    teardownLightbox();
+  }
+
+  function mountLightboxRuntime(state: string): void {
+    if (!lightbox) return;
+    const host = lightbox.querySelector<HTMLElement>('.lightbox-art');
+    if (!host) return;
+    lightboxRuntime?.destroy();
+    lightboxRuntime = createCharacterRuntime(host, {
+      cast: look.cast || 'tot',
+      state,
+      size: 220,
+      style: look.finish,
+      followPointer: false,
+    });
   }
 
   function stepLightbox(delta: number): void {
@@ -171,7 +199,10 @@ export function createWall(): View {
     if (!dialog || !lightboxList.length) return;
     lightboxIndex = (lightboxIndex + delta + lightboxList.length) % lightboxList.length;
     const state = lightboxList[lightboxIndex];
+    lightboxRuntime?.destroy();
+    lightboxRuntime = null;
     dialog.innerHTML = lightboxMarkup(state);
+    mountLightboxRuntime(state);
     dialog.setAttribute('aria-label', faceLabel(state));
     const body = dialog.querySelector<HTMLElement>('[data-lightbox-body]');
     if (body) {
@@ -193,9 +224,12 @@ export function createWall(): View {
     } else if (event.key === 'ArrowRight') {
       event.preventDefault();
       stepLightbox(1);
-    } else if (event.key === 'Escape') {
-      closeLightbox();
     }
+  }
+
+  function onLightboxCancel(event: Event): void {
+    event.preventDefault();
+    closeLightbox();
   }
 
   async function copyFromLightbox(button: HTMLButtonElement): Promise<void> {
@@ -262,27 +296,36 @@ export function createWall(): View {
     dialog.setAttribute('aria-label', faceLabel(state));
     dialog.innerHTML = lightboxMarkup(list[lightboxIndex]);
     dialog.addEventListener('close', teardownLightbox);
+    dialog.addEventListener('cancel', onLightboxCancel);
     dialog.addEventListener('click', onLightboxClick);
     document.body.append(dialog);
     lightbox = dialog;
     dialog.showModal();
+    mountLightboxRuntime(list[lightboxIndex]);
     document.addEventListener('keydown', onLightboxKey);
   }
 
   /* --- filters and grid ----------------------------------------------- */
 
   function paintFilters(): void {
-    const options = [
-      { id: 'all', label: t('wall.all') },
-      ...FAMILIES.map((item) => ({
-        id: item.id,
-        label: getLang() === 'zh' ? item.zh : item.en,
-      })),
-    ];
+    const options = tab === 'cast'
+      ? [
+          { id: 'all', label: t('wall.all') },
+          ...FAMILIES.map((item) => ({
+            id: item.id,
+            label: getLang() === 'zh' ? item.zh : item.en,
+          })),
+        ]
+      : [
+          { id: 'all', label: t('wall.all') },
+          { id: 'life', label: t('wall.group.life') },
+          { id: 'emotion', label: t('wall.group.emotion') },
+          { id: 'agent', label: t('wall.group.agent') },
+        ];
     filters.innerHTML = options.map(
       (item) =>
         '<button type="button" class="chip" data-family="' + item.id + '" aria-pressed="' +
-        (item.id === family) + '">' + item.label + '</button>',
+        (item.id === filter) + '">' + item.label + '</button>',
     ).join('');
   }
 
@@ -361,13 +404,38 @@ export function createWall(): View {
     });
   }
 
+  function teardownFeatureRuntime(): void {
+    featureRuntime?.destroy();
+    featureRuntime = null;
+  }
+
+  function mountFeatureRuntime(): void {
+    const tile = grid.querySelector<HTMLElement>('.tile.is-feature');
+    const host = tile?.querySelector<HTMLElement>('.tile-art');
+    const id = tile?.dataset.cast;
+    if (!host || !id) return;
+    const member = castMember(id);
+    if (!member) return;
+    host.querySelector('svg')?.remove();
+    const runtimeHost = document.createElement('span');
+    runtimeHost.className = 'feature-runtime';
+    host.append(runtimeHost);
+    featureRuntime = createCharacterRuntime(runtimeHost, {
+      cast: id,
+      state: member.face,
+      size: 220,
+      style: look.finish,
+      followPointer: false,
+    });
+  }
+
   function paintGrid(animate = false, stagger = false): void {
     const keep = new Set<string>();
     let html = '';
     faceTileIndex = 0;
     if (tab === 'cast') {
-      const all = family === 'all';
-      const list = all ? CAST : CAST.filter((member) => member.family === family);
+      const all = filter === 'all';
+      const list = all ? CAST : CAST.filter((member) => member.family === filter);
       list.forEach((member, index) => {
         keep.add('c:' + member.id);
         const feature = all && index === 0;
@@ -377,7 +445,9 @@ export function createWall(): View {
       if (!list.length) html = emptyMarkup();
       count.textContent = t('wall.count.cast', { n: list.length, total: CAST.length });
     } else {
-      const list = FACE_META.map((item) => item.id);
+      const list = FACE_META
+        .filter((item) => filter === 'all' || item.group === filter)
+        .map((item) => item.id);
       for (const id of list) keep.add('f:' + id);
       html = list.length
         ? list.map((id, index) => {
@@ -388,8 +458,10 @@ export function createWall(): View {
       count.textContent = t('wall.count.state', { n: list.length, total: FACE_META.length });
     }
     const ghost = animate ? ghostLayer() : null;
+    teardownFeatureRuntime();
     grid.innerHTML = html;
     markLiveTiles();
+    mountFeatureRuntime();
     if (ghost) scheduleGhostExit(ghost, keep);
   }
 
@@ -397,8 +469,7 @@ export function createWall(): View {
     for (const button of el.querySelectorAll<HTMLElement>('[data-tab]')) {
       button.setAttribute('aria-pressed', String(button.dataset.tab === tab));
     }
-    // Family filters only make sense for characters.
-    filters.hidden = tab !== 'cast';
+    filters.hidden = false;
   }
 
   /* --- pointer light --------------------------------------------------- */
@@ -479,7 +550,7 @@ export function createWall(): View {
       const tabs = el.querySelector<HTMLElement>('.wall-tabs')!;
       const hadFocus = tabs.contains(document.activeElement);
       tab = target.dataset.tab as 'cast' | 'emotion';
-      family = 'all';
+      filter = 'all';
       paintTabs();
       paintFilters();
       paintGrid(true);
@@ -488,9 +559,9 @@ export function createWall(): View {
     }
     if (target.dataset.family) {
       const hadFocus = filters.contains(document.activeElement);
-      family = target.dataset.family;
+      filter = target.dataset.family;
       paintFilters();
-      if (hadFocus) filters.querySelector<HTMLElement>('[data-family="' + family + '"]')?.focus();
+      if (hadFocus) filters.querySelector<HTMLElement>('[data-family="' + filter + '"]')?.focus();
       paintGrid(true);
       return;
     }
@@ -519,6 +590,7 @@ export function createWall(): View {
       if (spotFrame) window.cancelAnimationFrame(spotFrame);
       spotFrame = 0;
       live.disconnect();
+      teardownFeatureRuntime();
       if (ghostTimer) {
         window.clearTimeout(ghostTimer);
         ghostTimer = 0;

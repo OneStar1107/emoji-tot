@@ -103,6 +103,10 @@ let devicesWatching = false;
 /** Where the device list was scrolled, so a repaint does not jump to the top. */
 let devicesScrollTop = 0;
 
+/** Sustained previews use the live runtime; grids stay deterministic stills. */
+const liveAttrs = () =>
+  prefs.reduceMotion === true || prefs.motion === false ? ' live paused' : ' live';
+
 /* --------------------------------------------------------------- 文案 / copy */
 
 /**
@@ -735,7 +739,7 @@ function residencyCard() {
       '" role="list" aria-label="' + escapeHtml(T('pages.residency.preview')) + '">' +
       '<span class="residency-face" aria-hidden="true">' +
         '<emojitot-ball cast="' + escapeHtml(meta?.castId ?? 'tot') + '" size="30" state="' +
-          escapeHtml(faceState || 'idle') + '"></emojitot-ball>' +
+          escapeHtml(faceState || 'idle') + '"' + liveAttrs() + '></emojitot-ball>' +
       '</span>' + chips +
     '</div>' +
     '<span class="residency-mark" data-residency-mark hidden aria-hidden="true"></span>' +
@@ -1199,7 +1203,8 @@ function railCast() {
   return '<div class="rail-cast">' +
     '<button type="button" class="rail-cast-btn" data-nav="cast" aria-label="' +
       escapeHtml(T('rail.castAria', { name: member.label })) + '">' +
-      '<emojitot-ball cast="' + escapeHtml(id) + '" size="56" state="' + escapeHtml(faceState) + '"></emojitot-ball>' +
+      '<emojitot-ball cast="' + escapeHtml(id) + '" size="56" state="' + escapeHtml(faceState) +
+        '"' + liveAttrs() + '></emojitot-ball>' +
     '</button>' +
     '<b class="rail-cast-name">' + escapeHtml(member.label) + '</b></div>';
 }

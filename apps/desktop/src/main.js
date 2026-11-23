@@ -193,6 +193,8 @@ let agentArbiter = null;
 let emotionDirector = null;
 /** The preview that is currently sitting above the agent/media states. */
 let manualEmotionTimer = null;
+/** Engine-only previews have no protocol id, so they hold the bus directly. */
+let manualStatePreview = null;
 /** Is the foreground-game watcher running? It costs a PowerShell child. */
 let gamesRunning = false;
 
@@ -865,6 +867,7 @@ function endDrag() {
  * states.
  */
 function emitState(payload) {
+  if (manualStatePreview) return;
   const message = parseAgentMessage(payload);
   if (!message) return;
   // One producer, every window: the ball, the island and the settings preview
@@ -1118,15 +1121,24 @@ function handleSettingsAction({ kind, value } = {}) {
             }))
           : [],
         /*
-         * Every expression, not a shortlist: the settings page draws them as
-         * live characters, so a person picks by looking. Each emotion already
-         * carries its state name and Chinese label.
+         * Every drawable expression, not only the protocol-numbered subset.
+         * FACE_META owns the Chinese name, while EMOTIONS supplies the id when
+         * a state has a public two-digit number.
          */
-        demos: EMOTIONS.map((emotion) => ({
-          id: emotion.id,
-          label: emotion.name.zh,
-          state: emotion.state,
-        })),
+        demos: (CORE?.FACE_META?.length ? CORE.FACE_META : []).length
+          ? CORE.FACE_META.map((meta) => {
+              const emotion = EMOTIONS.find((item) => item.state === meta.id);
+              return {
+                id: emotion?.id ?? meta.id,
+                label: meta.name,
+                state: meta.id,
+              };
+            })
+          : EMOTIONS.map((emotion) => ({
+              id: emotion.id,
+              label: emotion.name.zh,
+              state: emotion.state,
+            })),
         agents: agentSnapshot(),
       };
     }
@@ -1142,10 +1154,28 @@ function handleSettingsAction({ kind, value } = {}) {
        * seconds is long enough to read the face and short enough that the
        * pet goes back to what it was actually doing on its own.
        */
-      const gate = emotions();
-      gate.set('manual', String(value));
+      const requested = String(value);
+      const emotion = EMOTIONS.find((item) => item.id === requested || item.state === requested);
       clearTimeout(manualEmotionTimer);
-      manualEmotionTimer = setTimeout(() => gate.clear('manual'), 4000);
+      manualStatePreview = null;
+      if (emotion) {
+        const gate = emotions();
+        gate.set('manual', emotion.id);
+        manualEmotionTimer = setTimeout(() => gate.clear('manual'), 4000);
+      } else {
+        /*
+         * The ten engine-only expressions have no protocol id. Preview one
+         * directly and hold the bus until the timer restores the live source.
+         */
+        manualStatePreview = requested;
+        faceBus.set(requested, 'preview');
+        manualEmotionTimer = setTimeout(() => {
+          manualStatePreview = null;
+          const current = emotions().current();
+          if (current?.emotionId) emitState({ emotionId: current.emotionId });
+          else faceBus.set('idle', 'preview');
+        }, 4000);
+      }
       return { ok: true };
     }
     case 'cast': {
@@ -2176,6 +2206,7 @@ if (!gotTheLock) {
     if (win) {
       win.webContents.on('did-finish-load', () => {
         safeSend(win, 'cast:changed', castId);
+        safeSend(win, 'settings:changed', readPrefs());
         // A reloaded ball missed every face broadcast while it was away.
         faceBus.resend();
       });
@@ -2246,6 +2277,7 @@ if (!gotTheLock) {
       if (changes.quotaReschedule) quota.reschedule();
       messenger.refresh();
       island.send('settings:changed', next);
+      if (win && !win.isDestroyed()) safeSend(win, 'settings:changed', next);
       previousPrefs = next;
     });
     // The guide opens last, over a fully booted app: its 完成 has to be able to

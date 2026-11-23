@@ -4,16 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { syncPackageVersions } from './package-version-lib.mjs';
+import {
+  SHIPPING_PACKAGE_FILES,
+  syncPackageVersions,
+} from './package-version-lib.mjs';
 
 describe('workspace package versions', () => {
   it('sets every shipping package to the public application version', () => {
     const root = mkdtempSync(join(tmpdir(), 'emojitot-package-versions-'));
-    const files = [
-      'apps/gallery/package.json',
-      'packages/core/package.json',
-      'packages/protocol/package.json',
-    ];
+    const files = SHIPPING_PACKAGE_FILES;
     try {
       for (const file of files) {
         const path = join(root, file);

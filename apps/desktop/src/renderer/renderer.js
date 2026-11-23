@@ -19,6 +19,14 @@ const api = window.petAPI;
 await customElements.whenDefined('emojitot-ball');
 
 let bubbleTimer = null;
+let motionPaused = false;
+
+function applyMotionPrefs(next) {
+  motionPaused = next?.reduceMotion === true || next?.motion === false;
+  ball?.toggleAttribute('paused', motionPaused);
+}
+
+api.onPrefs?.(applyMotionPrefs);
 
 /**
  * The bubble only speaks while docked.

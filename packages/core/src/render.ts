@@ -245,6 +245,74 @@ function brow(style: string, x: number, y: number, s: number, ink: string, weigh
   }
 }
 
+export interface FaceLayout {
+  dx: number;
+  dy: number;
+  wobble: number;
+  eyeScale: number;
+  mouthScale: number;
+  leftX: number;
+  rightX: number;
+  eyeY: number;
+}
+
+/** Geometry shared by the still renderer and the live polygon-eye runtime. */
+export function faceLayout(
+  state: string,
+  face: { x: number; y: number },
+  baseEyeScale = 1,
+): FaceLayout {
+  const spec = faceFor(state);
+  const LEAN = 1.6;
+  const SCALE = 1.25;
+  const shake = Math.max(0, Math.min(1, spec.shake ?? 0));
+  const wobble = shake * 1.8;
+  const dx = face.x + (spec.dx ?? 0) * LEAN + wobble * 0.6;
+  const dy = face.y + (spec.dy ?? 0) * LEAN - wobble * 0.4;
+  return {
+    dx,
+    dy,
+    wobble,
+    eyeScale: baseEyeScale * (1 + ((spec.eyeScale ?? 1) - 1) * SCALE),
+    mouthScale: baseEyeScale * (1 + ((spec.mouthScale ?? 1) - 1) * SCALE),
+    leftX: dx - 14.5 * baseEyeScale + wobble,
+    rightX: dx + 14.5 * baseEyeScale - wobble * 0.7,
+    eyeY: dy - 3,
+  };
+}
+
+/**
+ * Everything around the eyes. The live runtime reuses this layer so a still
+ * export and an animated stage cannot describe the same state differently.
+ */
+export function renderFaceDetails(
+  state: string,
+  face: { x: number; y: number },
+  ink: string,
+  baseEyeScale = 1,
+  weight = 1,
+): string {
+  const spec = faceFor(state);
+  const layout = faceLayout(state, face, baseEyeScale);
+  const { dx, dy, wobble, mouthScale } = layout;
+  const shake = Math.max(0, Math.min(1, spec.shake ?? 0));
+  const parts = [mouth(spec.mouth, dx - wobble * 0.5, dy + 12, mouthScale, ink, weight)];
+  if (spec.brow) parts.push(brow(spec.brow, dx, dy - 14 * baseEyeScale, baseEyeScale, ink, weight));
+  if (shake > 0) {
+    const tick = (dir: number) =>
+      `<path d="M${(dx + dir * 27 * baseEyeScale).toFixed(1)} ${(dy - 7).toFixed(1)} q${dir * 3} 4 0 8" fill="none" stroke="${ink}" stroke-width="${2 * baseEyeScale * weight}" stroke-linecap="round" opacity=${(0.35 + shake * 0.3).toFixed(2)}/>`;
+    parts.push(tick(-1), tick(1));
+  }
+  for (const mark of spec.marks ?? []) parts.push(markSvg(mark, dx, dy, baseEyeScale));
+  if (spec.blush) {
+    parts.unshift(
+      `<ellipse cx="${dx - 19 * baseEyeScale}" cy="${dy + 8}" rx="6" ry="3.2" fill="${ink}" opacity="0.2"/>`,
+      `<ellipse cx="${dx + 19 * baseEyeScale}" cy="${dy + 8}" rx="6" ry="3.2" fill="${ink}" opacity="0.2"/>`,
+    );
+  }
+  return parts.join('');
+}
+
 /**
  * The face of one expression, positioned inside the body.
  *
@@ -261,52 +329,22 @@ export function renderFace(
   motion?: MotionMode,
 ): string {
   const spec = faceFor(state);
-  /*
-   * The face never turns: a character that looks to the side at a stranger
-   * reads as a person, and this is a pet. What moves instead is the face
-   * inside the silhouette — the lean, the eye size, the mouth size — and it
-   * moves further than the literal offsets so an expression is visible at a
-   * glance instead of having to be compared with the one before it.
-   */
-  const LEAN = 1.6;
-  const SCALE = 1.25;
-  /*
-   * A shaking face is drawn shaking.
-   *
-   * The element also animates it, but the gallery, the settings grid and the
-   * evidence screenshots are stills; a state whose whole point is trembling
-   * has to say so in one frame. The offset is deliberately uneven — equal
-   * offsets on both eyes read as a smear, not as a tremble.
-   */
-  const shake = Math.max(0, Math.min(1, spec.shake ?? 0));
-  const wob = shake * 1.8;
-  const dx = face.x + (spec.dx ?? 0) * LEAN + wob * 0.6;
-  const dy = face.y + (spec.dy ?? 0) * LEAN - wob * 0.4;
-  const es = baseEyeScale * (1 + ((spec.eyeScale ?? 1) - 1) * SCALE);
-  const ms = baseEyeScale * (1 + ((spec.mouthScale ?? 1) - 1) * SCALE);
-  const leftEye = eye(spec.eye, dx - 14.5 * baseEyeScale + wob, dy - 3 + wob * 0.4, es, ink, weight);
-  const rightEye = eye(spec.eye, dx + 14.5 * baseEyeScale - wob * 0.7, dy - 3 - wob * 0.3, es * (spec.eyeAsym ?? 1), ink, weight);
+  const layout = faceLayout(state, face, baseEyeScale);
+  const { dx, dy, wobble, eyeScale, leftX, rightX, eyeY } = layout;
+  const leftEye = eye(spec.eye, leftX, eyeY + wobble * 0.4, eyeScale, ink, weight);
+  const rightEye = eye(
+    spec.eye,
+    rightX,
+    eyeY - wobble * 0.3,
+    eyeScale * (spec.eyeAsym ?? 1),
+    ink,
+    weight,
+  );
   let eyes = leftEye + rightEye;
   if (motion === 'demo' && BLINKABLE.has(spec.eye)) {
-    eyes = `<g class="et-eyes" style="transform-origin:${dx.toFixed(1)}px ${(dy - 3).toFixed(1)}px">${eyes}</g>`;
+    eyes = `<g class="et-eyes" style="transform-origin:${dx.toFixed(1)}px ${eyeY.toFixed(1)}px">${eyes}</g>`;
   }
-  const parts = [eyes, mouth(spec.mouth, dx - wob * 0.5, dy + 12, ms, ink, weight)];
-  if (spec.brow) parts.push(brow(spec.brow, dx, dy - 14 * baseEyeScale, baseEyeScale, ink, weight));
-  if (shake > 0) {
-    // Two motion ticks at the temples: the drawn half of a tremble.
-    const tick = (dir: number) =>
-      `<path d="M${(dx + dir * 27 * baseEyeScale).toFixed(1)} ${(dy - 7).toFixed(1)} q${dir * 3} 4 0 8" fill="none" stroke="${ink}" stroke-width="${2 * baseEyeScale * weight}" stroke-linecap="round" opacity=${(0.35 + shake * 0.3).toFixed(2)}/>`;
-    parts.push(tick(-1), tick(1));
-  }
-  for (const mark of spec.marks ?? []) parts.push(markSvg(mark, dx, dy, baseEyeScale));
-
-  if (spec.blush) {
-    parts.unshift(
-      `<ellipse cx="${dx - 19 * baseEyeScale}" cy="${dy + 8}" rx="6" ry="3.2" fill="${ink}" opacity="0.2"/>`,
-      `<ellipse cx="${dx + 19 * baseEyeScale}" cy="${dy + 8}" rx="6" ry="3.2" fill="${ink}" opacity="0.2"/>`,
-    );
-  }
-  return parts.join('');
+  return eyes + renderFaceDetails(state, face, ink, baseEyeScale, weight);
 }
 
 /** The little props: a tear, a sweat drop, an anger vein, a sparkle, zzz. */
@@ -460,7 +498,14 @@ export function renderCharacter(options: RenderOptions): string {
     shell,
     partsOver,
     renderTraits(surfaces, { ink, fill: bodyHex, body }),
-    renderFace(options.state, body.face, ink, body.eyeScale ?? 1, style === 'dots' ? 1.7 : style === 'line' ? 1.15 : 1, motion),
+    `<g class="et-face">${renderFace(
+      options.state,
+      body.face,
+      ink,
+      body.eyeScale ?? 1,
+      style === 'dots' ? 1.7 : style === 'line' ? 1.15 : 1,
+      motion,
+    )}</g>`,
     renderTraits(head, { ink, fill: bodyHex, body }),
     over,
   ].join('');
@@ -468,7 +513,7 @@ export function renderCharacter(options: RenderOptions): string {
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="emoji-tot">`,
     defs,
     motion === 'demo' ? MOTION_STYLE : '',
-    motion === 'demo' ? `<g class="et-breathe">${layers}</g>` : layers,
+    `<g class="et-character">${motion === 'demo' ? `<g class="et-breathe">${layers}</g>` : layers}</g>`,
     `</svg>`,
   ].join('');
 }

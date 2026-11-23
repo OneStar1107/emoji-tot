@@ -2715,6 +2715,12 @@ function applyPrefs() {
   syncGlassMaterial();
   document.body.dataset.motion = prefs.motion === false ? 'off' : 'on';
   document.body.dataset.reduceMotion = prefs.reduceMotion === true ? 'on' : 'off';
+  for (const face of document.querySelectorAll('emojitot-ball[live]')) {
+    face.toggleAttribute(
+      'paused',
+      prefs.reduceMotion === true || prefs.motion === false,
+    );
+  }
   document.body.dataset.theme = resolveTheme();
   /* The visible material is CSS-only; this remains a compatibility signal. */
   document.body.dataset.material = windowMaterial;

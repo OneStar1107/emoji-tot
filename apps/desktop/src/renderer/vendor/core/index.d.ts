@@ -18,7 +18,10 @@ export type { FaceMeta, FaceGroup, FaceSpec, EyeStyle, MouthStyle, BrowStyle } f
 export { LEXICON, lexiconEntry } from './lexicon.js';
 export type { LexiconEntry } from './lexicon.js';
 export { COLORS, COLOR_IDS, COLOR_ZH, colorHex } from './palette.js';
-export { renderCharacter, renderCast, renderFace, renderDataUrl, inkFor } from './render.js';
+export { renderCharacter, renderCast, renderFace, renderFaceDetails, faceLayout, renderDataUrl, inkFor, } from './render.js';
 export type { RenderOptions, RenderStyle, CastRenderOptions, MotionMode } from './render.js';
+export type { FaceLayout } from './render.js';
+export { EYE_POLYGONS, EYE_VERTEX_COUNT, createCharacterStateMachine, createSpring, eyePolygonsFor, morphPolygon, motionProfile, polygonPath, springProgress, stepSpring, } from './motion/index.js';
+export type { CharacterStateMachine, EyePolygon, GazeMode, MotionProfile, PolygonPoint, SpringState, StateMachineSnapshot, StateTransition, } from './motion/index.js';
 export { SHAPES, SHAPE_IDS, getShape, shapePreview } from './shapes.js';
 export type { ShapeSpec } from './shapes.js';

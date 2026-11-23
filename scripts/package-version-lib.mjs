@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const SHIPPING_PACKAGE_FILES = [
+  'apps/desktop/package.json',
   'apps/gallery/package.json',
   'packages/core/package.json',
   'packages/protocol/package.json',

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import { runBuildInfo } from '../../../scripts/build-info.mjs';
 import { createPortableExecutable } from './portable-launcher.mjs';
+import { signReleaseFiles } from './sign-release-files.mjs';
 
 const require = createRequire(import.meta.url);
 const cli = require.resolve('electron-builder/cli.js');
@@ -50,6 +51,9 @@ child.on('close', async (code, signal) => {
         iconPath: join(process.cwd(), 'assets', 'icon-256.png'),
       });
       rmSync(internalPortable);
+      if (await signReleaseFiles([publicPortable])) {
+        console.log('[electron-builder] signed the public portable launcher');
+      }
       const integrity = spawnSync(
         'icacls',
         [publicPortable, '/setintegritylevel', 'M'],

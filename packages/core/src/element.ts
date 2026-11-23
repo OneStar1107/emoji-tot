@@ -2,31 +2,52 @@
  * <emojitot-ball> — the character as a custom element.
  *
  * The desktop renderer has no build step, so this ships as a plain ES module
- * and registers itself. Animation is CSS: a breath on the body and a blink on
- * the lids, both paused when the window is hidden.
+ * and registers itself. Static thumbnails keep the deterministic SVG drawing;
+ * a sustained face can opt into the live spring/polygon-eye runtime with the
+ * boolean `live` attribute.
  */
 import { renderCast, renderCharacter } from './render.js';
 import type { RenderStyle } from './render.js';
 import { colorHex } from './palette.js';
+import {
+  createCharacterRuntime,
+  type CharacterMotionAction,
+  type CharacterRuntime,
+} from './runtime.js';
+
+const RUNTIME_ACTIONS = new Set<CharacterMotionAction>([
+  'spin',
+  'bounce',
+  'burst',
+  'tilt',
+  'wobble',
+  'pulse',
+  'float',
+]);
 
 const STYLE = `
   :host { display: inline-block; width: var(--ball-size, 120px); height: var(--ball-size, 120px); }
+  :host([hidden]) { display: none; }
   .ball { width: 100%; height: 100%; display: block; transform-origin: 50% 88%; animation: breathe 4.2s ease-in-out infinite; }
   .ball svg { width: 100%; height: 100%; display: block; }
   @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
   @media (prefers-reduced-motion: reduce) { .ball { animation: none; } }
-  :host([data-paused]) .ball { animation-play-state: paused; }
+  :host([paused]) .ball { animation-play-state: paused; }
+  :host([live]) .ball { animation: none; }
   /* motion="demo" puts the loop inside the drawing; a second one here would double it. */
   :host([motion="demo"]) .ball { animation: none; }
 `;
 
 export class EmojiTotBall extends HTMLElement {
   static get observedAttributes() {
-    return ['cast', 'body', 'shape', 'color', 'state', 'size', 'traits', 'finish', 'motion'];
+    return ['cast', 'body', 'shape', 'color', 'state', 'size', 'traits', 'finish', 'motion', 'live', 'paused'];
   }
 
   #root;
   #style;
+  #runtime: CharacterRuntime | null = null;
+  #runtimeKey = '';
+  #runtimeState = '';
 
   constructor() {
     super();
@@ -40,8 +61,12 @@ export class EmojiTotBall extends HTMLElement {
     this.#draw();
   }
 
-  attributeChangedCallback() {
-    this.#draw();
+  disconnectedCallback() {
+    this.#destroyRuntime();
+  }
+
+  attributeChangedCallback(_name: string, oldValue: string | null, newValue: string | null) {
+    if (oldValue !== newValue) this.#draw();
   }
 
   /** The engine state, as a property for hosts that prefer it to attributes. */
@@ -89,6 +114,24 @@ export class EmojiTotBall extends HTMLElement {
     return this.getAttribute('finish') ?? 'sticker';
   }
 
+  /** Opt into the live spring/polygon-eye runtime. Static is the default. */
+  set live(value: boolean) {
+    this.toggleAttribute('live', value);
+  }
+
+  get live(): boolean {
+    return this.hasAttribute('live');
+  }
+
+  /** Pause the live loop without losing the current pose or expression. */
+  set paused(value: boolean) {
+    this.toggleAttribute('paused', value);
+  }
+
+  get paused(): boolean {
+    return this.hasAttribute('paused');
+  }
+
   /**
    * The idle loop, as an attribute (`motion="demo"`).
    *
@@ -107,20 +150,27 @@ export class EmojiTotBall extends HTMLElement {
 
   /** One-shot motions. They do not change the state. */
   bounce(amount = 0.4) {
+    if (this.#pulse('bounce')) return;
     this.#play(`hop ${Math.round(360 + amount * 340)}ms ease-out`);
   }
 
   spin(turns = 1) {
+    if (this.#pulse('spin')) return;
     this.#play(`turn ${Math.round(420 + turns * 260)}ms cubic-bezier(.3,.7,.4,1)`, 'rotate');
   }
 
   burst(count = 16) {
     void count;
+    if (this.#pulse('burst')) return;
     this.#play('pop 420ms ease-out', 'scale');
   }
 
   /** Play one of the seven signature motions by name. */
   play(motion: string) {
+    const liveAction = motion === 'pop' ? 'burst' : motion;
+    if (RUNTIME_ACTIONS.has(liveAction as CharacterMotionAction) && this.#pulse(liveAction as CharacterMotionAction)) {
+      return;
+    }
     const map: Record<string, [string, string]> = {
       bounce: ['hop 620ms ease-out', 'translateY'],
       spin: ['turn 760ms cubic-bezier(.3,.7,.4,1)', 'rotate'],
@@ -132,6 +182,12 @@ export class EmojiTotBall extends HTMLElement {
     };
     const [name, kind] = map[motion] ?? ['hop 620ms ease-out', 'translateY'];
     this.#play(name, kind);
+  }
+
+  #pulse(action: CharacterMotionAction): boolean {
+    if (!this.#runtime) return false;
+    this.#runtime.pulse(action);
+    return true;
   }
 
   #play(name: string, kind: string = 'translateY') {
@@ -158,7 +214,15 @@ export class EmojiTotBall extends HTMLElement {
     }, { once: true });
   }
 
+  #destroyRuntime(): void {
+    this.#runtime?.destroy();
+    this.#runtime = null;
+    this.#runtimeKey = '';
+    this.#runtimeState = '';
+  }
+
   #draw() {
+    if (!this.isConnected) return;
     const cast = this.getAttribute('cast');
     const body = this.getAttribute('body') ?? this.getAttribute('shape') ?? 'circle';
     const color = this.getAttribute('color') ?? 'white';
@@ -173,6 +237,51 @@ export class EmojiTotBall extends HTMLElement {
     const finish = (this.getAttribute('finish') ?? 'sticker') as RenderStyle;
     const traits = (this.getAttribute('traits') ?? '').split(/\s+/).filter(Boolean);
     const motion = this.getAttribute('motion') === 'demo' ? 'demo' : undefined;
+    const live = this.hasAttribute('live');
+    let host = this.#root.querySelector<HTMLDivElement>('.ball');
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'ball';
+      this.#root.append(host);
+    }
+    this.style.setProperty('--ball-size', `${size}px`);
+    void colorHex(color);
+
+    if (live) {
+      const runtimeKey = [cast ?? '', body, color, traits.join(' '), finish, size].join('|');
+      if (this.#runtime && runtimeKey === this.#runtimeKey) {
+        if (state !== this.#runtimeState) {
+          this.#runtime.setState(state, 'element');
+          this.#runtimeState = state;
+        }
+        this.#runtime.setPaused(this.hasAttribute('paused'));
+        return;
+      }
+      this.#destroyRuntime();
+      host.replaceChildren();
+      try {
+        this.#runtime = createCharacterRuntime(host, {
+          cast: cast || undefined,
+          body,
+          color,
+          traits,
+          state,
+          size,
+          style: finish,
+          followPointer: true,
+          paused: this.hasAttribute('paused'),
+        });
+        this.#runtimeKey = runtimeKey;
+        this.#runtimeState = state;
+        host.setAttribute('aria-hidden', 'true');
+        return;
+      } catch {
+        this.#destroyRuntime();
+      }
+    } else {
+      this.#destroyRuntime();
+    }
+
     let svg;
     try {
       svg = cast
@@ -181,15 +290,8 @@ export class EmojiTotBall extends HTMLElement {
     } catch {
       svg = renderCharacter({ body: 'circle', color, state: 'idle', size, style: finish, motion });
     }
-    let host = this.#root.querySelector<HTMLDivElement>('.ball');
-    if (!host) {
-      host = document.createElement('div');
-      host.className = 'ball';
-      this.#root.append(host);
-    }
     host.innerHTML = svg;
-    this.style.setProperty('--ball-size', `${size}px`);
-    void colorHex(color);
+    host.setAttribute('aria-hidden', 'true');
   }
 }
 

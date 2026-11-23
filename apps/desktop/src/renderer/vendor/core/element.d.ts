@@ -3,7 +3,8 @@ export declare class EmojiTotBall extends HTMLElement {
     static get observedAttributes(): string[];
     constructor();
     connectedCallback(): void;
-    attributeChangedCallback(): void;
+    disconnectedCallback(): void;
+    attributeChangedCallback(_name: string, oldValue: string | null, newValue: string | null): void;
     /** The engine state, as a property for hosts that prefer it to attributes. */
     set state(value: string);
     get state(): string;
@@ -22,6 +23,12 @@ export declare class EmojiTotBall extends HTMLElement {
      */
     set finish(value: string);
     get finish(): string;
+    /** Opt into the live spring/polygon-eye runtime. Static is the default. */
+    set live(value: boolean);
+    get live(): boolean;
+    /** Pause the live loop without losing the current pose or expression. */
+    set paused(value: boolean);
+    get paused(): boolean;
     /**
      * The idle loop, as an attribute (`motion="demo"`).
      *

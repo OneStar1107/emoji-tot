@@ -158,6 +158,79 @@ try {
   ok('renderer has no Node globals (sandbox on)', parsed.process === 'undefined' && parsed.require === 'undefined', sandbox);
   ok('preload bridge present', parsed.api === 'object');
   ok('outer window size sane', /^\d+x\d+$/.test(parsed.outer) && !parsed.outer.startsWith('0'), parsed.outer);
+  const liveFace = JSON.parse(await evaluate(`
+    (async () => {
+      const face = document.querySelector('.pill-face emojitot-ball');
+      for (let i = 0; i < 40 && !face?.shadowRoot?.querySelector('[data-et-runtime]'); i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const root = face?.shadowRoot;
+      return JSON.stringify({
+        runtime: Boolean(root?.querySelector('[data-et-runtime]')),
+        eyes: root?.querySelectorAll('.et-polygon-eyes [data-eye]').length ?? 0,
+        paused: root?.querySelector('[data-et-runtime]')?.getAttribute('data-paused') ?? '',
+      });
+    })()
+  `));
+  ok(
+    'island faces mount the stateful polygon-eye runtime',
+    liveFace.runtime && liveFace.eyes === 2,
+    JSON.stringify(liveFace),
+  );
+  const motionPause = JSON.parse(await evaluate(`
+    (async () => {
+      const face = document.querySelector('.pill-face emojitot-ball');
+      await window.islandAPI.patchPrefs({ motion: true, reduceMotion: true });
+      for (let i = 0; i < 30 && face?.shadowRoot?.querySelector('[data-et-runtime]')?.dataset.paused !== 'true'; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const paused = face?.shadowRoot?.querySelector('[data-et-runtime]')?.dataset.paused ?? '';
+      await window.islandAPI.patchPrefs({ motion: true, reduceMotion: false });
+      return JSON.stringify({ paused });
+    })()
+  `));
+  ok(
+    'reduce-motion preference pauses the live character',
+    motionPause.paused === 'true',
+    JSON.stringify(motionPause),
+  );
+  const ballTarget = pages.find((page) => page.url.includes('index.html'));
+  if (ballTarget) {
+    const ballSession = await browser.send(
+      'Target.attachToTarget',
+      { targetId: ballTarget.targetId, flatten: true },
+    );
+    await browser.send('Runtime.enable', {}, 8000, ballSession.sessionId).catch(() => {});
+    const ballRuntime = await browser.send(
+      'Runtime.evaluate',
+      {
+        expression: `(async () => {
+          const face = document.querySelector('#pet emojitot-ball');
+          for (let i = 0; i < 40 && !face?.shadowRoot?.querySelector('[data-et-runtime]'); i += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+          const root = face?.shadowRoot;
+          return JSON.stringify({
+            ready: document.readyState,
+            defined: Boolean(customElements.get('emojitot-ball')),
+            runtime: Boolean(root?.querySelector('[data-et-runtime]')),
+            eyes: root?.querySelectorAll('.et-polygon-eyes [data-eye]').length ?? 0,
+            html: root?.innerHTML.slice(0, 160) ?? '',
+          });
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      },
+      8000,
+      ballSession.sessionId,
+    );
+    const ballFace = JSON.parse(ballRuntime.result.value);
+    ok(
+      'desktop ball mounts the stateful polygon-eye runtime',
+      ballFace.runtime && ballFace.eyes === 2,
+      JSON.stringify(ballFace),
+    );
+  }
   const material = JSON.parse(await evaluate(`
     (async () => {
       for (let i = 0; i < 30 && !document.body.dataset.material; i += 1) {
@@ -916,6 +989,45 @@ try {
       'empty weather city field stays visually empty',
       cityField?.value === '' && cityField?.placeholder === '',
       JSON.stringify(cityField),
+    );
+
+    let facePicker = null;
+    for (let i = 0; i < 40 && !facePicker; i += 1) {
+      const value = await settingsEvaluate(`
+        JSON.stringify((() => {
+          const nav = document.querySelector('[data-nav="cast"]');
+          if (!nav) return null;
+          nav.click();
+          const labels = [...document.querySelectorAll('.face-grid .face-cell span')]
+            .map((node) => node.textContent.trim());
+          return labels.length ? {
+            count: labels.length,
+            unnamed: labels.filter((label) => !label || !/[\\u3400-\\u9fff]/.test(label)),
+            sample: labels.slice(0, 6),
+          } : null;
+        })())
+      `);
+      facePicker = value ? JSON.parse(value) : null;
+      if (!facePicker) await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    ok(
+      'settings face picker lists all 61 states with Chinese names',
+      facePicker?.count === 61 && facePicker?.unnamed?.length === 0,
+      JSON.stringify(facePicker),
+    );
+    await settingsEvaluate("document.querySelector('.face-cell[data-value=\"sad\"]')?.click(); true");
+    let previewState = '';
+    for (let i = 0; i < 25 && previewState !== 'sad'; i += 1) {
+      previewState = await evaluate(`
+        document.querySelector('.pill-face emojitot-ball')?.shadowRoot
+          ?.querySelector('[data-et-runtime]')?.dataset.state ?? ''
+      `);
+      if (previewState !== 'sad') await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    ok(
+      'engine-only expression previews reach the live desktop face',
+      previewState === 'sad',
+      JSON.stringify({ previewState }),
     );
 
     await settingsEvaluate("document.querySelector('[data-nav=\"pages\"]')?.click(); true");

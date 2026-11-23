@@ -24,6 +24,11 @@ import {
   type FaceGroup,
   type FaceMeta,
 } from '@emojitot/core';
+import {
+  createCharacterRuntime,
+  type CharacterRuntime,
+  type CharacterRuntimeSnapshot,
+} from '@emojitot/core/runtime';
 import { EMOTIONS } from '@emojitot/protocol';
 import { SETTINGS_NAV } from '@emojitot/settings-schema';
 import { faceLabel } from './faces';
@@ -32,7 +37,17 @@ import { look } from './store';
 import type { View } from './main';
 
 /** The section ids are stable: they are the anchors a deep link points at. */
-const SECTION_IDS = ['what', 'genome', 'families', 'protocol', 'desktop', 'extend', 'call'] as const;
+const SECTION_IDS = [
+  'what',
+  'genome',
+  'families',
+  'engine',
+  'structure',
+  'protocol',
+  'desktop',
+  'extend',
+  'call',
+] as const;
 
 /** A literal newline for the code samples, kept out of the source as escapes. */
 const NL = String.fromCharCode(10);
@@ -46,6 +61,49 @@ const COPY = {
   lead: {
     zh: '从一条闭合路径到一个两位数协议，再到桌面端的两种形态。这一页写给要把它装进产品的人。',
     en: 'From one closed path to a two-digit protocol, and out to two desktop forms. Written for the person shipping it.',
+  },
+  engineLead: {
+    zh: '静态渲染只回答“长什么样”。浏览器运行时再回答“它此刻在怎么动”：同一个状态先选表情，再选姿态配置，最后交给十六点眼型和弹簧积分器。',
+    en: 'The static renderer answers what it looks like. The browser runtime answers how it is moving right now: a state selects a face, then a pose profile, then a sixteen-point eye and a spring integrator.',
+  },
+  engineState: {
+    zh: '状态表与运动配置分开：61 张脸只定义五官，状态族提供呼吸、视线和眨眼基线，少数状态再覆盖自己的节奏。',
+    en: 'The state table and motion profile stay separate: 61 faces define features, a state family sets breathing, gaze and blink baselines, and only distinct states override the rhythm.',
+  },
+  engineEyes: {
+    zh: '每种眼型都有 16 个顶点。形变只插值同编号顶点，所以从圆眼到星眼、从横线到半睁不会先消失再出现。',
+    en: 'Every eye shape has 16 vertices. Morphing interpolates matching vertices, so a round eye becoming a star, or a line becoming half-lidded, never disappears between frames.',
+  },
+  engineSpring: {
+    zh: '角色姿态由真实的弹簧状态驱动：目标、速度、阻尼和刚度，按最多 1/120 秒的小步长稳定积分。界面过渡使用同一套物理节奏的 linear() 曲线。',
+    en: 'Character pose is driven by real spring state: target, velocity, damping and stiffness, integrated in stable steps of at most 1/120s. Interface chrome uses linear() curves with the same physical rhythm.',
+  },
+  engineRuntime: {
+    zh: '一个页面只挂一个长期运行时；表情馆示例和灯箱按需创建，场景中的一个仲裁脸复用同一实例。路由卸载必须 destroy，避免后台 RAF 继续跑。',
+    en: 'One long-lived runtime per surface; gallery specimens and the lightbox mount on demand, and the scene reuses one arbiter instance. Route teardown must destroy the rig so no background RAF survives.',
+  },
+  engineTry: { zh: '试三种状态', en: 'Try three states' },
+  engineEye: { zh: '实时眼型', en: 'Live eye' },
+  engineTilt: { zh: '弹簧倾角', en: 'Spring tilt' },
+  structureLead: {
+    zh: '结构按“纯数据 → 纯渲染 → 浏览器运行时 → 页面宿主”分层。这样静态导出、桌面端、文档缩略图和会动的控制台共用同一份角色定义。',
+    en: 'The structure layers pure data, pure rendering, the browser runtime and page hosts. Static export, desktop, docs thumbnails and the live console therefore share one character definition.',
+  },
+  structureState: {
+    zh: '协议与角色表',
+    en: 'Protocol and cast data',
+  },
+  structureMotion: {
+    zh: '眼睛拓扑、运动配置、弹簧与状态历史',
+    en: 'Eye topology, profiles, springs and transition history',
+  },
+  structureRender: {
+    zh: '无 DOM 的确定性 SVG；仍用于导出、缩略图与静态页面',
+    en: 'Deterministic SVG with no DOM; still used for export, thumbnails and static pages',
+  },
+  structureRuntime: {
+    zh: '唯一有浏览器状态的生命周期层：指针、RAF、暂停、减少动态与清理',
+    en: 'The only browser-stateful lifecycle layer: pointer, RAF, pause, reduced motion and cleanup',
   },
 } as const;
 
@@ -176,6 +234,71 @@ export function createDocs(): View {
       '// → ' + sample.name.zh + ' · ' + sample.body + ' · ' + sample.color,
     ]);
 
+  const engineLayers = [
+    { id: 'state', n: '01', title: 'state', body: copy('engineState') },
+    { id: 'eyes', n: '02', title: 'polygon eyes', body: copy('engineEyes') },
+    { id: 'spring', n: '03', title: 'spring', body: copy('engineSpring') },
+    { id: 'runtime', n: '04', title: 'runtime', body: copy('engineRuntime') },
+  ];
+
+  const engineDoc = '<p>' + copy('engineLead') + '</p>' +
+    '<div class="engine-anatomy">' +
+    '<ol class="engine-layers">' +
+    engineLayers.map((layer) =>
+      '<li data-family="' + (layer.id === 'runtime' ? 'agent' : layer.id === 'spring' ? 'signal' : 'life') + '">' +
+      '<span>' + layer.n + '</span><b>' + layer.title + '</b><p>' + layer.body + '</p></li>',
+    ).join('') +
+    '</ol>' +
+    '<aside class="engine-specimen" data-family="life" aria-label="' + t('docs.engine') + '">' +
+    '<div class="engine-specimen-head"><span><i aria-hidden="true"></i>LIVE RIG</span>' +
+    '<code data-engine-eye>pill</code></div>' +
+    '<div class="engine-runtime" data-engine-runtime></div>' +
+    '<dl class="engine-metrics"><div><dt>' + copy('engineEye') + '</dt><dd data-engine-eye>pill</dd></div>' +
+    '<div><dt>' + copy('engineTilt') + '</dt><dd data-engine-tilt>0.0°</dd></div></dl>' +
+    '<div class="engine-controls"><span>' + copy('engineTry') + '</span>' +
+    ['idle', 'thinking', 'done'].map((state) =>
+      '<button type="button" data-engine-state="' + state + '" aria-pressed="' +
+      (state === 'idle') + '">' + faceLabel(state) + '</button>',
+    ).join('') +
+    '</div></aside></div>' +
+    code([
+      'import { createCharacterRuntime } from \'@emojitot/core/runtime\';',
+      '',
+      'const rig = createCharacterRuntime(stage, { cast: \'tot\', state: \'idle\' });',
+      'rig.setState(\'thinking\', \'agent:plan\');',
+      'rig.pulse(\'burst\');',
+      '// host teardown',
+      'rig.destroy();',
+    ]);
+
+  const structureDoc = '<p>' + copy('structureLead') + '</p>' +
+    '<div class="project-structure">' +
+    code([
+      'packages/',
+      '  protocol/        two-digit state contract',
+      '  core/',
+      '    src/face.ts    expressions and groups',
+      '    src/render.ts  pure SVG composition',
+      '    src/runtime.ts browser lifecycle',
+      '    src/motion/',
+      '      eyes.ts     16-point topology + morph',
+      '      profiles.ts acting, gaze and blink',
+      '      spring.ts   bounded integrator',
+      '      state-machine.ts transition history',
+      'apps/',
+      '  gallery/src/',
+      '    console.ts   live studio',
+      '    wall.ts      specimens + lightbox',
+      '    scene.ts     arbiter + transition tape',
+      '    docs.ts      this manual',
+    ]) +
+    '<div class="project-parts">' +
+    '<article data-family="life"><span>DATA</span><b>protocol + cast</b><p>' + copy('structureState') + '</p></article>' +
+    '<article data-family="emotion"><span>MOTION</span><b>motion/</b><p>' + copy('structureMotion') + '</p></article>' +
+    '<article data-family="agent"><span>STILL</span><b>render.ts</b><p>' + copy('structureRender') + '</p></article>' +
+    '<article data-family="signal"><span>LIVE</span><b>runtime.ts</b><p>' + copy('structureRuntime') + '</p></article>' +
+    '</div></div>';
+
   const groupsHtml = FACE_GROUPS.map((group) => {
     const metas = FACE_META.filter((meta) => meta.group === group.id);
     return '<details class="card sd-group" data-group="' + group.id + '"' + (group.id === 'life' ? ' open' : '') + '>' +
@@ -236,16 +359,18 @@ export function createDocs(): View {
     { id: SECTION_IDS[0], num: '01', kicker: 'What', title: t('docs.what'), body: intro },
     { id: SECTION_IDS[1], num: '02', kicker: 'Genome', title: t('docs.genome'), body: genomeDoc },
     { id: SECTION_IDS[2], num: '03', kicker: 'Families', title: t('docs.families'), body: familyTable },
+    { id: SECTION_IDS[3], num: '04', kicker: 'Motion', title: t('docs.engine'), body: engineDoc },
+    { id: SECTION_IDS[4], num: '05', kicker: 'Architecture', title: t('docs.structure'), body: structureDoc },
     {
-      id: SECTION_IDS[3],
-      num: '04',
+      id: SECTION_IDS[5],
+      num: '06',
       kicker: 'Protocol',
       title: t('docs.protocol'),
       body: '<p>' + t('docs.protocolLead') + '</p>' + groupsHtml,
     },
-    { id: SECTION_IDS[4], num: '05', kicker: 'Desktop', title: t('docs.desktop'), body: desktopDoc },
-    { id: SECTION_IDS[5], num: '06', kicker: 'Extend', title: t('docs.extend'), body: extendDoc },
-    { id: SECTION_IDS[6], num: '07', kicker: 'API', title: t('docs.call'), body: callDoc },
+    { id: SECTION_IDS[6], num: '07', kicker: 'Desktop', title: t('docs.desktop'), body: desktopDoc },
+    { id: SECTION_IDS[7], num: '08', kicker: 'Extend', title: t('docs.extend'), body: extendDoc },
+    { id: SECTION_IDS[8], num: '09', kicker: 'API', title: t('docs.call'), body: callDoc },
   ];
 
   el.innerHTML = '<header class="page-head">' +
@@ -282,6 +407,30 @@ export function createDocs(): View {
     tocLinks.set(link.dataset.goto!, link);
   }
   const sectionEls = [...el.querySelectorAll<HTMLElement>('.sd-section')];
+  const engineHost = el.querySelector<HTMLElement>('[data-engine-runtime]');
+  let engineRuntime: CharacterRuntime | null = null;
+
+  function paintEngineTelemetry(snapshot: CharacterRuntimeSnapshot): void {
+    for (const node of el.querySelectorAll<HTMLElement>('[data-engine-eye]')) {
+      node.textContent = snapshot.eye;
+    }
+    const tilt = el.querySelector<HTMLElement>('[data-engine-tilt]');
+    if (tilt) tilt.textContent = snapshot.rotation.toFixed(1) + '°';
+    for (const button of el.querySelectorAll<HTMLElement>('[data-engine-state]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.engineState === snapshot.state));
+    }
+  }
+
+  if (engineHost) {
+    engineRuntime = createCharacterRuntime(engineHost, {
+      cast: look.cast || 'tot',
+      state: 'idle',
+      size: 132,
+      style: look.finish,
+      followPointer: false,
+      onTelemetry: paintEngineTelemetry,
+    });
+  }
 
   /** Mark one entry of the contents as the section you are reading. */
   function setActiveToc(id: string): void {
@@ -417,6 +566,12 @@ export function createDocs(): View {
 
   el.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    const engineButton = target.closest<HTMLElement>('[data-engine-state]');
+    if (engineButton) {
+      const state = engineButton.dataset.engineState;
+      if (state) engineRuntime?.setState(state, 'docs:preview');
+      return;
+    }
     const link = target.closest<HTMLElement>('.sd-toc-link');
     if (link) {
       goTo(link.dataset.goto!);
@@ -457,6 +612,8 @@ export function createDocs(): View {
     dispose(): void {
       tocObserver.disconnect();
       revealObserver.disconnect();
+      engineRuntime?.destroy();
+      engineRuntime = null;
       for (const id of timeouts) window.clearTimeout(id);
       timeouts.clear();
       flashTimers.clear();

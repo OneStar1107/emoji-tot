@@ -6,7 +6,7 @@
 apps/desktop      Electron 桌面端：球窗口、灵动岛、设置中心、托盘
 apps/gallery      四页站点：控制台 / 表情馆 / 场景 / 文档
         ↓ 都依赖
-packages/core     组合式角色引擎：身体、特征、表情、渲染（纯函数，输出 SVG）
+packages/core     组合式角色引擎：身体、特征、表情、纯 SVG 渲染、浏览器运动运行时
 packages/protocol 两位数协议：解析、仲裁、事件桥
 ```
 
@@ -49,7 +49,8 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 外部（文件 / 事件 / 用户点击）
   → protocol.parse     两位 id 或状态名 → 一个 StateId（不认识也能落段）
   → protocol.arbitrate 按优先级与停留期决定「现在显示谁」
-  → core.render        { body, color, traits, state } → <svg>
+  → core.render        { body, color, traits, state } → 确定性 <svg>
+  → core/runtime       状态 + 眼型 + 弹簧姿态 → 可暂停的实时 SVG
   → 宿主               写进 DOM（站点）或窗口（桌面）
 ```
 
@@ -80,6 +81,28 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 4. **轮廓外** —— 耳朵、光环、尾巴（在身体外面，必须压在最上层）
 
 墨色不单独选：`inkFor()` 按身体亮度取反（亮度 < 0.55 用白墨，否则用深墨）。所以「白底黑字」和「黑底白字」是同一个规则的两端，`tot` 就是后者的默认演示。
+
+## 静态渲染与浏览器运行时
+
+`renderCharacter()` 不读时钟、不接触 DOM，因此静态导出、缩略图测试与自定义元素仍然得到同一张确定性的 SVG。
+
+需要持续表情时，站点只在真正活动的表面调用 `createCharacterRuntime()`（入口 `@emojitot/core/runtime`）：
+
+```
+状态变更
+  → motionProfiles   视线、呼吸、眨眼节奏、眼型播放表
+  → polygon eyes     10 种 16 顶点拓扑，按同编号顶点插值
+  → spring integrator 1/120s 上限子步长，驱动位置 / 倾角 / 缩放
+  → runtime          单个 RAF、指针输入、暂停、减少动态、销毁清理
+```
+
+- `packages/core/src/motion/eyes.ts` 只拥有拓扑、稳定形变和路径序列化。
+- `packages/core/src/motion/profiles.ts` 把 61 张脸映射成动作配置，不重复定义五官。
+- `packages/core/src/motion/spring.ts` 是 Node 可测的纯积分器。
+- `packages/core/src/motion/state-machine.ts` 记录最近迁移，宿主仍负责仲裁谁该显示。
+- `packages/core/src/runtime.ts` 是唯一有浏览器生命周期的一层；路由卸载必须调用 `destroy()`。
+
+控制台使用一个长期实例；表情馆的精选角色和灯箱按需挂载；场景只有一个仲裁脸实例。这样既有连续动作，又不会让 61 张卡同时跑 61 个 RAF。
 
 ## 站点
 

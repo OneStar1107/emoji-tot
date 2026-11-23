@@ -13,7 +13,8 @@
  * inferred from a label. None of this touches the arbitration itself:
  * createArbiter still owns every decision.
  */
-import { CAST, castMember, renderCast } from '@emojitot/core';
+import { CAST, castMember, faceMeta, renderCast } from '@emojitot/core';
+import { createCharacterRuntime, type CharacterRuntime } from '@emojitot/core/runtime';
 import { DEFAULT_PRIORITY, EMOTIONS, createArbiter, type ArbiterResult } from '@emojitot/protocol';
 import { getLang, t } from './i18n';
 import { look } from './store';
@@ -86,6 +87,12 @@ function kindOf(state: string): SessionKind {
   if (state === 'done' || state === 'celebrate' || state === 'satisfied') return 'done';
   if (IDLE_STATES.has(state)) return 'idle';
   return 'working';
+}
+
+function stateFamily(state: string): 'life' | 'emotion' | 'agent' | 'signal' {
+  return ['alerting', 'notifying', 'refusing', 'error'].includes(state)
+    ? 'signal'
+    : faceMeta(state).group;
 }
 
 function reducedMotion(): boolean {
@@ -163,6 +170,14 @@ export function createScene(): View {
       </div>
     </section>
 
+    <section class="transition-tape" aria-label="state transition history">
+      <div class="transition-tape-head">
+        <span>STATE BUS</span>
+        <b>arbiter <i>→</i> tot</b>
+      </div>
+      <ol class="transition-list" id="transition-list" aria-live="polite"></ol>
+    </section>
+
     <div class="scene-actions">
       <button type="button" class="btn" data-act="shuffle">${t('scene.act.shuffle')}</button>
       <button type="button" class="btn" data-act="party">${t('scene.act.party')}</button>
@@ -183,10 +198,19 @@ export function createScene(): View {
   const ownerEl = el.querySelector<HTMLElement>('#arbiter-owner')!;
   const rankEl = el.querySelector<HTMLElement>('#arbiter-rank')!;
   const toggleEl = el.querySelector<HTMLButtonElement>('#arbiter-toggle')!;
+  const transitionsEl = el.querySelector<HTMLElement>('#transition-list')!;
   let actors: Actor[] = [];
   let arbiterTimer = 0;
   let paused = false;
   let shownRank: number | null = null;
+  let arbiterRuntime: CharacterRuntime | null = null;
+  let lastArbiterState = 'idle';
+  let transitionHistory: {
+    from: string;
+    to: string;
+    session: string;
+    emotionId: string;
+  }[] = [];
   /** Which session the arbiter is actually showing — not just the last to report. */
   let shownSession = '';
   /** One-shot timers (cheer, doze, poke, rank roll); dispose clears them. */
@@ -237,24 +261,61 @@ export function createScene(): View {
 
   /* ----------------------------------------------------------- arbiter */
 
-  faceEl.innerHTML = renderCast({ id: look.cast || 'tot', state: 'idle', size: 148, style: look.finish });
+  function paintTransitions(): void {
+    if (!transitionHistory.length) {
+      transitionsEl.innerHTML = '<li class="transition-empty">' + t('scene.noSession') + '</li>';
+      return;
+    }
+    transitionsEl.innerHTML = transitionHistory.map((item, index) => {
+      const family = stateFamily(item.to);
+      return '<li class="transition-item" data-family="' + family + '"' +
+        (index === 0 ? ' data-fresh' : '') + '>' +
+        '<span class="transition-index">' + String(transitionHistory.length - index).padStart(2, '0') + '</span>' +
+        '<span class="transition-change"><code>' + item.from + '</code><i aria-hidden="true">→</i><b>' +
+        stateLabel(item.to) + '</b></span>' +
+        '<span class="transition-source">' + (item.session || 'reset') +
+        (item.emotionId ? ' · #' + item.emotionId : '') + '</span>' +
+        '</li>';
+    }).join('');
+  }
+
+  function recordTransition(result: ArbiterResult): void {
+    const next = result.state || 'idle';
+    if (next === lastArbiterState) {
+      arbiterRuntime?.setState(next, 'arbiter:' + (result.sessionId || 'reset'));
+      return;
+    }
+    transitionHistory = [
+      {
+        from: lastArbiterState,
+        to: next,
+        session: result.sessionId ?? '',
+        emotionId: result.emotionId ? String(result.emotionId) : '',
+      },
+      ...transitionHistory,
+    ].slice(0, 5);
+    lastArbiterState = next;
+    arbiterRuntime?.setState(next, 'arbiter:' + (result.sessionId || 'reset'));
+    paintTransitions();
+  }
+
+  const arbiterRuntimeOptions = {
+    cast: look.cast || 'tot',
+    state: 'idle',
+    size: 184,
+    style: look.finish,
+    followPointer: false,
+  } as const;
+  arbiterRuntime = createCharacterRuntime(faceEl, arbiterRuntimeOptions);
 
   const arbiter = createArbiter({
     onApply: (result) => {
-      const id = look.cast || 'tot';
-      faceEl.innerHTML = renderCast({ id, state: result.state, size: 148, style: look.finish });
+      recordTransition(result);
       stateEl.textContent = stateLabel(result.state);
       fromEl.textContent = result.sessionId
         ? result.sessionId + ' · #' + result.emotionId
         : t('scene.noSession');
       shownSession = result.sessionId ?? '';
-      // The face lands with a beat: 220ms, once, and only when a report came in.
-      if (result.sessionId && !reducedMotion()) {
-        faceEl.removeAttribute('data-beat');
-        void faceEl.offsetWidth;
-        faceEl.setAttribute('data-beat', '');
-        later(() => faceEl.removeAttribute('data-beat'), 240);
-      }
       paintSource(result);
       queueMicrotask(() => paintSessions());
     },
@@ -389,8 +450,11 @@ export function createScene(): View {
         for (const actor of actors) {
           const svg = actor.el.querySelector('.actor-svg');
           if (svg) svg.innerHTML = renderCast({ id: actor.id, state: mood, size: 110, style: look.finish });
-          actor.el.classList.add(kind === 'party' ? 'cheer' : 'doze');
-          later(() => actor.el.classList.remove('cheer', 'doze'), 2200);
+          const reaction = kind === 'party' ? 'cheer' : 'doze';
+          const opposite = kind === 'party' ? 'doze' : 'cheer';
+          actor.el.classList.remove(opposite);
+          actor.el.classList.add(reaction);
+          later(() => actor.el.classList.remove(reaction), 2200);
         }
       }
       return;
@@ -416,6 +480,7 @@ export function createScene(): View {
   spawn();
   paintSessions();
   paintSource(null);
+  paintTransitions();
   startTicking();
 
   return {
@@ -426,6 +491,8 @@ export function createScene(): View {
       arbiterTimer = 0;
       for (const id of timeouts) window.clearTimeout(id);
       timeouts.clear();
+      arbiterRuntime?.destroy();
+      arbiterRuntime = null;
       arbiter.dispose();
     },
   };

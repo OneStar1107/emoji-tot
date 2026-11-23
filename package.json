@@ -1,7 +1,7 @@
 {
   "name": "emoji-tot",
   "private": true,
-  "version": "0.8.18",
+  "version": "0.8.19",
   "description": "EmojiTot: an expressive character for the desktop and the web, driven by a two-digit protocol",
   "type": "commonjs",
   "license": "SEE LICENSE IN LICENSE",
@@ -19,6 +19,7 @@
     "typecheck": "pnpm -r typecheck",
     "preview": "pnpm build && node apps/gallery/scripts/preview.mjs",
     "dist": "pnpm build && pnpm --filter @emojitot/desktop dist",
+    "dist:selfsigned": "powershell -NoProfile -ExecutionPolicy Bypass -File apps/desktop/scripts/self-sign-dist.ps1",
     "check:gallery": "pnpm --filter @emojitot/gallery build && node apps/gallery/scripts/browser-check.mjs",
     "smoke:desktop": "pnpm --filter @emojitot/desktop copy:vendor && node apps/desktop/scripts/window-smoke.mjs",
     "audit:ci": "pnpm audit --registry=https://registry.npmjs.org --audit-level=moderate",

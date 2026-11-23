@@ -13,7 +13,8 @@ export { CAST, CAST_IDS, FAMILIES, MOTIONS, MOTION_ZH, DEFAULT_CAST, castMember,
 export { FACES, FACE_IDS, faceFor, FACE_META, faceMeta, facesInGroup } from './face.js';
 export { LEXICON, lexiconEntry } from './lexicon.js';
 export { COLORS, COLOR_IDS, COLOR_ZH, colorHex } from './palette.js';
-export { renderCharacter, renderCast, renderFace, renderDataUrl, inkFor } from './render.js';
+export { renderCharacter, renderCast, renderFace, renderFaceDetails, faceLayout, renderDataUrl, inkFor, } from './render.js';
+export { EYE_POLYGONS, EYE_VERTEX_COUNT, createCharacterStateMachine, createSpring, eyePolygonsFor, morphPolygon, motionProfile, polygonPath, springProgress, stepSpring, } from './motion/index.js';
 /* The old hand-drawn shapes remain exported for stored preferences. */
 export { SHAPES, SHAPE_IDS, getShape, shapePreview } from './shapes.js';
 /*

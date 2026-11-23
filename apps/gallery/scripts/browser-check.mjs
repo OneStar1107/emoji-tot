@@ -219,6 +219,41 @@ try {
     ok('route renders: ' + route, state.startsWith('1:') && state.length > 4, state.slice(0, 50));
   }
 
+  /*
+   * The console stage is the reference implementation for the live runtime.
+   * Keep the contract visible here: a real stateful SVG, two polygon eyes and
+   * an accessible pause control must survive the static build.
+   */
+  await renderRoute('#/console');
+  await sleep(180);
+  const consoleRuntime = await cdp.evaluate(`
+    (() => {
+      const root = document.querySelector('[data-hero] [data-et-runtime]');
+      const pause = document.querySelector('[data-motion-pause]');
+      const eyes = root ? [...root.querySelectorAll('[data-eye]')] : [];
+      return {
+        runtime: Boolean(root),
+        eyes: eyes.length,
+        polygonEyes: eyes.every((eye) => {
+          const d = eye.getAttribute('d') || '';
+          return d.startsWith('M') && d.endsWith('Z') && (d.match(/L/g) || []).length >= 11;
+        }),
+        pause: Boolean(pause),
+        state: root?.getAttribute('data-state') || '',
+      };
+    })()
+  `);
+  ok(
+    'console mounts the stateful polygon-eye runtime',
+    consoleRuntime.runtime && consoleRuntime.eyes === 2 && consoleRuntime.polygonEyes,
+    JSON.stringify(consoleRuntime),
+  );
+  ok(
+    'console exposes a pause control for persistent motion',
+    consoleRuntime.pause === true,
+    JSON.stringify(consoleRuntime),
+  );
+
   const metaDescription = await cdp.evaluate(
     "document.querySelector('meta[name=description]')?.content || ''",
   );
@@ -268,11 +303,74 @@ try {
     'all=' + allCasts + ', filtered=' + filtered,
   );
 
+  await renderRoute('#/gallery');
+  await cdp.evaluate("document.querySelector('#wallFilters [data-family=\"all\"]')?.click(); true;");
+  await sleep(180);
+  const feature = await cdp.evaluate(`
+    (() => {
+      const root = document.querySelector('.tile.is-feature [data-et-runtime]');
+      const eyes = root ? [...root.querySelectorAll('[data-eye]')] : [];
+      const rect = document.querySelector('.tile.is-feature')?.getBoundingClientRect();
+      return {
+        runtime: Boolean(root),
+        eyes: eyes.length,
+        polygonEyes: eyes.every((eye) => {
+          const d = eye.getAttribute('d') || '';
+          return d.startsWith('M') && d.endsWith('Z') && (d.match(/L/g) || []).length >= 11;
+        }),
+        x: rect ? rect.left + rect.width / 2 : -1,
+        y: rect ? rect.top + rect.height / 2 : -1,
+      };
+    })()
+  `);
+  ok(
+    'featured cast mounts a polygon-eye specimen',
+    feature.runtime && feature.eyes === 2 && feature.polygonEyes,
+    JSON.stringify(feature),
+  );
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: feature.x,
+    y: feature.y,
+    button: 'left',
+    clickCount: 1,
+  });
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: feature.x,
+    y: feature.y,
+    button: 'left',
+    clickCount: 1,
+  });
+  await sleep(220);
+  const featureNavigation = await cdp.evaluate('location.hash');
+  ok(
+    'featured cast owns its pointer hit area and opens the console',
+    featureNavigation.startsWith('#/console'),
+    featureNavigation,
+  );
+
   // The dialog replaces its body when the expression changes. Replacing the
   // focused arrow used to drop keyboard focus outside the top-layer dialog.
   await renderRoute('#/gallery');
   await cdp.evaluate("document.querySelector('[data-tab=\"emotion\"]').click(); true;");
   await sleep(120);
+  const emotionTaxonomy = await cdp.evaluate(`
+    JSON.stringify({
+      tiles: document.querySelectorAll('#wallGrid .tile').length,
+      filters: document.querySelectorAll('#wallFilters [data-family]').length,
+      groups: [...new Set([...document.querySelectorAll('#wallGrid [data-state-group]')].map(
+        (node) => node.dataset.stateGroup,
+      ))],
+    })
+  `);
+  ok(
+    'emotion tab exposes the three state groups',
+    JSON.parse(emotionTaxonomy).tiles === 61 &&
+      JSON.parse(emotionTaxonomy).filters === 4 &&
+      JSON.parse(emotionTaxonomy).groups.length === 3,
+    emotionTaxonomy,
+  );
   const lightboxOpened = await cdp.evaluate(`
     (() => {
       const tile = document.querySelector('#wallGrid [data-state]');
@@ -302,7 +400,30 @@ try {
     lightboxOpened && lightboxFocusInside,
     'open=' + lightboxOpened + ', focusInside=' + lightboxFocusInside,
   );
-  await cdp.evaluate("document.querySelector('dialog.lightbox')?.close(); true;");
+  await cdp.send('Input.dispatchKeyEvent', {
+    type: 'rawKeyDown',
+    windowsVirtualKeyCode: 27,
+    key: 'Escape',
+    code: 'Escape',
+  });
+  await cdp.send('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    windowsVirtualKeyCode: 27,
+    key: 'Escape',
+    code: 'Escape',
+  });
+  await sleep(180);
+  const escaped = await cdp.evaluate(`
+    JSON.stringify({
+      removed: !document.querySelector('dialog.lightbox'),
+      focusInGrid: Boolean(document.activeElement?.closest?.('#wallGrid')),
+    })
+  `);
+  ok(
+    'gallery lightbox cleans up and restores focus on Escape',
+    JSON.parse(escaped).removed && JSON.parse(escaped).focusInGrid,
+    escaped,
+  );
 
   await renderRoute('#/scene');
   const sceneLabels = await cdp.evaluate(`
@@ -320,9 +441,11 @@ try {
     (() => {
       document.querySelector('[data-act="error"]').click();
       const before = document.querySelector('#arbiter-owner').textContent;
+      const transitions = document.querySelectorAll('.transition-item').length;
       document.querySelector('[data-act="reset"]').click();
       return {
         before,
+        transitions,
         owner: document.querySelector('#arbiter-owner').textContent,
         idleSessions: [...document.querySelectorAll('[data-session]')].every(
           (node) => node.dataset.kind === 'idle',
@@ -331,8 +454,11 @@ try {
     })()
   `);
   ok(
-    'scene reset clears the face and every source immediately',
-    sceneReset.before !== '—' && sceneReset.owner === '—' && sceneReset.idleSessions,
+    'scene reset clears the face, keeps transition history and resets every source',
+    sceneReset.before !== '—' &&
+      sceneReset.transitions > 0 &&
+      sceneReset.owner === '—' &&
+      sceneReset.idleSessions,
     JSON.stringify(sceneReset),
   );
 
@@ -346,6 +472,12 @@ try {
   await sleep(300);
   const english = await cdp.evaluate("document.querySelector('#nav a').textContent + '|' + document.documentElement.lang");
   ok('language switch changes the nav and the lang attribute', /Console|Gallery|Faces|Docs/.test(english) && english.includes('en'), english);
+
+  const themeBefore = await cdp.evaluate("document.documentElement.dataset.mono");
+  await cdp.evaluate("document.querySelector('.switch').click(); true;");
+  await sleep(120);
+  const themeAfter = await cdp.evaluate("document.documentElement.dataset.mono");
+  ok('theme switch changes the page colour scheme', themeAfter !== themeBefore, themeBefore + ' → ' + themeAfter);
 
   await renderRoute('#/console');
   await sleep(250);
@@ -372,6 +504,25 @@ try {
     JSON.stringify(englishIsland),
   );
   await renderRoute('#/docs');
+  const docsEngine = await cdp.evaluate(`
+    (() => {
+      document.querySelector('[data-engine-state="thinking"]')?.click();
+      return JSON.stringify({
+        sections: document.querySelectorAll('.sd-section').length,
+        toc: document.querySelectorAll('.sd-toc-link').length,
+        buttons: document.querySelectorAll('[data-engine-state]').length,
+        state: document.querySelector('[data-engine-runtime]')?.getAttribute('data-state'),
+      });
+    })()
+  `);
+  ok(
+    'docs document and mount the live motion rig',
+    JSON.parse(docsEngine).sections === 9 &&
+      JSON.parse(docsEngine).toc === 9 &&
+      JSON.parse(docsEngine).buttons === 3 &&
+      JSON.parse(docsEngine).state === 'thinking',
+    docsEngine,
+  );
   const englishDocGroups = await cdp.evaluate(`
     JSON.stringify([...document.querySelectorAll('.sd-group-head > span:not(.sd-group-hint)')].map(
       (node) => node.textContent.trim(),

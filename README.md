@@ -25,6 +25,8 @@
 
 三件东西全部在这个仓库里从零写成：`packages/core` 角色引擎（手写轮廓、表情词汇、画风与合成，输出 SVG）、`packages/protocol` 两位数协议（解析、多会话仲裁、事件桥）、`apps/desktop` 与 `apps/gallery`（Windows 桌面端；控制台 / 表情馆 / 场景 / 文档四页站点）。
 
+**静态 SVG 之上还有一层会动的骨架。** `renderCharacter()` 仍是确定性的纯函数，供导出、缩略图和测试使用；浏览器里的 `createCharacterRuntime()`（`@emojitot/core/runtime`）负责同一个角色的状态迁移、16 点多边形眼型形变、视线、眨眼和弹簧姿态。运动配置、弹簧积分器与状态历史分别在 `packages/core/src/motion/` 中，页面只负责选择要显示的状态，不复制角色实现。
+
 ## 演示
 
 ![收起](docs/screenshots/island-folded-frost.png)
@@ -37,11 +39,11 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.28/EmojiTot.Setup.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.28/EmojiTot.Portable.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.19.3/EmojiTot.Setup.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.19.3/EmojiTot.Portable.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
-Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.18<!--/facts-->
+Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.19<!--/facts-->
 
 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护；它指向的版本还没打标签时链接会 404，从「全部版本」里取当前已发布的那一版。
 
