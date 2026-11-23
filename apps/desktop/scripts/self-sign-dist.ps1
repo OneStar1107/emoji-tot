@@ -72,20 +72,42 @@ try {
     (Join-Path $root 'release\EmojiTot.Setup.exe'),
     (Join-Path $root 'release\EmojiTot.Portable.exe')
   )
+  $signTool = Get-Command signtool.exe -CommandType Application -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($signTool) {
+    $signToolPath = $signTool.Source
+  } else {
+    $cachedSignTool = Get-ChildItem `
+      -Path (Join-Path $env:LOCALAPPDATA 'electron-builder\Cache') `
+      -Filter signtool.exe `
+      -File `
+      -Recurse `
+      -ErrorAction SilentlyContinue |
+      Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+      Sort-Object LastWriteTime -Descending |
+      Select-Object -First 1
+    if (-not $cachedSignTool) {
+      throw 'Could not locate signtool.exe for signature verification.'
+    }
+    $signToolPath = $cachedSignTool.FullName
+  }
+
   $invalid = @(
-    Get-AuthenticodeSignature -LiteralPath $files |
-      Where-Object Status -ne 'Valid'
+    foreach ($file in $files) {
+      & $signToolPath verify /pa /all $file | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        $file
+      }
+    }
   )
   if ($invalid.Count -gt 0) {
-    throw 'Signature verification failed: ' +
-      (($invalid | ForEach-Object { $_.Path + '=' + $_.Status }) -join ', ')
+    throw 'Signature verification failed: ' + ($invalid -join ', ')
   }
 
   Write-Host ('Self-signed EmojiTot with ' + $certificate.Subject)
   Write-Host ('Certificate thumbprint: ' + $certificate.Thumbprint)
   $files | ForEach-Object {
-    $signature = Get-AuthenticodeSignature -LiteralPath $_
-    Write-Host ($signature.Status + '  ' + $_)
+    Write-Host ('Valid  ' + $_)
   }
 } finally {
   Remove-Item Env:CSC_LINK -ErrorAction SilentlyContinue
