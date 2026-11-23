@@ -38,7 +38,7 @@
  *   pnpm ui:audit -- --port 9580  # another CDP port (default 9576)
  *   pnpm ui:audit -- --exe <path> # another installed build
  *   pnpm ui:audit -- --skin solid # one skin; written to prefs.json before launch
- *   pnpm ui:audit -- --skins all  # all five skins, every island page each
+ *   pnpm ui:audit -- --skins all  # all three skins, every island page each
  *   pnpm ui:audit -- --skins all --stress  # skin × stress matrix over every island page
  *
  * A first launch can be measured before the island has a box: pages then read
@@ -69,7 +69,7 @@ const DEFAULT_PORT = 9576;
  * renderer/settings.js (rowSeg) and DEFAULTS.skin in shared/schema.js; the
  * product has no exported SKINS constant to import, so keep the three in step.
  */
-const SKINS = ['frost', 'solid', 'plain', 'magazine', 'console'];
+const SKINS = ['frost', 'solid', 'plain'];
 /** The smallest control we are willing to call usable. Documented in docs/UI-AUDIT.md. */
 const MIN_CONTROL_HEIGHT = 20;
 /** Layout measurements come back fractional; one pixel of dust is not a bug. */
@@ -120,11 +120,11 @@ function usage() {
     '  --port <n>      CDP port (default 9576; the default moves to the next free port)',
     '  --exe <path>    installed or packed EmojiTot.exe (defaults to the installed app, then release/win-unpacked)',
     '  --skin <key>    one island skin: ' + SKINS.join(', '),
-    '  --skins all     all five island skins; settings pages are measured once',
+    '  --skins all     all three island skins; settings pages are measured once',
     '  -h, --help      this text',
     '',
     '  --skin cannot be combined with --skins.',
-    '  --stress with --skins all measures the five-skin matrix over every island page,',
+    '  --stress with --skins all measures the three-skin matrix over every island page,',
     '  all at mono / 600 / 140%; the settings pages are still measured once.',
   ].join('\n');
 }
@@ -888,7 +888,7 @@ async function runPass(options, name, skin, measureSettings, stress) {
     /*
      * Skins only restyle the island window; the settings window keeps one
      * layout. So --skins all measures all settings pages once, on the
-     * first skin, instead of re-reading the same layout five times.
+     * first skin, instead of re-reading the same layout three times.
      */
     if (measureSettings) {
       const settingsSession = await openSettings(browser, islandSession, name);
@@ -1038,7 +1038,7 @@ function printPass(pass, skinsMode, settingsMeasuredOn) {
   console.log((pass.issues.length ? 'FAIL  ' : 'PASS  ') + measured + ' pages, ' + pass.issues.length + ' violation(s)');
 }
 
-/** Skin × page scrollHeight, the one table that makes five passes comparable. */
+/** Skin × page scrollHeight, the one table that makes three passes comparable. */
 function printSkinTable(passes, stress) {
   const skins = passes.filter((pass) => pass.skin);
   if (!skins.length) return;
@@ -1089,7 +1089,7 @@ async function main() {
   /*
    * One skin per launch: the profile is seeded with that skin and the app is
    * started again for the next one. Measuring a skin from a profile that never
-   * asked for it would make "frost" and "console" the same picture.
+   * asked for it would make every skin the same picture.
    */
   const plan = skinsMode
     ? skinPlan.map((skin, index) => ({ name: skin, skin, stress: options.stress, measureSettings: index === 0 }))

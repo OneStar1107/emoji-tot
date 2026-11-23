@@ -28,7 +28,16 @@ function start(handler) {
    */
   const confirm = createFullscreenGuard({ hideAfter: 2, showAfter: 2 });
   proc = platform.spawnPowerShell(
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT],
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      SCRIPT,
+      '-AppPid',
+      String(process.pid),
+    ],
     { stdio: ['ignore', 'pipe', 'ignore'] },
   );
   if (!proc) {

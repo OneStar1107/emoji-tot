@@ -59,11 +59,12 @@ describe('residency: a drag writes one order', () => {
 });
 
 describe('residency: reset', () => {
-  it('returns the fresh-install row: battery, clock, weather, balance off', () => {
+  it('returns the fresh-install row with optional components off', () => {
     const fresh = defaultStatusItems();
     assert.deepEqual(fresh, ['battery', 'clock', 'weather']);
     assert.deepEqual(fresh, DEFAULTS.statusItems);
     assert.ok(!fresh.includes('quota'), 'the balance stays switched off after a reset');
+    assert.ok(!fresh.includes('kaomoji'), 'kaomoji stays switched off after a reset');
   });
 
   it('hands back a copy, so resetting cannot edit the schema default', () => {
@@ -84,17 +85,26 @@ describe('residency: reset', () => {
 describe('residency: the preview keeps a slot for switched-off items', () => {
   it('lists every manifest item, switched-on ones first in the user order', () => {
     const rows = statusPreviewRows(withDefaults({ statusItems: ['weather', 'battery'] }));
-    assert.deepEqual(rows.map((row) => row.key), ['weather', 'battery', 'clock', 'quota']);
+    assert.deepEqual(rows.map((row) => row.key), ['weather', 'battery', 'clock', 'quota', 'kaomoji']);
     assert.deepEqual(rows.filter((row) => row.enabled).map((row) => row.key), ['weather', 'battery']);
     assert.equal(rows.find((row) => row.key === 'clock').enabled, false);
+    assert.equal(rows.find((row) => row.key === 'kaomoji').enabled, false);
     assert.deepEqual(rows.map((row) => row.key).sort(), [...ALL].sort());
   });
 
   it('keeps the off item as a grey slot after a drag', () => {
     const moved = moveStatusKey(withDefaults({ statusItems: ['battery', 'clock', 'weather'] }), 'weather', 0);
     const rows = statusPreviewRows(withDefaults({ statusItems: moved }));
-    assert.deepEqual(rows.map((row) => row.key), ['weather', 'battery', 'clock', 'quota']);
-    assert.equal(rows.at(-1).enabled, false, 'the balance keeps the last slot, switched off');
+    assert.deepEqual(rows.map((row) => row.key), ['weather', 'battery', 'clock', 'quota', 'kaomoji']);
+    assert.equal(rows.find((row) => row.key === 'quota').enabled, false, 'balance keeps its reserved slot');
+    assert.equal(rows.at(-1).enabled, false, 'kaomoji keeps the last slot, switched off');
+  });
+
+  it('adds kaomoji to the same statusItems order when switched on', () => {
+    const before = withDefaults({ statusItems: ['battery', 'clock', 'weather'] });
+    const after = withDefaults({ statusItems: setStatusItemEnabled(before, 'kaomoji', true) });
+    assert.deepEqual(enabledStatusKeys(after), ['battery', 'clock', 'weather', 'kaomoji']);
+    assert.equal(statusPreviewRows(after).find((row) => row.key === 'kaomoji').enabled, true);
   });
 });
 
@@ -114,7 +124,7 @@ describe('residency: the two lists are one list', () => {
     const rows = statusPreviewRows(off);
     assert.equal(rows.find((row) => row.key === 'clock').enabled, false);
     assert.ok(rows.findIndex((row) => row.key === 'clock') >= 3, 'the off item moves to the reserved tail');
-    assert.deepEqual(orderedStatusKeys(off), ['quota', 'battery', 'weather', 'clock']);
+    assert.deepEqual(orderedStatusKeys(off), ['quota', 'battery', 'weather', 'clock', 'kaomoji']);
   });
 
   it('the settings page reads both lists from the schema, not from a copy', () => {
@@ -125,6 +135,12 @@ describe('residency: the two lists are one list', () => {
     assert.ok(settings.includes('moveStatusKey(prefs'), 'a drag writes through the shared mover');
     assert.ok(settings.includes('defaultStatusItems()'), 'reset uses the schema default, not a literal');
     assert.ok(!/statusItems: \['battery'/.test(settings), 'no second copy of the default order in the renderer');
+  });
+
+  it('previews kaomoji with the same expression the island renders', () => {
+    const settings = src('renderer/settings.js');
+    assert.ok(settings.includes('PILL_EXPRESSION'), 'the settings preview imports the shared expression');
+    assert.ok(settings.includes("key === 'kaomoji'"), 'the preview has a kaomoji branch');
   });
 
   it('the island and the strip share one set of reading rules', () => {

@@ -47,7 +47,97 @@ Module._load = function patched(request, ...rest) {
 };
 const platform = require('../src/main/platform.js');
 const media = require('../src/main/services/media.js');
+const douyu = require('../src/main/services/douyu.js');
 Module._load = originalLoad;
+
+describe('live frames keep a usable cover and the real start time', () => {
+  const bilibiliTitle = 'gta6！赚够100W再下播 - 棉花大哥哥 - 哔哩哔哩直播，二次元弹幕直播平台';
+
+  it('drops the Bilibili placeholder thumbnail so the real cover lookup can run', () => {
+    const frame = media.prepareLiveFrame({
+      active: true,
+      title: bilibiliTitle,
+      duration: 0,
+      art: 'data:image/png;base64,cGxhY2Vob2xkZXI=',
+    });
+    assert.equal(frame.art, '');
+  });
+
+  it('keeps artwork for an ordinary song', () => {
+    const art = 'data:image/jpeg;base64,YXJ0';
+    const frame = media.prepareLiveFrame({ active: true, title: '晴天', duration: 269, art });
+    assert.equal(frame.art, art);
+  });
+
+  it('merges the room metadata and uses the broadcast start, not first detection', () => {
+    const frame = media.attachLiveInfo(
+      { active: true, title: bilibiliTitle, duration: 0, art: '', liveSince: 5000 },
+      {
+        platform: 'bilibili',
+        roomId: '34348',
+        roomTitle: 'gta6！赚够100W再下播',
+        anchorName: '棉花大哥哥',
+        startedAt: 1795428383000,
+        art: 'data:image/jpeg;base64,Y292ZXI=',
+      },
+    );
+    assert.equal(frame.liveSince, 1795428383000);
+    assert.deepEqual(frame.live, {
+      platform: 'bilibili',
+      roomId: '34348',
+      roomTitle: 'gta6！赚够100W再下播',
+      anchorName: '棉花大哥哥',
+      startedAt: 1795428383000,
+    });
+    assert.equal(frame.art, 'data:image/jpeg;base64,Y292ZXI=');
+  });
+});
+
+describe('live room identification', () => {
+  it('matches the Douyu room by its exact room and anchor names', () => {
+    const room = douyu.pickRoom('六点半来哦', 'Xleft小叮当', [
+      { isLive: 1, roomName: '另一个房间', nickName: 'Xleft小叮当', rid: 1 },
+      { isLive: 1, roomName: '六点半来哦', nickName: 'Xleft小叮当', rid: 3168536 },
+    ]);
+    assert.equal(room.rid, 3168536);
+  });
+
+  it('does not turn an unrelated browser live stream into a Douyu room', () => {
+    assert.equal(
+      douyu.pickRoom('A live stream', 'Lofi Girl', [
+        { isLive: 1, roomName: 'A live stream highlights', nickName: 'Someone else', rid: 2 },
+      ]),
+      null,
+    );
+  });
+
+  it('only asks Douyu to resolve a live session with both room and anchor text', () => {
+    assert.equal(
+      douyu.looksCandidate({
+        active: true,
+        duration: 0,
+        source: 'egolite',
+        title: '六点半来哦',
+        artist: 'Xleft小叮当',
+      }),
+      true,
+    );
+    assert.equal(
+      douyu.looksCandidate({ active: true, duration: 0, source: 'egolite', title: '六点半来哦', artist: '' }),
+      false,
+    );
+    assert.equal(
+      douyu.looksCandidate({
+        active: true,
+        duration: 213,
+        source: 'egolite',
+        title: '六点半来哦',
+        artist: 'Xleft小叮当',
+      }),
+      false,
+    );
+  });
+});
 
 describe('seek rail arithmetic', () => {
   it('maps the ends of the track to 0 and 100 percent', () => {

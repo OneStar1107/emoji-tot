@@ -31,6 +31,15 @@ param([string]$CityB64, [switch]$AutoLocate, [double]$Lat, [double]$Lon, [string
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 
+# These are fixed public endpoints, and the Electron session already bypasses
+# the system proxy for the same reason: a stale 127.0.0.1 proxy setting turns
+# every request into a five-second timeout even when the hosts are reachable
+# directly. Windows PowerShell otherwise inherits that proxy automatically.
+$env:HTTP_PROXY = $null
+$env:HTTPS_PROXY = $null
+$env:ALL_PROXY = $null
+[System.Net.WebRequest]::DefaultWebProxy = New-Object System.Net.WebProxy
+
 $steps = New-Object System.Collections.ArrayList
 
 function Write-Step([string]$line) {

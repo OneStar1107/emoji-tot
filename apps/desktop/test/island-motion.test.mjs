@@ -91,21 +91,35 @@ describe('island morph integration: one geometry clock, no content transforms', 
     assert.match(main, /island:prepare-size/);
   });
 
-  it('measures the resting panel before the morph layout removes its body from flow', () => {
+  it('measures the resting panel before the preparation layout removes its body from flow', () => {
     const setOpen = source.indexOf('async function setOpen');
     const panelRead = source.indexOf('width: Math.ceil(panelEl.offsetWidth)', setOpen);
     const bodyRead = source.indexOf('width: Math.ceil(panelBodyEl.offsetWidth)', setOpen);
-    const morphLayout = source.indexOf("document.body.dataset.morphing = 'true'", setOpen);
+    const prepareLayout = source.indexOf("document.body.dataset.preparing = 'true'", setOpen);
 
     assert.ok(panelRead > setOpen);
     assert.ok(bodyRead > panelRead);
-    assert.ok(morphLayout > bodyRead);
+    assert.ok(prepareLayout > bodyRead);
+  });
+
+  it('samples the compact target without letting the visible panel squeeze it', () => {
+    const close = source.indexOf('function closeMorph()');
+    const measurePill = source.indexOf('syncPillWidth({ immediate: true })', close);
+    const sampleCompact = source.indexOf('const pillW = Math.ceil(pillEl.offsetWidth)', close);
+    assert.ok(measurePill > close && sampleCompact > measurePill);
+    assert.match(css, /\.pill\s*\{[^}]*flex:\s*none/);
+    assert.match(css, /\.panel\s*\{[^}]*flex:\s*none/);
+  });
+
+  it('never paints a closing geometry narrower than the compact destination', () => {
+    assert.match(source, /const progress = clamp01\(m\.progress\);/);
+    assert.match(source, /geometryAt\(m\.compact, m\.expanded, progress\)/);
   });
 
   it('never reports an intermediate layout box while the morph owns the window', () => {
     assert.match(
       source,
-      /function measure\(\) \{[\s\S]*?if \(document\.body\.dataset\.morphing === 'true'\) return;[\s\S]*?api\.reportBox/,
+      /function measure\(\) \{[\s\S]*?if \(preparing \|\| document\.body\.dataset\.morphing === 'true'\) return;[\s\S]*?api\.reportBox/,
     );
   });
 
@@ -118,8 +132,8 @@ describe('island morph integration: one geometry clock, no content transforms', 
   });
 
   it('removes outer surface shadows during the composite-sensitive morph', () => {
-    assert.match(css, /body\[data-morphing="true"\] \.pill/);
-    assert.match(css, /body\[data-morphing="true"\] \.panel/);
+    assert.match(css, /body:is\(\[data-morphing="true"\], \[data-preparing="true"\]\) \.pill/);
+    assert.match(css, /body:is\(\[data-morphing="true"\], \[data-preparing="true"\]\) \.panel/);
     assert.match(css, /box-shadow:\s*none/);
   });
 });

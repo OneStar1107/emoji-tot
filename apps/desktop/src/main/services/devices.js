@@ -7,17 +7,18 @@
  * no battery property is still listed — "connected" is useful on its own.
  *
  * One sweep prints two lines, and each one is pushed as a whole snapshot:
- * "list" arrives in ~1.5s with the names and connection state (battery null),
- * "battery" follows in ~2.5s more with the levels. The renderer replaces its
- * list per push, so the page draws rows as soon as it has rows instead of
- * waiting out the slow half of the sweep. The vendor probe is merged on read,
- * so a receiver's level can still land between or after the two.
+ * "list" arrives in about a second with the names plus every native PnP level,
+ * and "battery" follows after the one-at-a-time HFP read. The renderer replaces
+ * its list per push, so rows and levels appear together instead of waiting for a
+ * batched PowerShell property lookup. The vendor probe is merged on read, so a
+ * receiver's level can still land between or after the two.
  */
 const platform = require('../platform');
 const path = require('node:path');
 const { cachePath, readJson, scriptFile, writeJson } = require('../paths');
 const deviceBattery = require('./device-battery');
 const { classifyDeviceSnapshot } = require('../device-cache');
+const { currentLocale, localizeDeviceName } = require('../device-names');
 
 const RESPAWN_MS = 30000;
 /** A cold child that never emits is replaced instead of leaving an empty list. */
@@ -40,6 +41,7 @@ let firstPushesLogged = 0;
 /** Which half of the sweep the last line was: 'list' or 'battery'. */
 let phase = 'list';
 let stopped = true;
+let locale = currentLocale();
 const listeners = new Set();
 
 const scriptPath = () => scriptFile('devices.ps1');
@@ -78,7 +80,12 @@ function snapshot() {
    * same as before.
    */
   const rows = devices.map((device) => {
-    const row = { ...device };
+    const row = {
+      ...device,
+      /* UI-only label. `name` remains the stable identity used by pin, hide,
+       * order, duplicate removal, and vendor battery lookup. */
+      displayName: localizeDeviceName(device.name, locale),
+    };
     if (row.battery === null) {
       const vendor = deviceBattery.get(row.name);
       if (vendor) row.battery = vendor.level;
@@ -129,6 +136,7 @@ function handleLine(line) {
    * Number(null) is 0, so null must be checked before the numeric test.
    */
   const byName = new Map();
+  const previousByName = new Map(devices.map((device) => [device.name, device]));
   for (const device of parsed.devices) {
     const name = String(device.name ?? '');
     if (!name) continue;
@@ -145,6 +153,11 @@ function handleLine(line) {
        */
       source: String(device.source ?? ''),
     };
+    const previous = previousByName.get(name);
+    if (phase === 'list' && entry.battery === null && previous && previous.battery !== null) {
+      entry.battery = previous.battery;
+      entry.source = previous.source || entry.source;
+    }
     const existing = byName.get(name);
     if (!existing || (existing.battery === null && entry.battery !== null)) byName.set(name, entry);
   }
@@ -249,6 +262,13 @@ function onChange(fn) {
   listeners.add(fn);
 }
 
+/** Called once at startup with the OS locale, independent of the UI language. */
+function setLocale(value) {
+  locale = String(value || currentLocale());
+  if (!stopped) emit();
+  return locale;
+}
+
 /** The devices page came into view (or left it): probe once now, or slow down. */
 function setFocused(active) {
   deviceBattery.setFocused(active);
@@ -278,4 +298,4 @@ function refresh() {
   return deviceBattery.probeNow().then(() => emit());
 }
 
-module.exports = { start, stop, snapshot, onChange, setFocused, refresh };
+module.exports = { start, stop, snapshot, onChange, setFocused, setLocale, refresh };

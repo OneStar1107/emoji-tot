@@ -16,6 +16,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const Module = require('node:module');
@@ -118,6 +120,7 @@ describe('devices: one resident child, two pushes per sweep', () => {
 
   it('pushes the list first with null levels, then the same rows with levels', () => {
     const devices = fresh();
+    devices.setLocale('zh-CN');
     const pushes = [];
     devices.onChange((value) => pushes.push(value));
     devices.start();
@@ -132,6 +135,12 @@ describe('devices: one resident child, two pushes per sweep', () => {
     assert.equal(pushes[1].phase, 'list');
     assert.equal(pushes[1].scanning, false);
     assert.deepEqual(pushes[1].devices.map((row) => row.battery), [null, null]);
+    assert.deepEqual(pushes[1].devices.map((row) => row.name), ['Xbox Wireless Controller', 'ROG AZOTH']);
+    assert.deepEqual(
+      pushes[1].devices.map((row) => row.displayName),
+      ['Xbox Wireless Controller', 'ROG 夜魔'],
+      'the localized label is separate from the stable PnP identity',
+    );
     assert.equal(pushes[1].withBattery, 0);
 
     line(batteryLine([
@@ -146,6 +155,22 @@ describe('devices: one resident child, two pushes per sweep', () => {
     devices.stop();
   });
 
+  it('keeps PnP names in non-Chinese locales', () => {
+    const devices = fresh();
+    devices.setLocale('en-US');
+    const pushes = [];
+    devices.onChange((value) => pushes.push(value));
+    devices.start();
+
+    line(listLine([
+      { name: 'ROG GLADIUS III WIRELESS AIMPOINT', status: 'OK', battery: null, source: 'hid-wireless' },
+    ]));
+
+    assert.equal(pushes.at(-1).devices[0].name, 'ROG GLADIUS III WIRELESS AIMPOINT');
+    assert.equal(pushes.at(-1).devices[0].displayName, 'ROG GLADIUS III WIRELESS AIMPOINT');
+    devices.stop();
+  });
+
   it('a vendor level lands on a row the list pass left at null', () => {
     const devices = fresh();
     const pushes = [];
@@ -156,6 +181,24 @@ describe('devices: one resident child, two pushes per sweep', () => {
     line(listLine([{ name: 'ROG GLADIUS III WIRELESS AIMPOINT', status: 'OK', battery: null, source: 'hid-wireless' }]));
     assert.deepEqual(pushes[1].devices.map((row) => row.battery), [64], 'the receiver level is merged on read');
     assert.equal(pushes[1].withBattery, 1);
+    devices.stop();
+  });
+
+  it('keeps a known level while a refresh enumerates the same device', () => {
+    const devices = fresh();
+    const pushes = [];
+    cache.value = {
+      at: 1,
+      devices: [{ name: 'crociris T7 GT', status: 'OK', battery: 100, source: 'bluetooth' }],
+    };
+    devices.onChange((value) => pushes.push(value));
+    devices.start();
+
+    line(listLine([{ name: 'crociris T7 GT', status: 'OK', battery: null, source: 'bluetooth' }]));
+    assert.equal(pushes.at(-1).devices[0].battery, 100, 'the fast list must not blank a cached level');
+
+    line(batteryLine([{ name: 'crociris T7 GT', status: 'OK', battery: 97, source: 'bluetooth' }]));
+    assert.equal(pushes.at(-1).devices[0].battery, 97, 'the completed probe replaces the cached level');
     devices.stop();
   });
 
@@ -215,5 +258,85 @@ describe('devices.ps1: the two-line protocol and the post-boot sweep', () => {
     assert.match(script, /pnputil\.exe/);
     assert.match(script, /OEMCodePage/);
     assert.ok(!/Get-PnpDevice -Class/.test(script), 'the slow class queries are gone');
+  });
+
+  it('keeps only top-level paired Bluetooth devices, not services or radio adapters', () => {
+    assert.match(script, /function Test-IsBluetoothPeripheral/);
+    assert.match(script, /\^\(BTHLE\|BTHENUM\)\\\\Dev_/);
+    assert.match(script, /Test-IsBluetoothPeripheral \$id \$name/);
+  });
+
+  it('does not list smart speakers as computer peripherals', () => {
+    assert.ok(script.includes('Speaker'));
+    assert.ok(script.includes(String.raw`\u97F3\u7BB1`));
+    assert.ok(script.includes(String.raw`\u626C\u58F0\u5668`));
+  });
+
+  it('does not list phones as computer peripherals', () => {
+    assert.ok(script.includes(String.raw`(?<![A-Za-z])Phone(?![A-Za-z])`));
+    assert.ok(script.includes("'iPhone'"));
+    assert.ok(script.includes("'Smartphone'"));
+    assert.ok(script.includes(String.raw`\u624B\u673A`));
+  });
+
+  it('treats localized generic HID collection names as plumbing', () => {
+    assert.ok(script.includes(String.raw`^\u7B26\u5408 HID \u6807\u51C6`));
+    assert.ok(script.includes(String.raw`^USB \u8F93\u5165\u8BBE\u5907$`));
+    assert.ok(script.includes(String.raw`^\u7B26\u5408\u84DD\u7259\u4F4E\u80FD\u8017 GATT \u7684 HID \u8BBE\u5907$`));
+    assert.ok(script.includes(String.raw`^\u84DD\u7259 LE XINPUT \u517C\u5BB9\u7684\u8F93\u5165\u8BBE\u5907$`));
+  });
+
+  it('parses native PnP battery properties without the slow PowerShell property lookup', () => {
+    const modulePath = fileURLToPath(new URL('../src/main/services/devices-pnp.ps1', import.meta.url));
+    const xml = `<PnpUtil>
+      <Device><Properties>
+        <Property Key="{104ea319-6ee2-4701-bd47-8ddbf425bbe5}[2]" Type="BYTE"><Value>0x64</Value></Property>
+      </Properties></Device>
+      <Device><Properties>
+        <Property Key="{104ea319-6ee2-4701-bd47-8ddbf425bbe5}[2]" Type="BYTE"><Value>0x5E</Value></Property>
+      </Properties></Device>
+      <Device><Properties>
+        <Property Key="{a8b865dd-2e3d-4094-ad97-e593a70c75d6}[26]" Type="Boolean"><Value>FALSE</Value></Property>
+      </Properties></Device>
+    </PnpUtil>`;
+    const escapedModule = modulePath.replaceAll("'", "''");
+    const command = `. '${escapedModule}'; $xml = [xml]$env:EMOJITOT_PNP_FIXTURE; @($xml.PnpUtil.Device | ForEach-Object { [pscustomobject]@{ battery = Get-PnpBatteryLevel $_ } }) | ConvertTo-Json -Compress`;
+    const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      encoding: 'utf8',
+      env: { ...process.env, EMOJITOT_PNP_FIXTURE: xml },
+      timeout: 10000,
+    });
+    assert.equal(result.status, 0, result.stderr || result.error?.message);
+    assert.ok(result.stdout.trim(), result.stderr || result.error?.message);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), [
+      { battery: 100 },
+      { battery: 94 },
+      { battery: null },
+    ]);
+  });
+
+  it('returns a complete battery snapshot in one fast diagnostic pass', () => {
+    const startedAt = Date.now();
+    const result = spawnSync('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      SCRIPT,
+      '-Once',
+    ], {
+      encoding: 'utf8',
+      timeout: 12000,
+    });
+    const elapsedMs = Date.now() - startedAt;
+    assert.equal(result.status, 0, result.stderr || result.error?.message);
+    assert.ok(elapsedMs < 10000, `the native PnP sweep took ${elapsedMs}ms`);
+    const snapshots = result.stdout
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    assert.equal(snapshots.at(-1)?.phase, 'battery');
+    assert.ok(Array.isArray(snapshots.at(-1)?.devices));
   });
 });

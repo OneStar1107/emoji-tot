@@ -152,14 +152,14 @@ Get-PnpDeviceProperty -InstanceId 'BTHENUM\{0000111E-0000-1000-8000-00805F9B34FB
 | 优先 | 通道 | 现在能不能 | 覆盖举例 | 代价 |
 | --- | --- | --- | --- | --- |
 | 1 | BLE GATT 0x180F/0x2A19 | **能**，马上 | ROG AZOTH、FlyDigi BS2PRO、绝大多数 BLE 键鼠手柄 | 无 |
-| 2 | 经典蓝牙 HFP 上报 | **能**，修一下扫描类 | **T7 GT**、Sony/Bose/漫步者等蓝牙耳机 | 改 `devices.ps1` 一处 |
+| 2 | 经典蓝牙 HFP 上报 | **能，已接入** | **T7 GT**、Sony/Bose/漫步者等蓝牙耳机 | `devices.ps1` + Config Manager 属性读取 |
 | 3 | `Windows.Gaming.Input` | 能，照 MIT 项目 | Xbox One / Series 手柄 | 小 |
 | 4 | 手柄输入报告 | 能，照 MIT 项目 | DualSense / DualSense Edge / DS4 | 小 |
 | 5 | 罗技 HID++ | 要一条 HID 通道 | MX Master 3、G Pro、G915、PRO X Wireless | 中（需设备） |
 | 6 | 厂商私有 HID | 不能照搬，只能自己抓 | 雷蛇、赛睿、海盗船、HyperX、Glorious | 高（需设备 + 许可证评估） |
 | — | 纯 2.4G 无属性 dongle | 做不了 | 杂牌 | 只能显示「已连接」 |
 
-**这一轮就能落地的是 1 和 2**：修 `devices.ps1` 的两个缺口（补扫 HFP AG、批量读分块），T7 GT 这类蓝牙耳机的电量就会出现在岛里，且不碰任何私有协议。
+1 和 2 已经落地：`devices.ps1` 会补扫 HFP AG，并通过原生 Config Manager 属性读取电量；T7 GT 这类蓝牙耳机的电量会出现在岛里，且不碰任何私有协议。
 
 ## 八、复现
 

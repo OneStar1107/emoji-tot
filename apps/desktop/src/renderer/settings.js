@@ -31,6 +31,7 @@ import {
   quotaText,
   temperatureText,
 } from '../shared/status-view.js';
+import { PILL_EXPRESSION } from './island-pill.mjs';
 import { LANGS, translate } from './i18n.js';
 
 /** The rail, from the one manifest. */
@@ -139,7 +140,7 @@ const row = (label, sub, control) =>
 /*
  * The stacked row: label above, control across the card.
  *
- * The skin cards are a five-column grid of their own — side by side with the
+ * The skin cards are a three-column grid of their own — side by side with the
  * label they squeezed it into three lines, and in the narrow column the card
  * had less room than the grid. This is the one row type where the control is
  * the subject, so it gets the full width.
@@ -159,15 +160,13 @@ const rowSeg = (label, sub, key, options) =>
     (String(valueOf(key)) === String(value)) + '">' + escapeHtml(text) + '</button>').join('') + '</span>');
 
 /*
- * 皮肤预览：五张迷你岛，和上面的文字段共用同一个 seg 动作。
+ * 皮肤预览：三张迷你岛，和上面的文字段共用同一个 seg 动作。
  * 点击、Tab + Enter 和 aria-pressed 因此只有一条路径，两种控件不会各说各话。
  */
 const SKIN_PREVIEWS = [
   ['frost', 'skin.frost.label', 'skin.frost.hint'],
   ['solid', 'skin.solid.label', 'skin.solid.hint'],
   ['plain', 'skin.plain.label', 'skin.plain.hint'],
-  ['magazine', 'skin.magazine.label', 'skin.magazine.hint'],
-  ['console', 'skin.console.label', 'skin.console.hint'],
 ];
 
 const skinPreviewCards = () =>
@@ -340,7 +339,7 @@ function pageAppearance() {
     ])) +
     group(T('appearance.island.title'), card([
       /* The cards carry the name and the look of every skin; the text segment row
-         above them repeated the same five labels, so it is gone. */
+         above them repeated the same three labels, so it is gone. */
       rowStack(T('appearance.skin.label'), T('appearance.skin.sub'), skinPreviewCards()),
       skinPreviewRow(),
       rowToggle(T('appearance.blur.label'), T('appearance.blur.sub'), 'blur'),
@@ -701,7 +700,7 @@ const RESIDENCY_CELSIUS = 17;
  *
  * 条是胶囊的等比放大：同一个胶囊圆角、同一套内边距节奏、同一组读数函数。
  * 皮肤与主题跟随 prefs.skin 与 html[data-theme] —— .skin-preview 这个类把
- * 五套皮肤映射成岛自己的变量名（--card-solid / --accent / --ink / --ui-font），
+ * 三套皮肤映射成岛自己的变量名（--card-solid / --accent / --ink / --ui-font），
  * 这里只借它的变量壳，尺寸由 .residency-pill 自己重写。
  *
  * 未启用的组件留在条上（虚线 + 降透明度）：位置看得见，只是它现在不画在
@@ -719,7 +718,8 @@ function residencyCard() {
     const value = key === 'battery' ? batteryText(RESIDENCY_BATTERY)
       : key === 'clock' ? clockText(now, use24)
         : key === 'weather' ? temperatureText(RESIDENCY_CELSIUS, unit)
-          : balance || '¥20.8';
+          : key === 'kaomoji' ? PILL_EXPRESSION
+            : balance || '¥20.8';
     const off = T('pages.residency.off', { name: label });
     const aria = enabled ? T('pages.residency.chip', { name: label, value }) : off;
     return '<div class="residency-chip" role="listitem" tabindex="0" data-residency-key="' + key +
@@ -958,7 +958,7 @@ function pageWeather() {
   return head(T('weather.title'), T('weather.lead')) +
     group(T('weather.location.title'), card([
       rowToggle(T('weather.autoLocate.label'), T('weather.autoLocate.sub'), 'weather.autoLocate'),
-      rowInput(T('weather.city.label'), T('weather.city.sub'), 'weather.city', cityValue, T('weather.city.placeholder')),
+      rowInput(T('weather.city.label'), T('weather.city.sub'), 'weather.city', cityValue, ''),
       rowSeg(T('weather.unit.label'), '', 'weather.unit', [['c', T('weather.unit.c')], ['f', T('weather.unit.f')]]),
     ])) +
     '<p class="note">' + T('weather.privacy.note') + '</p>' +
@@ -1018,6 +1018,7 @@ function pageDevices() {
   const ordered = orderDevices(list, { pinned, order: prefs.devices?.order });
   const rows = ordered.map((device) => {
     const name = String(device.name ?? '');
+    const displayName = String(device.displayName || name);
     const shown = !hidden.includes(name);
     const isPinned = pinned.includes(name);
     const level = levelOf(device.battery);
@@ -1032,13 +1033,13 @@ function pageDevices() {
     const pinTitle = isPinned
       ? T('devices.row.unpinTitle')
       : pinFull ? T('devices.row.pinFull', { max: DEVICE_PIN_LIMIT }) : T('devices.row.pinTitle', { max: DEVICE_PIN_LIMIT });
-    return '<div class="row dev-row" draggable="true" data-device="' + escapeHtml(name) + '"' + (shown ? '' : ' data-off="1"') + ' title="' + escapeHtml([name, state, source, level === null ? T('devices.row.unreadable') : T('devices.row.level', { n: level })].filter(Boolean).join(' · ')) + '">' +
+    return '<div class="row dev-row" draggable="true" data-device="' + escapeHtml(name) + '"' + (shown ? '' : ' data-off="1"') + ' title="' + escapeHtml([displayName, state, source, level === null ? T('devices.row.unreadable') : T('devices.row.level', { n: level })].filter(Boolean).join(' · ')) + '">' +
       '<span class="dev-grip" aria-hidden="true" title="' + escapeHtml(T('devices.row.drag')) + '"><svg viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></span>' +
       '<span class="dev-glyph" aria-hidden="true"><svg viewBox="0 0 24 24">' + (DEVICE_GLYPHS[deviceKind(name)] ?? DEVICE_GLYPHS.other) + '</svg></span>' +
-      '<span class="dev-main"><b>' + escapeHtml(name) + '</b><span>' + escapeHtml(state) + (source ? ' · ' + escapeHtml(source) : '') + '</span></span>' +
+      '<span class="dev-main"><b>' + escapeHtml(displayName) + '</b><span>' + escapeHtml(state) + (source ? ' · ' + escapeHtml(source) : '') + '</span></span>' +
       battery +
-      '<button type="button" class="switch" role="switch" aria-checked="' + shown + '" data-act="device-show" data-name="' + escapeHtml(name) + '" aria-label="' + escapeHtml(T('devices.row.show', { name })) + '" title="' + (shown ? escapeHtml(T('devices.row.show', { name })) : escapeHtml(T('devices.row.hidden'))) + '"></button>' +
-      '<button type="button" class="dev-star' + (isPinned ? ' on' : '') + '" data-act="device-pin" data-name="' + escapeHtml(name) + '" aria-pressed="' + isPinned + '" aria-label="' + (isPinned ? escapeHtml(T('devices.row.unpin', { name })) : escapeHtml(T('devices.row.pin', { name }))) + '" title="' + escapeHtml(pinTitle) + '"' + (!isPinned && pinFull ? ' disabled' : '') + '>' +
+      '<button type="button" class="switch" role="switch" aria-checked="' + shown + '" data-act="device-show" data-name="' + escapeHtml(name) + '" aria-label="' + escapeHtml(T('devices.row.show', { name: displayName })) + '" title="' + (shown ? escapeHtml(T('devices.row.show', { name: displayName })) : escapeHtml(T('devices.row.hidden'))) + '"></button>' +
+      '<button type="button" class="dev-star' + (isPinned ? ' on' : '') + '" data-act="device-pin" data-name="' + escapeHtml(name) + '" aria-pressed="' + isPinned + '" aria-label="' + (isPinned ? escapeHtml(T('devices.row.unpin', { name: displayName })) : escapeHtml(T('devices.row.pin', { name: displayName }))) + '" title="' + escapeHtml(pinTitle) + '"' + (!isPinned && pinFull ? ' disabled' : '') + '>' +
         '<svg viewBox="0 0 24 24" aria-hidden="true">' + STAR_ICON + '</svg></button>' +
       '</div>';
   }).join('');
@@ -1602,7 +1603,7 @@ content.addEventListener('click', async (event) => {
     return;
   }
   if (act === 'status-reset') {
-    /* 恢复默认是「回到新装那天」：电量、时间、温度，余额关掉，顺序也复原。 */
+    /* 恢复默认是「回到新装那天」：电量、时间、温度，余额和颜文字关掉，顺序也复原。 */
     await patch({ statusItems: defaultStatusItems() });
     return;
   }

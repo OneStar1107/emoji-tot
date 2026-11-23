@@ -21,6 +21,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FACTS } from './facts.mjs';
+import { currentReleaseVersion } from './release-version-lib.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
@@ -37,7 +38,14 @@ const DOCS = [
 
 const FACT_MARKER = /<!--facts:([A-Za-z]+)-->([\s\S]*?)<!--\/facts-->/g;
 const DOWNLOAD_BLOCK = /<!--downloads:start-->([\s\S]*?)<!--downloads:end-->/g;
-const VERSION = FACTS.version;
+const packageVersion = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
+let buildInfo = null;
+try {
+  buildInfo = JSON.parse(readFileSync(resolve(root, 'apps', 'desktop', 'build-info.json'), 'utf8'));
+} catch {
+  // A clean source tree without a build has only the public three-part version.
+}
+const VERSION = currentReleaseVersion({ packageVersion, buildInfo });
 
 let stale = 0;
 let checked = 0;
@@ -71,11 +79,11 @@ for (const rel of DOCS) {
     // Bare versions first (skipping the one inside "v0.3.2"), then the v-prefixed
     // form, so a release URL and its file name cannot disagree.
     const fixed = body
-      .replace(/(?<!v)0\.\d+\.\d+/g, () => {
+      .replace(/(?<![\w.])\d+\.\d+\.\d+(?:\.\d+)?(?![\w.])/g, () => {
         links += 1;
         return VERSION;
       })
-      .replace(/v0\.\d+\.\d+/g, () => {
+      .replace(/v\d+\.\d+\.\d+(?:\.\d+)?/g, () => {
         links += 1;
         return 'v' + VERSION;
       });

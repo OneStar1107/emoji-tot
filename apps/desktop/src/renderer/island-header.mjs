@@ -6,8 +6,10 @@
  * into a 96px slot on the right. Now the playing title owns the line and the
  * page name stays where it belongs — under the avatar.
  */
+import { nowPlayingText } from './island-pill.mjs';
+
 export function islandHeaderState(media) {
-  return { title: media?.active ? String(media.title ?? '') : '' };
+  return { title: media?.active ? nowPlayingText(media) : '' };
 }
 
 export function pagingVisibility(pageCount) {

@@ -8,32 +8,76 @@
  * across a stylesheet rule and an if/else inside renderPillStatus, so neither
  * could be tested. It lives here as data instead:
  *
- *   status   at least one component has a value  (the default)
- *   lyric    no component, a song is playing, and the "岛上歌词" switch is on
- *   face     nothing else: the expression keeps the capsule from being empty
+ *   nowPlaying  media is actively playing; its title owns the row
+ *   status      no media is playing and at least one component has a value
+ *   face        nothing else: the expression keeps the capsule from being empty
  *
- * The expression is filler, so it never shares the row with two or more
- * components — at that point it is noise, not status.
+ * Kaomoji is no longer automatic filler. It is an opt-in status component and
+ * may join the row only when at least one real reading has a value.
  */
 
-/** The collapsed pill's one expression. Named so the tests and CSS agree. */
+/** The collapsed pill's one expression, shared by the island and settings preview. */
 export const PILL_EXPRESSION = '(｡･ω･｡)';
+
+const BILIBILI_LIVE_TITLE = /^(?<room>.*?)\s+-\s+(?<anchor>[^-]+?)\s+-\s+哔哩哔哩直播/u;
+
+const clean = (value) => String(value ?? '').trim();
+
+/**
+ * The one text a playing frame may show.
+ *
+ * Music is "song - artist". A live room is "room title - anchor name". The
+ * platform suffix that Bilibili puts in the SMTC title is metadata, not part
+ * of the label, so it never reaches the island.
+ */
+export function nowPlayingText(media) {
+  if (!media) return '';
+  const rawTitle = clean(media.title);
+  if (media.live) {
+    const title = clean(media.live.roomTitle) || rawTitle;
+    const bilibili = rawTitle.match(BILIBILI_LIVE_TITLE);
+    const anchor =
+      clean(media.live.anchorName) ||
+      clean(bilibili?.groups.anchor) ||
+      clean(media.artist);
+    return [title, anchor].filter(Boolean).join(' - ');
+  }
+  const bilibili = rawTitle.match(BILIBILI_LIVE_TITLE);
+  if (bilibili) {
+    return [clean(bilibili.groups.room), clean(bilibili.groups.anchor)].filter(Boolean).join(' - ');
+  }
+  return [rawTitle, clean(media.artist)].filter(Boolean).join(' - ');
+}
+
+/**
+ * Resolve the status keys that can actually be drawn.
+ *
+ * Missing readings never become placeholders. Kaomoji keeps its user-defined
+ * slot when enabled, but disappears by itself when every real reading is
+ * unavailable — the character face remains the fallback instead.
+ */
+export function visiblePillStatusKeys(keys = [], available = {}) {
+  const ordered = Array.isArray(keys) ? [...new Set(keys)] : [];
+  const readings = ordered.filter((key) => key !== 'kaomoji' && Boolean(available?.[key]));
+  if (!readings.length) return [];
+  return ordered.filter((key) => key === 'kaomoji' || Boolean(available?.[key]));
+}
 
 /**
  * The collapsed pill's content plan.
  *
- * Status components always win, including while a song plays: they were hidden
- * before this module existed, and the lyric that replaced them (when
- * music.islandLyrics is on) covered the very components the pill is for. The
- * lyric still has a place — the expanded panel's music page — and on the
- * collapsed pill only when no component has a value at all, so the switch the
- * settings window offers is not a dead one.
+ * Playback is the one state that outranks the status row. A title is more
+ * useful than four unrelated readings while music, video, or a live stream is
+ * running; stopping or pausing restores that row. The existing island-content
+ * preference can switch the title off for users who prefer the readings.
  */
-export function pillContentPlan({ statusCount = 0, playing = false, islandLyrics = true } = {}) {
+export function pillContentPlan({ statusCount = 0, media = null, showNowPlaying = true } = {}) {
   const count = Math.max(0, Number(statusCount) || 0);
-  if (count > 0) return { mode: 'status', statusCount: count, trailer: count < 2 };
-  if (playing && islandLyrics !== false) return { mode: 'lyric', statusCount: 0, trailer: false };
-  return { mode: 'face', statusCount: 0, trailer: true };
+  const playing = Boolean(showNowPlaying && media?.active && media?.playing);
+  const text = playing ? nowPlayingText(media) || '正在播放' : '';
+  if (text) return { mode: 'nowPlaying', text, statusCount: 0 };
+  if (count > 0) return { mode: 'status', statusCount: count };
+  return { mode: 'face', statusCount: 0 };
 }
 
 /**

@@ -82,6 +82,10 @@ describe('i18n: translate()', () => {
     assert.equal(translate('zh', 'cast.title'), '角色与表情');
     assert.equal(translate('en', 'cast.title'), 'Cast & faces');
     assert.equal(translate('en', 'weather.autoLocate.label'), 'Auto-locate');
+    assert.equal(translate('zh', 'skin.frost.label'), 'Liquid Glass');
+    assert.equal(translate('en', 'skin.frost.label'), 'Liquid Glass');
+    assert.equal(translate('zh', 'status.kaomoji'), '颜文字');
+    assert.equal(translate('en', 'status.kaomoji'), 'Kaomoji');
   });
 
   it('falls back to zh for a key the request language does not carry', () => {
@@ -99,6 +103,12 @@ describe('i18n: translate()', () => {
     assert.equal(translate('en', 'nope.missing', null, '设备'), '设备');
     assert.equal(translate('en', 'nope.missing'), 'nope.missing');
     assert.equal(translate('en', 'nope.missing', { n: 1 }), 'nope.missing');
+  });
+
+  it('uses the same Liquid Glass name in onboarding', () => {
+    const onboarding = src('renderer/onboarding.js');
+    assert.ok(onboarding.includes("['frost', 'Liquid Glass'"), 'first-run skin card must match settings');
+    assert.ok(!onboarding.includes("['frost', '毛玻璃'"), 'the old display name must not return');
   });
 
   it('fills {placeholders} and leaves unknown ones alone', () => {

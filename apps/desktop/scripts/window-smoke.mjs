@@ -5,7 +5,7 @@
  * answers Runtime.evaluate, which is what made the first attempt hang.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,9 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { resolveElectronBinary } from './electron-runtime.mjs';
 
 const PACKAGED_EXE = process.env.EMOJITOT_APP_EXE ? resolve(process.env.EMOJITOT_APP_EXE) : '';
+const SMOKE_SCREENSHOT = process.env.EMOJITOT_SMOKE_SCREENSHOT
+  ? resolve(process.env.EMOJITOT_SMOKE_SCREENSHOT)
+  : '';
 const ELECTRON = PACKAGED_EXE || resolveElectronBinary();
 const DESKTOP_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = 9555;
@@ -132,6 +135,24 @@ try {
     return r.result.value;
   };
 
+  /*
+   * Auto-avoid replaces the pill with a 6px strip while the smoke runner owns
+   * the foreground. Measurements of the compact capsule and its hand-off must
+   * keep the normal pill path, so this temporary test profile turns avoidance
+   * off before any fold is sampled.
+   */
+  await evaluate(`
+    (async () => {
+      const boot = await window.islandAPI.bootstrap();
+      await window.islandAPI.patchPrefs({
+        avoidEnabled: false,
+        pages: { ...boot.prefs.pages, music: false },
+        statusItems: ['clock'],
+      });
+    })()
+  `);
+  await sleep(1000);
+
   const sandbox = await evaluate("JSON.stringify({ process: typeof process, require: typeof require, api: typeof window.islandAPI, outer: window.outerWidth + 'x' + window.outerHeight })");
   const parsed = JSON.parse(sandbox);
   ok('renderer has no Node globals (sandbox on)', parsed.process === 'undefined' && parsed.require === 'undefined', sandbox);
@@ -178,6 +199,196 @@ try {
       surface.backdrop === 'none',
     JSON.stringify(surface),
   );
+  const compactContent = JSON.parse(await evaluate(`
+    JSON.stringify((() => {
+      const status = document.querySelector('.pill-status');
+      return {
+        hasLegacyBars: Boolean(document.querySelector('.pill-live')),
+        hasStatusRow: Boolean(status),
+        text: status?.textContent.trim() ?? '',
+      };
+    })())
+  `));
+  ok(
+    'collapsed pill has no legacy playing-bars indicator',
+    compactContent.hasLegacyBars === false,
+    JSON.stringify(compactContent),
+  );
+  ok(
+    'collapsed pill keeps its text row',
+    compactContent.hasStatusRow === true,
+    JSON.stringify(compactContent),
+  );
+  const compactLayout = JSON.parse(await evaluate(`
+    (async () => {
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      const pill = document.querySelector('.pill');
+      const face = document.querySelector('.pill-face');
+      const status = document.querySelector('.pill-status');
+      const frame = document.querySelector('#frame');
+      const rootStyle = getComputedStyle(document.documentElement);
+      const fixedWidth = parseFloat(rootStyle.getPropertyValue('--island-w'));
+      const original = status.innerHTML;
+      /*
+       * The first compact report still crosses from the app's startup guess to
+       * the measured stage. Take the baseline only after the native edge has
+       * stopped moving; this test is about a content change, not startup.
+       */
+      let stableFrames = 0;
+      let nativeSignature = '';
+      for (let i = 0; i < 120 && stableFrames < 8; i += 1) {
+        await nextFrame();
+        const next = [window.innerWidth, window.innerHeight, frame.getBoundingClientRect().width].join(':');
+        stableFrames = next === nativeSignature ? stableFrames + 1 : 0;
+        nativeSignature = next;
+      }
+      const before = {
+        frame: frame.getBoundingClientRect().width,
+        pill: pill.getBoundingClientRect().width,
+        inner: window.innerWidth,
+      };
+      status.innerHTML = '<span class="stat now-playing-pill"><span class="now-playing-pill__text">gta6! 赚够100W再下播 - 棉花大哥哥 - 哔哩哔哩直播，二次元</span></span>';
+      /*
+       * Probe the new content at its settled width once, before the spring.
+       * This is the only state in which the face and the last glyph have their
+       * final breathing room; an intermediate width intentionally clips text.
+       */
+      const previousWidth = pill.style.getPropertyValue('--pill-content-w');
+      pill.style.setProperty('--pill-content-w', 'max-content');
+      const targetPillBox = pill.getBoundingClientRect();
+      const targetFaceBox = face.getBoundingClientRect();
+      const targetStatusBox = status.getBoundingClientRect();
+      const titleViewport = status.querySelector('.now-playing-pill');
+      const titleViewportBox = titleViewport.getBoundingClientRect();
+      const faceArt = face.querySelector('emojitot-ball');
+      const facePaths = faceArt?.shadowRoot
+        ? [...faceArt.shadowRoot.querySelectorAll('svg path')]
+        : [];
+      const faceInkLeft = facePaths.length
+        ? Math.min(...facePaths.map((path) => path.getBoundingClientRect().left))
+        : targetFaceBox.left;
+      const targetGaps = {
+        left: targetFaceBox.left - targetPillBox.left,
+        right: targetPillBox.right - targetStatusBox.right,
+      };
+      const opticalGaps = {
+        left: faceInkLeft - targetPillBox.left,
+        right: targetPillBox.right - titleViewportBox.right,
+      };
+      const gutters = {
+        left: parseFloat(getComputedStyle(pill).paddingLeft) || 0,
+        right: parseFloat(getComputedStyle(pill).paddingRight) || 0,
+      };
+      if (previousWidth) pill.style.setProperty('--pill-content-w', previousWidth);
+      else pill.style.removeProperty('--pill-content-w');
+      const samples = [];
+      for (let i = 0; i < 40; i += 1) {
+        await nextFrame();
+        samples.push({
+          frame: frame.getBoundingClientRect().width,
+          pill: pill.getBoundingClientRect().width,
+          inner: window.innerWidth,
+        });
+      }
+      const pillBox = pill.getBoundingClientRect();
+      const result = {
+        fixedWidth,
+        before,
+        after: {
+          frame: frame.getBoundingClientRect().width,
+          pill: pillBox.width,
+          inner: window.innerWidth,
+        },
+        targetPill: targetPillBox.width,
+        nativePadding: window.innerWidth - frame.getBoundingClientRect().width,
+        leftGap: targetGaps.left,
+        rightGap: targetGaps.right,
+        opticalLeftGap: opticalGaps.left,
+        opticalRightGap: opticalGaps.right,
+        gutterLeft: gutters.left,
+        gutterRight: gutters.right,
+        titleOver: status.querySelector('.now-playing-pill')?.dataset.over ?? '',
+        titleShift: status.querySelector('.now-playing-pill')?.style.getPropertyValue('--pill-title-shift') ?? '',
+        titleWidth: titleViewport?.getBoundingClientRect().width ?? 0,
+        titleMaxWidth: titleViewport ? parseFloat(getComputedStyle(titleViewport).maxWidth) || 0 : 0,
+        samples,
+      };
+      window.__emojiTotSmokeStatus = original;
+      return JSON.stringify(result);
+    })()
+  `));
+  const compactWidthRange = {
+    low: Math.min(...compactLayout.samples.map((sample) => sample.pill)),
+    high: Math.max(...compactLayout.samples.map((sample) => sample.pill)),
+  };
+  const compactIntermediate = compactLayout.samples.some(
+    (sample) =>
+      sample.pill > compactWidthRange.low + 8 &&
+      sample.pill < compactWidthRange.high - 8,
+  );
+  const compactPeakFrame = Math.max(...compactLayout.samples.map((sample) => sample.frame));
+  const compactPeakPill = Math.max(...compactLayout.samples.map((sample) => sample.pill));
+  const compactPeakInner = Math.max(...compactLayout.samples.map((sample) => sample.inner));
+  ok(
+    'collapsed native window follows content without exceeding the island cap',
+    Math.abs(compactLayout.before.frame - compactLayout.before.pill) <= 1 &&
+      Math.abs(compactPeakFrame - compactLayout.targetPill) <= 1 &&
+      compactPeakPill > compactLayout.before.pill + 8 &&
+      compactLayout.targetPill <= compactLayout.fixedWidth + 1 &&
+      compactPeakInner > compactLayout.before.inner &&
+      compactLayout.samples.every((sample) => sample.frame + 1 >= sample.pill) &&
+      compactLayout.samples.some(
+        (sample) =>
+          Math.abs(sample.inner - sample.frame - compactLayout.nativePadding) <= 1,
+      ),
+    JSON.stringify(compactLayout),
+  );
+  ok(
+    'collapsed pill animates between measured content widths',
+    compactWidthRange.high - compactWidthRange.low > 8 && compactIntermediate,
+    JSON.stringify({
+      before: compactLayout.before.pill,
+      after: compactLayout.after.pill,
+      range: compactWidthRange,
+      samples: compactLayout.samples.map((sample) => Number(sample.pill.toFixed(2))),
+    }),
+  );
+  ok(
+    'collapsed pill matches the face inset with the right breathing room',
+    compactLayout.gutterRight > compactLayout.gutterLeft + 8 &&
+      Math.abs(compactLayout.opticalLeftGap - compactLayout.opticalRightGap) <= 1,
+    JSON.stringify(compactLayout),
+  );
+  ok(
+    'overlong title scrolls inside the shorter red-box viewport',
+    compactLayout.titleOver === 'true' &&
+      parseFloat(compactLayout.titleShift) > 0 &&
+      compactLayout.titleWidth <= compactLayout.titleMaxWidth + 1 &&
+      compactLayout.titleMaxWidth <= 241,
+    JSON.stringify({
+      titleOver: compactLayout.titleOver,
+      titleShift: compactLayout.titleShift,
+      titleWidth: compactLayout.titleWidth,
+      titleMaxWidth: compactLayout.titleMaxWidth,
+    }),
+  );
+  if (SMOKE_SCREENSHOT) {
+    const shot = await browser.send(
+      'Page.captureScreenshot',
+      { format: 'png', fromSurface: true },
+      10000,
+      sessionId,
+    );
+    writeFileSync(SMOKE_SCREENSHOT, Buffer.from(shot.data, 'base64'));
+    console.log('  INFO  compact screenshot: ' + SMOKE_SCREENSHOT);
+  }
+  await evaluate(`
+    (() => {
+      const status = document.querySelector('.pill-status');
+      status.innerHTML = window.__emojiTotSmokeStatus;
+    })()
+  `);
+  await sleep(300);
 
   /*
    * Exercise the interrupted fold, not only its resting state.
@@ -196,6 +407,30 @@ try {
         if (!node) return null;
         const box = node.getBoundingClientRect();
         return { x: box.x, y: box.y, w: box.width, h: box.height };
+      };
+      /*
+       * The native window is placed after the renderer reports its compact box.
+       * Sampling the first visible frame treats that startup move as fold drift,
+       * so wait until the size and origin have stopped changing before taking
+       * the baseline.
+       */
+      let stableFrames = 0;
+      let windowSignature = '';
+      for (let i = 0; i < 120 && stableFrames < 8; i += 1) {
+        await nextFrame();
+        const nextSignature = [
+          window.screenX,
+          window.screenY,
+          window.outerWidth,
+          window.outerHeight,
+        ].join(':');
+        stableFrames = nextSignature === windowSignature ? stableFrames + 1 : 0;
+        windowSignature = nextSignature;
+      }
+      const initialPill = rect('#pill');
+      const initialScreen = {
+        x: window.screenX + (initialPill?.x ?? 0) + (initialPill?.w ?? 0) / 2,
+        y: window.screenY + (initialPill?.y ?? 0) + (initialPill?.h ?? 0) / 2,
       };
       const start = performance.now();
       let reversed = false;
@@ -221,6 +456,7 @@ try {
         samples.push({
           t: performance.now() - start,
           started,
+          reversed,
           morphing,
           outerW: window.outerWidth,
           outerH: window.outerHeight,
@@ -239,6 +475,7 @@ try {
           ] : [],
           shadow: style?.boxShadow ?? '',
           transform: style?.transform ?? '',
+          pill: rect('#pill'),
         });
         if (started && !reversed && performance.now() - start >= startedAt + 100) {
           reversed = true;
@@ -249,7 +486,44 @@ try {
         }
         if (started && reversed && !morphing) break;
       }
+      /* Let the native window finish the post-morph setBounds call. */
+      const settledSamples = [];
+      for (let i = 0; i < 40; i += 1) {
+        await nextFrame();
+        const pill = rect('#pill');
+        settledSamples.push({
+          x: window.screenX + (pill?.x ?? 0) + (pill?.w ?? 0) / 2,
+          y: window.screenY + (pill?.y ?? 0) + (pill?.h ?? 0) / 2,
+          screenX: window.screenX,
+          island: rect('#island'),
+          frame: rect('#frame'),
+          pill,
+          outerW: window.outerWidth,
+        });
+      }
+      const settledPill = rect('#pill');
+      const settledScreen = {
+        x: window.screenX + (settledPill?.x ?? 0) + (settledPill?.w ?? 0) / 2,
+        y: window.screenY + (settledPill?.y ?? 0) + (settledPill?.h ?? 0) / 2,
+      };
       return JSON.stringify({
+        initialScreen,
+        settledScreen,
+        initialWindow: {
+          x: window.screenX,
+          outerW: window.outerWidth,
+          innerW: window.innerWidth,
+          pill: initialPill,
+        },
+        settledWindow: {
+          x: window.screenX,
+          outerW: window.outerWidth,
+          innerW: window.innerWidth,
+          pill: settledPill,
+          island: rect('#island'),
+          frame: rect('#frame'),
+        },
+        settledSamples,
         samples,
         open: document.getElementById('island')?.dataset.open,
         morphing: document.body.dataset.morphing,
@@ -291,14 +565,34 @@ try {
     firstMoving &&
     Math.abs(firstMoving.outerW - maxOuterW) <= 1 &&
     Math.abs(firstMoving.outerH - maxOuterH) <= 1;
+  const returnDriftX = Math.abs(motion.settledScreen.x - motion.initialScreen.x);
+  const returnDriftY = Math.abs(motion.settledScreen.y - motion.initialScreen.y);
+  const returnDrifts = motion.settledSamples.map((sample) => ({
+    x: Math.abs(sample.x - motion.initialScreen.x),
+    y: Math.abs(sample.y - motion.initialScreen.y),
+  }));
+  const returnMaxDriftX = Math.max(returnDriftX, ...returnDrifts.map((drift) => drift.x));
+  const returnMaxDriftY = Math.max(returnDriftY, ...returnDrifts.map((drift) => drift.y));
+  const settledCompactWidth = motion.settledWindow.frame?.w ?? Infinity;
+  const closingMoving = moving.filter((sample) => sample.reversed);
+  const narrowestMovingWidth = closingMoving.length
+    ? Math.min(...closingMoving.map((sample) => sample.island?.w ?? Infinity))
+    : Infinity;
+  const compactHandoffTracksPill =
+    Math.abs((motion.settledWindow.frame?.w ?? Infinity) - (motion.settledWindow.pill?.w ?? 0)) <= 1;
   ok(
-    'island folds continuously without drift, ghosting, or unequal corners',
+    'island folds continuously without drift, a narrow intermediate target, or unequal corners',
     moving.length >= 8 &&
       motion.open === 'false' &&
       motion.morphing === undefined &&
       preExpanded &&
+      compactHandoffTracksPill &&
+      closingMoving.length >= 6 &&
+      narrowestMovingWidth >= settledCompactWidth - 1 &&
       driftX <= 1 &&
       driftY <= 1 &&
+      returnMaxDriftX <= 1 &&
+      returnMaxDriftY <= 1 &&
       cornerSpread <= 0.05 &&
       moving.every((sample) => sample.shadow === 'none'),
     JSON.stringify({
@@ -310,6 +604,37 @@ try {
       heightDelta: Number(heightDelta.toFixed(2)),
       radiusDelta: Number(radiusDelta.toFixed(2)),
       preExpanded,
+      compactHandoffTracksPill,
+      closingFrames: closingMoving.length,
+      narrowestMovingWidth: Number(narrowestMovingWidth.toFixed(2)),
+      settledCompactWidth: Number(settledCompactWidth.toFixed(2)),
+      returnDrift: {
+        x: Number(returnDriftX.toFixed(2)),
+        y: Number(returnDriftY.toFixed(2)),
+      },
+      returnMaxDrift: {
+        x: Number(returnMaxDriftX.toFixed(2)),
+        y: Number(returnMaxDriftY.toFixed(2)),
+      },
+      returnSamples: motion.settledSamples.slice(0, 6).map((sample) => ({
+        x: Number(sample.x.toFixed(2)),
+        screenX: sample.screenX,
+        outerW: sample.outerW,
+        island: sample.island && {
+          x: Number(sample.island.x.toFixed(2)),
+          w: Number(sample.island.w.toFixed(2)),
+        },
+        frame: sample.frame && {
+          x: Number(sample.frame.x.toFixed(2)),
+          w: Number(sample.frame.w.toFixed(2)),
+        },
+        pill: sample.pill && {
+          x: Number(sample.pill.x.toFixed(2)),
+          w: Number(sample.pill.w.toFixed(2)),
+        },
+      })),
+      initialWindow: motion.initialWindow,
+      settledWindow: motion.settledWindow,
       outer: [maxOuterW, maxOuterH],
       first: firstMoving && {
         t: Number(firstMoving.t.toFixed(1)),
@@ -328,6 +653,94 @@ try {
         topBall: moving.at(-1).topBall,
       },
     }),
+  );
+
+  /*
+   * The ghost is intermittent, so one fold is not enough evidence. Repeat the
+   * complete open/close hand-off and require every cycle to keep the same
+   * native width and centre. Only the height may change.
+   */
+  const cycleStability = JSON.parse(await evaluate(`
+    (async () => {
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      const waitFor = async (condition, limit = 180) => {
+        for (let i = 0; i < limit; i += 1) {
+          if (condition()) return true;
+          await nextFrame();
+        }
+        return false;
+      };
+      const island = document.getElementById('island');
+      const panel = document.getElementById('panel');
+      const pill = document.getElementById('pill');
+      const frame = document.getElementById('frame');
+      const fixedWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--island-w'));
+      const initial = {
+        innerW: window.innerWidth,
+        outerW: window.outerWidth,
+        screenX: window.screenX,
+        centerX: window.screenX + window.outerWidth / 2,
+        frameW: frame.getBoundingClientRect().width,
+      };
+      const cycles = [];
+      let timedOut = false;
+      for (let cycle = 0; cycle < 5; cycle += 1) {
+        pill.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+        const opened = await waitFor(
+          () => island.dataset.open === 'true' &&
+            panel.hidden === false &&
+            document.body.dataset.morphing !== 'true' &&
+            document.body.dataset.preparing !== 'true',
+        );
+        for (let i = 0; i < 3; i += 1) await nextFrame();
+        const openState = {
+          open: island.dataset.open,
+          innerW: window.innerWidth,
+          outerW: window.outerWidth,
+          screenX: window.screenX,
+          frameW: frame.getBoundingClientRect().width,
+        };
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        const closed = await waitFor(
+          () => island.dataset.open === 'false' &&
+            panel.hidden === true &&
+            document.body.dataset.morphing !== 'true' &&
+            document.body.dataset.preparing !== 'true',
+        );
+        /* The native height is intentionally reported after two painted frames. */
+        for (let i = 0; i < 8; i += 1) await nextFrame();
+        const closedState = {
+          open: island.dataset.open,
+          innerW: window.innerWidth,
+          outerW: window.outerWidth,
+          screenX: window.screenX,
+          frameW: frame.getBoundingClientRect().width,
+          avoid: document.body.dataset.avoid,
+        };
+        cycles.push({ opened, closed, openState, closedState });
+        if (!opened || !closed) {
+          timedOut = true;
+          break;
+        }
+      }
+      return JSON.stringify({ fixedWidth, initial, cycles, timedOut });
+    })()
+  `));
+  ok(
+    'repeated fold hand-offs keep one centre while native width follows the state',
+    cycleStability.timedOut === false &&
+      cycleStability.cycles.length === 5 &&
+      cycleStability.cycles.every(({ openState, closedState }) =>
+        openState.open === 'true' &&
+        closedState.open === 'false' &&
+        Math.abs(openState.frameW - cycleStability.fixedWidth) <= 1 &&
+        closedState.frameW > 0 &&
+        closedState.frameW <= openState.frameW - 1 &&
+        Math.abs(openState.screenX + openState.outerW / 2 - cycleStability.initial.centerX) <= 1 &&
+        Math.abs(closedState.screenX + closedState.outerW / 2 - cycleStability.initial.centerX) <= 1
+      ),
+    JSON.stringify(cycleStability),
   );
 
   // Open the shelf page and measure the clipboard block.
@@ -424,6 +837,95 @@ try {
       panelSurface.radius?.[0] !== '0px' &&
       panelSurface.gradients >= 3,
     JSON.stringify(panelSurface),
+  );
+
+  await evaluate("window.islandAPI.openSettings('weather')");
+  let settingsTarget = null;
+  for (let i = 0; i < 40 && !settingsTarget; i += 1) {
+    const { targetInfos } = await browser.send('Target.getTargets');
+    settingsTarget = targetInfos.find((target) => target.type === 'page' && target.url.includes('settings.html')) ?? null;
+    if (!settingsTarget) await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  ok('opened the weather settings page', Boolean(settingsTarget));
+  if (settingsTarget) {
+    const settingsSession = await browser.send(
+      'Target.attachToTarget',
+      { targetId: settingsTarget.targetId, flatten: true },
+    );
+    await browser.send('Runtime.enable', {}, 8000, settingsSession.sessionId).catch(() => {});
+    const settingsEvaluate = async (expression) => {
+      const result = await browser.send(
+        'Runtime.evaluate',
+        { expression, awaitPromise: true, returnByValue: true },
+        10000,
+        settingsSession.sessionId,
+      );
+      if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
+      return result.result.value;
+    };
+    let cityField = null;
+    for (let i = 0; i < 40 && !cityField; i += 1) {
+      const value = await settingsEvaluate(`
+        JSON.stringify((() => {
+          const input = document.querySelector('input[data-key="weather.city"]');
+          return input ? { value: input.value, placeholder: input.placeholder } : null;
+        })())
+      `);
+      cityField = value ? JSON.parse(value) : null;
+      if (!cityField) await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    ok(
+      'empty weather city field stays visually empty',
+      cityField?.value === '' && cityField?.placeholder === '',
+      JSON.stringify(cityField),
+    );
+  }
+
+  async function surfaceVisibility(name) {
+    const { targetInfos: currentTargets } = await browser.send('Target.getTargets');
+    const target = currentTargets.find(
+      (item) => item.type === 'page' && item.url.split('/').pop() === name,
+    );
+    if (!target) return null;
+    const attached = await browser.send(
+      'Target.attachToTarget',
+      { targetId: target.targetId, flatten: true },
+    );
+    await browser.send('Runtime.enable', {}, 8000, attached.sessionId).catch(() => {});
+    const result = await browser.send(
+      'Runtime.evaluate',
+      { expression: 'document.visibilityState', returnByValue: true },
+      8000,
+      attached.sessionId,
+    );
+    return result.result.value;
+  }
+
+  const relaunch = spawn(
+    ELECTRON,
+    [
+      '--user-data-dir=' + SMOKE_USER_DATA,
+      ...(PACKAGED_EXE ? [] : [DESKTOP_ROOT]),
+    ],
+    {
+      cwd: PACKAGED_EXE ? dirname(PACKAGED_EXE) : DESKTOP_ROOT,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: cleanEnv,
+    },
+  );
+  const relaunchExit = await Promise.race([
+    new Promise((resolve) => relaunch.once('exit', (code) => resolve(code))),
+    sleep(10000).then(() => 'timeout'),
+  ]);
+  await sleep(500);
+  const islandVisibility = await surfaceVisibility('island.html');
+  const ballVisibility = await surfaceVisibility('index.html');
+  ok(
+    'relaunch keeps island-only display mode and does not surface the desktop ball',
+    relaunchExit !== 'timeout' &&
+      islandVisibility === 'visible' &&
+      ballVisibility !== 'visible',
+    JSON.stringify({ relaunchExit, islandVisibility, ballVisibility }),
   );
 
   browser.close();

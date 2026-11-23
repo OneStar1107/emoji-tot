@@ -2124,10 +2124,16 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (win) {
-      win.showInactive();
-      win.focus();
-    }
+    // Re-opening the app asks for the surface the user configured, not the
+    // legacy ball. The ball window still exists while displayMode is "island",
+    // but surfacing it here contradicted settings and stole focus from a live
+    // island. clear the fullscreen latch too: an explicit launch is a request
+    // to see EmojiTot now, and the watcher only reacts to later edges.
+    const prefs = readPrefs();
+    displayMode = prefs.displayMode;
+    hiddenByFullscreen = false;
+    applyForm();
+    if (showBall() && win && !win.isDestroyed()) win.focus();
   });
 
   app.whenReady().then(async () => {
@@ -2147,6 +2153,11 @@ if (!gotTheLock) {
       console.error('[net] proxy bypass failed', error?.message ?? error);
     }
     hardenSession(session.defaultSession);
+    /* Device labels follow the Windows region, not the app's UI language
+       preference (which defaults to Chinese for every installation). */
+    devices.setLocale(
+      typeof app.getSystemLocale === 'function' ? app.getSystemLocale() : app.getLocale(),
+    );
     await loadCore();
     await loadSchema();
     const stored = readPrefs();

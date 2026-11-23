@@ -1,11 +1,11 @@
 /**
  * The island window: a pill at the top centre of the screen.
  *
- * The page decides how big the island is — collapse, expand, a taller page —
- * and reports its own measured box; this module only keeps the window equal to
- * that box, centred on the chosen display. Window size is therefore never
- * computed twice (once in CSS, once in main), which is how a notch ends up
- * clipped or floating away from its content.
+ * The page decides the island's box and reports its measured frame width; this
+ * module keeps the native window equal to that box, centred on the chosen
+ * display. The renderer grows the native surface before a capsule widens and
+ * shrinks it after the capsule has settled, so animated content never crosses
+ * the operating-system window edge.
  *
  * Clicks pass through by default. Electron's `forward: true` does not reliably
  * forward mousemove on Windows (the ball window learned this first), so the
@@ -128,6 +128,12 @@ function place() {
   const bounds = win.getBounds();
   if (bounds.x !== x || bounds.y !== y || bounds.width !== width || bounds.height !== height) {
     win.setBounds({ x, y, width, height });
+    /*
+     * A transparent Windows window can keep the pre-resize swap chain until the
+     * compositor receives a new frame. Invalidate after every real bounds
+     * change so the old rounded panel cannot remain beneath a smaller pill.
+     */
+    win.webContents.invalidate();
   }
   /*
    * The page still receives a move event for layout-dependent state. The
@@ -152,7 +158,9 @@ function setBoundsHook(fn) {
 
 function pillRect() {
   /*
-   * Measured, not derived from the padding constants.
+   * Measured, not derived from the padding constants. During a fold or an
+   * automatic avoid, the renderer may draw a narrower rectangle than the native
+   * box: hitRect is the current drawn pill, panel or avoid strip.
    *
    * The page centres the frame horizontally and pins it to the top, so the
    * padding is not symmetric in practice: the window carries the 32px side
@@ -160,8 +168,8 @@ function pillRect() {
    * top put the avoid rectangle 36px lower than the pill, and a browser that
    * only covered that empty band collapsed the island for no reason.
    */
-  const w = Math.max(1, Math.round(box.w));
-  const h = Math.max(1, Math.round(box.h));
+  const w = Math.max(1, Math.round(hitRect?.w ?? box.w));
+  const h = Math.max(1, Math.round(hitRect?.h ?? box.h));
   return {
     x: Math.round(windowRect.x + (windowRect.width - w) / 2),
     y: Math.round(windowRect.y),

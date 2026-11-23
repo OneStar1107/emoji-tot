@@ -6,7 +6,7 @@
  * has never run the app has no reason to find it. Page one says what the app
  * is; page two asks the two things that change how it looks — whether the
  * character lives in the island, as a free desktop ball, or both, and which of
- * the five skins it wears.
+ * the three skins it wears.
  *
  * It writes ordinary preferences through settings.applyPatch(), the same
  * function the settings window uses, so a choice made here is applied to the
@@ -25,7 +25,7 @@ const { loadBuildVersion } = require('./build-version');
 
 /** The closed set of answers page two may send back. */
 const DISPLAY_MODES = ['island', 'ball', 'both'];
-const SKINS = ['frost', 'solid', 'plain', 'magazine', 'console'];
+const SKINS = ['frost', 'solid', 'plain'];
 
 /*
  * This window's page joins the shared frame list (main/ipc-frame.js) here

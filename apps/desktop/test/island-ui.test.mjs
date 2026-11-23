@@ -17,6 +17,31 @@ describe('island header title', () => {
     assert.equal(state.title, '正在播放的歌');
   });
 
+  it('adds the artist to a song title', () => {
+    const state = islandHeaderState({
+      active: true,
+      playing: true,
+      title: '晴天',
+      artist: '周杰伦',
+    });
+    assert.equal(state.title, '晴天 - 周杰伦');
+  });
+
+  it('shows a live room as room title and anchor name without the platform', () => {
+    const state = islandHeaderState({
+      active: true,
+      playing: true,
+      title: 'gta6！赚够100W再下播 - 棉花大哥哥 - 哔哩哔哩直播，二次元弹幕直播平台',
+      live: {
+        platform: 'bilibili',
+        roomTitle: 'gta6！赚够100W再下播',
+        anchorName: '棉花大哥哥',
+        anchorId: '1871001',
+      },
+    });
+    assert.equal(state.title, 'gta6！赚够100W再下播 - 棉花大哥哥');
+  });
+
   it('leaves the line empty when nothing is playing', () => {
     const state = islandHeaderState({ active: false, title: '旧歌' });
     assert.equal(state.title, '');

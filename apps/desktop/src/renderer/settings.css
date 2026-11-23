@@ -444,7 +444,7 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
   overflow: hidden;
 }
 /* The skin picker is this page's main character; it spans the grid like mock
-   B's wide card so the five thumbnails never get squeezed into half a page. */
+   B's wide card so the three thumbnails never get squeezed into half a page. */
 .group:has(.skin-previews) { grid-column: 1 / -1; }
 .group > .ch {
   display: flex;
@@ -511,7 +511,7 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 .row-label span { font-size: 11.5px; color: var(--faint); line-height: 1.4; }
 .row-control { display: flex; align-items: center; gap: 7px; flex: none; }
 
-/* Label on top, control across the card: the skin picker is five cards wide and
+/* Label on top, control across the card: the skin picker is three cards wide and
    would otherwise leave the label three lines of two characters. */
 .row.stacked { flex-direction: column; align-items: stretch; gap: 8px; padding: 11px 16px 13px; }
 .row.stacked .row-label { flex: none; }
@@ -575,14 +575,14 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
 .seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--ink); }
 
 /*
- * Skin previews: five miniature islands below the text segmented control.
+ * Skin previews: three miniature islands below the text segmented control.
  * They are buttons carrying the same `seg` action, so pointer, Tab + Enter and
  * aria-pressed have one owner; the selected card reuses the accent that
  * :focus-visible uses, and both themes read the same material colours.
  */
 .skin-previews {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
   padding: 2px 0 0;
@@ -682,58 +682,11 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
   opacity: 0.42;
 }
 
-/* magazine: warm gold on paper, a serif initial and the column rule. */
-.skin-thumb-magazine {
-  background: linear-gradient(180deg, #262119, #141318);
-  border-color: rgba(233, 196, 106, 0.36);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-}
-.skin-thumb-magazine::before {
-  left: 9px; top: 7px;
-  font-family: Georgia, "Songti SC", "Noto Serif SC", "SimSun", serif;
-  font-size: 14.5px;
-  line-height: 1.3;
-  letter-spacing: 0.01em;
-  color: #e9c46a;
-  content: "Aa";
-}
-.skin-thumb-magazine::after {
-  left: 9px; right: 9px; bottom: 8px;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(233, 196, 106, 0.72), rgba(233, 196, 106, 0.16));
-}
-
-/* console: a cold instrument plate with a mono readout and a meter. */
-.skin-thumb-console {
-  background:
-    repeating-linear-gradient(0deg, rgba(110, 180, 255, 0.08) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(90deg, rgba(110, 180, 255, 0.06) 0 1px, transparent 1px 14px),
-    #0b1017;
-  border-color: rgba(96, 180, 255, 0.36);
-  box-shadow: inset 0 1px 0 rgba(150, 215, 255, 0.14);
-}
-.skin-thumb-console::before {
-  left: 8px; top: 7px;
-  font-family: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
-  font-size: 9px;
-  line-height: 1.3;
-  letter-spacing: 0.02em;
-  color: #4fd1ff;
-  content: "0x1F";
-}
-.skin-thumb-console::after {
-  left: 8px; right: 8px; bottom: 7px;
-  height: 5px;
-  background: repeating-linear-gradient(90deg, #4fd1ff 0 2px, rgba(79, 209, 255, 0.16) 2px 5px);
-  border-radius: 1px;
-  opacity: 0.82;
-}
-
 /* ----------------------------------------------------- live skin preview */
 /*
  * The 96×64 live preview under the skin cards.
  *
- * The five 56×36 samples above draw each skin's idea; this box paints the
+ * The three 56×36 samples above draw each skin's idea; this box paints the
  * island's CURRENT skin out of the island's own variable names — --card,
  * --card-solid, --accent, --ink, --line, --ui-font — redefined per skin key
  * below exactly as island.css defines them on body[data-skin=…]. Switching
@@ -745,8 +698,7 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
  * selector, so the rest of the page keeps its own --card / --accent.
  *
  * Radii echo the radius each skin's smaller parts use in island.css: the
- * panel's --radius for frost/solid, magazine's 11px cards, console's 3px
- * instrument blocks, and plain's near-square minimal card.
+ * panel's --radius for frost/solid and plain's near-square minimal card.
  */
 .skin-preview {
   /* The island's --radius lives on its :root; this window has no copy, so the
@@ -826,29 +778,6 @@ html[data-theme="light"] .theme-btn .tb-sun { display: none; }
   opacity: 0.45;
 }
 .skin-preview[data-skin-preview="plain"] .sp-dot { display: none; }
-/* magazine: warm paper, gold accent, serif headline, small card radius. */
-.skin-preview[data-skin-preview="magazine"] {
-  --card: rgba(20, 19, 24, 0.94);
-  --card-solid: #141318;
-  --accent: #e9c46a;
-  --ink: #f2f2f5;
-  --line: rgba(255, 255, 255, 0.075);
-  --pv-radius: 11px;
-  --ui-font: Georgia, "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", "宋体", serif;
-}
-.skin-preview[data-skin-preview="magazine"] .sp-pill { border-radius: 5px; background: var(--card); }
-/* console: the cold plate, cyan accent, mono readout, instrument corners. */
-.skin-preview[data-skin-preview="console"] {
-  --card: #0b1017;
-  --card-solid: #0b1017;
-  --accent: #4fd1ff;
-  --ink: #e6f4ff;
-  --line: rgba(120, 190, 255, 0.2);
-  --pv-radius: 3px;
-  --ui-font: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
-}
-.skin-preview[data-skin-preview="console"] .sp-pill { border-radius: 2px; background: var(--card); }
-
 /* The light theme flips the island's surfaces too; the preview follows the
    same values island.css uses under body[data-theme="light"].
    The font family is not repeated: it belongs to the skin, not the theme. */
@@ -867,21 +796,6 @@ html[data-theme="light"] .skin-preview[data-skin-preview="plain"] {
   --ink: #1a1a1e;
   --line: rgba(0, 0, 0, 0.1);
 }
-html[data-theme="light"] .skin-preview[data-skin-preview="magazine"] {
-  --card: #fcfaf4;
-  --card-solid: #fcfaf4;
-  --accent: #8a6410;
-  --ink: #1a1a1e;
-  --line: rgba(32, 26, 14, 0.13);
-}
-html[data-theme="light"] .skin-preview[data-skin-preview="console"] {
-  --card: #f2f7fc;
-  --card-solid: #f2f7fc;
-  --accent: #0b6fb8;
-  --ink: #0b1520;
-  --line: rgba(11, 76, 140, 0.22);
-}
-
 /* ------------------------------------------------------------ preview pane */
 /*
  * Mock C's third column, kept permanently: the right pane draws a small island
@@ -966,16 +880,12 @@ html[data-theme="light"] .pv-stage {
 .pv-island[data-skin="frost"] { background: linear-gradient(160deg, rgba(180, 214, 255, 0.26), rgba(120, 150, 220, 0.14) 60%, rgba(80, 110, 190, 0.1)); border: 1px solid rgba(205, 228, 255, 0.32); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 12px 30px rgba(0, 0, 0, 0.4); backdrop-filter: blur(16px); }
 .pv-island[data-skin="solid"] { background: #191920; border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 30px rgba(0, 0, 0, 0.4); }
 .pv-island[data-skin="plain"] { background: rgba(20, 20, 26, 0.42); border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28); }
-.pv-island[data-skin="magazine"] { background: linear-gradient(165deg, #2a2118, #1c1710); border: 1px solid rgba(214, 178, 120, 0.34); box-shadow: inset 0 1px 0 rgba(255, 240, 210, 0.12), 0 12px 30px rgba(0, 0, 0, 0.45); }
-.pv-island[data-skin="console"] { background: #0d1117; border: 1px solid rgba(120, 180, 255, 0.3); background-image: linear-gradient(rgba(120, 180, 255, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 180, 255, 0.06) 1px, transparent 1px); background-size: 14px 14px; box-shadow: 0 0 0 1px rgba(120, 180, 255, 0.08), 0 12px 30px rgba(0, 0, 0, 0.45); }
 
 /* The light theme turns the island's surfaces too, so the pane would lie if it
    stayed near-black; these mirror the light values island.css uses. */
 html[data-theme="light"] .pv-island[data-skin="frost"] { --pv-ink: #16202e; --pv-main: rgba(255, 255, 255, 0.42); background: linear-gradient(160deg, rgba(205, 232, 255, 0.95), rgba(155, 200, 250, 0.7) 60%, rgba(120, 170, 225, 0.5)); border-color: rgba(120, 160, 210, 0.5); }
 html[data-theme="light"] .pv-island[data-skin="solid"],
 html[data-theme="light"] .pv-island[data-skin="plain"] { --pv-ink: #1a1a1e; --pv-main: rgba(0, 0, 0, 0.05); background: #ffffff; border-color: rgba(0, 0, 0, 0.12); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.12); }
-html[data-theme="light"] .pv-island[data-skin="magazine"] { --pv-ink: #2a2118; --pv-main: rgba(0, 0, 0, 0.06); background: linear-gradient(165deg, #fbf5e7, #f0e5cd); border-color: rgba(160, 125, 60, 0.35); }
-html[data-theme="light"] .pv-island[data-skin="console"] { --pv-ink: #0b1520; --pv-main: rgba(10, 60, 110, 0.07); background: #eef4fb; border-color: rgba(40, 90, 140, 0.3); }
 
 .pv-pill { display: flex; align-items: center; gap: 5px; width: 64px; height: 16px; padding: 0 6px; border-radius: var(--r-full); background: rgba(0, 0, 0, 0.22); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
 html[data-theme="light"] .pv-island[data-skin="frost"] .pv-pill,
@@ -989,12 +899,7 @@ html[data-theme="light"] .pv-island[data-skin="plain"] .pv-pill { background: rg
 .pv-ava { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px; background: var(--accent); color: #14121f; font-size: 9px; font-weight: 700; }
 .pv-name { font-size: 10.5px; font-weight: 600; }
 .pv-big { margin: 9px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
-.pv-island[data-skin="magazine"] .pv-big { font-family: Georgia, "Songti SC", serif; font-weight: 400; color: #ecd3a4; }
-.pv-island[data-skin="console"] .pv-big { font-family: "JetBrains Mono", Consolas, monospace; font-size: 13px; color: #9fd0ff; }
-html[data-theme="light"] .pv-island[data-skin="magazine"] .pv-big { color: #6b4c1c; }
-html[data-theme="light"] .pv-island[data-skin="console"] .pv-big { color: #0b6fb8; }
 .pv-sub { margin: 3px 0 0; font-size: 10.5px; line-height: 1.4; color: color-mix(in srgb, var(--pv-ink) 62%, transparent); }
-.pv-island[data-skin="console"] .pv-sub { font-family: "JetBrains Mono", Consolas, monospace; font-size: 9.5px; }
 .pv-bars { display: flex; gap: 4px; margin-top: 9px; }
 .pv-bars i { display: block; height: 3px; border-radius: 2px; background: var(--accent); opacity: 0.85; }
 .pv-bars i:nth-child(1) { width: 44%; }
@@ -1477,7 +1382,7 @@ html[data-theme="light"] .dev-meter.warn i { background: #b97612; }
 /*
  * 页面管理页顶上的「常驻排列」：一条按胶囊放大的预览条。
  *
- * 变量借 .skin-preview 的壳（同一个 class 已经把五套皮肤映射成岛自己的
+ * 变量借 .skin-preview 的壳（同一个 class 已经把三套皮肤映射成岛自己的
  * --card-solid / --accent / --ink / --ui-font），尺寸在这里重写。条给到
  * 420px 才够把四五个格子摊开来拖；字号和图标只提一档，不按字面比例放大
  * （168 → 420 是 2.5 倍，那会把 12.5px 变成 31px，出一条巨幅横条）。
@@ -1492,17 +1397,13 @@ html[data-theme="light"] .dev-meter.warn i { background: #b97612; }
  * 是自引用，CSS 变量循环会让它变成无效值——chip 的焦点环、拖动底色、插入位
  * 标记如果直接用 var(--accent)，整条 outline 声明会被丢掉（computed style 里
  * outline-style: none，看起来就是"没有焦点环"）。所以这里先在外层取一份，
- * 三套紫皮肤共用它，magazine / console 按自己的真实强调色覆盖。
+ * 三套皮肤共用它。
  */
 .gbody > .residency {
   position: relative;
   padding: 6px 16px 12px;
   --rsv-accent: var(--accent-2, #b9adff);
 }
-.residency .residency-pill[data-skin-preview="magazine"] { --rsv-accent: #e9c46a; }
-.residency .residency-pill[data-skin-preview="console"] { --rsv-accent: #4fd1ff; }
-html[data-theme="light"] .residency .residency-pill[data-skin-preview="magazine"] { --rsv-accent: #8a6410; }
-html[data-theme="light"] .residency .residency-pill[data-skin-preview="console"] { --rsv-accent: #0b6fb8; }
 
 .residency .residency-pill {
   display: flex;

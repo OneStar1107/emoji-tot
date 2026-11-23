@@ -13,6 +13,7 @@ const platform = require('../platform');
 const path = require('node:path');
 const { scriptFile } = require('../paths');
 const bilibili = require('./bilibili');
+const douyu = require('./douyu');
 
 const SCRIPT = scriptFile('media.ps1');
 const EMPTY = Object.freeze({ active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '', output: '', controls: null, error: false, liveSince: 0 });
@@ -34,11 +35,12 @@ const HEARTBEAT_MS = 5000;
  * Every frame is a sample, not an event, so "the stream dropped" and "the
  * player was closed" look identical for a second or two. Holding the start
  * stamp through a short gap keeps the clock continuous for the reconnect the
- * user actually experienced; a different channel, or a longer gap, is a
- * different broadcast and starts at zero.
+ * user actually experienced; a different channel starts a new clock.
  */
 const LIVE_GRACE_MS = 30000;
 let live = { key: '', since: 0, endedAt: 0 };
+/** The live metadata lookup currently in flight for this exact frame. */
+let liveLookupKey = '';
 
 function emit() {
   for (const fn of listeners) {
@@ -51,7 +53,36 @@ function emit() {
 }
 
 /** What makes two frames the same broadcast: the channel and who played it. */
-const liveKey = (frame) => JSON.stringify([frame.title || '', frame.source || '']);
+const liveKey = (frame) => JSON.stringify([frame.title || '', frame.artist || '', frame.source || '']);
+
+/**
+ * Drop the Bilibili placeholder thumbnail before it can suppress the real
+ * room lookup. The public room endpoint is the only source that knows whether
+ * today's SMTC thumbnail is a useful image or the familiar 300px logo.
+ */
+function prepareLiveFrame(frame) {
+  if (!frame?.active || frame.duration || !bilibili.looksLive(frame.title)) return frame;
+  return { ...frame, art: '' };
+}
+
+/** Add resolved room metadata without replacing the player's raw title. */
+function attachLiveInfo(frame, info) {
+  if (!frame || !info?.roomTitle || !info?.anchorName) return frame;
+  const startedAt = Number(info.startedAt) || 0;
+  const art = typeof info.art === 'string' && info.art.startsWith('data:image/') ? info.art : '';
+  return {
+    ...frame,
+    art: art || frame.art,
+    liveSince: startedAt || frame.liveSince,
+    live: {
+      platform: String(info.platform || ''),
+      roomId: String(info.roomId || ''),
+      roomTitle: String(info.roomTitle),
+      anchorName: String(info.anchorName),
+      startedAt,
+    },
+  };
+}
 
 /**
  * The start time to report for this frame, or 0 when it is not live.
@@ -68,14 +99,40 @@ function liveSinceFor(frame) {
   }
   const now = Date.now();
   const key = liveKey(frame);
+  const reportedStart = Number(frame.live?.startedAt) || 0;
   const continuing =
     live.since && live.key === key && (!live.endedAt || now - live.endedAt <= LIVE_GRACE_MS);
   if (continuing) {
     live.endedAt = 0;
+    if (reportedStart) live.since = reportedStart;
   } else {
-    live = { key, since: now, endedAt: 0 };
+    live = { key, since: reportedStart || now, endedAt: 0 };
   }
   return live.since;
+}
+
+/**
+ * The provider that can resolve this live frame, if any.
+ *
+ * Bilibili identifies itself in the title. Douyu uses a browser-shaped live
+ * frame with both room name and anchor; the bridge then requires an exact
+ * name match before accepting a room.
+ */
+function liveLookupTarget(frame) {
+  if (!frame.active || frame.duration) return null;
+  if (bilibili.looksLive(frame.title)) {
+    return {
+      key: JSON.stringify(['bilibili', frame.title || '', frame.source || '']),
+      run: () => bilibili.infoFor(frame.title),
+    };
+  }
+  if (douyu.looksCandidate(frame)) {
+    return {
+      key: JSON.stringify(['douyu', frame.title || '', frame.artist || '', frame.source || '']),
+      run: () => douyu.infoFor(frame.title, frame.artist),
+    };
+  }
+  return null;
 }
 
 function handleLine(line) {
@@ -86,47 +143,71 @@ function handleLine(line) {
   } catch {
     return;
   }
+  next = prepareLiveFrame(next);
+  /*
+   * The PowerShell stream sends metadata only when it changes. Carry resolved
+   * live metadata and artwork forward for the same frame, just as the cover is
+   * carried for the same track.
+   */
+  if (
+    state.live &&
+    next.title === state.title &&
+    next.artist === state.artist &&
+    next.source === state.source
+  ) {
+    next.live = state.live;
+  }
+  if (!next.art && state.art && next.title === state.title && next.artist === state.artist) {
+    next.art = state.art;
+  }
   next.error = false;
   // Derived from the frame, never reported by the script itself.
   next.liveSince = liveSinceFor(next);
   if (!next.active) {
+    liveLookupKey = '';
     if (state.active || state.error) {
       state = { ...EMPTY };
       emit();
     }
     return;
   }
-  /*
-   * Carry the cover forward, but only while it is the same track. The child
-   * sends art on the frame where the track changes, and a broadcast has no
-   * art at all: carrying across a change put the previous song's cover on
-   * the next stream.
-   */
-  if (!next.art && state.art && next.title === state.title && next.artist === state.artist) next.art = state.art;
-
-  /*
-   * Bilibili's live page sets no MediaSession artwork, so Windows hands us a
-   * title and no thumbnail. The title names the broadcast; the public live
-   * API names the room and its cover. One silent lookup per broadcast, and
-   * the frame is only updated if it is still the same broadcast without art.
-   */
-  if (!next.art && !next.duration && bilibili.looksLive(next.title)) {
+  const lookup = liveLookupTarget(next);
+  if (lookup && lookup.key !== liveLookupKey) {
+    liveLookupKey = lookup.key;
     const title = next.title;
+    const artist = next.artist;
     const source = next.source;
-    bilibili
-      .coverFor(title)
-      .then((art) => {
-        if (!art || state.art || state.duration || state.title !== title || state.source !== source) return;
-        state = { ...state, art };
+    lookup
+      .run()
+      .then((info) => {
+        if (
+          !info ||
+          state.duration ||
+          state.title !== title ||
+          state.artist !== artist ||
+          state.source !== source ||
+          state.live?.roomId === info.roomId
+        ) {
+          if (!info && liveLookupKey === lookup.key) liveLookupKey = '';
+          return;
+        }
+        state = attachLiveInfo(state, info);
+        state.liveSince = liveSinceFor(state);
+        lastEmit = Date.now();
         emit();
       })
-      .catch(() => {});
+      .catch(() => {
+        if (liveLookupKey === lookup.key) liveLookupKey = '';
+      });
+  } else if (!lookup) {
+    liveLookupKey = '';
   }
   const changed =
     next.title !== state.title ||
     next.artist !== state.artist ||
     next.playing !== state.playing ||
     next.art !== state.art ||
+    next.liveSince !== state.liveSince ||
     // A device switch is the whole reason the badge exists; push it at once.
     next.output !== state.output ||
     // The progress bar needs a frame per second; everything else is change-only.
@@ -330,4 +411,14 @@ function current() {
   return state;
 }
 
-module.exports = { start, stop, command, normalizeCommand, onChange, current, refreshSoon };
+module.exports = {
+  start,
+  stop,
+  command,
+  normalizeCommand,
+  onChange,
+  current,
+  refreshSoon,
+  prepareLiveFrame,
+  attachLiveInfo,
+};

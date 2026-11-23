@@ -29,6 +29,7 @@
 | `clock` | 时间 | 无 | 开 |
 | `weather` | 温度 | `weather` | 开 |
 | `quota` | 余额 | `quota` | 关 |
+| `kaomoji` | 颜文字 | 无 | 关 |
 
 ## 服务计划
 

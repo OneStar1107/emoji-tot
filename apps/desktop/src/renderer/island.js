@@ -25,7 +25,13 @@ import {
   temperatureText,
 } from '../shared/status-view.js';
 import { islandHeaderState, pagingVisibility } from './island-header.mjs';
-import { fitStatusRow, pillContentPlan } from './island-pill.mjs';
+import {
+  PILL_EXPRESSION,
+  fitStatusRow,
+  nowPlayingText,
+  pillContentPlan,
+  visiblePillStatusKeys,
+} from './island-pill.mjs';
 import {
   advancedSections,
   canSeek,
@@ -238,6 +244,7 @@ function measure() {
     /* Every layout change also moves the hover target. */
     reportHit();
     if (avoidCollapsed) return;
+    if (collapseResizeHeld) return;
     /*
      * A morph owns the native window. Reporting the half-swapped frame here
      * used to shrink the window to 168x36 while prepareBox was in flight, then
@@ -245,13 +252,11 @@ function measure() {
      * frame jump. settleMorph reports the exact final box once the driver is
      * done.
      */
-    if (document.body.dataset.morphing === 'true') return;
+    if (preparing || document.body.dataset.morphing === 'true') return;
     /*
-     * The frame is the content's natural box — it is out of flow with
-     * width: max-content, so it reports the real size of whichever surface is
-     * showing. Reading the surface itself (panel/pill) reported zero while the
-     * swap was still pending a layout, and a zero box is dropped, which left
-     * the window at its collapsed size with the panel spilling out.
+     * The frame owns the measured stage. Its height is the real height of
+     * whichever surface is showing; reading the surface itself reported zero
+     * while a swap was still pending layout and left the window too short.
      */
     const rect = frameEl.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
@@ -320,7 +325,7 @@ function batteryEntries() {
   });
   for (const device of visible) {
     if (device.battery === null || device.battery === undefined) continue;
-    entries.push({ name: device.name, level: Number(device.battery) });
+    entries.push({ name: device.displayName || device.name, level: Number(device.battery) });
   }
   return entries;
 }
@@ -402,6 +407,30 @@ function renderHeader() {
 }
 
 /**
+ * Start the compact title marquee only when the capped viewport hides text.
+ *
+ * The capsule's width is measured before this runs. The viewport therefore
+ * already has its final width, and the inner span can publish the exact travel
+ * distance without feedback into the pill's own sizing.
+ */
+function fitNowPlayingTitle() {
+  const viewport = pillStatus.querySelector('.now-playing-pill');
+  if (!viewport) return;
+  const textEl = viewport.firstElementChild;
+  viewport.dataset.over = 'false';
+  viewport.style.removeProperty('--pill-title-shift');
+  if (!textEl || !viewport.clientWidth) return;
+  const over = textEl.scrollWidth > viewport.clientWidth + 2;
+  viewport.dataset.over = String(over);
+  if (over) {
+    viewport.style.setProperty(
+      '--pill-title-shift',
+      textEl.scrollWidth - viewport.clientWidth + 8 + 'px',
+    );
+  }
+}
+
+/**
  * Trim the status row at a component boundary, never mid-number.
  *
  * The capsule is capped by --pill-max-w; past that cap the row is what gives
@@ -452,9 +481,194 @@ function fitPillStatus() {
   pillEl.dataset.truncated = 'true';
 }
 
+/*
+ * The collapsed pill has a content-sized stage and one moving width.
+ *
+ * Every mode has a different natural width, but enumerating those modes would
+ * make every future status combination a new animation. Instead the stylesheet
+ * stays at max-content for one synchronous measurement, that number becomes the
+ * spring target, and the pill itself is animated back to it. A new title or
+ * battery reading retargets the existing spring from its current position and
+ * velocity, so consecutive changes cannot restart the motion with a jump.
+ */
+const PILL_WIDTH_SPRING = Object.freeze({ mass: 1, stiffness: 520, damping: 36 });
+const PILL_WIDTH_SETTLE = 0.35;
+const PILL_WIDTH_QUIET_AT = 80;
+const PILL_WIDTH_GUARD_MS = 900;
+
+let pillWidthSpring = null;
+let pillWidthFrame = 0;
+let pillWidthGuard = 0;
+let pillWidthStartedAt = 0;
+let pillWidthTarget = 0;
+let pillWidthMin = 0;
+let pillWidthMax = 0;
+let pillWidthReady = false;
+let pillWidthQueued = false;
+
+function stopPillWidthDriver() {
+  if (pillWidthFrame) cancelAnimationFrame(pillWidthFrame);
+  if (pillWidthGuard) clearTimeout(pillWidthGuard);
+  pillWidthFrame = 0;
+  pillWidthGuard = 0;
+  pillWidthSpring = null;
+}
+
+function writePillWidth(width) {
+  pillEl.style.setProperty('--pill-content-w', `${Math.max(1, width)}px`);
+}
+
+/**
+ * Publish the native stage width.
+ *
+ * The stage grows before a width spring and shrinks after it settles. A
+ * transparent window may therefore have spare room on both sides during the
+ * motion, but the painted capsule is never clipped by an OS resize that lags
+ * behind the renderer.
+ */
+function writePillStage(width) {
+  islandEl.style.setProperty('--pill-stage-w', `${Math.max(1, width)}px`);
+}
+
+/**
+ * Read the real current width, then ask the browser for this content's natural
+ * width before restoring the current box. Both reads and the restore happen in
+ * one task, so the max-content probe is never painted.
+ */
+function measurePillWidth() {
+  const current = pillEl.getBoundingClientRect().width;
+  const previous = pillEl.style.getPropertyValue('--pill-content-w');
+  pillEl.style.setProperty('--pill-content-w', 'max-content');
+  const target = pillEl.getBoundingClientRect().width;
+  if (previous) writePillWidth(parseFloat(previous));
+  else pillEl.style.removeProperty('--pill-content-w');
+  return { current, target };
+}
+
+function pillCanAnimateWidth() {
+  return (
+    !open &&
+    !morph &&
+    !preparing &&
+    !closing &&
+    !avoidCollapsed &&
+    document.body.dataset.avoid !== '1' &&
+    document.body.dataset.morphing !== 'true' &&
+    !pillEl.hidden &&
+    pillEl.getClientRects().length > 0
+  );
+}
+
+function finishPillWidth() {
+  stopPillWidthDriver();
+  writePillWidth(pillWidthTarget);
+  writePillStage(pillWidthTarget);
+  fitNowPlayingTitle();
+  pillStatus.style.opacity = '';
+  reportHit();
+  measure();
+}
+
+function startPillWidthDriver(from, target) {
+  stopPillWidthDriver();
+  const now = performance.now();
+  pillWidthStartedAt = now;
+  pillWidthTarget = target;
+  pillWidthMin = Math.min(from, target);
+  pillWidthMax = Math.max(from, target);
+  pillWidthSpring = createSpring({
+    ...PILL_WIDTH_SPRING,
+    from,
+    target,
+    startedAt: now / 1000,
+  });
+  if (Math.abs(target - from) > 2) pillStatus.style.opacity = '0.42';
+
+  const step = (frameNow) => {
+    if (!pillWidthSpring) return;
+    const sample = pillWidthSpring.sample(frameNow / 1000);
+    /* Bound the visible width to the two measured endpoints. The damping still
+       shapes the approach, but a 2px overshoot cannot escape the native stage
+       or make a shrinking pill become narrower than its destination. */
+    const width = Math.min(pillWidthMax, Math.max(pillWidthMin, sample.position));
+    writePillWidth(width);
+    /* Start a marquee as soon as the viewport reaches its final width. Waiting
+       for the spring's quiet threshold delays the scroll by almost a second on
+       a long title even though the text is already clipped. */
+    if (Math.abs(width - pillWidthTarget) < 0.5) fitNowPlayingTitle();
+    reportHit();
+    const elapsed = frameNow - pillWidthStartedAt;
+    const settled =
+      elapsed >= PILL_WIDTH_QUIET_AT &&
+      Math.abs(sample.position - pillWidthTarget) < PILL_WIDTH_SETTLE &&
+      Math.abs(sample.velocity) < 4;
+    if (settled || elapsed >= PILL_WIDTH_GUARD_MS) finishPillWidth();
+    else pillWidthFrame = requestAnimationFrame(step);
+  };
+  pillWidthFrame = requestAnimationFrame(step);
+  if (pillWidthGuard) clearTimeout(pillWidthGuard);
+  pillWidthGuard = setTimeout(() => {
+    if (pillWidthSpring) finishPillWidth();
+  }, PILL_WIDTH_GUARD_MS + 80);
+}
+
+/**
+ * Bring the visual capsule to the current content width. `immediate` is used
+ * on first paint and when the panel hands the surface back, never for a normal
+ * status change.
+ */
+function syncPillWidth({ immediate = false } = {}) {
+  if (!pillCanAnimateWidth()) return;
+  const { current, target } = measurePillWidth();
+  pillWidthTarget = target;
+  pillWidthMin = Math.min(current, target);
+  pillWidthMax = Math.max(current, target);
+  /*
+   * Expand the stage before the content spring so even its first frame has
+   * native pixels to paint into. A shrinking stage keeps its current width
+   * until finishPillWidth(), at which point the pill has already reached the
+   * smaller target and the native setBounds call cannot reveal a short-lived
+   * narrow remainder of the old panel.
+   */
+  writePillStage(Math.max(current, target));
+  if (target > current + 0.5) measure();
+  const reduced =
+    document.body.dataset.motion === 'off' ||
+    document.body.dataset.reduceMotion === 'on';
+  if (immediate || reduced || !pillWidthReady || Math.abs(target - current) < 0.5) {
+    stopPillWidthDriver();
+    writePillWidth(target);
+    writePillStage(target);
+    fitNowPlayingTitle();
+    pillStatus.style.opacity = '';
+    pillWidthReady = true;
+    reportHit();
+    measure();
+    return;
+  }
+  pillWidthReady = true;
+  const now = performance.now();
+  if (pillWidthSpring) {
+    pillWidthSpring.retarget(target, now / 1000);
+    pillWidthMin = Math.min(current, target);
+    pillWidthMax = Math.max(current, target);
+    pillWidthStartedAt = now;
+    if (Math.abs(target - current) > 2) pillStatus.style.opacity = '0.42';
+    return;
+  }
+  startPillWidthDriver(current, target);
+}
+
+function schedulePillWidth(options) {
+  if (pillWidthQueued) return;
+  pillWidthQueued = true;
+  queueMicrotask(() => {
+    pillWidthQueued = false;
+    syncPillWidth(options);
+  });
+}
+
 function renderPillStatus() {
-  const playing = Boolean(media.active && media.playing);
-  document.body.dataset.playing = String(playing);
   /*
    * The row the collapsed pill carries: the user's order, and only the
    * components that have a value. A component with no data is not drawn at
@@ -462,8 +676,16 @@ function renderPillStatus() {
    */
 
   const items = prefs.statusItems ?? ['battery', 'clock', 'weather'];
+  const balance = quotaText(quotaState?.last);
+  const visible = visiblePillStatusKeys(items, {
+    battery: Boolean(battery),
+    clock: true,
+    weather: Boolean(weather),
+    quota: Boolean(balance),
+    kaomoji: true,
+  });
   const parts = [];
-  for (const key of items) {
+  for (const key of visible) {
     if (key === 'battery' && battery) {
       parts.push(`<span class="stat" title="电量 ${battery.level}%">${batterySvg(battery.level, battery.charging)}<b>${batteryText(battery.level)}</b></span>`);
     } else if (key === 'clock') {
@@ -476,32 +698,24 @@ function renderPillStatus() {
        * this loop only knew battery, clock and weather. A status item with no
        * renderer is worse than no status item: it looks switched on.
        */
-      const balance = quotaText(quotaState?.last);
       if (balance) parts.push(`<span class="stat dim" title="AI 余额">${escapeHtml(balance)}</span>`);
+    } else if (key === 'kaomoji') {
+      parts.push(`<span class="stat dim kaomoji" title="颜文字">${PILL_EXPRESSION}</span>`);
     }
   }
-  /*
-   * Components first, and that is true while a song plays as well.
-   *
-   * The lyric used to replace this row whenever music.islandLyrics was on, so
-   * a playing capsule could never show battery, clock, temperature and balance
-   * at once. The lyric still has its place: the expanded music page, and the
-   * collapsed pill only when every component is switched off (pillContentPlan
-   * keeps the settings switch meaningful without ever covering the row).
-   */
+  /* Playing media owns the row; pausing or stopping restores the components. */
   const plan = pillContentPlan({
     statusCount: parts.length,
-    playing,
-    islandLyrics: prefs.music?.islandLyrics,
+    media,
+    showNowPlaying: prefs.music?.islandLyrics !== false,
   });
   if (plan.mode === 'status') pillStatus.innerHTML = parts.join('');
-  else if (plan.mode === 'lyric') {
-    const line = currentLyricLine() || media.title || '';
-    pillStatus.innerHTML = `<span class="stat lyric-pill">${escapeHtml(clip(line, 24))}</span>`;
+  else if (plan.mode === 'nowPlaying') {
+    pillStatus.innerHTML = `<span class="stat now-playing-pill" title="${escapeHtml(plan.text)}"><span class="now-playing-pill__text">${escapeHtml(plan.text)}</span></span>`;
   } else pillStatus.innerHTML = '';
-  pillEl.dataset.trailer = plan.trailer ? 'on' : 'off';
   pillEl.dataset.status = String(plan.statusCount);
   fitPillStatus();
+  schedulePillWidth();
   topClock.textContent = hhmm();
   if (battery) {
     topBattery.innerHTML = batterySvg(battery.level, battery.charging);
@@ -512,6 +726,22 @@ function renderPillStatus() {
   }
   measure();
 }
+
+new ResizeObserver(() => schedulePillWidth()).observe(pillStatus);
+/*
+ * A title can arrive while the pill is hidden behind the open panel, and a
+ * font or display-scale change can alter the same text without a new render.
+ * Observe the row's own DOM instead of `window.resize`: the latter also fires
+ * for our own native setBounds call, which would feed the stage width back into
+ * the capsule spring. The spring retargets in place, so a real content change
+ * never restarts the motion or produces a second width jump.
+ */
+new MutationObserver(() => schedulePillWidth()).observe(pillStatus, {
+  childList: true,
+  subtree: true,
+  characterData: true,
+});
+document.fonts?.ready.then(() => schedulePillWidth()).catch(() => {});
 
 /* ------------------------------------------------------------------- pages */
 
@@ -545,8 +775,6 @@ function currentLyricLine() {
   return lyrics.lines[index].text;
 }
 
-const clip = (text, max) => (String(text).length > max ? String(text).slice(0, max - 1) + '…' : String(text));
-
 function lyricSliceHtml(index, span = 3) {
   if (!lyrics?.synced || !lyrics.lines.length) return '<span class="lyric-empty">这首歌没有同步歌词</span>';
   /*
@@ -564,17 +792,6 @@ function lyricSliceHtml(index, span = 3) {
       return `<p class="lyric-line${distance === 0 ? ' on' : ''}" data-n="${distance}">${escapeHtml(line.text)}</p>`;
     })
     .join('');
-}
-
-/**
- * A browser session is "media", not "music": the user asked for the distinction
- * because a video tab and a music player are different things to interrupt.
- */
-const BROWSER_SOURCES = ['chrome', 'msedge', 'edge', 'firefox', 'brave', 'opera', 'vivaldi', 'egolite', 'browser', 'chromium'];
-
-function isBrowserMedia() {
-  const source = String(media.source || '').toLowerCase();
-  return BROWSER_SOURCES.some((name) => source.includes(name));
 }
 
 /** Live streams and video tabs often report no duration at all. */
@@ -609,7 +826,6 @@ function musicPage() {
   }
   const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
   const live = isLiveMedia();
-  const browser = isBrowserMedia();
   /*
    * The rail is draggable only when the frame carries a length. A broadcast
    * reports none, and a paused player that reports none is the same shape:
@@ -651,8 +867,7 @@ function musicPage() {
     <div class="music-row">
       <div class="music-cover">${art}</div>
       <div class="music-meta">
-        <b>${escapeHtml(media.title || '未命名')}</b>
-        <span>${escapeHtml(media.artist || media.album || (browser ? '媒体 · ' + (media.source || '浏览器') : media.source || ''))}</span>
+        <b>${escapeHtml(nowPlayingText(media) || '未命名')}</b>
       </div>
     </div>
     ${prefs.music?.lyrics === false
@@ -2478,6 +2693,7 @@ function devicesPage() {
   const rows = shown
     .map((device) => {
       const isPinned = pinned.includes(device.name);
+      const displayName = String(device.displayName || device.name);
       const deviceLevel = knownLevel(device.battery);
       const source = DEVICE_SOURCE_LABEL[device.source] || '';
       /*
@@ -2485,7 +2701,7 @@ function devicesPage() {
        * whether a level exists at all, and where that level was read from.
        */
       const title = [
-        device.name,
+        displayName,
         device.status === 'OK' ? '已连接' : device.status || '已连接',
         showBattery ? (deviceLevel === null ? '电量不可读，显示为 —' : `电量 ${deviceLevel}%`) : '电量已隐藏',
         source ? `来源：${source}` : '',
@@ -2497,9 +2713,9 @@ function devicesPage() {
       const pinTitle = isPinned ? '取消置顶' : full ? `已置顶 ${DEVICE_PINS} 台，先取消一台` : '置顶（最多 3 台）';
       return `<div class="dev-item${isPinned ? ' pinned' : ''}" title="${escapeHtml(title)}">
         <span class="dev-icon">${svg(DEVICE_ICON)}</span>
-        <span class="dev-name">${isPinned ? `<span class="dev-pin-mark" aria-hidden="true">${svg(STAR_ICON)}</span>` : ''}${escapeHtml(device.name)}</span>
+        <span class="dev-name">${isPinned ? `<span class="dev-pin-mark" aria-hidden="true">${svg(STAR_ICON)}</span>` : ''}${escapeHtml(displayName)}</span>
         ${right}
-        <button type="button" class="dev-pin${isPinned ? ' on' : ''}" data-pin="${escapeHtml(device.name)}" aria-pressed="${isPinned}" aria-label="${isPinned ? '取消置顶' : '置顶'} ${escapeHtml(device.name)}" title="${pinTitle}"${!isPinned && full ? ' disabled' : ''}>${svg(STAR_ICON)}</button>
+        <button type="button" class="dev-pin${isPinned ? ' on' : ''}" data-pin="${escapeHtml(device.name)}" aria-pressed="${isPinned}" aria-label="${isPinned ? '取消置顶' : '置顶'} ${escapeHtml(displayName)}" title="${pinTitle}"${!isPinned && full ? ' disabled' : ''}>${svg(STAR_ICON)}</button>
       </div>`;
     })
     .join('');
@@ -2611,6 +2827,7 @@ function applyPrefs() {
   /* The visible material is CSS-only; this remains a compatibility signal. */
   document.body.dataset.material = windowMaterial;
   timeFormat24 = prefs.timeFormat !== '12h';
+  schedulePillWidth();
 }
 
 function applyLocal(snapshot) {
@@ -2793,6 +3010,47 @@ let morphGuard = 0;
 let closing = false;
 /** Monotonic token so a delayed native resize cannot start a stale morph. */
 let morphIntent = 0;
+/*
+ * The hand-off after a close keeps the expanded native surface for two painted
+ * frames. Hiding the panel and shrinking a transparent Windows window in the
+ * same task lets DWM present the new bounds with the old swap chain still
+ * attached, which is the large rounded ghost in the report. Once the compact
+ * frame has actually reached the compositor, the smaller native box is safe to
+ * report.
+ */
+const COLLAPSE_RESIZE_GUARD_MS = 180;
+let collapseResizeHeld = false;
+let collapseResizeFrames = new Set();
+let collapseResizeGuard = 0;
+
+function cancelCollapseResizeHold() {
+  for (const frame of collapseResizeFrames) cancelAnimationFrame(frame);
+  collapseResizeFrames = new Set();
+  if (collapseResizeGuard) clearTimeout(collapseResizeGuard);
+  collapseResizeGuard = 0;
+  collapseResizeHeld = false;
+}
+
+function holdCollapsedNativeResize() {
+  cancelCollapseResizeHold();
+  collapseResizeHeld = true;
+  const finish = () => {
+    if (!collapseResizeHeld || open || morph || preparing) return;
+    cancelCollapseResizeHold();
+    reportBoxNow({ force: true });
+    measure();
+  };
+  const secondFrame = () => {
+    const frame = requestAnimationFrame(finish);
+    collapseResizeFrames.add(frame);
+  };
+  const firstFrame = requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(secondFrame);
+    collapseResizeFrames.add(frame);
+  });
+  collapseResizeFrames.add(firstFrame);
+  collapseResizeGuard = setTimeout(finish, COLLAPSE_RESIZE_GUARD_MS);
+}
 
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 
@@ -2839,13 +3097,16 @@ function stopMorph() {
   morphGuard = 0;
   morph = null;
   preparing = null;
+  delete document.body.dataset.preparing;
   delete document.body.dataset.morphing;
   clearMorphStyles();
 }
 
 /** Paint one frame from the single spring progress. */
-function paintMorph(geometry) {
+function paintMorph() {
   const m = morph;
+  const progress = clamp01(m.progress);
+  const geometry = geometryAt(m.compact, m.expanded, progress);
   const width = Math.max(1, geometry.width);
   const height = Math.max(1, geometry.height);
   const radius = Math.max(0, geometry.radius);
@@ -2915,14 +3176,14 @@ function startMorph(open, compact, expanded, content) {
     morph.expanded = expanded;
     retargetMorph(open, performance.now());
   }
-  paintMorph(geometryAt(morph.compact, morph.expanded, morph.progress));
+  paintMorph();
   if (morphFrame) cancelAnimationFrame(morphFrame);
   const step = (now) => {
     const m = morph;
     if (!m) return;
     const sample = m.spring.sample(now / 1000);
     m.progress = sample.position;
-    paintMorph(geometryAt(m.compact, m.expanded, m.progress));
+    paintMorph();
     if (now - m.startedAt >= MORPH_SETTLE_MS) settleMorph();
     else morphFrame = requestAnimationFrame(step);
   };
@@ -2944,6 +3205,7 @@ function settleMorph() {
   const wasOpen = morph ? morph.open : false;
   morph = null;
   preparing = null;
+  delete document.body.dataset.preparing;
   delete document.body.dataset.morphing;
   clearMorphStyles();
   if (wasOpen) {
@@ -2957,6 +3219,7 @@ function settleMorph() {
 function landOpen() {
   closing = false;
   islandEl.dataset.closing = 'false';
+  cancelCollapseResizeHold();
   stopMorph();
   pillEl.hidden = true;
   panelEl.hidden = false;
@@ -2975,12 +3238,13 @@ function landOpen() {
  * fold, it ceased to exist. The fold now retargets the same spring towards the
  * pill's compact geometry.
  *
- * The window stays at the panel's box while the card folds inside it. Growing
- * the OS window frame by frame was the alternative and it is the one that
- * reads as a cut: the page lays out a frame or two behind the window, so the
- * still-visible card would be clipped and shoved sideways on every frame of
- * its own animation. What does follow the fold is the hit box (reportHit): the
- * wide transparent margin the fold leaves behind may never swallow a click.
+ * The native window stays at the panel's box while the card folds inside it.
+ * Resizing the OS window on every frame reads as a cut: the page can lay out a
+ * frame or two behind the window, so the still-visible card would be clipped
+ * and shoved sideways during its own animation. After the compact frame has
+ * painted, holdCollapsedNativeResize reports the smaller box. What follows the
+ * fold immediately is the hit box (reportHit): the wide transparent margin the
+ * fold leaves behind may never swallow a click.
  *
  * The pill is not shown until the hand-off. It stays laid out out of flow (see
  * #island[data-closing] in island.css) at opacity 0, and fades in over the
@@ -2992,6 +3256,18 @@ function closeMorph() {
     preparing = null;
     landClosed();
     return;
+  }
+  /*
+   * The pill may have received a new title while it was hidden behind the
+   * panel. Size it once, invisibly, before sampling the compact geometry; the
+   * fold then has an exact destination instead of landing on last render's
+   * width and jumping when the status observer catches up.
+   */
+  if (!morph) {
+    closing = false;
+    pillEl.hidden = false;
+    syncPillWidth({ immediate: true });
+    fitNowPlayingTitle();
   }
   closing = true;
   islandEl.dataset.closing = 'true';
@@ -3023,11 +3299,12 @@ function landClosed() {
   pillEl.hidden = false;
   pillEl.style.animation = 'none';
   stopMorph();
+  syncPillWidth({ immediate: true });
+  fitNowPlayingTitle();
   syncAvoidVisual();
   syncSize();
-  reportBoxNow();
   reportHit();
-  measure();
+  holdCollapsedNativeResize();
 }
 
 /* ------------------------------------------------------------- no glass */
@@ -3050,6 +3327,7 @@ async function setOpen(next) {
   const folding = next === false && open;
   /* Already there, or the same toggle twice: nothing to move. */
   if (!opening && !folding) return;
+  cancelCollapseResizeHold();
   /* Folding releases the photograph in the same task: a full-screen bitmap has
      no business outliving the panel that shows it. */
   if (folding) clearGlass();
@@ -3084,7 +3362,14 @@ async function setOpen(next) {
     };
     closing = false;
     islandEl.dataset.closing = 'false';
-    pillEl.hidden = false;
+    /*
+     * Keep the pill out of the flex row while measuring the panel. Now that
+     * #frame has a fixed width, two visible flex items would shrink the panel
+     * from 420px to the leftover 252px, and the native stage would be prepared
+     * at that wrong width. The pill comes back after the measurement, under the
+     * same absolute layout the morph uses.
+     */
+    pillEl.hidden = true;
     panelEl.hidden = false;
     preparing = { intent };
     renderPage();
@@ -3103,7 +3388,14 @@ async function setOpen(next) {
     const content = panelBodyEl
       ? { width: Math.ceil(panelBodyEl.offsetWidth), height: Math.ceil(panelBodyEl.offsetHeight) }
       : null;
-    document.body.dataset.morphing = 'true';
+    /*
+     * Keep the resting panel measurable until the native window has already
+     * grown. `preparing` uses the same absolute layout rules as a morph, but
+     * the test and, more importantly, the first visible spring frame only see
+     * `data-morphing` after setBounds has completed.
+     */
+    document.body.dataset.preparing = 'true';
+    pillEl.hidden = false;
     frameEl.style.width = `${expanded.width}px`;
     frameEl.style.height = `${expanded.height}px`;
     if (panelBodyEl) {
@@ -3129,10 +3421,12 @@ async function setOpen(next) {
     }
     if (intent !== morphIntent || !open) {
       preparing = null;
+      delete document.body.dataset.preparing;
       if (!open) landClosed();
       return;
     }
     preparing = null;
+    delete document.body.dataset.preparing;
     if (!animated || avoiding) {
       landOpen();
     } else if (!startMorph(true, compact, expanded, content)) {
@@ -3172,7 +3466,8 @@ async function setOpen(next) {
    * width, so the window never grew and the panel spilled outside it.
    */
   syncSize();
-  reportBoxNow();
+  if (!open && !avoiding) holdCollapsedNativeResize();
+  else reportBoxNow();
   reportHit();
   measure();
   /* No morph to wait for (reduced motion, or a fold interrupted by an avoid
@@ -3185,11 +3480,17 @@ async function setOpen(next) {
 /**
  * Tell the main process what the pointer has to be inside to count as hovering.
  *
- * The frame is exactly what is drawn — 168x64 for the folded pill, the panel's
- * box when open, 140x6 for the auto-avoid slit — while the window keeps its
+ * The active surface is exactly what is drawn — the current compact capsule,
+ * the panel's box when open, or the auto-avoid slit — while the window keeps its
  * transparent padding. Sending this is what makes the island stop opening when
  * the pointer merely crosses the empty space around it.
  */
+function activeHitSurface() {
+  if (morph || preparing || closing) return islandEl;
+  if (avoidCollapsed) return frameEl;
+  return open ? panelEl : pillEl;
+}
+
 function reportHit() {
   /* During the fold the drawn surface is the island's animated box, not the
      frame's pre-fold layout (see closeMorph). "collapsed" is the main process'
@@ -3197,7 +3498,7 @@ function reportHit() {
      outside the drawn box, whatever the click-through preference says — the
      fold leaves a wide transparent margin behind it for a quarter of a second
      and none of it may swallow a click. */
-  const rect = (morph || preparing || closing ? islandEl : frameEl).getBoundingClientRect();
+  const rect = activeHitSurface().getBoundingClientRect();
   if (!rect.width || !rect.height) return;
   api.reportHit({
     w: Math.ceil(rect.width),
@@ -3215,8 +3516,12 @@ function reportHit() {
  * Reading synchronously right after the swap forces the layout and the value is
  * then the one actually on screen.
  */
-function reportBoxNow() {
+function reportBoxNow({ force = false } = {}) {
   if (avoidCollapsed) return;
+  /* landClosed paints the compact state first, then reports it after two
+     painted frames. Any layout observer firing in that window must not shrink
+     the native surface before the new frame exists. */
+  if (collapseResizeHeld && !force) return;
   const rect = frameEl.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
   api.reportBox({ w: Math.ceil(rect.width), h: Math.ceil(rect.height) });
@@ -3835,10 +4140,11 @@ function pointerOverContent(event) {
    * target is inside the drawn frame — that is the content by definition.
    * Real clicks in the transparent padding land on body/#island, not here.
    */
+  const surface = activeHitSurface();
   const target = event.target instanceof Node ? event.target : null;
-  if (target && frameEl.contains(target)) return true;
+  if (target && surface.contains(target)) return true;
   if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return false;
-  const rect = frameEl.getBoundingClientRect();
+  const rect = surface.getBoundingClientRect();
   if (!rect.width || !rect.height) return false;
   return (
     event.clientX >= rect.left &&
@@ -3990,6 +4296,10 @@ api.onMedia((value) => {
   /* A stream that gains or loses a duration is a different row: a live clock
      on one side, a total length on the other. */
   const liveChanged = !value.duration !== !media.duration;
+  const liveInfoChanged =
+    value.live?.roomTitle !== media.live?.roomTitle ||
+    value.live?.anchorName !== media.live?.anchorName ||
+    value.live?.startedAt !== media.live?.startedAt;
   /* A cover that arrives a beat after its frame (the Bilibili lookup) is a repaint. */
   const artChanged = value.art !== media.art;
   /*
@@ -4006,7 +4316,7 @@ api.onMedia((value) => {
   renderSub();
   renderHeader();
   if (open && enabledPages()[pageIndex]?.key === 'music') {
-    if (trackChanged || playingChanged || liveChanged || artChanged) {
+    if (trackChanged || playingChanged || liveChanged || liveInfoChanged || artChanged) {
       lastLyricIndex = -2;
       renderPage();
     } else if (advancedChanged) {
@@ -4157,7 +4467,6 @@ quotaState = boot?.quotaAgent?.quota ?? quotaState;
 agentsState = Array.isArray(boot?.quotaAgent?.agents) ? boot.quotaAgent.agents : agentsState;
 mailState = boot?.mail ?? mailState;
 calendarState = boot?.calendar ?? calendarState;
-document.body.dataset.playing = String(Boolean(media.active && media.playing));
 
 applyPrefs();
 renderPillStatus();

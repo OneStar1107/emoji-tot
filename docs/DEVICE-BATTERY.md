@@ -168,7 +168,7 @@ Areson，`260D` 下有三个 DAREU 家族。因此：
 
 | 项目 | 结果 | 说明 |
 | --- | --- | --- |
-| 蓝牙 BLE 路径 | **读到** | AZOTH 100 %、FlyDigi BS2PRO 94 %、Xbox 手柄 89 %、iPhone 100 %（`Get-PnpDeviceProperty` 批量读取） |
+| 蓝牙 BLE 路径 | **读到** | AZOTH 100 %、FlyDigi BS2PRO 94 %、Xbox 手柄 89 %（`pnputil /properties` 原生快照） |
 | ROG AZOTH（`0B05:1A83`） | **100 %（蓝牙路径）** | 键盘的厂商通道同样只回全零（待机），页面上的 100 % 来自 BLE 属性，不是私有协议 |
 | ROG GLADIUS III WIRELESS AIMPOINT（`0B05:1A72`） | **协议通道打开成功，读数被拒 → 需唤醒** | `MI_00` 集合确认（`0xFF01`，in/out 65，feat 0）；`00 12 07` 发出后 **3 个包 × 各 10 次 = 30 次读取全部 65 字节全零**；用 `mouse_event` 移动光标唤醒后再发 3 个包 × 10 次，**仍然全部全零**（合计 60 次）。按 §3.3，全零 = 只有接收器在应答、鼠标处于待机/休眠，与 G-Helper `IsDeviceReady=false` 一致。**需人工唤醒**：物理移动鼠标或按键后再点「刷新」/ 等后台轮询 |
 | 新增 15 个品牌族 | **untested** | 本机无对应硬件；能力检测失败即静默跳过 |
@@ -218,5 +218,6 @@ Areson，`260D` 下有三个 DAREU 家族。因此：
 - HID++ 协议：Solaar `lib/logitech_receiver/hidpp20.py`；HaloBattery `providers/logitech.py` 文件头；
   logipal `battery_overlay.py` 的 `_build_report`。
 - BatteryHub 协议：`src/drivers/<file>.cpp` 的注释（每个函数注释里标注了上游文件与命令字节）。
-- 本机实测：`Get-PnpDeviceProperty -KeyName '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'`（蓝牙）；
+- 本机实测：`pnputil /enum-devices /connected /class Bluetooth /properties /format xml`（蓝牙）；
+  `devices-pnp.ps1` 的 Config Manager 属性读取（HFP 节点）；
   `device-battery.ps1` 的 JSON 输出（私有协议）；设备页两次快照的 `probedAt`（后台轮询）。

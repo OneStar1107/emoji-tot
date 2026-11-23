@@ -1,32 +1,27 @@
 /**
- * A cover for a Bilibili live stream that Windows hands us no thumbnail for.
+ * Metadata for a Bilibili live room.
  *
- * The live page never sets MediaSession artwork, so its SMTC frame carries a
- * title and nothing else — there is no thumbnail to forward. The title is
- * still a pointer: Bilibili writes it as
+ * The live page's SMTC title is
  *
  *   "<stream title> - <anchor> - 哔哩哔哩直播，二次元弹幕直播平台"
  *
- * and the public live search endpoint maps the anchor to the room and its
- * cover. Neither the page nor a login is involved: one search request and one
- * image request, both anonymous.
- *
- * Failure is silent on purpose. A broadcast without a cover has to keep
- * playing and fall back to the skin's placeholder, so every path here resolves
- * to an empty string instead of throwing.
+ * but its thumbnail is sometimes a 300px Bilibili placeholder. The public
+ * search and room endpoints map the title to the authoritative room name,
+ * anchor name, live start and stable cover. Failure is silent: playback keeps
+ * its raw title and skin fallback rather than throwing.
  */
 const platform = require('../platform');
 const { scriptFile } = require('../paths');
 
 const SCRIPT = scriptFile('bilibili-cover.ps1');
-/** A cover belongs to one broadcast and does not change while it is on. */
-const COVER_TTL = 6 * 60 * 60 * 1000;
+/** Room titles can change, and a new broadcast has a new start time. */
+const INFO_TTL = 5 * 60 * 1000;
 /** A miss is a maybe: the search endpoint is rate limited and the network returns. */
-const FAIL_TTL = 60 * 1000;
+const FAIL_TTL = 30 * 1000;
 /** The script has its own request timeouts; this is the backstop for a hung child. */
-const TIMEOUT_MS = 15000;
+const TIMEOUT_MS = 25000;
 /** Enough channels for an evening of switching; anything older is re-fetched. */
-const CACHE_MAX = 12;
+const CACHE_MAX = 16;
 
 /** The shape of a Bilibili live page title, as it reaches SMTC. */
 const LIVE_TITLE = /^.*?\s+-\s+[^-]+?\s+-\s+哔哩哔哩直播/u;
@@ -36,37 +31,36 @@ function looksLive(title) {
   return typeof title === 'string' && LIVE_TITLE.test(title);
 }
 
-const covers = new Map();
+const rooms = new Map();
 const pending = new Map();
 
-function remember(key, art) {
-  covers.set(key, { art, at: Date.now() });
-  if (covers.size > CACHE_MAX) covers.delete(covers.keys().next().value);
+function remember(key, info) {
+  rooms.set(key, { info, at: Date.now() });
+  if (rooms.size > CACHE_MAX) rooms.delete(rooms.keys().next().value);
 }
 
 /**
- * The cover for one broadcast title, or '' when there is none.
+ * Room metadata for one broadcast title, or null when it cannot be resolved.
  *
  * Repeated frames for the same broadcast are the normal case (one per second),
- * so a found cover is kept for hours and a miss is retried after a minute
- * instead of on every frame.
+ * so a hit stays cached briefly and a miss is retried after half a minute.
  */
-function coverFor(title) {
+function infoFor(title) {
   const key = String(title || '');
-  if (!looksLive(key)) return Promise.resolve('');
-  const hit = covers.get(key);
-  if (hit && Date.now() - hit.at < (hit.art ? COVER_TTL : FAIL_TTL)) return Promise.resolve(hit.art);
+  if (!looksLive(key)) return Promise.resolve(null);
+  const hit = rooms.get(key);
+  if (hit && Date.now() - hit.at < (hit.info ? INFO_TTL : FAIL_TTL)) return Promise.resolve(hit.info);
   if (pending.has(key)) return pending.get(key);
   const task = lookup(key)
-    .then((art) => {
+    .then((info) => {
       pending.delete(key);
-      remember(key, art);
-      return art;
+      remember(key, info);
+      return info;
     })
     .catch(() => {
       pending.delete(key);
-      remember(key, '');
-      return '';
+      remember(key, null);
+      return null;
     });
   pending.set(key, task);
   return task;
@@ -77,17 +71,17 @@ function lookup(title) {
   return new Promise((resolve) => {
     let out = '';
     let settled = false;
-    const finish = (art) => {
+    const finish = (info) => {
       if (settled) return;
       settled = true;
-      resolve(art);
+      resolve(info);
     };
     const child = platform.spawnPowerShell(
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-Title', title],
       { stdio: ['ignore', 'pipe', 'ignore'] },
     );
     if (!child) {
-      resolve('');
+      resolve(null);
       return;
     }
     const timer = setTimeout(() => {
@@ -96,22 +90,22 @@ function lookup(title) {
       } catch {
         // already gone
       }
-      finish('');
+      finish(null);
     }, TIMEOUT_MS);
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
       out += chunk;
       // A cover is a few hundred KB of base64; anything past that is a runaway.
-      if (out.length > 4 * 1024 * 1024) {
+      if (out.length > 8 * 1024 * 1024) {
         try {
           child.kill();
         } catch {
           // already gone
         }
-        finish('');
+        finish(null);
       }
     });
-    child.on('error', () => finish(''));
+    child.on('error', () => finish(null));
     child.on('exit', () => {
       clearTimeout(timer);
       const line = out
@@ -119,17 +113,33 @@ function lookup(title) {
         .map((entry) => entry.trim())
         .find((entry) => entry.startsWith('{'));
       if (!line) {
-        finish('');
+        finish(null);
         return;
       }
       try {
         const parsed = JSON.parse(line);
-        finish(typeof parsed.art === 'string' && parsed.art.startsWith('data:image/') ? parsed.art : '');
+        if (parsed.ok !== true || !parsed.roomTitle || !parsed.anchorName) {
+          finish(null);
+          return;
+        }
+        finish({
+          platform: 'bilibili',
+          roomId: String(parsed.roomId || ''),
+          roomTitle: String(parsed.roomTitle),
+          anchorName: String(parsed.anchorName),
+          startedAt: Number(parsed.startedAt) || 0,
+          art: typeof parsed.art === 'string' && parsed.art.startsWith('data:image/') ? parsed.art : '',
+        });
       } catch {
-        finish('');
+        finish(null);
       }
     });
   });
 }
 
-module.exports = { looksLive, coverFor };
+/** Kept as a narrow cover-only view for callers that do not need metadata. */
+function coverFor(title) {
+  return infoFor(title).then((info) => info?.art || '');
+}
+
+module.exports = { looksLive, infoFor, coverFor };

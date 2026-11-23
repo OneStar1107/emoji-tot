@@ -218,6 +218,21 @@ describe('schema: display mode migration', () => {
   });
 });
 
+describe('schema: removed skins', () => {
+  it('falls back to frost when a stored profile used a removed skin', () => {
+    assert.equal(withDefaults({ skin: 'magazine' }).skin, 'frost');
+    assert.equal(withDefaults({ skin: 'console' }).skin, 'frost');
+  });
+
+  it('accepts the remaining skins and rejects writes for removed ones', () => {
+    for (const skin of ['frost', 'solid', 'plain']) {
+      assert.deepEqual(filterPatch({ skin }), { accepted: { skin }, rejected: [] });
+    }
+    assert.deepEqual(filterPatch({ skin: 'magazine' }), { accepted: {}, rejected: ['skin'] });
+    assert.deepEqual(filterPatch({ skin: 'console' }), { accepted: {}, rejected: ['skin'] });
+  });
+});
+
 describe('schema: pages drive services', () => {
   it('stops a service when its page is switched off', () => {
     const off = withDefaults({ pages: { weather: false }, statusItems: ['battery', 'clock'] });

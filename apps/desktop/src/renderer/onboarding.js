@@ -6,11 +6,9 @@
  * form the app does not have and the two endings (完成 / 跳过) stay one call.
  */
 const SKIN_PREVIEWS = [
-  ['frost', '毛玻璃', '半透明浅蓝，桌面会透出来'],
+  ['frost', 'Liquid Glass', '半透明浅蓝，桌面会透出来'],
   ['solid', '实色', '不透明深色卡片'],
   ['plain', '极简', '收起时只剩一条细线'],
-  ['magazine', '杂志', '暖金衬线标题'],
-  ['console', '控制台', '冷蓝网格与等宽读数'],
 ];
 
 const welcome = document.getElementById('page-welcome');

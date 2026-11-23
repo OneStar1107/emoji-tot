@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const desktop = fileURLToPath(new URL('..', import.meta.url));
 const src = (path) => readFileSync(join(desktop, 'src', path), 'utf8');
 const desktopPackage = JSON.parse(readFileSync(join(desktop, 'package.json'), 'utf8'));
+const installerHooks = readFileSync(join(desktop, 'build', 'installer.nsh'), 'utf8');
 
 describe('startup polish and release identity', () => {
   it('never paints the internal Hong Kong fallback into the city field', () => {
@@ -31,7 +32,12 @@ describe('startup polish and release identity', () => {
     assert.match(i18n, /about\.license/);
   });
 
-  it('uses a clean installer filename without Setup or a version suffix', () => {
-    assert.equal(desktopPackage.build.nsis.artifactName, 'EmojiTot.${ext}');
+  it('keeps the installer filename distinct from the app without a version suffix', () => {
+    assert.equal(desktopPackage.build.nsis.artifactName, 'EmojiTot.Setup.${ext}');
+    assert.match(
+      installerHooks,
+      /!macro customCheckAppRunning[\s\S]*?!macroend/,
+      'the installer must override the pre-$INSTDIR app-running false positive',
+    );
   });
 });

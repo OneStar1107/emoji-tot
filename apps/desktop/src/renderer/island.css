@@ -1,10 +1,9 @@
 /**
- * The island, sized entirely by its content.
+ * The island, sized by its content and capped by the user's width preference.
  *
- * The window has 16x12 of transparent margin; everything visible is this
- * element. No fixed window size anywhere: the main process reads back the box
- * the page reports, so a taller page is a taller window with no second copy of
- * the layout numbers.
+ * The native window has transparent padding around this element. Compact states
+ * publish the measured capsule width, while the open state uses the panel width.
+ * Height always follows the measured frame.
  */
 :root {
   --ink: #f2f2f5;
@@ -83,17 +82,39 @@
   --fold-h: clamp(34px, calc(var(--pill-h) * 1.16), 64px);
   --fold-face: clamp(20px, calc(var(--fold-h) * 0.7), 40px);
   /*
-   * The collapsed pill used to be a fixed 168px because it held a face and one
-   * expression. It now sizes to its status components, so it needs a ceiling:
-   * the widest it may get before the row is trimmed at a component boundary.
-   *
-   * Tied to the panel it unfolds into, not to the viewport. The island window
-   * is set from this very content (measure -> reportBox -> setBounds), so a vw
-   * cap would feed the capped box back into the unit it is capped with. Four
-   * components measure 207-300px across the uiScale range, so this is a ceiling
-   * for long values (a six-figure balance) and never the normal case.
+   * The native stage follows the compact content, but never grows past the
+   * expanded panel. The renderer measures the next content width first: growing
+   * stages are installed before the pill expands, while shrinking stages wait
+   * until the pill has visibly settled. That keeps the moving object inside the
+   * native window without resizing the OS surface on every spring frame.
    */
-  --pill-max-w: min(520px, calc(var(--island-w) + 72px));
+  --pill-max-w: var(--island-w);
+  /*
+   * The face artwork has a small transparent inset inside its layout box. The
+   * left edge uses the nominal gutter; the right edge adds the calibrated
+   * optical room so text and the visible face keep matching breathing room.
+   */
+  --pill-pad-left: 12px;
+  --pill-pad-right: 23.5px;
+  --pill-gap: 8px;
+  /*
+   * The title column is deliberately narrower than the whole island. The
+   * screenshots use this slot as the readable window: ordinary song names fit,
+   * while a live-stream title scrolls instead of pulling the capsule to the
+   * overall maximum. It scales with the user's UI size and can never exceed the
+   * remaining room inside --pill-max-w.
+   */
+  --pill-title-max-w: min(
+    calc(240px * var(--ui-scale, 1)),
+    calc(
+      var(--pill-max-w)
+      - var(--fold-face)
+      - var(--pill-pad-left)
+      - var(--pill-pad-right)
+      - var(--pill-gap)
+      - 12px
+    )
+  );
   --ui-font: system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --ui-size: 12.5px;
   --ui-weight: 400;
@@ -260,12 +281,11 @@ body {
 }
 
 /*
- * The island is a fixed-size window into a naturally-sized frame.
+ * The island is a window into its frame.
  *
- * The frame decides how big the content is; the island animates towards it and
- * the main process follows the island every frame. Animating the window itself
- * from the main process would need a second copy of every layout number, and
- * the two would drift apart on the first layout change.
+ * The frame holds the measured lateral stage and a natural height. The native
+ * box is grown before the pill widens, then shrunk after the capsule settles;
+ * the island follows the height and the main process follows the reported box.
  */
 body {
   display: flex;
@@ -313,10 +333,13 @@ body {
   left: 50%;
   top: 0;
   transform: translateX(-50%);
-  width: max-content;
+  width: var(--pill-stage-w, var(--fold-w));
   display: flex;
   justify-content: center;
 }
+/* The open panel is the hard-width destination; compact states publish the
+   measured pill width through --pill-stage-w. */
+#island[data-open="true"] #frame { width: var(--island-w); }
 
 /*
  * The skin cross-fade.
@@ -347,22 +370,31 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* The panel is measured in the same flex row during the close hand-off. It
+     must not squeeze the capsule down to --fold-w and teach the morph the wrong
+     destination width. */
+  flex: none;
   /*
    * 8px between the face, the status row and the expression: one rhythm for
    * the whole capsule. The row inside .pill-status uses a 7px gap of its own,
    * because numbers read as one block and the face is a different thing.
    */
-  gap: 8px;
+  gap: var(--pill-gap);
   /*
-   * Sized by its content, floored at the old fixed width and capped by
-   * --pill-max-w. min-width keeps the face-only capsule the size it has always
-   * been; max-width is what the row is trimmed against (see fitPillStatus).
+   * --pill-content-w is sampled after every content change, then driven by
+   * island.js between the measured widths. The surrounding frame is grown
+   * first and shrunk after the spring settles, so the moving capsule never
+   * crosses the native edge. min-width keeps the face-only capsule at its
+   * established size; max-width is the component-boundary trim cap.
    */
-  width: max-content;
+  width: var(--pill-content-w, max-content);
   min-width: var(--fold-w);
   max-width: var(--pill-max-w);
   height: var(--fold-h);
-  padding: 0 12px;
+  /* The right gutter is wider because the face artwork is inset inside its
+     layout box; the visible face and clipped text must land equally far from
+     their respective edges. */
+  padding: 0 var(--pill-pad-right) 0 var(--pill-pad-left);
   overflow: hidden;
   border: 1px solid var(--glass-edge);
   border-radius: var(--r-full);
@@ -451,6 +483,7 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   color: var(--ink);
+  transition: opacity var(--fast) var(--ease);
 }
 
 /* An empty row must not spend a gap on nothing. */
@@ -470,63 +503,6 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
 /* The marker that replaced the components which did not fit. */
 .pill-status .stat.more { color: var(--faint); opacity: 1; letter-spacing: 0; }
 .pill-status svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-
-.pill-live {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 12px;
-  margin-left: 1px;
-  opacity: 0.75;
-}
-.pill-live i {
-  width: 2px;
-  height: 5px;
-  border-radius: 1px;
-  background: var(--ink);
-  animation: live 1.1s ease-in-out infinite;
-}
-.pill-live i:nth-child(2) { animation-delay: 0.15s; height: 9px; }
-.pill-live i:nth-child(3) { animation-delay: 0.3s; height: 6px; }
-.pill-live i:nth-child(4) { animation-delay: 0.45s; height: 10px; }
-@keyframes live { 0%, 100% { transform: scaleY(0.55); } 50% { transform: scaleY(1); } }
-body[data-playing="false"] .pill-live { display: none; }
-
-/*
- * The collapsed capsule carries the status row.
- *
- * 0.3.49 hid .pill-status and .pill-live here, on the idea that C's folded
- * state is "the face and nothing else". The renderer kept producing battery,
- * clock, temperature and balance the whole time; one rule in this file was the
- * only thing keeping them off the capsule — the reason a folded island showed
- * a face and an expression where the reference app shows the numbers.
- *
- * So the row is back. The row that stays hidden is the play indicator: four
- * animated bars next to four numbers are a louder second copy of the same
- * fact, and the numbers already say "something is playing" through the media
- * row the panel opens. The expression steps aside by itself once the row has
- * two or more components (see #pill[data-trailer="off"] below).
- */
-#island[data-open="false"] .pill .pill-live { display: none; }
-
-.pill::after {
-  content: "(｡･ω･｡)";
-  flex: none;
-  max-width: calc(100% - var(--fold-face) - 24px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--ui-size);
-  line-height: 1.3;
-  color: var(--dim);
-}
-/*
- * Filler, not status: pillContentPlan() sets data-trailer="off" whenever the
- * row carries two or more components, and this rule is what makes that
- * decision visible. Kept as a data attribute rather than :has() because the
- * count includes components whose data arrived a beat later.
- */
-#pill[data-trailer="off"]::after { display: none; }
 
 /* Skins: one fill difference each, not three themes to maintain. */
 /* ---------------------------------------------------------------- skins */
@@ -564,7 +540,6 @@ body[data-skin="plain"] .pill {
   transition: width var(--base) var(--spring), height var(--base) var(--spring), opacity var(--base) ease, background var(--base) ease;
 }
 body[data-skin="plain"] .pill > * { opacity: 0; transition: opacity var(--fast) ease; }
-body[data-skin="plain"] .pill::after { opacity: 0; transition: opacity var(--fast) ease; }
 /* Hovering is how you find it again: the line grows back into the folded pill. */
 body[data-skin="plain"] .pill:hover,
 body[data-skin="plain"] .pill:focus-visible {
@@ -577,8 +552,6 @@ body[data-skin="plain"] .pill:focus-visible {
 }
 body[data-skin="plain"] .pill:hover > *,
 body[data-skin="plain"] .pill:focus-visible > * { opacity: 1; }
-body[data-skin="plain"] .pill:hover::after,
-body[data-skin="plain"] .pill:focus-visible::after { opacity: 1; }
 
 body[data-blur="off"] .panel,
 body[data-blur="off"] .pill { background: var(--card-solid); backdrop-filter: none; }
@@ -611,6 +584,7 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
 .panel {
   position: relative;
   width: var(--island-w);
+  flex: none;
   /* Left and right padding is the arrows' lane: content never sits under them.
      Top is 8, not 12: the header already owns its breathing room, and the extra
      4px of panel padding was part of the empty band above the page. */
@@ -623,7 +597,7 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
   /*
    * The skin decides the fill. --card is the translucent one (frost), and each
    * solid/plain skin overrides it below. Painting --card-solid here made every
-   * skin look identical once the panel was open — which is exactly what "毛玻璃
+   * skin look identical once the panel was open — which is exactly what "Liquid Glass
    * 和实色没区别" reports.
    *
    * No backdrop-filter: in a transparent Electron window there is nothing real
@@ -668,16 +642,6 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
    * content, and it is clipped by the panel's own rounded box.
    */
   /*
-   * The morph origin, not a decoration.
-   *
-   * The panel is scaled up out of the pill (see morphPanel in island.js). With
-   * the origin at the top centre the top edge stays on the pill's top edge and
-   * both sides grow outwards along the same centre line the window is growing
-   * along; scaling about the middle dropped the top edge 145px on the first
-   * frame and read as the card falling into place from above.
-   */
-  transform-origin: top center;
-  /*
    * The panel is its own stacking context so the two glass layers below can sit
    * at negative z-index: inside this context they paint above the panel's own
    * background and below every in-flow child, which is exactly "between the
@@ -687,16 +651,8 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
   isolation: isolate;
 }
 
-/*
- * The page inside the card is counter-scaled during the fold (paintMorph in
- * island.js), and the inverse only cancels the panel's scale if it turns
- * about the same origin. The panel turns about its top centre; this layer
- * used to turn about its own centre, so the two transforms disagreed by
- * (1 - 1/scale) times half the layer's height — the character sat still on
- * the first frame and then slid upwards through the whole open, which is the
- * drift that was reported.
- */
-.panel-body { transform: none; transform-origin: top center; }
+/* The shell owns the fold geometry; content stays at its natural size. */
+.panel-body { transform: none; }
 
 /*
  * During the morph the panel and content are siblings in one fixed-size frame.
@@ -704,27 +660,35 @@ body[data-theme="light"][data-skin="plain"] .pill:hover { background: #ffffff; o
  * clipped by the panel. This avoids the compound transform that made the face
  * drift and left a stale grey edge beside the translucent surface.
  */
-body[data-morphing="true"] #frame {
+body:is([data-morphing="true"], [data-preparing="true"]) #frame {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
 }
-body[data-morphing="true"] .panel,
-body[data-morphing="true"] .panel-body {
+body:is([data-morphing="true"], [data-preparing="true"]) .panel,
+body:is([data-morphing="true"], [data-preparing="true"]) .panel-body {
   position: absolute;
   top: 0;
   left: 50%;
   transform: translateX(-50%);
 }
-body[data-morphing="true"] .pill {
+body:is([data-morphing="true"], [data-preparing="true"]) .pill {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 0;
+  right: 0;
   z-index: 2;
-  transform: translateX(-50%);
+  margin: 0 auto;
+  /*
+   * The normal pill transitions transform for its hover lift. Centering with
+   * translateX here made removing data-morphing animate from translateX(-50%)
+   * back to none, which looked like the capsule slid left and bounced home.
+   * Auto margins give the same centre without touching the animated property.
+   */
+  transform: none;
 }
-body[data-morphing="true"] .pill,
-body[data-morphing="true"] .panel {
+body:is([data-morphing="true"], [data-preparing="true"]) .pill,
+body:is([data-morphing="true"], [data-preparing="true"]) .panel {
   box-shadow: none;
 }
 
@@ -1146,6 +1110,21 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
+}
+.now-playing-pill {
+  max-width: var(--pill-title-max-w);
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+  display: inline-block;
+}
+.now-playing-pill > span { display: inline-block; }
+.now-playing-pill[data-over="true"] > span {
+  animation: pill-title-scroll 12s linear infinite;
+}
+@keyframes pill-title-scroll {
+  0%, 10% { transform: translateX(0); }
+  90%, 100% { transform: translateX(calc(-1 * var(--pill-title-shift, 0px))); }
 }
 .music-row { display: flex; align-items: center; gap: 10px; height: 96px; flex: none; min-width: 0; }
 .cover {
@@ -2244,7 +2223,7 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .msg-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
 
 /* Six pixels cannot carry a brand mark: these are the apps' dominant hues,
-   spread far enough apart to stay tellable from each other on all five skins. */
+   spread far enough apart to stay tellable from each other on all three skins. */
 .msg-group[data-app="wechat"] .msg-dot { background: #2fbf5c; }
 .msg-group[data-app="qq"] .msg-dot { background: #3b82f6; }
 .msg-group[data-app="wecom"] .msg-dot { background: #22b8cf; }
@@ -2779,539 +2758,6 @@ body[data-avoid="1"] #pill,
 body[data-avoid="1"] #panel { visibility: hidden; }
 body[data-avoid="1"] #avoid-strip { display: block; }
 
-/* =========================================== skins: magazine (direction E) */
-/*
- * The fourth skin: a magazine page, not a piece of glass.
- *
- * Direction E carries exactly three signals, and only these three are built
- * here:
- *   - a serif headline over sans body text, from the platform stack only
- *   - one accent colour, used for state and for the single rule under the
- *     header
- *   - margins at the panel edges, with content grouped as cards on paper
- *     instead of widgets on a translucent surface
- *
- * Out of scope on purpose, and checked unchanged in the CDP run that accepts
- * this skin: page markup, page layout, the 217px page box, the pager 32px hit
- * target and the dots 24px one. No page geometry is edited below, so every
- * page reports the same scrollHeight under magazine as it does under frost.
- *
- * The accent is E's warm gold in dark mode and a deeper gold in light mode.
- * The hard-coded purple highlights further up this file (a ticked todo, a
- * verification code, a drag hover) are re-pointed at var(--accent) so the
- * "one accent" rule survives contact with those states.
- */
-body[data-skin="magazine"] {
-  /*
-   * Latin from Georgia, CJK from the first serif the machine actually has.
-   * The Latin face is listed first on purpose: the stack is walked per glyph,
-   * so Georgia ahead of the CJK serifs gives Latin its editorial serif while
-   * Chinese still lands on Songti (macOS) or SimSun (Windows) instead of
-   * falling through to the sans default.
-   */
-  --serif: Georgia, "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", "宋体", serif;
-  --accent: #e9c46a;
-  /* Paper: opaque enough to hold a headline over any wallpaper. */
-  --card: rgba(20, 19, 24, 0.94);
-  /* Hairlines one step finer than frost: a magazine rules a column with a line
-     you barely see, not with a surface you can read. */
-  --line: rgba(255, 255, 255, 0.075);
-  --surface-1: rgba(255, 255, 255, 0.04);
-  --surface-2: rgba(255, 255, 255, 0.085);
-  --surface-3: rgba(255, 255, 255, 0.14);
-}
-
-/* The card: one warm wash from the top edge, then paper. The wash is a
-   background layer, not a ::before, so it can never sit over the content. */
-body[data-skin="magazine"] .panel {
-  /*
-   * Vertical margin only. The side padding is the pager's lane (34px) and the
-   * page box is measured against it, so horizontally nothing moves.
-   */
-  /* Same 8/4 as the base panel. The 26px serif line box (20px × 1.3) still fits
-     inside the 42.7px column the face sets, so the magazine header lands at the
-     same height as every other skin's and the window does not jump on a switch. */
-  padding: 8px 34px 4px;
-  background:
-    radial-gradient(120% 86% at 50% -18%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 62%),
-    var(--card);
-  border-color: var(--line);
-  box-shadow: var(--hi), var(--lo), var(--ring);
-}
-
-/* Folded: a rounded card rather than a full capsule. Width and height stay on
-   --fold-w / --fold-h, so the size preferences keep working. */
-body[data-skin="magazine"] .pill {
-  border-radius: calc(var(--fold-h) * 0.28);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 60%),
-    var(--card);
-  border-color: var(--line);
-}
-body[data-skin="magazine"] .pill-live i { background: var(--accent); }
-
-/* ------------------------------------------------------------------ header */
-/*
- * The headline is the skin. 20px of serif over a 10.5px tracked kicker is the
- * whole type hierarchy change; the title still rides #page-title's existing
- * nowrap + scroll, so a long song name is clipped by the same rule as before.
- *
- * 24px of line box is the number the acceptance run reads back: headline 20px,
- * line box 1.3, and the pair still fits inside the 42.7px column the ball sets,
- * which is why the header does not get taller than under the other skins.
- */
-body[data-skin="magazine"] .top-titles { padding-left: 10px; gap: 2px; }
-body[data-skin="magazine"] #page-title {
-  font-family: var(--serif);
-  font-size: 20px;
-  font-weight: 500;
-  line-height: 1.3;
-  min-height: 24px;
-  letter-spacing: 0.005em;
-  color: var(--ink);
-}
-body[data-skin="magazine"] #page-sub {
-  font-family: var(--ui-font);
-  font-size: 10.5px;
-  line-height: 1.3;
-  letter-spacing: 0.18em;
-  color: var(--dim);
-  /* The kicker's signal is tracking plus caps. CJK ignores uppercase; a Latin
-     date or a city name does not. */
-  text-transform: uppercase;
-}
-body[data-skin="magazine"] .top-page-name {
-  font-family: var(--serif);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  color: var(--accent);
-}
-/* The one rule: a warm hairline closing the header, on the border that was
-   already there, so the header keeps its height. */
-body[data-skin="magazine"] .topbar {
-  /* 3px, not 4: the magazine page name is 9.5px in the serif, so its face
-     column is half a pixel taller than the sans one. Closing the bar one pixel
-     earlier keeps every skin's header within 0.5px of the others, which is what
-     keeps the window height from jumping on a skin switch. */
-  padding: 0 4px 3px;
-  border-bottom-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-}
-
-/* ------------------------------------------------------------------- cards */
-/*
- * Rings, not borders: boxing a cell with border would add 2px of height to
- * rows that already fill the 217px page. An inset ring paints the same edge
- * without touching the box model.
- */
-body[data-skin="magazine"] .wx-cell,
-body[data-skin="magazine"] .health-row {
-  border-radius: 11px;
-  background: var(--surface-1);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-body[data-skin="magazine"] .health-row:hover { background: var(--surface-2); }
-body[data-skin="magazine"] .cover,
-body[data-skin="magazine"] .cover-img {
-  border-radius: 6px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.34);
-}
-body[data-skin="magazine"] .shelf-hint { border-radius: 12px; }
-
-/* ------------------------------------------------------------ one accent */
-body[data-skin="magazine"] .music-bar i,
-body[data-skin="magazine"] .health-bar i { background: var(--accent); }
-body[data-skin="magazine"] .dots button[aria-current="true"]::after { background: var(--accent); }
-body[data-skin="magazine"] .todo-item.done .todo-check::before {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-}
-body[data-skin="magazine"] .shelf.dragover .shelf-hint {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-/* ------------------------------------------------------------- light paper */
-/*
- * Same idea on a light desktop: warm paper, and a gold dark enough to hold
- * contrast against it.
- */
-body[data-theme="light"][data-skin="magazine"] {
-  --accent: #8a6410;
-  --card: #fcfaf4;
-  --line: rgba(32, 26, 14, 0.13);
-  --surface-1: rgba(32, 26, 14, 0.045);
-  --surface-2: rgba(32, 26, 14, 0.1);
-  --surface-3: rgba(32, 26, 14, 0.17);
-}
-body[data-theme="light"][data-skin="magazine"] .panel {
-  background:
-    radial-gradient(120% 86% at 50% -18%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 62%),
-    var(--card);
-  box-shadow: var(--hi), var(--lo), var(--ring);
-}
-body[data-theme="light"][data-skin="magazine"] .pill {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 60%), var(--card);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14), var(--hi), var(--ring);
-}
-
-
-/* =========================================== skins: console (direction D) */
-/*
- * The fifth skin: an instrument panel, not a card.
- *
- * Direction D carries three signals, and only these are built here:
- *   - a monospaced numeric voice (JetBrains Mono / Cascadia / Consolas) with
- *     tabular figures, so a value does not shift the row it lives in
- *   - a cold, near-black plate ruled with hairline cyan, denser than frost
- *   - the numbers that were already on the page drawn as instruments: the
- *     quota split, the focus ring and the health meters
- *
- * Out of scope on purpose, and read back in the CDP run that accepts this
- * skin: page markup, page layout, the 217px page box, the pager's 32px hit
- * target and the dots' 24px one. No rule below sets a width, height, padding
- * or gap on page content: the meters are backgrounds, inset rings and
- * absolutely positioned pseudo-elements, so the geometry is unchanged.
- *
- * The two cold accents replace the purple; --accent2 is the quota split's
- * second segment and is not otherwise used by the base stylesheet.
- */
-body[data-skin="console"] {
-  --accent: #4fd1ff;
-  --accent2: #7c9cff;
-  --good: #3ddc97;
-  --warn: #ffb454;
-  --bad: #ff5d6c;
-  --ink: #e6f4ff;
-  --dim: rgba(206, 230, 255, 0.62);
-  --faint: rgba(190, 218, 248, 0.4);
-  /* An instrument is read against its own face, not the wallpaper: the plate
-     is opaque, like the "solid" skin, and drops the blur with it. */
-  --card: #0b1017;
-  --card-solid: #0b1017;
-  --line: rgba(120, 190, 255, 0.2);
-  --surface-1: rgba(88, 168, 255, 0.07);
-  --surface-2: rgba(88, 168, 255, 0.14);
-  --surface-3: rgba(88, 168, 255, 0.24);
-  --hi: inset 0 1px 0 rgba(150, 215, 255, 0.14);
-  --lo: inset 0 -1px 0 rgba(0, 0, 0, 0.5);
-  --ring: inset 0 0 0 1px rgba(96, 180, 255, 0.12);
-  --console-mono: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
-  --console-grid: rgba(110, 180, 255, 0.045);
-  color-scheme: dark;
-}
-
-/* The plate: one cold wash from the top edge, then a 4px scan and a 32px
-   column rule. All three are background layers, so nothing can sit over the
-   content. */
-body[data-skin="console"] .panel {
-  background:
-    linear-gradient(180deg, rgba(79, 209, 255, 0.075), rgba(79, 209, 255, 0) 42%),
-    repeating-linear-gradient(0deg, var(--console-grid) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(90deg, var(--console-grid) 0 1px, transparent 1px 32px),
-    var(--card);
-  border-color: var(--line);
-  box-shadow: var(--hi), var(--lo), var(--ring);
-}
-/* The status rail: 2px of accent inside the top edge, in the panel's own
-   padding, so it cannot cover the header. */
-body[data-skin="console"] .panel::before {
-  content: "";
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  top: 0;
-  height: 2px;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, var(--accent) 14%, var(--accent) 86%, transparent);
-  opacity: 0.55;
-}
-
-body[data-skin="console"] .pill {
-  background:
-    repeating-linear-gradient(90deg, var(--console-grid) 0 1px, transparent 1px 20px),
-    linear-gradient(180deg, rgba(79, 209, 255, 0.1), rgba(79, 209, 255, 0) 70%),
-    var(--card);
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.38), var(--hi), var(--ring);
-  backdrop-filter: none;
-}
-/* The folded pill's one expression becomes a terminal token. Width and height
-   stay on --fold-w / --fold-h and the text is clipped by the same max-width
-   rule every other skin uses. */
-body[data-skin="console"] .pill::after {
-  content: "[｡･ω･｡]";
-  font-family: var(--console-mono);
-  letter-spacing: -0.03em;
-  color: var(--accent);
-}
-body[data-skin="console"] .pill-live i { background: var(--accent); }
-
-/* ------------------------------------------------------------------ header */
-/*
- * The header keeps its height: only colour, tracking and the value line's face
- * change. #page-title keeps the system font so a long song name still clips
- * and scrolls exactly as it did; #page-sub is the line that carries numbers,
- * so that is the one that goes mono.
- */
-body[data-skin="console"] .topbar {
-  border-bottom-color: color-mix(in srgb, var(--accent) 26%, var(--line));
-}
-body[data-skin="console"] #page-sub,
-body[data-skin="console"] .top-clock {
-  font-family: var(--console-mono);
-  letter-spacing: 0.02em;
-}
-body[data-skin="console"] .top-clock { color: var(--accent); }
-body[data-skin="console"] .top-page-name {
-  letter-spacing: 0.14em;
-  color: var(--accent);
-}
-
-/* --------------------------------------------------------------- instruments */
-
-/*
- * Quota.
- *
- * The split bar is the one ratio the two money values already contain;
- * island.js writes it as --quota-share and no new data field is involved. In
- * console it reads as a segmented instrument: the two accents plus one dark
- * notch every 7px, with the amount in the mono face as the page's focus.
- */
-body[data-skin="console"] .quota-amount {
-  font-family: var(--console-mono);
-  /* 30px: the scale's top tier. Mono digits are wider than the sans face, but
-     this is the page's one number and the row has the width for it. */
-  font-size: 30px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  color: var(--accent);
-  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 28%, transparent);
-}
-body[data-skin="console"] .quota-amount small { color: var(--dim); }
-body[data-skin="console"] .quota-id { font-family: var(--console-mono); letter-spacing: 0.08em; }
-body[data-skin="console"] .quota-part {
-  font-family: var(--console-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-}
-/* The two legend entries are the bar's two segments, in the bar's two colours. */
-body[data-skin="console"] .quota[data-gauge] .quota-part.topped { color: var(--accent); }
-body[data-skin="console"] .quota[data-gauge] .quota-part.granted { color: var(--accent2); }
-body[data-skin="console"] .quota[data-gauge] .quota-part.topped .quota-piece { background: var(--accent); }
-body[data-skin="console"] .quota[data-gauge] .quota-part.granted .quota-piece { background: var(--accent2); }
-body[data-skin="console"] .quota-foot { font-family: var(--console-mono); letter-spacing: 0.06em; }
-body[data-skin="console"] .quota-meter {
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 30%, transparent);
-}
-/* Coded, not solid: one dark notch every 7px reads as a segmented instrument. */
-body[data-skin="console"] .quota-meter::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(90deg, transparent 0 6px, rgba(8, 14, 22, 0.6) 6px 7px);
-}
-
-/*
- * Focus.
- *
- * The ring was already a conic-gradient gauge driven by --pct, so the skin only
- * changes the instrument: calibration ticks outside it, a hairline inside it,
- * the phase word in the middle. 96px stays 96px; the clock is its neighbour now,
- * not its centre.
- */
-body[data-skin="console"] .focus-ring {
-  background:
-    repeating-conic-gradient(from -90deg, color-mix(in srgb, var(--accent) 45%, transparent) 0 0.55deg, transparent 0.55deg 9deg),
-    conic-gradient(var(--accent) calc(var(--pct) * 1%), var(--surface-2) 0);
-  box-shadow:
-    0 0 26px color-mix(in srgb, var(--accent) 16%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-body[data-skin="console"] .focus-ring::before {
-  inset: 7px;
-  background: var(--card-solid);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-body[data-skin="console"] .focus-ring::after {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
-  pointer-events: none;
-}
-body[data-skin="console"] .focus-time {
-  font-family: var(--console-mono);
-  font-size: 30px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--ink);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
-}
-body[data-skin="console"] .focus-phase {
-  letter-spacing: 0.2em;
-  color: var(--accent);
-}
-
-/*
- * Health.
- *
- * The bars are the progress the page already reports: their width is written
- * inline by healthPage(), so the skin only gives them a 6px instrument body,
- * a segment grid and a cold fill. 2px taller per bar is the only box-model
- * change in this block, and the acceptance run measures the page after it.
- */
-body[data-skin="console"] .health-row {
-  border-radius: 3px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent 62%), var(--surface-1);
-  box-shadow: inset 2px 0 0 var(--accent), inset 0 0 0 1px var(--line);
-}
-body[data-skin="console"] .health-label {
-  letter-spacing: 0.18em;
-  color: var(--accent);
-}
-body[data-skin="console"] .health-num {
-  font-family: var(--console-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-}
-/* The week's figure sits in the same column as the counter's, so the skin's
-   instrument type has to reach it too: two fonts in one column reads as a bug. */
-body[data-skin="console"] .health-trend-num {
-  font-family: var(--console-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-}
-body[data-skin="console"] .health-bar {
-  position: relative;
-  height: 4px;
-  border-radius: 1px;
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-body[data-skin="console"] .health-bar i {
-  border-radius: 1px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 52%, transparent), var(--accent));
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 40%, transparent);
-}
-body[data-skin="console"] .health-bar i[data-due="true"] {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 52%, transparent), var(--warn));
-}
-body[data-skin="console"] .health-bar::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(8, 14, 22, 0.55) 9px 10px);
-}
-
-/* ---------------------------------------------------------------- the rest */
-/* Colour and face only below this line: no page owns a new edge here. */
-body[data-skin="console"] .music-bar {
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-body[data-skin="console"] .music-bar i { background: linear-gradient(90deg, var(--accent2), var(--accent)); }
-body[data-skin="console"] .music-times,
-body[data-skin="console"] .music-state,
-body[data-skin="console"] .cal-time,
-body[data-skin="console"] .dev-bat,
-body[data-skin="console"] .todo-due {
-  font-family: var(--console-mono);
-}
-body[data-skin="console"] .cover,
-body[data-skin="console"] .cover-img {
-  border-radius: 4px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
-}
-body[data-skin="console"] .wx-temp {
-  font-family: var(--console-mono);
-  font-weight: 300;
-}
-body[data-skin="console"] .wx-cell {
-  border-radius: 3px;
-  background: var(--surface-1);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-body[data-skin="console"] .cal-cell { border-radius: 3px; }
-body[data-skin="console"] .cal-day-title { font-family: var(--console-mono); }
-body[data-skin="console"] .todo-item.done .todo-check::before {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
-body[data-skin="console"] .todo-check::before { border-radius: 2px; }
-body[data-skin="console"] .shelf-hint { border-radius: 3px; }
-body[data-skin="console"] .shelf.dragover .shelf-hint {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-body[data-skin="console"] .dev-item {
-  box-shadow: inset 0 -1px 0 var(--surface-1);
-}
-body[data-skin="console"] .dots button::after {
-  width: 5px;
-  height: 5px;
-  border-radius: 1px;
-  background: var(--surface-3);
-}
-body[data-skin="console"] .dots button[aria-current="true"]::after {
-  width: 14px;
-  height: 3px;
-  border-radius: 1px;
-  background: var(--accent);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
-}
-body[data-skin="console"] .pager { color: var(--accent); opacity: 0.55; }
-body[data-skin="console"] .pager:hover {
-  background: var(--surface-1);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  color: var(--accent);
-}
-
-/* ------------------------------------------------------------- light plate */
-/* Same instrument on a lit plate: cold blue ink, and accents dark enough to
-   hold contrast against paper. */
-body[data-theme="light"][data-skin="console"] {
-  --ink: #0b1520;
-  --dim: rgba(11, 32, 52, 0.66);
-  --faint: rgba(11, 32, 52, 0.45);
-  --card: #f2f7fc;
-  --card-solid: #f2f7fc;
-  --line: rgba(11, 76, 140, 0.22);
-  --accent: #0b6fb8;
-  --accent2: #5a4bd1;
-  --good: #128a55;
-  --warn: #a95a00;
-  --bad: #c62f3d;
-  --surface-1: rgba(11, 76, 140, 0.06);
-  --surface-2: rgba(11, 76, 140, 0.13);
-  --surface-3: rgba(11, 76, 140, 0.22);
-  --hi: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --lo: inset 0 -1px 0 rgba(11, 21, 32, 0.06);
-  --ring: inset 0 0 0 1px rgba(11, 76, 140, 0.08);
-  --console-grid: rgba(11, 76, 140, 0.05);
-  color-scheme: light;
-}
-body[data-theme="light"][data-skin="console"] .panel {
-  background:
-    linear-gradient(180deg, rgba(11, 111, 184, 0.05), rgba(11, 111, 184, 0) 42%),
-    repeating-linear-gradient(0deg, var(--console-grid) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(90deg, var(--console-grid) 0 1px, transparent 1px 32px),
-    var(--card);
-  box-shadow: var(--hi), var(--lo), var(--ring);
-}
-body[data-theme="light"][data-skin="console"] .pill {
-  background:
-    repeating-linear-gradient(90deg, var(--console-grid) 0 1px, transparent 1px 20px),
-    linear-gradient(180deg, rgba(11, 111, 184, 0.06), rgba(11, 111, 184, 0) 70%),
-    var(--card);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14), var(--hi), var(--ring);
-}
-body[data-theme="light"][data-skin="console"] .quota-meter::after {
-  background: repeating-linear-gradient(90deg, transparent 0 6px, rgba(242, 247, 252, 0.72) 6px 7px);
-}
-body[data-theme="light"][data-skin="console"] .health-bar::after {
-  background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(242, 247, 252, 0.66) 9px 10px);
-}
-
 /* ------------------------------------------------------- seek rail & more */
 
 /*
@@ -3416,4 +2862,4 @@ body[data-theme="light"][data-skin="console"] .health-bar::after {
  * visible (the panel is scaling anyway) and is the difference between a
  * smooth open and a stutter.
  */
-body[data-morphing="true"] .glass-root { filter: none; }
+body:is([data-morphing="true"], [data-preparing="true"]) .glass-root { filter: none; }

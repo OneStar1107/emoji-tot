@@ -39,10 +39,11 @@
 #
 # Cost, and why the reads are batched
 # -----------------------------------
-# Reading one property used to cost ~1.8s per node. Get-PnpDeviceProperty
-# accepts an array of instance ids and reads one key for all of them in a single
-# pass, so a ~100-node sweep costs ~2.5s instead of three minutes. The sweep
-# still runs every five minutes: a battery percentage does not change faster.
+# `pnputil /properties` includes the Bluetooth battery value in the same native
+# class query. The old PowerShell property cmdlet could spend 30-40s setting up
+# its provider on a cold child, even with only five device ids. The resident HFP
+# node uses the direct Config Manager property API in devices-pnp.ps1; both
+# paths finish in about a second on the reference machine.
 #
 # One warm-up sweep after start
 # -----------------------------
@@ -50,26 +51,42 @@
 # properties can be missing, which is exactly when the app starts. The first
 # interval is therefore short ($WARMUP_MS) so a second full sweep lands 20s
 # later; every later interval is the five-minute clock.
+param([switch]$Once)
+
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $OutputEncoding = [Text.Encoding]::UTF8
+. (Join-Path $PSScriptRoot 'devices-pnp.ps1')
 
-$BATTERY_KEY = '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'
 $SWEEP_MS = 300000
 # One catch-up sweep this soon after the child starts, then the five-minute clock.
 $WARMUP_MS = 20000
 
-# Bluetooth nodes that describe a protocol service, not a device.
-$NOISE = @('Service', 'Enumerator', 'Generic Attribute', 'Generic Access', 'RFCOMM', 'Device Information', 'Bluetooth LE', 'Avrcp', 'Wireless Bluetooth')
+# Windows exposes a paired device as a top-level BTHLE\Dev_* or BTHENUM\Dev_*
+# node. The same Bluetooth class also contains every GATT service, protocol
+# transport, enumerator and the local radio adapter. Those nodes are plumbing,
+# not peripherals, so only the top-level paired-device nodes become rows.
+$BLUETOOTH_NOISE = @(
+  '^Bluetooth Device$', '^Bluetooth LE Device$',
+  '^\u84DD\u7259\u8BBE\u5907$', '^\u84DD\u7259 LE \u8BBE\u5907$',
+  # Smart speakers are paired audio endpoints, not computer peripherals.
+  'Speaker', '\u97F3\u7BB1', '\u97F3\u54CD', '\u626C\u58F0\u5668', '\u56DE\u97F3\u58C1',
+  # Phones are paired endpoints too. Word boundaries keep "Headphone" visible.
+  '(?<![A-Za-z])Phone(?![A-Za-z])', 'iPhone', 'Smartphone', '\u624B\u673A'
+)
 
 # HID nodes that are driver plumbing or a generic driver name. A row called
 # "HID-compliant mouse" answers nothing, and listing one per collection column
 # buried the device the user actually plugged in.
+$HID_GENERIC_PREFIX = @('^HID-compliant', '^\u7B26\u5408 HID \u6807\u51C6')
 $HID_NOISE = @(
   'Virtual HID', 'VHF', 'TENCENT', 'I2C HID', 'Microsoft Input Configuration',
   'HID Keyboard Device', 'USB Input Device',
+  '^USB \u8F93\u5165\u8BBE\u5907$',
   'Bluetooth LE XINPUT compatible input device',
-  'Bluetooth Low Energy GATT compliant HID device'
+  '^\u84DD\u7259 LE XINPUT \u517C\u5BB9\u7684\u8F93\u5165\u8BBE\u5907$',
+  'Bluetooth Low Energy GATT compliant HID device',
+  '^\u7B26\u5408\u84DD\u7259\u4F4E\u80FD\u8017 GATT \u7684 HID \u8BBE\u5907$'
 )
 
 # A vendor whose receiver has no named node of its own still deserves a row.
@@ -86,9 +103,10 @@ $VENDORS = @{
 
 $WIRELESS = @('Receiver', 'Wireless', 'WIRELESS', '2.4G', 'Lightspeed', 'LIGHTSPEED', 'Unifying', 'Bolt', 'Dongle', 'DONGLE')
 
-function Test-IsDevice([string]$name) {
-  foreach ($word in $NOISE) {
-    if ($name -like "*$word*") { return $false }
+function Test-IsBluetoothPeripheral([string]$id, [string]$name) {
+  if ($id -notmatch '^(BTHLE|BTHENUM)\\Dev_') { return $false }
+  foreach ($pattern in $BLUETOOTH_NOISE) {
+    if ($name -match $pattern) { return $false }
   }
   return $true
 }
@@ -98,9 +116,11 @@ function Test-IsHidDevice([string]$name) {
   # Every generic driver name starts with this: HID-compliant mouse, keyboard,
   # vendor-defined device, wireless radio controls, phone. None of them names
   # the thing the user plugged in.
-  if ($name -like 'HID-compliant*') { return $false }
+  foreach ($prefix in $HID_GENERIC_PREFIX) {
+    if ($name -match $prefix) { return $false }
+  }
   foreach ($word in $HID_NOISE) {
-    if ($name -like "*$word*") { return $false }
+    if ($name -match $word) { return $false }
   }
   return $true
 }
@@ -118,10 +138,12 @@ function Get-SourceKind([string]$name) {
 # PowerShell pipeline decodes that as UTF-8 and turns Chinese device names into
 # replacement characters, so the child is started with the OEM encoding
 # explicitly. The class filter also avoids building the 300+ node WMI list.
-function Get-PnpDevices([string]$className) {
+function Get-PnpDevices([string]$className, [switch]$WithProperties) {
   $info = [Diagnostics.ProcessStartInfo]::new()
   $info.FileName = 'pnputil.exe'
-  $info.Arguments = "/enum-devices /connected /class $className /format xml"
+  $info.Arguments = "/enum-devices /connected /class $className"
+  if ($WithProperties) { $info.Arguments += ' /properties' }
+  $info.Arguments += ' /format xml'
   $info.UseShellExecute = $false
   $info.CreateNoWindow = $true
   $info.RedirectStandardOutput = $true
@@ -145,6 +167,7 @@ function Get-PnpDevices([string]$className) {
       name = [string]$device.DeviceDescription
       status = $status
       class = [string]$device.ClassName
+      battery = Get-PnpBatteryLevel $device
     }
   }
 }
@@ -250,14 +273,16 @@ function Write-Rows([string]$phase, $list) {
 $delay = $WARMUP_MS
 
 while ($true) {
-  # ---- enumerate: four fast connected-class queries, no WMI ----------------
+  # ---- enumerate: native pnputil properties, no PowerShell WMI provider ---
   $btNodes = @()
   $hidNodes = @()
   $hfpBattery = @{}
+  $battery = @{}
   $nodes = @()
   foreach ($className in @('Bluetooth', 'HIDClass', 'Mouse', 'Keyboard')) {
-    $nodes += @(Get-PnpDevices $className)
+    $nodes += @(Get-PnpDevices $className -WithProperties)
   }
+  $systemNodes = @(Get-PnpDevices 'System')
   $seenIds = @{}
   foreach ($entity in $nodes) {
     $id = [string]$entity.id
@@ -267,16 +292,9 @@ while ($true) {
     $name = [string]$entity.Name
     if ([string]$entity.class -eq 'Bluetooth') {
       if (-not $name) { continue }
-      if (-not (Test-IsDevice $name)) { continue }
+      if (-not (Test-IsBluetoothPeripheral $id $name)) { continue }
       $btNodes += [pscustomobject]@{ name = $name; status = [string]$entity.Status; id = $id }
-      continue
-    }
-    # Some headsets publish their level on the Hands-Free (HFP) node instead of
-    # the Bluetooth one: the T7 GT reports 100% on BTHENUM\{0000111E}, which the
-    # Bluetooth class does not list. Collect those and match them by MAC.
-    if ($id -match 'BTHENUM\\\{0000111E') {
-      $mac = Get-Mac $id
-      if ($mac) { $hfpBattery[$mac] = $id }
+      if ($null -ne $entity.battery) { $battery[$id] = [int]$entity.battery }
       continue
     }
     if ([string]$entity.class -in @('HIDClass', 'Mouse', 'Keyboard')) {
@@ -284,29 +302,35 @@ while ($true) {
       # plumbing and the Bluetooth pass already covers the device they belong to.
       if ($id -notmatch '^(HID|USB)\\') { continue }
       $hidNodes += [pscustomobject]@{ name = $name; status = [string]$entity.Status; id = $id }
+      if ($null -ne $entity.battery) { $battery[$id] = [int]$entity.battery }
     }
   }
 
-  # ---- phase 1: the list, so the page can draw it now ----------------------
-  Write-Rows 'list' (Build-List $btNodes $hidNodes $hfpBattery @{})
-
-  # ---- phase 2: one batched battery read for every node --------------------
-  $ids = @(@($btNodes) + @($hidNodes) | ForEach-Object { $_.id } | Where-Object { $_ })
-  $battery = @{}
-  $probe = @($ids) + @($hfpBattery.Values)
-  # Get-PnpDeviceProperty silently returns nothing when the array is large
-  # (341 ids measured: 0 rows in 15ms), so the reads go in blocks of 100.
-  for ($i = 0; $i -lt $probe.Count; $i += 100) {
-    $block = $probe[$i..([Math]::Min($i + 99, $probe.Count - 1))]
-    foreach ($prop in (Get-PnpDeviceProperty -InstanceId $block -KeyName $BATTERY_KEY -ErrorAction SilentlyContinue)) {
-      if ($null -eq $prop.Data -or "$($prop.Data)" -eq '') { continue }
-      $parsed = 0
-      if ([int]::TryParse("$($prop.Data)", [ref]$parsed)) { $battery[[string]$prop.InstanceId] = $parsed }
+  # Some headsets publish their level on the Hands-Free (HFP) node in the
+  # System class instead of their Bluetooth node. pnputil omits this property,
+  # so the single HFP node gets one direct property read; all other levels were
+  # already collected in the native class sweep above.
+  foreach ($entity in $systemNodes) {
+    $id = [string]$entity.id
+    if ($id -match 'BTHENUM\\\{0000111E') {
+      $mac = Get-Mac $id
+      if ($mac) { $hfpBattery[$mac] = $id }
     }
+  }
+
+  # Phase 1 paints immediately with every native PnP level. It is still named
+  # "list" so the renderer can retain the last known HFP level while that one
+  # targeted read completes.
+  Write-Rows 'list' (Build-List $btNodes $hidNodes $hfpBattery $battery)
+
+  foreach ($hfpId in $hfpBattery.Values) {
+    $level = Get-PnpDevNodeBattery $hfpId
+    if ($null -ne $level) { $battery[[string]$hfpId] = [int]$level }
   }
 
   Write-Rows 'battery' (Build-List $btNodes $hidNodes $hfpBattery $battery)
 
+  if ($Once) { break }
   Start-Sleep -Milliseconds $delay
   $delay = $SWEEP_MS
 }

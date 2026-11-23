@@ -108,6 +108,7 @@ export const STATUS_MANIFEST = [
   { key: 'clock', label: '时间', service: null },
   { key: 'weather', label: '温度', service: 'weather' },
   { key: 'quota', label: '余额', service: 'quota' },
+  { key: 'kaomoji', label: '颜文字', service: null },
 ];
 
 /**
@@ -154,6 +155,9 @@ export const PRESET_MANIFEST = [
 ];
 
 /* --------------------------------------------------------------- defaults */
+
+/** The island skins this build ships. Stored values outside this set fall back to frost. */
+export const SKINS = Object.freeze(['frost', 'solid', 'plain']);
 
 /**
  * Every preference, its default, and nothing else.
@@ -362,6 +366,7 @@ export function withDefaults(raw) {
   const next = { ...DEFAULTS, ...source, displayMode };
   delete next.form;
   delete next.formBoth;
+  if (!SKINS.includes(source.skin)) next.skin = DEFAULTS.skin;
   for (const key of NESTED) {
     next[key] = { ...DEFAULTS[key], ...(source[key] && typeof source[key] === 'object' ? source[key] : {}) };
   }
@@ -438,7 +443,9 @@ export function filterPatch(patch) {
   const rejected = [];
   if (!patch || typeof patch !== 'object') return { accepted, rejected };
   for (const [key, value] of Object.entries(patch)) {
-    if (Object.prototype.hasOwnProperty.call(DEFAULTS, key)) {
+    if (key === 'skin' && !SKINS.includes(value)) {
+      rejected.push(key);
+    } else if (Object.prototype.hasOwnProperty.call(DEFAULTS, key)) {
       accepted[key] = value;
     } else {
       rejected.push(key);
@@ -491,8 +498,9 @@ export function setStatusItemEnabled(prefs, key, enabled) {
  * The default status row, in the default order.
  *
  * The reset button's whole value is being exactly the fresh-install list —
- * battery, clock, weather — with the balance switched off, not "some sensible
- * order". A copy is returned so no caller can edit DEFAULTS by accident.
+ * battery, clock, weather — with the balance and kaomoji switched off, not
+ * "some sensible order". A copy is returned so no caller can edit DEFAULTS by
+ * accident.
  */
 export function defaultStatusItems() {
   return [...DEFAULTS.statusItems];

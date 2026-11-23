@@ -46,7 +46,7 @@
       }
     },
     "nsis": {
-      "artifactName": "EmojiTot.${ext}",
+      "artifactName": "EmojiTot.Setup.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

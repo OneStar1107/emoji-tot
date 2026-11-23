@@ -177,6 +177,19 @@ describe('the settings window renders and writes the devices page', () => {
     assert.ok(body.includes('visibleDevices(probed, prefs.devices?.hidden)'), 'the island must hide, not the probe');
     assert.ok(body.includes('设备都隐藏了'), 'all-hidden has its own empty state');
   });
+
+  it('shows localized labels while every device action keeps the PnP identity', () => {
+    const settingsBody = functionBody(settings, 'pageDevices');
+    const islandBody = functionBody(island, 'devicesPage');
+    const batteryBody = functionBody(island, 'batteryEntries');
+
+    assert.ok(settingsBody.includes('displayName'), 'settings rows render displayName');
+    assert.ok(settingsBody.includes('data-device="\' + escapeHtml(name) + \'"'), 'drag identity stays canonical');
+    assert.ok(settingsBody.includes('data-name="\' + escapeHtml(name) + \'"'), 'pin/hide identity stays canonical');
+    assert.ok(islandBody.includes('displayName'), 'island rows render displayName');
+    assert.ok(islandBody.includes('data-pin="${escapeHtml(device.name)}"'), 'the island pin sends the canonical name');
+    assert.ok(batteryBody.includes('displayName'), 'the rotating status line uses the localized label');
+  });
 });
 
 describe('devices: the order a person dragged', () => {
