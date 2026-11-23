@@ -16,7 +16,7 @@
 - Added the pure spring integrator, 16-vertex eye vocabulary, state machine, motion profiles and browser runtime.
 - Integrated the live rig into Console, Gallery, Scene and Docs, with theme-aware state colours, transition telemetry and project-structure documentation.
 - Replaced stale-node automation with requerying loops and repaired the discovered hit-area, dialog cleanup, focus return, scene exclusivity, theme contrast, mobile overflow and reduced-motion issues.
-- Captured final desktop dark/light screenshots for all four routes plus 390px mobile evidence in `C:\Users\hyx11\AppData\Local\Temp\emojitot-final-20261123`.
+- Captured final desktop dark/light screenshots for all four routes plus 390px mobile evidence in a temporary QA folder outside the workspace.
 
 ### Test Results
 | Test | Expected | Actual | Status |

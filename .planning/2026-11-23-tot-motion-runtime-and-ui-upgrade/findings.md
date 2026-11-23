@@ -17,7 +17,7 @@
 - Current Tot's live motion is mostly CSS: breathing and blinking live inside the SVG, while spin/bounce/burst are page-specific CSS classes.
 - Current Tot's face eyes are discrete SVG primitives (`circle`, `rect`, `path`), so state changes swap drawings rather than morph a shared topology.
 - Current Tot's public state vocabulary is strong enough to drive a richer motion profile table without adding new protocol ids.
-- Baseline desktop and mobile screenshots are stored under `C:\Users\hyx11\AppData\Local\Temp\emojitot-ui-baseline-20261123`.
+- Baseline desktop and mobile screenshots are stored in a temporary QA folder outside the workspace.
 - Initial control audit found the visible console behaviours present, but the automation clicked stale drawer nodes after each innerHTML repaint. The final audit must re-query after every change.
 
 ## Technical Decisions
@@ -47,7 +47,7 @@
 - GraphFlow's compatibility host returned only `{ok:true}` and exposed no context/index tools, so the graph could not be refreshed from this session; targeted repository context and fresh command evidence were used instead.
 
 ## Desktop And Deployment Follow-up
-- `origin` is `ssh://git@ssh.github.com:443/OneStar1107/emoji-tot.git`.
+- `origin` points to the project repository over SSH.
 - Local `main`, `origin/main` and the checked-out HEAD are all `64d45f6`; the upgrade is not committed or pushed.
 - GitHub Pages is built from `gh-pages`, currently `77e3eba`, not from `main`.
 - CI only verifies pushes to `main`; it does not publish the Gallery.
@@ -64,7 +64,7 @@
 
 ## Resources
 - Reference: https://github.com/blessonism/grok-icon-study
-- Local reference clone: `C:\Users\hyx11\AppData\Local\Temp\grok-icon-study-0c83c5c78fe240c8a70abdfbd5cb79b2`
+- Local reference clone: a temporary checkout outside the workspace, pinned to the commit above.
 - Core still renderer: `packages/core/src/render.ts`
 - State vocabulary: `packages/core/src/face.ts`, `packages/protocol/src/emotions.ts`
 - Gallery surfaces: `apps/gallery/src/{console,wall,scene,docs}.ts`
