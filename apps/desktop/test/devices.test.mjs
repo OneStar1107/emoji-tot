@@ -23,6 +23,7 @@ const require = createRequire(import.meta.url);
 const Module = require('node:module');
 const ENTRY = require.resolve('../src/main/services/devices.js');
 const SCRIPT = require.resolve('../src/main/services/devices.ps1');
+const WINDOWS_ONLY = { skip: process.platform !== 'win32' };
 
 const stats = { spawn: 0 };
 const children = [];
@@ -286,7 +287,7 @@ describe('devices.ps1: the two-line protocol and the post-boot sweep', () => {
     assert.ok(script.includes(String.raw`^\u84DD\u7259 LE XINPUT \u517C\u5BB9\u7684\u8F93\u5165\u8BBE\u5907$`));
   });
 
-  it('parses native PnP battery properties without the slow PowerShell property lookup', () => {
+  it('parses native PnP battery properties without the slow PowerShell property lookup', WINDOWS_ONLY, () => {
     const modulePath = fileURLToPath(new URL('../src/main/services/devices-pnp.ps1', import.meta.url));
     const xml = `<PnpUtil>
       <Device><Properties>
@@ -315,7 +316,7 @@ describe('devices.ps1: the two-line protocol and the post-boot sweep', () => {
     ]);
   });
 
-  it('returns a complete battery snapshot in one fast diagnostic pass', () => {
+  it('returns a complete battery snapshot in one fast diagnostic pass', WINDOWS_ONLY, () => {
     const startedAt = Date.now();
     const result = spawnSync('powershell.exe', [
       '-NoProfile',
