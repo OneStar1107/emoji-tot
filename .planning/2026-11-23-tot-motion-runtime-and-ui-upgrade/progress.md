@@ -105,7 +105,7 @@ Add opt-in live runtime lifecycle to the custom element, then wire the sustained
 
 ### Current Status
 - **Phase:** 12 - Self-Signed Publication
-- **Status:** in_progress
+- **Status:** complete
 
 ### Actions Taken
 - Reused the existing local EmojiTot code-signing certificate with Subject `CN=OneStar1107, O=EmojiTot, C=CN`.
@@ -118,3 +118,13 @@ Add opt-in live runtime lifecycle to the custom element, then wire the sustained
 - Signer thumbprint: `5F04740EF301EE713463B3E58119DCD9C2732E77`.
 - DigiCert timestamp present on all three public artifacts.
 - Full `pnpm check`: passed with 418 desktop tests, 34 protocol tests, 27 core tests, 32/32 Gallery checks and 29/29 desktop smoke checks.
+- GitHub Actions run `45216377352` completed successfully for source commit `450a735`.
+- The final setup, portable package and unpacked app were rebuilt from `450a735`; `build-info.json` reports `0.8.19.3` and commit `450a735`.
+- Final unpacked and installed desktop smoke suites both passed 29/29.
+
+### Published Release
+- Source commit: `450a735`.
+- Tag and release: `v0.8.19.3`, https://github.com/OneStar1107/emoji-tot/releases/tag/v0.8.19.3.
+- GitHub Pages: `gh-pages` commit `5db0715`; Pages build `1396234810` completed successfully.
+- Installed app: `D:\EmojiTot`, FileVersion and ProductVersion `0.8.19.3`; app, runtime and uninstaller signatures are `Valid`.
+- User `prefs.json`, `state.json` and `avoidance.json` hashes were identical before and after installation; shelf contents and user data were preserved.

@@ -38,7 +38,7 @@ Folded, it is just a face; click it and it grows into a 420px panel in place. Th
 | [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.19.3/EmojiTot.Portable.exe) | Portable — double-click, writes nothing to the registry |
 <!--downloads:end-->
 
-Windows x64 · unsigned (SmartScreen may ask you to run it anyway) · [all releases](https://github.com/OneStar1107/emoji-tot/releases) · current <!--facts:version-->0.8.19<!--/facts-->
+Windows x64 · locally self-signed (other PCs may still show an Unknown publisher SmartScreen prompt; choose "Run anyway") · [all releases](https://github.com/OneStar1107/emoji-tot/releases) · current <!--facts:version-->0.8.19<!--/facts-->
 
 The version here is kept in sync with `package.json` by `pnpm docs:sync`. If that release has not been tagged yet the links 404 — take the current published build from all releases.
 

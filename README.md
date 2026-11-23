@@ -43,7 +43,7 @@
 | [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.19.3/EmojiTot.Portable.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
-Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.19<!--/facts-->
+Windows x64 · 本机自签名（其他电脑首次运行仍可能出现 SmartScreen「未知发布者」，可点「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.19<!--/facts-->
 
 下载区的版本号与 `package.json` 同步，由 `pnpm docs:sync` 维护；它指向的版本还没打标签时链接会 404，从「全部版本」里取当前已发布的那一版。
 
