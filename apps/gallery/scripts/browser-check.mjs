@@ -268,6 +268,42 @@ try {
     'all=' + allCasts + ', filtered=' + filtered,
   );
 
+  // The dialog replaces its body when the expression changes. Replacing the
+  // focused arrow used to drop keyboard focus outside the top-layer dialog.
+  await renderRoute('#/gallery');
+  await cdp.evaluate("document.querySelector('[data-tab=\"emotion\"]').click(); true;");
+  await sleep(120);
+  const lightboxOpened = await cdp.evaluate(`
+    (() => {
+      const tile = document.querySelector('#wallGrid [data-state]');
+      tile.focus();
+      tile.click();
+      return Boolean(document.querySelector('dialog.lightbox')?.open);
+    })()
+  `);
+  await cdp.send('Input.dispatchKeyEvent', {
+    type: 'rawKeyDown',
+    windowsVirtualKeyCode: 39,
+    key: 'ArrowRight',
+    code: 'ArrowRight',
+  });
+  await cdp.send('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    windowsVirtualKeyCode: 39,
+    key: 'ArrowRight',
+    code: 'ArrowRight',
+  });
+  await sleep(180);
+  const lightboxFocusInside = await cdp.evaluate(
+    "Boolean(document.activeElement?.closest?.('dialog.lightbox'))",
+  );
+  ok(
+    'gallery lightbox keeps keyboard focus after changing expression',
+    lightboxOpened && lightboxFocusInside,
+    'open=' + lightboxOpened + ', focusInside=' + lightboxFocusInside,
+  );
+  await cdp.evaluate("document.querySelector('dialog.lightbox')?.close(); true;");
+
   await renderRoute('#/scene');
   const sceneLabels = await cdp.evaluate(`
     JSON.stringify(['shuffle', 'party', 'sleep'].map((kind) => {
@@ -279,6 +315,25 @@ try {
     'scene actions use their own labels',
     sceneLabels === JSON.stringify(['换一批', '全体开心', '全体入睡']),
     sceneLabels,
+  );
+  const sceneReset = await cdp.evaluate(`
+    (() => {
+      document.querySelector('[data-act="error"]').click();
+      const before = document.querySelector('#arbiter-owner').textContent;
+      document.querySelector('[data-act="reset"]').click();
+      return {
+        before,
+        owner: document.querySelector('#arbiter-owner').textContent,
+        idleSessions: [...document.querySelectorAll('[data-session]')].every(
+          (node) => node.dataset.kind === 'idle',
+        ),
+      };
+    })()
+  `);
+  ok(
+    'scene reset clears the face and every source immediately',
+    sceneReset.before !== '—' && sceneReset.owner === '—' && sceneReset.idleSessions,
+    JSON.stringify(sceneReset),
   );
 
   // Deep link with an expression.
@@ -301,6 +356,31 @@ try {
     'drawer cast names switch to English',
     englishDrawer.includes('Bread') && englishDrawer.includes('Star') && !englishDrawer.includes('面包'),
     englishDrawer.slice(0, 100),
+  );
+  const englishIsland = await cdp.evaluate(`
+    (() => {
+      document.querySelector('.drawer [data-cast="mianbao"]').click();
+      return {
+        stage: document.querySelector('[data-stage-name]').textContent,
+        island: document.querySelector('[data-island-title]').textContent,
+      };
+    })()
+  `);
+  ok(
+    'console island title follows the selected language and cast',
+    englishIsland.stage.includes('Bread') && englishIsland.island === 'Bread',
+    JSON.stringify(englishIsland),
+  );
+  await renderRoute('#/docs');
+  const englishDocGroups = await cdp.evaluate(`
+    JSON.stringify([...document.querySelectorAll('.sd-group-head > span:not(.sd-group-hint)')].map(
+      (node) => node.textContent.trim(),
+    ))
+  `);
+  ok(
+    'docs protocol groups switch to English',
+    englishDocGroups === JSON.stringify(['Lifecycle', 'Feelings', 'Agent work']),
+    englishDocGroups,
   );
   await cdp.evaluate(`document.querySelector('#lang [data-lang="zh"]').click(); true;`);
 

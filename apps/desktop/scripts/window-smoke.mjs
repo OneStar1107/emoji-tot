@@ -390,6 +390,44 @@ try {
   `);
   await sleep(300);
 
+  const statusAlignment = JSON.parse(await evaluate(`
+    (async () => {
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+      const status = document.querySelector('.pill-status');
+      const original = status.innerHTML;
+      status.innerHTML = [
+        '<span class="stat"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1.2" y="7" width="17" height="10" rx="2.6"></rect></svg><b>82%</b></span>',
+        '<span class="stat dim">17°</span>',
+        '<span class="stat dim">¥20.8</span>',
+        '<span class="stat dim kaomoji">(｡･ω･｡)</span>',
+      ].join('');
+      await nextFrame();
+      await nextFrame();
+      const row = status.getBoundingClientRect();
+      const samples = [...status.querySelectorAll('.stat')].map((el) => {
+        const box = el.getBoundingClientRect();
+        return {
+          text: el.textContent.trim(),
+          centerY: box.top + box.height / 2,
+          height: box.height,
+        };
+      });
+      status.innerHTML = original;
+      await nextFrame();
+      return JSON.stringify({
+        rowCenterY: row.top + row.height / 2,
+        samples,
+        maxCenterDelta: Math.max(...samples.map((sample) => sample.centerY)) -
+          Math.min(...samples.map((sample) => sample.centerY)),
+      });
+    })()
+  `));
+  ok(
+    'kaomoji and readings share one centred line',
+    statusAlignment.samples.length === 4 && statusAlignment.maxCenterDelta < 0.5,
+    JSON.stringify(statusAlignment),
+  );
+
   /*
    * Exercise the interrupted fold, not only its resting state.
    *
@@ -878,6 +916,35 @@ try {
       'empty weather city field stays visually empty',
       cityField?.value === '' && cityField?.placeholder === '',
       JSON.stringify(cityField),
+    );
+
+    await settingsEvaluate("document.querySelector('[data-nav=\"pages\"]')?.click(); true");
+    let residency = null;
+    for (let i = 0; i < 40 && !residency; i += 1) {
+      const value = await settingsEvaluate(`
+        JSON.stringify((() => {
+          const pill = document.querySelector('.residency-pill');
+          const parent = pill?.parentElement;
+          if (!pill || !parent) return null;
+          const pillBox = pill.getBoundingClientRect();
+          const parentBox = parent.getBoundingClientRect();
+          return {
+            left: pillBox.left - parentBox.left,
+            right: parentBox.right - pillBox.right,
+            width: pillBox.width,
+            available: parentBox.width,
+          };
+        })())
+      `);
+      residency = value ? JSON.parse(value) : null;
+      if (!residency) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    ok(
+      'settings residency preview is centred in its card',
+      residency &&
+        Math.abs(residency.left - residency.right) <= 1 &&
+        residency.width < residency.available,
+      JSON.stringify(residency),
     );
   }
 

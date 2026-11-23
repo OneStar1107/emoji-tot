@@ -37,8 +37,8 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.26/EmojiTot.Setup.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.26/EmojiTot.Portable.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.28/EmojiTot.Setup.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.18.28/EmojiTot.Portable.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
 Windows x64 · 未签名（首次运行 SmartScreen 可能提示「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.18<!--/facts-->

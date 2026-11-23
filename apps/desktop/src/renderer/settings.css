@@ -1411,6 +1411,7 @@ html[data-theme="light"] .dev-meter.warn i { background: #b97612; }
   align-items: center;
   gap: 6px;
   width: min(100%, 420px);
+  margin-inline: auto;
   height: 52px;
   padding: 0 16px;
   border: 1px solid var(--line);

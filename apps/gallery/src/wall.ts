@@ -179,6 +179,11 @@ export function createWall(): View {
       void body.offsetWidth;
       body.setAttribute('data-swap', '');
     }
+    // Replacing the dialog body removes the focused arrow. Move focus with
+    // the expression so keyboard users stay inside the top-layer dialog.
+    dialog
+      .querySelector<HTMLButtonElement>(delta < 0 ? '[data-lightbox-prev]' : '[data-lightbox-next]')
+      ?.focus({ preventScroll: true });
   }
 
   function onLightboxKey(event: KeyboardEvent): void {

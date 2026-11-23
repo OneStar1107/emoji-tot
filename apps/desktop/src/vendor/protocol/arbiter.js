@@ -266,7 +266,14 @@ function createArbiter(options = {}) {
     return {
         update,
         remove(sessionId) {
-            sessions.delete(sessionId);
+            const removed = sessions.delete(sessionId);
+            if (removed && sessions.size === 0) {
+                // Nothing remains to dwell on. Keeping the old face made a reset look
+                // stuck for the rest of the display window.
+                queue = [];
+                apply(idleResult());
+                return;
+            }
             if (now() >= dwellUntil)
                 apply(resolve());
         },

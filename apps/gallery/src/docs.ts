@@ -27,7 +27,7 @@ import {
 import { EMOTIONS } from '@emojitot/protocol';
 import { SETTINGS_NAV } from '@emojitot/settings-schema';
 import { faceLabel } from './faces';
-import { getLang, t } from './i18n';
+import { getLang, t, type MessageKey } from './i18n';
 import { look } from './store';
 import type { View } from './main';
 
@@ -121,10 +121,10 @@ function faceTable(metas: readonly FaceMeta[]): string {
     rows.join('') + '</tbody></table>';
 }
 
-const FACE_GROUPS: { id: FaceGroup; label: string }[] = [
-  { id: 'life', label: t('docs.group.life') },
-  { id: 'emotion', label: t('docs.group.emotion') },
-  { id: 'agent', label: t('docs.group.agent') },
+const FACE_GROUPS: { id: FaceGroup; labelKey: MessageKey }[] = [
+  { id: 'life', labelKey: 'docs.group.life' },
+  { id: 'emotion', labelKey: 'docs.group.emotion' },
+  { id: 'agent', labelKey: 'docs.group.agent' },
 ];
 
 export function createDocs(): View {
@@ -181,7 +181,7 @@ export function createDocs(): View {
     return '<details class="card sd-group" data-group="' + group.id + '"' + (group.id === 'life' ? ' open' : '') + '>' +
       '<summary class="sd-group-head" title="' + copy('toggle') + '">' +
       '<i class="sd-dot" aria-hidden="true"></i>' +
-      '<span>' + group.label + '</span>' +
+      '<span>' + t(group.labelKey) + '</span>' +
       '<b>' + metas.length + '</b>' +
       '<span class="sd-group-hint" aria-hidden="true"></span>' +
       '</summary>' +

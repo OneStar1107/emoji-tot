@@ -33,7 +33,6 @@ import {
   visiblePillStatusKeys,
 } from './island-pill.mjs';
 import {
-  advancedSections,
   canSeek,
   seekFromKey,
   seekFromRatio,
@@ -88,7 +87,6 @@ const ICON = {
   pause: '<rect x="7" y="5" width="3.4" height="14" rx="1.2"/><rect x="13.6" y="5" width="3.4" height="14" rx="1.2"/>',
   prev: '<path d="M6 5v14M18 5.5v13a1 1 0 0 1-1.5.86l-8-6.5a1 1 0 0 1 0-1.72l8-6.5A1 1 0 0 1 18 5.5z"/>',
   next: '<path d="M18 5v14M6 5.5v13a1 1 0 0 0 1.5.86l8-6.5a1 1 0 0 0 0-1.72l-8-6.5A1 1 0 0 0 6 5.5z"/>',
-  more: '<circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/>',
 };
 
 const WEATHER_ICON = {
@@ -832,7 +830,6 @@ function musicPage() {
    * there is no position to seek to, so the rail stays the live one.
    */
   const seekable = canSeek(media);
-  const sections = advancedSections(media);
   /*
    * A broadcast with no artwork still gets a cover-shaped block in the skin
    * colour: an empty rectangle reads as "the picture failed", a tinted one
@@ -880,10 +877,6 @@ function musicPage() {
       <button type="button" data-media="prev" aria-label="上一首">${svg(ICON.prev)}</button>
       <button type="button" class="main" data-media="toggle" aria-label="${media.playing ? '暂停' : '播放'}">${svg(media.playing ? ICON.pause : ICON.play)}</button>
       <button type="button" data-media="next" aria-label="下一首">${svg(ICON.next)}</button>
-      <button type="button" data-action="settings:music" aria-label="歌词设置" title="歌词设置">${svg('<path d="M4 7h16M4 12h9M4 17h13"/>')}</button>
-      ${sections.length
-        ? `<button type="button" data-more="toggle" aria-label="更多播放控制" aria-expanded="false" aria-controls="more-panel" title="播放速率、重复、随机">${svg(ICON.more)}</button>`
-        : ''}
       <button type="button" data-volume="toggle" aria-label="系统音量" aria-expanded="false" aria-controls="volume-panel" title="系统音量">${svg(ICON.volume)}</button>
     </div>
     <div class="volume-panel" id="volume-panel" data-volume-panel data-state="loading" hidden>
@@ -898,44 +891,11 @@ function musicPage() {
       </div>
       <p class="volume-note" data-volume-note hidden>系统音量不可用</p>
     </div>
-    ${sections.length ? morePanelHtml(sections) : ''}
   </div>`;
 }
 
-/**
- * The three player switches, in a floating card like the volume panel.
- *
- * Only the rows this session claims to implement are drawn — media-controls
- * decides, from SMTC's own `Controls` flags — so a browser tab, which accepts
- * the call and then ignores it, never gets a speed menu. A player that claims
- * a row and refuses the call is recorded in `moreDenied` and the row is
- * disabled, so a key never sits there pretending the last press worked.
- */
-let moreDenied = {};
-
-function moreRowsHtml(sections) {
-  const rows = sections
-    .map((section) => {
-      const refused = moreDenied[section.key] === true;
-      const options = section.options
-        .map((option) => {
-          const on = section.value !== null && Math.abs(Number(section.value) - Number(option.value)) < 0.001;
-          return `<button type="button" data-more-pick="${section.key}" data-more-value="${option.value}" aria-pressed="${on}"${refused ? ' disabled' : ''}>${option.label}</button>`;
-        })
-        .join('');
-      return `<div class="more-row" data-more-row="${section.key}"><span class="more-label">${section.label}</span><div class="more-opts">${options}</div></div>`;
-    })
-    .join('');
-  const refusedAny = sections.some((section) => moreDenied[section.key] === true);
-  return `${rows}<p class="more-note" data-more-note${refusedAny ? '' : ' hidden'}>播放器不接受这一项</p>`;
-}
-
-function morePanelHtml(sections) {
-  return `<div class="more-panel" id="more-panel" data-more-panel hidden>${moreRowsHtml(sections)}</div>`;
-}
-
 /*
- * The volume key is a fifth control, not a switch on the player.
+ * The volume key is its own control, not a switch on the player.
  *
  * A player's own volume only changes that player; this panel drives the
  * machine's master volume through CoreAudio in the main process, which is
@@ -1023,74 +983,6 @@ function closeVolumePanel() {
   if (!volumePanelOpen) return;
   volumePanelOpen = false;
   paintVolume();
-}
-
-/* ------------------------------------------------- the "more" panel & rail */
-
-/*
- * Two floating cards cannot share the same 100px: opening one closes the
- * other, and each closes on a click that lands outside it (the click handler
- * below owns that, because the page re-renders on a one-second frame and a
- * document listener would outlive it).
- */
-let morePanelOpen = false;
-
-function paintMorePanel() {
-  const panel = pagesEl.querySelector('[data-more-panel]');
-  const toggle = pagesEl.querySelector('[data-more="toggle"]');
-  if (toggle) toggle.setAttribute('aria-expanded', String(morePanelOpen));
-  if (panel) panel.hidden = !morePanelOpen;
-}
-
-function toggleMorePanel() {
-  morePanelOpen = !morePanelOpen;
-  if (morePanelOpen) closeVolumePanel();
-  paintMorePanel();
-}
-
-function closeMorePanel() {
-  if (!morePanelOpen) return;
-  morePanelOpen = false;
-  paintMorePanel();
-}
-
-/**
- * Redraw just the rows after a frame changed speed/repeat/shuffle.
- *
- * A full renderPage would close the card the user has open. Returns false
- * when the card has to change shape (a row appearing or disappearing), which
- * is the one case that does need the page rebuilt.
- */
-function refreshMorePanel() {
-  const panel = pagesEl.querySelector('[data-more-panel]');
-  if (!panel) return false;
-  const sections = advancedSections(media);
-  if (!sections.length) return false;
-  panel.innerHTML = moreRowsHtml(sections);
-  paintMorePanel();
-  return true;
-}
-
-/**
- * One tap on a panel option.
- *
- * The reply is the player's own Try* answer. A refusal marks the row and
- * repaints it disabled; an acceptance is not shown as a new value, because a
- * player may say yes and leave the state alone — the next frame is the only
- * thing allowed to move the selection.
- */
-function pickMore(kind, value) {
-  if (!Number.isFinite(value)) return;
-  api
-    .control(kind, value)
-    .then((state) => {
-      if (!state || !state.control || state.control.ok !== false) return;
-      moreDenied = { ...moreDenied, [kind]: true };
-      renderPage();
-      morePanelOpen = true;
-      paintMorePanel();
-    })
-    .catch(() => {});
 }
 
 /*
@@ -2853,7 +2745,6 @@ function renderPage(animate = false) {
   const list = enabledPages();
   // A new page is a new DOM: the old panel (and its open state) is gone.
   volumePanelOpen = false;
-  morePanelOpen = false;
   cancelSeek();
   if (!list.length) {
     document.body.dataset.pages = '0';
@@ -3621,20 +3512,6 @@ panelEl.addEventListener('click', (event) => {
   }
   if (volumePanelOpen && !event.target.closest('[data-volume-panel]')) closeVolumePanel();
 
-  const moreControl = event.target.closest('[data-more]');
-  if (moreControl) {
-    if (moreControl.dataset.more === 'toggle') toggleMorePanel();
-    event.stopPropagation();
-    return;
-  }
-  if (morePanelOpen && !event.target.closest('[data-more-panel]')) closeMorePanel();
-  const morePick = event.target.closest('[data-more-pick]');
-  if (morePick) {
-    pickMore(morePick.dataset.morePick, Number(morePick.dataset.moreValue));
-    event.stopPropagation();
-    return;
-  }
-
   /* The lyric window is the switch between the card and lyrics mode. */
   const lyricToggle = event.target.closest('[data-lyric-toggle]');
   if (lyricToggle) {
@@ -3945,11 +3822,6 @@ panelEl.addEventListener('keydown', (event) => {
   }
   if (event.key === 'Escape' && volumePanelOpen) {
     closeVolumePanel();
-    event.stopPropagation();
-    return;
-  }
-  if (event.key === 'Escape' && morePanelOpen) {
-    closeMorePanel();
     event.stopPropagation();
     return;
   }
@@ -4279,20 +4151,6 @@ api.onMedia((value) => {
   if (!value) return;
   const trackChanged = value.title !== media.title || value.active !== media.active;
   const playingChanged = value.playing !== media.playing;
-  /* A refusal belongs to the player that refused: a new source may accept. */
-  if (value.source !== media.source) moreDenied = {};
-  /*
-   * Speed, repeat and shuffle only change the open card, so they repaint its
-   * rows instead of the whole page — a rebuild would close the card the user
-   * is looking at.
-   */
-  const advancedChanged =
-    value.rate !== media.rate ||
-    value.autoRepeatMode !== media.autoRepeatMode ||
-    value.shuffleActive !== media.shuffleActive ||
-    value.controls?.rate !== media.controls?.rate ||
-    value.controls?.repeat !== media.controls?.repeat ||
-    value.controls?.shuffle !== media.controls?.shuffle;
   /* A stream that gains or loses a duration is a different row: a live clock
      on one side, a total length on the other. */
   const liveChanged = !value.duration !== !media.duration;
@@ -4319,8 +4177,6 @@ api.onMedia((value) => {
     if (trackChanged || playingChanged || liveChanged || liveInfoChanged || artChanged) {
       lastLyricIndex = -2;
       renderPage();
-    } else if (advancedChanged) {
-      if (!refreshMorePanel()) renderPage();
     } else {
       updateMusicLive();
     }

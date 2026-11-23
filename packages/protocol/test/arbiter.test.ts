@@ -108,4 +108,12 @@ describe('createArbiter', () => {
     advance(100);
     expect(arbiter.current()?.emotionId).toBe('02');
   });
+
+  it('clears immediately when the last source is removed', () => {
+    const { arbiter } = harness();
+    arbiter.update({ sessionId: 'a', emotionId: '34' });
+    expect(arbiter.current()?.emotionId).toBe('34');
+    arbiter.remove('a');
+    expect(arbiter.current()?.emotionId).toBe('02');
+  });
 });

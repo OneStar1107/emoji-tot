@@ -480,6 +480,7 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
    * should not be larger than every other value on the island.
    */
   font-size: var(--ui-size);
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   color: var(--ink);
@@ -492,13 +493,18 @@ body[data-reduce-motion="on"] #frame { transition: none !important; }
 .pill-status .stat {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex: none;
   gap: 4px;
+  min-height: 1.35em;
+  line-height: 1;
   color: var(--ink);
   opacity: 0.92;
 }
 
 .pill-status .stat.dim { color: var(--dim); }
+.pill-status .stat > b { line-height: inherit; }
+.pill-status .stat.kaomoji { letter-spacing: 0; }
 
 /* The marker that replaced the components which did not fit. */
 .pill-status .stat.more { color: var(--faint); opacity: 1; letter-spacing: 0; }
@@ -1261,11 +1267,8 @@ button.ghost:hover { background: var(--surface-2); border-color: var(--surface-3
 .music .music-controls .main { width: 36px; height: 36px; }
 .music .music-controls svg { width: 18px; height: 18px; }
 .music .music-controls .main svg { width: 26px; height: 26px; }
-/* The lyrics key is strokes, not a filled transport glyph: the shared
-   .music-controls rule sets fill and clears stroke for the arrow shapes. */
-.music .music-controls button[data-action] svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
-/* The volume key is strokes for the same reason as the lyrics key: the shared
-   .music-controls rule paints the transport glyphs as fills. */
+/* The volume key is strokes: the shared .music-controls rule paints the
+   transport glyphs as fills. */
 .music .music-controls button[data-volume] svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .music .music-controls button[data-volume]:disabled { opacity: 0.3; cursor: default; }
 /*
@@ -2803,57 +2806,6 @@ body[data-avoid="1"] #avoid-strip { display: block; }
 .music-seek:focus-visible .music-thumb,
 .music-seek[data-dragging="true"] .music-thumb { opacity: 1; }
 .music[data-music="lyrics"] .music-seek { height: 8px; }
-
-/*
- * The "more" card: the volume panel's trick, three rows tall.
- *
- * 205px of page is already spent on the cover, the lyric window, the rail and
- * the keys; anything in the flow would push the transport out of the box. It
- * floats above the rail on a solid surface so a song title never reads
- * through a menu, and it is the same width as the volume card because the
- * narrowest island setting leaves 250px for content.
- */
-.more-panel {
-  position: absolute;
-  right: 0;
-  bottom: 46px;
-  z-index: 3;
-  width: 236px;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: var(--card-solid);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.38);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  animation: volume-in var(--fast) var(--ease);
-}
-.more-panel[hidden] { display: none; }
-/* Label over its row of options: 236px cannot hold "播放速率" and six
-   buttons side by side, and a wrapped sixth button read as a second group. */
-.more-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; }
-.more-label { font-size: 10px; line-height: 1.2; color: var(--dim); white-space: nowrap; }
-.more-opts { display: flex; flex-wrap: wrap; gap: 4px; }
-.more-opts button {
-  border: 0;
-  background: var(--surface-1);
-  color: var(--dim);
-  font-size: 10px;
-  line-height: 1;
-  padding: 5px 6px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.more-opts button[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--accent) 42%, var(--surface-1));
-  color: var(--ink);
-}
-.more-opts button:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
-.more-opts button:disabled { opacity: 0.4; cursor: default; }
-.more-note { margin: 0; font-size: 10px; line-height: 1.3; color: var(--dim); }
-.more-note[hidden] { display: none; }
 
 /*
  * While the box is being resized frame by frame, the blurred photograph is

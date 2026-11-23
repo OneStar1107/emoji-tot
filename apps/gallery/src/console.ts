@@ -403,7 +403,10 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     who.textContent = member
       ? member.desc
       : t('console.customGenome');
-    stageName.innerHTML = '<b>' + (member ? (getLang() === 'zh' ? member.name.zh : member.name.en) : t('console.custom')) +
+    const memberName = member
+      ? (getLang() === 'zh' ? member.name.zh : member.name.en)
+      : t('console.custom');
+    stageName.innerHTML = '<b>' + memberName +
       '</b> <i>·</i> ' + faceLabel(look.state);
     stageId.textContent = faceId(look.state) ? '#' + faceId(look.state) : '—';
 
@@ -412,7 +415,7 @@ export function createConsole(ctx: RouteContext = { route: 'console' }): View {
     const art = el.querySelector<HTMLElement>('[data-island-art]');
     if (art) art.innerHTML = hero(54);
     const title = el.querySelector<HTMLElement>('[data-island-title]');
-    if (title) title.textContent = member ? member.name.zh : t('console.custom');
+    if (title) title.textContent = memberName;
 
     for (const button of el.querySelectorAll<HTMLElement>('[data-finish]')) {
       button.setAttribute('aria-pressed', String(button.dataset.finish === look.finish));

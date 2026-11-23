@@ -370,15 +370,25 @@ describe('one action list across page, IPC, service and script', () => {
     assert.match(island, /const seekable = canSeek\(media\)/, 'the rail is gated by canSeek');
     assert.match(island, /\$\{seekable\s*$|\$\{seekable/, 'the seekable branch decides the rail markup');
     assert.match(island, /data-seek role="slider" tabindex="0"/, 'the rail is a keyboard-reachable slider');
-    assert.match(island, /advancedSections\(media\)/, 'the rows come from the session itself');
-    assert.match(island, /sections\.length/, 'no rows means no ⋯ entry');
+  });
+
+  it('does not render the retired advanced-playback trigger', () => {
+    assert.doesNotMatch(island, /data-more="toggle"/, 'the transport has no ⋯ control');
+    assert.doesNotMatch(island, /data-more-panel/, 'the retired control cannot leave an unreachable panel');
+  });
+
+  it('keeps the lyrics-settings shortcut out of the transport', () => {
+    const start = island.indexOf('<div class="music-controls">');
+    const controls = island.slice(start, island.indexOf('</div>', start));
+    assert.ok(start >= 0 && controls, 'the media transport markup is present');
+    assert.doesNotMatch(controls, /data-action="settings:music"/, 'the transport has no lyrics-settings hamburger');
+    assert.doesNotMatch(controls, /歌词设置/, 'the removed shortcut cannot survive as a hidden label');
+    assert.doesNotMatch(controls, /M4 7h16M4 12h9M4 17h13/, 'the removed hamburger glyph cannot survive as dead markup');
   });
 
   it('declares the hit box, the drag state and the focus ring in CSS', () => {
     const css = src('renderer/island.css');
     assert.match(css, /\.music-seek \{[^}]*height: 12px/, 'a 3px rail needs a taller thing to press');
     assert.match(css, /\.music-seek\[data-dragging="true"\][^}]*cursor: grabbing/);
-    assert.match(css, /\.more-panel \{[^}]*position: absolute/, 'the card floats, it does not push the transport out');
-    assert.match(css, /\.more-panel\[hidden\] \{ display: none; \}/);
   });
 });

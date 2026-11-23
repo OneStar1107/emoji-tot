@@ -143,6 +143,27 @@ describe('residency: the two lists are one list', () => {
     assert.ok(settings.includes("key === 'kaomoji'"), 'the preview has a kaomoji branch');
   });
 
+  it('centres the capsule preview inside its card', () => {
+    const css = src('renderer/settings.css');
+    const start = css.indexOf('.residency .residency-pill {');
+    const rule = css.slice(start, css.indexOf('}', start));
+    assert.match(rule, /margin-inline:\s*auto/, 'a fixed-width preview must centre itself in the surrounding card');
+  });
+
+  it('keeps kaomoji and readings on one centred line box', () => {
+    const css = src('renderer/island.css');
+    const statusStart = css.indexOf('.pill-status {');
+    const statusRule = css.slice(statusStart, css.indexOf('}', statusStart));
+    assert.match(statusRule, /align-items:\s*center/, 'the status row has one vertical centre');
+    assert.match(statusRule, /line-height:\s*1/, 'the row does not inherit mixed font metrics');
+
+    const statStart = css.indexOf('.pill-status .stat {');
+    const statRule = css.slice(statStart, css.indexOf('}', statStart));
+    assert.match(statRule, /align-items:\s*center/, 'each component centres its icon and text');
+    assert.match(statRule, /min-height:\s*1\.35em/, 'every component reserves the same line box');
+    assert.match(statRule, /line-height:\s*1/, 'kaomoji and numeric readings share one baseline');
+  });
+
   it('the island and the strip share one set of reading rules', () => {
     const island = src('renderer/island.js');
     for (const name of ['batteryGlyph', 'batteryText', 'clockReadout', 'temperatureText', 'quotaText']) {
