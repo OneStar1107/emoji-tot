@@ -17,6 +17,19 @@ export function latestReleaseVersionFromNotes(notes, fallback) {
   return match ? match[1] : String(fallback || '');
 }
 
+/**
+ * The release version a generated download link should use.
+ *
+ * A packaged workspace knows its exact local build. A clean CI checkout does
+ * not have build-info.json, so it falls back to the newest four-part release
+ * notes rather than the public three-part package version.
+ */
+export function artifactReleaseVersion({ packageVersion, buildInfo, notes }) {
+  const generated = currentReleaseVersion({ packageVersion, buildInfo });
+  if (FOUR_PART.test(generated)) return generated;
+  return latestReleaseVersionFromNotes(notes, generated);
+}
+
 function fourParts(version) {
   const parts = String(version || '').replace(/^v/, '').split('.').map((part) => Number(part) || 0);
   while (parts.length < 4) parts.push(0);

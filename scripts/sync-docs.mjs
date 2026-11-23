@@ -8,8 +8,8 @@
  *    this script rewrites the text between the markers to whatever the engine
  *    currently says.
  * 2. The download block. Everything between `<!--downloads:start-->` and
- *    `<!--downloads:end-->` has its version number forced to package.json's,
- *    so a release bump cannot leave a stale link behind.
+ *    `<!--downloads:end-->` has its version number forced to the local build
+ *    version, or to the newest documented release in a clean CI checkout.
  *
  * `--check` exits non-zero when anything is stale, which is what CI runs.
  *
@@ -21,7 +21,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FACTS } from './facts.mjs';
-import { currentReleaseVersion } from './release-version-lib.mjs';
+import { artifactReleaseVersion } from './release-version-lib.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
@@ -39,13 +39,14 @@ const DOCS = [
 const FACT_MARKER = /<!--facts:([A-Za-z]+)-->([\s\S]*?)<!--\/facts-->/g;
 const DOWNLOAD_BLOCK = /<!--downloads:start-->([\s\S]*?)<!--downloads:end-->/g;
 const packageVersion = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
+const releaseNotes = readFileSync(resolve(root, 'docs', 'RELEASE-NOTES.md'), 'utf8');
 let buildInfo = null;
 try {
   buildInfo = JSON.parse(readFileSync(resolve(root, 'apps', 'desktop', 'build-info.json'), 'utf8'));
 } catch {
   // A clean source tree without a build has only the public three-part version.
 }
-const VERSION = currentReleaseVersion({ packageVersion, buildInfo });
+const VERSION = artifactReleaseVersion({ packageVersion, buildInfo, notes: releaseNotes });
 
 let stale = 0;
 let checked = 0;

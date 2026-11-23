@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  artifactReleaseVersion,
   compareReleaseVersions,
   currentReleaseVersion,
   latestReleaseVersionFromNotes,
@@ -21,6 +22,22 @@ describe('release version resolution', () => {
       packageVersion: '0.8.19',
       buildInfo: { version: '0.8.18', buildVersion: '0.8.18.13' },
     }), '0.8.19');
+  });
+
+  it('uses the latest release notes when a clean CI checkout has no build-info', () => {
+    assert.equal(artifactReleaseVersion({
+      packageVersion: '0.8.18',
+      buildInfo: null,
+      notes: '## 0.8.18.26\n- current\n## 0.8.18.14\n- previous\n',
+    }), '0.8.18.26');
+  });
+
+  it('prefers a local build identity over the latest documented release', () => {
+    assert.equal(artifactReleaseVersion({
+      packageVersion: '0.8.18',
+      buildInfo: { version: '0.8.18', buildVersion: '0.8.18.27' },
+      notes: '## 0.8.18.26\n- published\n',
+    }), '0.8.18.27');
   });
 
   it('compares all four segments before the tag is created', () => {

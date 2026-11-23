@@ -9,12 +9,20 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PAGE_MANIFEST, SETTINGS_PAGE_KEYS } from '../apps/desktop/src/shared/schema.js';
-import { latestReleaseVersionFromNotes } from './release-version-lib.mjs';
+import { artifactReleaseVersion } from './release-version-lib.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => readFileSync(resolve(root, file), 'utf8');
 const version = JSON.parse(read('package.json')).version;
-const artifactVersion = latestReleaseVersionFromNotes(read('docs/RELEASE-NOTES.md'), version);
+let buildInfo = null;
+if (existsSync(resolve(root, 'apps', 'desktop', 'build-info.json'))) {
+  buildInfo = JSON.parse(read('apps/desktop/build-info.json'));
+}
+const artifactVersion = artifactReleaseVersion({
+  packageVersion: version,
+  buildInfo,
+  notes: read('docs/RELEASE-NOTES.md'),
+});
 const failures = [];
 
 function expectText(file, needle, why) {
