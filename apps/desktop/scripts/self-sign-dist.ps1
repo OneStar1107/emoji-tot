@@ -72,7 +72,6 @@ try {
     (Join-Path $root 'release\EmojiTot.Setup.exe'),
     (Join-Path $root 'release\EmojiTot.Portable.exe')
   )
-  Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
   $invalid = @(
     Get-AuthenticodeSignature -LiteralPath $files |
       Where-Object Status -ne 'Valid'
