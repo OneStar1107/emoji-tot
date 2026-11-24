@@ -318,6 +318,7 @@ export function renderCharacter(options) {
             .join('');
         behind += `<g fill="none" stroke="${paper}" stroke-width="${10 + (body.round ?? 0)}" stroke-linejoin="round" stroke-linecap="round">${outline}</g>`;
         shell = `<path d="${body.path}" fill="${bodyHex}"${fat}/>`;
+        over += `<ellipse cx="${body.face.x - 14}" cy="${body.face.y - 14}" rx="8" ry="4.6" fill="#FFFFFF" opacity="0.3" transform="rotate(-28 ${body.face.x - 14} ${body.face.y - 14})"/>`;
     }
     else if (style === 'glow') {
         defs = `<defs><radialGradient id="g${bodyId}" cx="38%" cy="32%" r="78%"><stop offset="0" stop-color="${shade(bodyHex, 0.32)}"/><stop offset="0.62" stop-color="${bodyHex}"/><stop offset="1" stop-color="${shade(bodyHex, -0.22)}"/></radialGradient></defs>`;

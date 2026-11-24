@@ -25,7 +25,7 @@ import { castMember } from './cast.js';
  * look without re-picking fifteen characters.
  *
  * - `flat`    — solid fill, no outline, quiet face. The default.
- * - `sticker` — thick paper outline, like a die-cut sticker.
+ * - `sticker` — thick darker outline, a corner highlight, a couple of sparks.
  * - `glow`    — radial gradient, a pale outer ring, a soft halo.
  * - `dots`    — the silhouette printed as a grid of dots (halftone).
  * - `line`    — outline only, no fill: pen on paper.
@@ -437,6 +437,7 @@ export function renderCharacter(options: RenderOptions): string {
       .join('');
     behind += `<g fill="none" stroke="${paper}" stroke-width="${10 + (body.round ?? 0)}" stroke-linejoin="round" stroke-linecap="round">${outline}</g>`;
     shell = `<path d="${body.path}" fill="${bodyHex}"${fat}/>`;
+    over += `<ellipse cx="${body.face.x - 14}" cy="${body.face.y - 14}" rx="8" ry="4.6" fill="#FFFFFF" opacity="0.3" transform="rotate(-28 ${body.face.x - 14} ${body.face.y - 14})"/>`;
   } else if (style === 'glow') {
     defs = `<defs><radialGradient id="g${bodyId}" cx="38%" cy="32%" r="78%"><stop offset="0" stop-color="${shade(bodyHex, 0.32)}"/><stop offset="0.62" stop-color="${bodyHex}"/><stop offset="1" stop-color="${shade(bodyHex, -0.22)}"/></radialGradient></defs>`;
     // The halo follows the silhouette, not a circle: a star inside a round
