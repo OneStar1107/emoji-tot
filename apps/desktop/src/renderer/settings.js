@@ -9,6 +9,7 @@ import {
   DEFAULTS,
   DEVICE_PIN_LIMIT,
   PAGE_MANIFEST,
+  PAUSED_HIDE_MINUTES,
   PRESET_MANIFEST,
   STATUS_MANIFEST,
   deviceKind,
@@ -774,11 +775,25 @@ function pagePages() {
 }
 
 function pageMusic() {
+  const pausedHideOptions = PAUSED_HIDE_MINUTES.map((minutes) => [
+    String(minutes),
+    minutes === 0
+      ? T('music.paused.never')
+      : `${minutes}${T('unit.minutes')}`,
+  ]);
   return head(T('music.title'), T('music.lead')) +
     group(T('music.lyrics.title'), card([
       rowToggle(T('music.lyrics.label'), T('music.lyrics.sub'), 'music.lyrics'),
       rowToggle(T('music.islandLyrics.label'), T('music.islandLyrics.sub'), 'music.islandLyrics'),
       rowRange(T('music.offset.label'), T('music.offset.sub'), 'music.offset', -1, 2, 0.05, T('unit.seconds')),
+    ])) +
+    group(T('music.paused.title'), card([
+      rowSelect(
+        T('music.paused.label'),
+        T('music.paused.sub'),
+        'music.pausedHideMin',
+        pausedHideOptions,
+      ),
     ])) +
     '<p class="note">' + T('music.note') + '</p>';
 }
@@ -1797,6 +1812,7 @@ content.addEventListener('change', async (event) => {
   let value = target.value;
   if (target.type === 'range') value = Number(value);
   else if (target.type === 'number') value = Number(value);
+  else if (key === 'music.pausedHideMin') value = Number(value);
   else if (key === 'displayId') value = target.value === 'null' ? null : target.value;
   /* A typed city is a manual choice, and a manual choice outranks the locator:
      leaving auto-locate on here would silently ignore what was just typed. */

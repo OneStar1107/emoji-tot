@@ -3,12 +3,21 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
+import * as pill from '../src/renderer/island-pill.mjs';
+
+const {
   PILL_EXPRESSION,
   fitStatusRow,
+  isMusicMedia,
+  isLiveMedia,
+  lyricPreviewWindow,
+  mediaSourceLabel,
+  mediaTimingLabel,
+  pausedResumeVisible,
   pillContentPlan,
+  shouldCollapseForPausedMusic,
   visiblePillStatusKeys,
-} from '../src/renderer/island-pill.mjs';
+} = pill;
 
 /** Directory of this test file, so the renderer sources can be read. */
 const here = dirname(fileURLToPath(import.meta.url));
@@ -125,25 +134,24 @@ describe('collapsed pill carries the status components', () => {
     assert.ok(stat.includes('flex: none'), 'a component is never squeezed into half a number');
   });
 
-  it('scrolls an overlong now-playing title instead of hard-clipping it', () => {
+  it('keeps the now-playing title in one fixed slot and trims the overflow', () => {
     assert.ok(
       islandCss.includes('--pill-title-max-w: min(') &&
         islandCss.includes('calc(240px * var(--ui-scale, 1))'),
       'the title viewport uses the shorter red-box width rather than the whole island',
     );
-    assert.ok(
-      islandJs.includes('now-playing-pill__text'),
-      'the now-playing label keeps its text in a movable inner span',
+    const nowPlaying = cssBlock('.now-playing-pill');
+    assert.match(nowPlaying, /width:\s*var\(--pill-title-max-w\)/);
+    assert.match(nowPlaying, /max-width:\s*var\(--pill-title-max-w\)/);
+    assert.doesNotMatch(
+      islandCss,
+      /\.now-playing-pill\[data-over="true"\]\s*>\s*span\s*\{[^}]*animation:/,
+      'a lyric or long title must not start a marquee that changes the capsule',
     );
     assert.match(
       islandCss,
-      /\.now-playing-pill\[data-over="true"\] > span\s*\{[^}]*animation:/,
-      'the overlong title runs a marquee inside its capped slot',
-    );
-    assert.match(
-      islandCss,
-      /\.now-playing-pill\s*\{[^}]*overflow:\s*hidden/,
-      'the marquee viewport clips only the moving text',
+      /\.now-playing-pill\s*>\s*span\s*\{[^}]*text-overflow:\s*ellipsis/,
+      'the fixed title slot trims a long title at its right edge',
     );
   });
 
@@ -169,13 +177,45 @@ describe('collapsed pill carries the status components', () => {
 });
 
 describe('what the collapsed pill shows', () => {
-  it('shows the status components while playback is stopped', () => {
+  it('shows the current lyric while keeping the track as quiet context', () => {
     const plan = pillContentPlan({
       statusCount: 3,
-      media: { active: true, playing: false, title: 'paused track' },
+      media: { active: true, playing: true, title: 'get me high', artist: 'marco luka' },
+      lyricLine: "I've been so damn faded tryna give you all my time",
+    });
+    assert.equal(plan.mode, 'nowPlaying');
+    assert.equal(plan.text, "I've been so damn faded tryna give you all my time");
+    assert.equal(plan.track, 'get me high - marco luka');
+    assert.equal(plan.lyric, "I've been so damn faded tryna give you all my time");
+  });
+
+  it('falls back to the track title before the first lyric arrives', () => {
+    const plan = pillContentPlan({
+      statusCount: 3,
+      media: { active: true, playing: true, title: 'get me high', artist: 'marco luka' },
+      lyricLine: '',
+    });
+    assert.equal(plan.text, 'get me high - marco luka');
+  });
+
+  it('returns paused music to the status row while keeping its resume affordance', () => {
+    const plan = pillContentPlan({
+      statusCount: 3,
+      media: { active: true, playing: false, title: 'paused track', type: 'Music' },
+      resumeVisible: true,
     });
     assert.equal(plan.mode, 'status');
     assert.equal(plan.statusCount, 3);
+  });
+
+  it('keeps the paused resume control on screen when every reading is unavailable', () => {
+    const plan = pillContentPlan({
+      statusCount: 0,
+      media: { active: true, playing: false, title: 'paused track', type: 'Music' },
+      resumeVisible: true,
+    });
+    assert.equal(plan.mode, 'status');
+    assert.equal(plan.statusCount, 0);
   });
 
   it('shows the playing title instead of the status components', () => {
@@ -266,6 +306,278 @@ describe('what the collapsed pill shows', () => {
     assert.equal(pillContentPlan().mode, 'face');
     assert.equal(pillContentPlan({ statusCount: -2 }).mode, 'face');
     assert.equal(pillContentPlan({ statusCount: Number.NaN }).mode, 'face');
+  });
+});
+
+describe('the collapsed pill keeps lyrics inside a fixed slot', () => {
+  it('passes the current lyric into the pill plan', () => {
+    const start = islandJs.indexOf('function renderPillStatus()');
+    const body = islandJs.slice(start, islandJs.indexOf('topClock.textContent', start));
+    assert.match(body, /lyricLine:\s*currentLyricLine\(\)/);
+  });
+
+  it('updates only the lyric text when the line advances', () => {
+    const start = islandJs.indexOf('function paintCurrentLyric(');
+    const body = islandJs.slice(start, islandJs.indexOf('function stopLyricClock()', start));
+    assert.doesNotMatch(body, /renderPillStatus\(/);
+    assert.match(body, /textContent\s*=\s*currentLyricLine\(index\)/);
+  });
+
+  it('repaints the pill once when a new lyric document arrives', () => {
+    const start = islandJs.indexOf('api.onLyrics((value) =>');
+    const body = islandJs.slice(start, islandJs.indexOf('api.onFocus', start));
+    assert.match(body, /renderPillStatus\(\)/);
+  });
+});
+
+describe('paused music hands the island back without losing resume', () => {
+  const paused = {
+    active: true,
+    playing: false,
+    title: 'Break Even',
+    artist: 'Graham',
+    type: 'Music',
+    source: 'cloudmusic.exe',
+  };
+
+  it('recognizes paused music even when a browser live stream reports type Music', () => {
+    assert.equal(isMusicMedia(paused), true);
+    assert.equal(
+      isMusicMedia({
+        active: true,
+        playing: false,
+        type: 'Music',
+        title: '主播 - 哔哩哔哩直播',
+        source: 'msedge.exe',
+      }),
+      false,
+    );
+  });
+
+  it('collapses only when playing music becomes paused', () => {
+    assert.equal(shouldCollapseForPausedMusic({ ...paused, playing: true }, paused), true);
+    assert.equal(shouldCollapseForPausedMusic(paused, paused), false);
+    assert.equal(
+      shouldCollapseForPausedMusic(
+        { ...paused, playing: true, title: 'live', type: 'Video' },
+        { ...paused, title: 'live', type: 'Video' },
+      ),
+      false,
+    );
+  });
+
+  it('keeps the resume control until the selected idle limit', () => {
+    const pausedSince = 1_000;
+    assert.equal(
+      pausedResumeVisible({ media: paused, pausedSince, hideAfterMin: 1, now: pausedSince + 59_999 }),
+      true,
+    );
+    assert.equal(
+      pausedResumeVisible({ media: paused, pausedSince, hideAfterMin: 1, now: pausedSince + 60_000 }),
+      false,
+    );
+    assert.equal(
+      pausedResumeVisible({ media: paused, pausedSince, hideAfterMin: 30, now: pausedSince + 29 * 60_000 }),
+      true,
+    );
+    assert.equal(
+      pausedResumeVisible({ media: paused, pausedSince, hideAfterMin: 30, now: pausedSince + 30 * 60_000 }),
+      false,
+    );
+  });
+
+  it('never expires the resume control when auto-hide is off', () => {
+    assert.equal(
+      pausedResumeVisible({ media: paused, pausedSince: 1_000, hideAfterMin: 0, now: 10_000_000_000 }),
+      true,
+    );
+  });
+
+  it('wires a dedicated compact control back to the media transport', () => {
+    assert.match(islandHtml, /id="paused-resume"/);
+    assert.match(islandCss, /\.paused-resume\s*\{/);
+    assert.match(islandJs, /pausedResumeEl\.addEventListener\('click'/);
+    assert.match(islandJs, /api\.control\('toggle'\)/);
+  });
+});
+
+describe('media page identity and timing', () => {
+  it('names the current player instead of exposing its executable id', () => {
+    assert.equal(typeof mediaSourceLabel, 'function');
+    assert.equal(mediaSourceLabel({ source: 'QQMusic.exe' }), 'QQ音乐');
+    assert.equal(mediaSourceLabel({ source: 'cloudmusic.exe' }), '网易云音乐');
+    assert.equal(mediaSourceLabel({ source: 'SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify' }), 'Spotify');
+  });
+
+  it('lets a resolved live provider outrank the browser that hosts it', () => {
+    assert.equal(typeof mediaSourceLabel, 'function');
+    assert.equal(
+      mediaSourceLabel({ source: 'msedge.exe', live: { platform: 'bilibili' } }),
+      '哔哩哔哩',
+    );
+    assert.equal(
+      mediaSourceLabel({ source: 'chrome.exe', live: { platform: 'douyu' } }),
+      '斗鱼',
+    );
+  });
+
+  it('shows elapsed and total as the padded slash pair from the reference', () => {
+    assert.equal(typeof mediaTimingLabel, 'function');
+    assert.equal(
+      mediaTimingLabel(
+        { active: true, duration: 258 },
+        { position: 160 },
+      ),
+      '02:40 / 04:18',
+    );
+  });
+
+  it('uses the real broadcast start for live media', () => {
+    assert.equal(typeof mediaTimingLabel, 'function');
+    assert.equal(
+      mediaTimingLabel(
+        { active: true, duration: 0, live: { startedAt: 1_700_000_000_000 } },
+        { liveSeconds: 3723 },
+      ),
+      '01:02:03',
+    );
+  });
+
+  it('does not turn a music session with no timeline into a live stream', () => {
+    assert.equal(typeof isLiveMedia, 'function');
+    assert.equal(
+      isLiveMedia({
+        active: true,
+        duration: 0,
+        title: 'ghosts - Shinigami',
+        source: 'cloudmusic.exe',
+        liveSince: Date.now(),
+      }),
+      false,
+    );
+    assert.equal(
+      mediaTimingLabel({
+        active: true,
+        duration: 0,
+        title: 'ghosts - Shinigami',
+        source: 'cloudmusic.exe',
+        liveSince: Date.now(),
+      }),
+      '00:00 / --:--',
+    );
+  });
+
+  it('recognises a live stream from provider metadata or a Bilibili title', () => {
+    assert.equal(typeof isLiveMedia, 'function');
+    assert.equal(
+      isLiveMedia({ active: true, duration: 0, live: { platform: 'douyu' } }),
+      true,
+    );
+    assert.equal(
+      isLiveMedia({
+        active: true,
+        duration: 0,
+        title: 'room - anchor - 哔哩哔哩直播，二次元弹幕直播平台',
+      }),
+      true,
+    );
+  });
+
+  it('uses a lyrics lookup duration when the player omits its timeline', () => {
+    assert.equal(typeof mediaTimingLabel, 'function');
+    assert.equal(
+      mediaTimingLabel(
+        { active: true, duration: 0, title: 'ghosts - Shinigami', source: 'cloudmusic.exe' },
+        { position: 160, fallbackDuration: 125 },
+      ),
+      '02:40 / 02:05',
+    );
+  });
+});
+
+describe('music page title and lyric readability', () => {
+  it('leaves the track name to the island header instead of repeating it in the page', () => {
+    assert.doesNotMatch(islandJs, /class="music-title(?:__text)?"/);
+    assert.doesNotMatch(islandJs, /function fitMusicTitle\(/);
+    assert.doesNotMatch(islandCss, /\.music-title/);
+  });
+
+  it('selects the previous, current and next lyric around the middle slot', () => {
+    const lines = [{ text: '第一句' }, { text: '第二句' }, { text: '第三句' }];
+    assert.equal(typeof lyricPreviewWindow, 'function');
+    assert.deepEqual(lyricPreviewWindow(lines, 1), ['第一句', '第二句', '第三句']);
+    assert.deepEqual(lyricPreviewWindow(lines, 0), ['', '第一句', '第二句']);
+    assert.deepEqual(lyricPreviewWindow(lines, 2), ['第二句', '第三句', '']);
+  });
+
+  it('renders three lyric rows with the current one in the middle at reading size', () => {
+    const start = islandJs.indexOf('function lyricPreviewHtml(');
+    const body = islandJs.slice(start, islandJs.indexOf('function', start + 10));
+    const order = ['data-prev-lyric', 'data-current-lyric', 'data-next-lyric']
+      .map((attribute) => body.indexOf(attribute));
+    assert.ok(order.every((position) => position >= 0), 'all three lyric rows need a stable hook');
+    assert.deepEqual([...order].sort((a, b) => a - b), order, 'lyrics must read previous, current, next');
+    assert.ok(islandCss.includes('[data-prev-lyric]'));
+    assert.ok(islandCss.includes('[data-next-lyric]'));
+    const current = cssBlock('.music-current-lyric [data-current-lyric]');
+    assert.match(current, /font-size:\s*17px/);
+    assert.match(current, /color:\s*var\(--ink\)/);
+    assert.match(current, /font-weight:\s*[5-7]00/);
+  });
+
+  it('wraps only the current lyric to two lines and keeps both neighbours visible', () => {
+    const current = cssBlock('.music-current-lyric [data-current-lyric]');
+    assert.match(current, /-webkit-line-clamp:\s*2/);
+    assert.match(current, /white-space:\s*pre-line/);
+    assert.match(current, /max-height:\s*2\.64em/);
+    assert.match(current, /text-overflow:\s*ellipsis/, 'the clamped second line must signal that more words follow');
+    assert.match(cssBlock('.music-current-lyric'), /max-height:\s*82px/);
+    assert.match(
+      islandCss,
+      /\.music-current-lyric \[data-prev-lyric\],\s*\.music-current-lyric \[data-next-lyric\]\s*\{[^}]*white-space:\s*nowrap/,
+    );
+    const full = cssBlock('.music[data-music="lyrics"] .lyric-box .lyric-line.on');
+    assert.match(full, /-webkit-line-clamp:\s*2/);
+    assert.match(full, /white-space:\s*pre-line/);
+    assert.match(full, /text-overflow:\s*ellipsis/);
+  });
+
+  it('puts the lyric and seek rail in a right-hand tile beside the cover', () => {
+    assert.match(cssBlock('.music-row'), /display:\s*grid/);
+    assert.match(cssBlock('.music-row'), /grid-template-columns:\s*96px\s+minmax\(0,\s*1fr\)/);
+    assert.match(cssBlock('.music-meta'), /justify-content:\s*center/);
+    assert.match(cssBlock('.music-meta'), /border:\s*1px\s+solid\s+var\(--line\)/);
+    const page = islandJs.slice(islandJs.indexOf('return `<div class="music"'), islandJs.indexOf('/*\n * The volume key'));
+    assert.ok(
+      page.indexOf('<div class="music-current-lyric"') < page.indexOf('<div class="music-progress">'),
+      'the lyric is painted above the seek rail',
+    );
+    assert.ok(
+      page.indexOf('<div class="music-progress">') < page.indexOf('<div class="music-controls">'),
+      'the seek rail belongs to the stage, not the transport footer',
+    );
+  });
+
+  it('gives the expanded media page room for a separate control bar', () => {
+    assert.match(islandCss, /--pages-h:\s*260px/);
+    assert.match(cssBlock('.pages'), /height:\s*var\(--pages-h\)/);
+    assert.match(cssBlock('.music .music-controls'), /height:\s*44px/);
+    assert.match(cssBlock('.music .music-controls'), /border:\s*1px\s+solid\s+var\(--line\)/);
+  });
+
+  it('keeps one enlarged current lyric in the default window', () => {
+    assert.match(
+      islandCss,
+      /\.music\[data-music="default"\]\s+\.lyric-box\s*\{[^}]*display:\s*none/,
+    );
+  });
+
+  it('repaints the elapsed side of the time pair without rebuilding the page', () => {
+    assert.ok(islandJs.includes('data-time-pair'));
+    const start = islandJs.indexOf('function updateMusicLive()');
+    const body = islandJs.slice(start, islandJs.indexOf('function', start + 10));
+    assert.ok(body.includes("querySelector('[data-time-pair]')"));
+    assert.ok(body.includes('mediaTimingLabel('));
   });
 });
 

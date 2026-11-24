@@ -87,7 +87,9 @@ describe('island morph integration: one geometry clock, no content transforms', 
   });
 
   it('stages the native window at the expanded size before the first morph frame', () => {
-    assert.match(source, /await api\.prepareBox/);
+    assert.match(source, /async function prepareNativeBox/);
+    assert.match(source, /Promise\.race\(\[/);
+    assert.match(source, /await prepareNativeBox\(expanded\)/);
     assert.match(main, /island:prepare-size/);
   });
 
@@ -135,5 +137,32 @@ describe('island morph integration: one geometry clock, no content transforms', 
     assert.match(css, /body:is\(\[data-morphing="true"\], \[data-preparing="true"\]\) \.pill/);
     assert.match(css, /body:is\(\[data-morphing="true"\], \[data-preparing="true"\]\) \.panel/);
     assert.match(css, /box-shadow:\s*none/);
+  });
+});
+
+describe('open-stage recovery', () => {
+  it('exports a predicate that detects a native stage still sized for the pill', async () => {
+    const motion = await import('../src/renderer/island-motion.mjs');
+    assert.equal(typeof motion.stageNeedsRecovery, 'function');
+    assert.equal(
+      motion.stageNeedsRecovery(
+        { width: 264, height: 112 },
+        { width: 504, height: 352 },
+        64,
+        72,
+      ),
+      true,
+      'an open 504x352 panel inside a compact 264x112 window is clipped',
+    );
+    assert.equal(
+      motion.stageNeedsRecovery(
+        { width: 568, height: 424 },
+        { width: 504, height: 352 },
+        64,
+        72,
+      ),
+      false,
+      'the prepared native stage already contains the panel',
+    );
   });
 });

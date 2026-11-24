@@ -26,3 +26,48 @@ change the license of this repository.
 If GPL-3.0 code from BatteryHub is ever reused directly, the affected files must
 be distributed under GPL-3.0 and the combined distribution re-evaluated. Do not
 label such a reuse as MIT.
+
+NetEase playback-log reader
+---------------------------
+
+`apps/desktop/src/main/services/netease-elog.js` is a JavaScript adaptation of
+the MIT-licensed `YouRanCoder/netease-cloudmusic-detector-py` project, commit
+81512059f28e3083ad9190e0544c5abbe7f9ddaf:
+
+  https://github.com/YouRanCoder/netease-cloudmusic-detector-py
+
+Copyright (c) 2025 ButterCookies
+Copyright (c) 2026 YouRan
+
+The complete MIT permission notice is distributed with the adapted module as
+`apps/desktop/src/main/services/netease-elog.LICENSE.txt` and is included in
+packaged builds. It applies to that adapted module; the rest of EmojiTot keeps
+the licence in the repository's `LICENSE` file.
+
+NetEase local seek bridge
+-------------------------
+
+`apps/desktop/src/main/services/netease-cdp.js` is a JavaScript adaptation of
+the loopback-only CDP playback service from the MIT-licensed
+`alent17/Wind0ws_Dynamic_island` project, commit
+39704e2ffd1c4c67b04a182272136d20:
+
+  https://github.com/alent17/Wind0ws_Dynamic_island
+
+Copyright (c) 2026 alent17
+
+The complete MIT permission notice is distributed with that module as
+`apps/desktop/src/main/services/netease-cdp.LICENSE.txt` and is included in
+packaged builds.
+
+NetEase missing-artwork lookup
+------------------------------
+
+`apps/desktop/src/main/services/netease-artwork.js` adapts the track-detail
+and album-image lookup from the same MIT-licensed
+`alent17/Wind0ws_Dynamic_island` project and commit. EmojiTot adds strict
+host allow-listing, redirect checks, download limits and an in-memory cache.
+
+The complete MIT permission notice is distributed with that module as
+`apps/desktop/src/main/services/netease-artwork.LICENSE.txt` and is included
+in packaged builds.

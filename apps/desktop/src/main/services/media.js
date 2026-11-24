@@ -14,14 +14,27 @@ const path = require('node:path');
 const { scriptFile } = require('../paths');
 const bilibili = require('./bilibili');
 const douyu = require('./douyu');
+const netease = require('./netease');
+const neteaseArtwork = require('./netease-artwork');
+const neteaseCdp = require('./netease-cdp');
 
 const SCRIPT = scriptFile('media.ps1');
-const EMPTY = Object.freeze({ active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '', output: '', controls: null, error: false, liveSince: 0 });
+const CONNECT_SCRIPT = scriptFile('netease-connect.ps1');
+const EMPTY = Object.freeze({ active: false, title: '', artist: '', album: '', trackId: '', playing: false, position: 0, duration: 0, art: '', source: '', output: '', controls: null, error: false, liveSince: 0, sampledAt: 0 });
 
 let state = { ...EMPTY };
+/* The two providers keep their own last frame; `state` is the public winner. */
+let smtcFrame = { ...EMPTY };
+let fallbackFrame = null;
+/* The best non-music player while the winning music session is paused. */
+let alternateFrame = null;
+let pausedMusicSince = 0;
+let pausedMusicKey = '';
+let pausedHideMin = 15;
 let proc = null;
 let restartTimer = null;
 let stopping = false;
+let connectPrepared = false;
 const listeners = new Set();
 /** One decoder for the whole stream: a character split across chunks stays whole. */
 let buffer = '';
@@ -41,6 +54,158 @@ const LIVE_GRACE_MS = 30000;
 let live = { key: '', since: 0, endedAt: 0 };
 /** The live metadata lookup currently in flight for this exact frame. */
 let liveLookupKey = '';
+
+/*
+ * Media ownership is decided once, before anything reaches the renderer.
+ *
+ * "Media" is not one kind: music can play beside a recorded video, and a live
+ * room can stay open while a song plays. The order below is the product rule,
+ * not a guess about launch order:
+ *
+ *   music       known music players or PlaybackType=Music
+ *   onDemand    finite-length video, podcast or other recorded media
+ *   live        broadcast evidence from a provider/title
+ *   generic     an active session we cannot classify further
+ *
+ * Music stays pinned above every non-music session, including while paused.
+ * That keeps the play control on the music player and lets the same frame
+ * resume when the user presses play again. Playback state only breaks ties
+ * within the same media kind. The title, timeline and cover always travel
+ * together from that one frame.
+ */
+const isNeteaseSource = (frame) => /(?:cloudmusic|netease)/i.test(String(frame?.source || ''));
+const needsNetEaseTimeline = (frame) => Boolean(frame?.active && !frame.duration && isNeteaseSource(frame));
+const MUSIC_SOURCE = /(?:cloudmusic|netease|spotify|qqmusic|kugou|kuwo|foobar|aimp|musicbee|winamp|itunes|apple[ ._-]*music|tidal|youtube[ ._-]*music|deezer|soundcloud|amazon[ ._-]*music|zune(?:music)?)/i;
+const LIVE_EVIDENCE = /(?:bilibili|bililive|douyu|哔哩哔哩|斗鱼|直播)/i;
+const MEDIA_PRIORITY = Object.freeze({ music: 400, onDemand: 300, live: 200, generic: 100 });
+
+function classifyMediaFrame(frame) {
+  if (!frame?.active) return 'inactive';
+  const type = String(frame.type || '').trim().toLowerCase();
+  const source = String(frame.source || '');
+  const title = String(frame.title || '');
+
+  if (
+    (frame.live &&
+      (frame.live.platform || frame.live.roomId || frame.live.startedAt || frame.live.roomTitle)) ||
+    LIVE_EVIDENCE.test(source) ||
+    LIVE_EVIDENCE.test(title)
+  ) {
+    return 'live';
+  }
+  if (type === 'music' || type === '1' || MUSIC_SOURCE.test(source)) return 'music';
+  if (Number(frame.duration) > 0 || type === 'video' || type === '2' || type === 'podcast') {
+    return 'onDemand';
+  }
+  return 'generic';
+}
+
+const mediaIdentity = (frame) =>
+  JSON.stringify([
+    String(frame?.source || ''),
+    String(frame?.title || ''),
+    String(frame?.artist || ''),
+    String(frame?.album || ''),
+  ]);
+
+function trackPausedMusic(frame, now = Date.now()) {
+  if (!frame?.active || classifyMediaFrame(frame) !== 'music' || frame.playing !== false) {
+    pausedMusicSince = 0;
+    pausedMusicKey = '';
+    return;
+  }
+  const key = mediaIdentity(frame);
+  if (!pausedMusicSince || pausedMusicKey !== key) {
+    pausedMusicSince = now;
+    pausedMusicKey = key;
+  }
+}
+
+function sameNeteaseTrack(left, right) {
+  if (!isNeteaseSource(left) || !isNeteaseSource(right)) return false;
+  const leftId = String(left.trackId || '').trim();
+  const rightId = String(right.trackId || '').trim();
+  if (leftId && rightId) return leftId === rightId;
+  const leftTitle = String(left.title || '').trim();
+  const rightTitle = String(right.title || '').trim();
+  return Boolean(leftTitle && rightTitle && leftTitle === rightTitle);
+}
+
+/** Merge only two observations of the same NetEase track. */
+function supplementNeteaseTimeline(primary, fallback) {
+  if (!needsNetEaseTimeline(primary) || !fallback?.active || !sameNeteaseTrack(primary, fallback)) {
+    return primary;
+  }
+  return {
+    ...fallback,
+    title: fallback.title || primary.title,
+    artist: fallback.artist || primary.artist,
+    album: fallback.album || primary.album,
+    trackId: fallback.trackId || primary.trackId,
+    art: primary.art || fallback.art,
+    controls: primary.controls ?? fallback.controls,
+    output: primary.output || fallback.output,
+    playing: primary.playing === true,
+    type: primary.type || fallback.type || 'Music',
+  };
+}
+
+function pausedMusicExpired(frame, { pausedSince = 0, pausedHideMin = 0, now = Date.now() } = {}) {
+  if (classifyMediaFrame(frame) !== 'music' || frame.playing !== false) return false;
+  const minutes = Math.max(0, Number(pausedHideMin) || 0);
+  const since = Math.max(0, Number(pausedSince) || 0);
+  return Boolean(minutes && since && Math.max(0, Number(now) - since) >= minutes * 60_000);
+}
+
+function selectMediaFrame(primary, fallback, alternate = null, options = {}) {
+  const primaryFrame = supplementNeteaseTimeline(primary, fallback);
+  const fallbackWasMerged = primaryFrame !== primary;
+  const candidates = [
+    { frame: primaryFrame, order: 0 },
+    { frame: fallbackWasMerged ? null : fallback, order: 1 },
+    { frame: alternate, order: 2 },
+  ].filter(({ frame }) => frame?.active && !pausedMusicExpired(frame, options));
+
+  if (candidates.length) {
+    candidates.sort((left, right) => {
+      const leftKind = classifyMediaFrame(left.frame);
+      const rightKind = classifyMediaFrame(right.frame);
+      const leftMusic = leftKind === 'music' ? 1 : 0;
+      const rightMusic = rightKind === 'music' ? 1 : 0;
+      if (leftMusic !== rightMusic) return rightMusic - leftMusic;
+      const leftPlaying = left.frame.playing === true ? 1 : 0;
+      const rightPlaying = right.frame.playing === true ? 1 : 0;
+      if (leftPlaying !== rightPlaying) return rightPlaying - leftPlaying;
+      const priority =
+        (MEDIA_PRIORITY[rightKind] || 0) -
+        (MEDIA_PRIORITY[leftKind] || 0);
+      return priority || left.order - right.order;
+    });
+    return candidates[0].frame;
+  }
+  if (primary?.error) return primary;
+  return EMPTY;
+}
+
+/**
+ * Keep the NetEase clock available whenever its audio session still exists.
+ *
+ * A paused player can stop being the playing SMTC session without closing its
+ * audio session. Polling only while `audio.playing` is true made a live stream
+ * replace paused music before the fallback could publish its paused frame.
+ */
+function shouldPollNetease(audio, frame) {
+  return Boolean(
+    !frame?.active ||
+      needsNetEaseTimeline(frame) ||
+      (audio?.session === true && classifyMediaFrame(frame) !== 'music'),
+  );
+}
+
+const neteaseFallback = netease.createNeteaseFallback({
+  shouldPoll: (audio) => shouldPollNetease(audio, smtcFrame),
+});
+neteaseFallback.onChange(handleNeteaseFrame);
 
 function emit() {
   for (const fn of listeners) {
@@ -119,7 +284,7 @@ function liveSinceFor(frame) {
  * name match before accepting a room.
  */
 function liveLookupTarget(frame) {
-  if (!frame.active || frame.duration) return null;
+  if (!frame?.active || frame.duration) return null;
   if (bilibili.looksLive(frame.title)) {
     return {
       key: JSON.stringify(['bilibili', frame.title || '', frame.source || '']),
@@ -135,77 +300,74 @@ function liveLookupTarget(frame) {
   return null;
 }
 
-function handleLine(line) {
-  if (!line || line[0] !== '{') return;
-  let next;
-  try {
-    next = JSON.parse(line);
-  } catch {
-    return;
-  }
-  next = prepareLiveFrame(next);
-  /*
-   * The PowerShell stream sends metadata only when it changes. Carry resolved
-   * live metadata and artwork forward for the same frame, just as the cover is
-   * carried for the same track.
-   */
+/**
+ * Fill a missing NetEase cover without changing which frame owns playback.
+ *
+ * The returned image is written back to every observation of the same track,
+ * then the normal selector runs again. If a live stream took over while the
+ * request was in flight, the track-id check prevents its artwork from being
+ * attached to the new owner.
+ */
+function resolveSelectedArtwork(frame) {
   if (
-    state.live &&
-    next.title === state.title &&
-    next.artist === state.artist &&
-    next.source === state.source
+    !frame?.active ||
+    frame.art ||
+    !isNeteaseSource(frame) ||
+    !/^\d{1,20}$/.test(String(frame.trackId || ''))
   ) {
-    next.live = state.live;
-  }
-  if (!next.art && state.art && next.title === state.title && next.artist === state.artist) {
-    next.art = state.art;
-  }
-  next.error = false;
-  // Derived from the frame, never reported by the script itself.
-  next.liveSince = liveSinceFor(next);
-  if (!next.active) {
-    liveLookupKey = '';
-    if (state.active || state.error) {
-      state = { ...EMPTY };
-      emit();
-    }
     return;
   }
-  const lookup = liveLookupTarget(next);
-  if (lookup && lookup.key !== liveLookupKey) {
-    liveLookupKey = lookup.key;
-    const title = next.title;
-    const artist = next.artist;
-    const source = next.source;
-    lookup
-      .run()
-      .then((info) => {
-        if (
-          !info ||
-          state.duration ||
-          state.title !== title ||
-          state.artist !== artist ||
-          state.source !== source ||
-          state.live?.roomId === info.roomId
-        ) {
-          if (!info && liveLookupKey === lookup.key) liveLookupKey = '';
-          return;
-        }
-        state = attachLiveInfo(state, info);
-        state.liveSince = liveSinceFor(state);
-        lastEmit = Date.now();
-        emit();
-      })
-      .catch(() => {
-        if (liveLookupKey === lookup.key) liveLookupKey = '';
-      });
-  } else if (!lookup) {
-    liveLookupKey = '';
-  }
+  const trackId = String(frame.trackId);
+  void neteaseArtwork.resolve(trackId).then((art) => {
+    if (!art || stopping) return;
+    let applied = false;
+    if (
+      isNeteaseSource(smtcFrame) &&
+      String(smtcFrame.trackId || '') === trackId
+    ) {
+      smtcFrame = { ...smtcFrame, art };
+      applied = true;
+    }
+    if (
+      fallbackFrame?.active &&
+      isNeteaseSource(fallbackFrame) &&
+      String(fallbackFrame.trackId || '') === trackId
+    ) {
+      fallbackFrame = { ...fallbackFrame, art };
+      applied = true;
+    }
+    if (applied) publishSelected(true);
+  });
+}
+
+/** Publish whichever provider wins now, without losing its per-second clock. */
+function publishSelected(force = false) {
+  const now = Date.now();
+  trackPausedMusic(selectMediaFrame(smtcFrame, fallbackFrame, alternateFrame), now);
+  const selected = selectMediaFrame(smtcFrame, fallbackFrame, alternateFrame, {
+    pausedSince: pausedMusicSince,
+    pausedHideMin,
+    now,
+  });
+  const next = {
+    ...selected,
+    liveSince: liveSinceFor(selected),
+    // The renderer uses this local receipt time to run its lyric clock
+    // between the once-per-second media frames. Player-provided `updated`
+    // timestamps are not portable (NetEase reports 0/0 there).
+    sampledAt: Date.now(),
+  };
+  if (!next.active) liveLookupKey = '';
+
   const changed =
+    next.active !== state.active ||
+    next.error !== state.error ||
     next.title !== state.title ||
     next.artist !== state.artist ||
+    next.album !== state.album ||
     next.playing !== state.playing ||
+    next.duration !== state.duration ||
+    next.source !== state.source ||
     next.art !== state.art ||
     next.liveSince !== state.liveSince ||
     // A device switch is the whole reason the badge exists; push it at once.
@@ -236,17 +398,153 @@ function handleLine(line) {
    * playing" while audio played for hours. A slow heartbeat makes a dropped
    * frame recoverable instead of permanent.
    */
-  const now = Date.now();
-  if (changed || now - lastEmit > HEARTBEAT_MS) {
+  if (force || changed || now - lastEmit > HEARTBEAT_MS) {
     lastEmit = now;
     emit();
   }
+  resolveSelectedArtwork(next);
 }
 
-function start() {
+function handleLine(line) {
+  if (!line || line[0] !== '{') return;
+  let next;
+  try {
+    next = JSON.parse(line);
+  } catch {
+    return;
+  }
+  const alternate = next.alternate;
+  delete next.alternate;
+  next = prepareLiveFrame(next);
+  const preparedAlternate = alternate?.active ? prepareLiveFrame(alternate) : null;
+  if (
+    preparedAlternate &&
+    alternateFrame?.live &&
+    preparedAlternate.title === alternateFrame.title &&
+    preparedAlternate.artist === alternateFrame.artist &&
+    preparedAlternate.source === alternateFrame.source
+  ) {
+    preparedAlternate.live = alternateFrame.live;
+  }
+  if (
+    preparedAlternate &&
+    !preparedAlternate.art &&
+    alternateFrame?.art &&
+    preparedAlternate.title === alternateFrame.title &&
+    preparedAlternate.artist === alternateFrame.artist
+  ) {
+    preparedAlternate.art = alternateFrame.art;
+  }
+  alternateFrame = preparedAlternate;
+  /*
+   * The PowerShell stream sends metadata only when it changes. Carry resolved
+   * live metadata and artwork forward for the same frame, just as the cover is
+   * carried for the same track.
+   */
+  if (
+    smtcFrame.live &&
+    next.title === smtcFrame.title &&
+    next.artist === smtcFrame.artist &&
+    next.source === smtcFrame.source
+  ) {
+    next.live = smtcFrame.live;
+  }
+  if (!next.art && smtcFrame.art && next.title === smtcFrame.title && next.artist === smtcFrame.artist) {
+    next.art = smtcFrame.art;
+  }
+  next.error = false;
+  smtcFrame = next;
+  neteaseFallback.setPlayingHint(next.active && isNeteaseSource(next) ? next.playing : null);
+  if (!next.active) {
+    liveLookupKey = '';
+    publishSelected();
+    return;
+  }
+  const primaryLookup = liveLookupTarget(next);
+  const lookupIsAlternate = !primaryLookup && Boolean(alternateFrame);
+  const lookup = primaryLookup || liveLookupTarget(alternateFrame);
+  if (lookup && lookup.key !== liveLookupKey) {
+    liveLookupKey = lookup.key;
+    const title = lookupIsAlternate ? alternateFrame.title : next.title;
+    const artist = lookupIsAlternate ? alternateFrame.artist : next.artist;
+    const source = lookupIsAlternate ? alternateFrame.source : next.source;
+    lookup
+      .run()
+      .then((info) => {
+        const current = lookupIsAlternate ? alternateFrame : smtcFrame;
+        if (
+          !info ||
+          !current ||
+          current.duration ||
+          current.title !== title ||
+          current.artist !== artist ||
+          current.source !== source ||
+          current.live?.roomId === info.roomId
+        ) {
+          if (!info && liveLookupKey === lookup.key) liveLookupKey = '';
+          return;
+        }
+        if (lookupIsAlternate) alternateFrame = attachLiveInfo(alternateFrame, info);
+        else smtcFrame = attachLiveInfo(smtcFrame, info);
+        publishSelected(true);
+      })
+      .catch(() => {
+        if (liveLookupKey === lookup.key) liveLookupKey = '';
+      });
+  } else if (!lookup) {
+    liveLookupKey = '';
+  }
+  publishSelected();
+}
+
+function handleNeteaseFrame(frame) {
+  fallbackFrame = frame?.active ? frame : null;
+  /*
+   * This callback is the clock for NetEase. It must publish even when SMTC
+   * has an active zero-length NetEase frame, and it may also be the winner
+   * over a simultaneously playing live session.
+   */
+  publishSelected();
+}
+
+const normalizePausedHideMin = (value) => Math.max(0, Number(value) || 0);
+
+function setPausedHideMin(value) {
+  const next = normalizePausedHideMin(value);
+  if (next === pausedHideMin) return;
+  pausedHideMin = next;
+  publishSelected(true);
+}
+
+function holdPausedResume() {
+  if (!pausedMusicSince) return false;
+  pausedMusicSince = Date.now();
+  publishSelected(true);
+  return true;
+}
+
+function start(options = {}) {
   if (proc) return;
   stopping = false;
   buffer = '';
+  pausedHideMin = normalizePausedHideMin(options.pausedHideMin ?? pausedHideMin);
+  if (!connectPrepared) {
+    connectPrepared = true;
+    try {
+      const setup = platform.spawnPowerShell(
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', CONNECT_SCRIPT, '-Action', 'Ensure'],
+        { stdio: 'ignore' },
+      );
+      setup?.unref?.();
+    } catch {
+      // A read-only user profile can still use elog playback and external seek.
+    }
+  }
+  /*
+   * Start both probes together. Whichever player is already running wins on
+   * its first frame, so launch order is no longer part of the contract.
+   */
+  neteaseFallback.start();
   proc = platform.spawnPowerShell(
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, 'watch'],
     { stdio: ['ignore', 'pipe', 'ignore'] },
@@ -276,10 +574,8 @@ function start() {
      * face says Puzzled until a real frame comes back, so the state is
      * visibly different from a paused track instead of silently identical.
      */
-    if (!state.error) {
-      state = { ...EMPTY, error: true };
-      emit();
-    }
+    smtcFrame = { ...EMPTY, error: true };
+    publishSelected();
     // A crashed child comes back; the island keeps the last frame meanwhile.
     restartTimer = setTimeout(start, 2500);
   });
@@ -288,6 +584,13 @@ function start() {
 function stop() {
   stopping = true;
   clearTimeout(restartTimer);
+  neteaseFallback.stop();
+  smtcFrame = { ...EMPTY };
+  fallbackFrame = null;
+  alternateFrame = null;
+  pausedMusicSince = 0;
+  pausedMusicKey = '';
+  connectPrepared = false;
   if (proc) {
     try {
       proc.kill();
@@ -337,6 +640,13 @@ function normalizeCommand(kind, arg = 0) {
   return { kind, arg: 0 };
 }
 
+function commandTargetArgs(frame = state) {
+  if (!frame?.active) return [];
+  const source = String(frame.source || '').trim();
+  if (!source) return [];
+  return ['-TargetSource', source, '-TargetTitle', String(frame.title || '')];
+}
+
 /**
  * Run one control action; resolves with what the player answered.
  *
@@ -348,12 +658,36 @@ function normalizeCommand(kind, arg = 0) {
 function command(kind, arg = 0) {
   const request = normalizeCommand(kind, arg);
   if (!request) return Promise.resolve({ kind: String(kind), ok: false, note: 'unknown' });
+  /*
+   * NetEase's SMTC endpoint accepts a seek and returns true even when its
+   * advertised timeline is 0/0 and no native progress moves. Use the bounded
+   * local CDP path when NetEase owns the visible frame, and do not report a
+   * success until the player itself reads back the new native position.
+   */
+  if (request.kind === 'seek' && isNeteaseSource(state)) {
+    return neteaseCdp
+      .seek(request.arg, { trackId: state.trackId })
+      .then((result) => {
+        if (!result.ok) {
+          return { kind: 'seek', ok: false, note: String(result.note || 'netease-cdp') };
+        }
+        neteaseFallback.seek(result.position);
+        return {
+          kind: 'seek',
+          ok: true,
+          note: 'netease-cdp',
+          position: result.position,
+        };
+      })
+      .catch(() => ({ kind: 'seek', ok: false, note: 'netease-cdp' }));
+  }
   const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, request.kind];
   /* toggle/next/prev take no value; everything else must pass its own, zero
      included — "shuffle 0" and "shuffle with no argument" are the same call
      only by accident of the script's default, and the page should not rely
      on that. */
   if (!['toggle', 'next', 'prev'].includes(request.kind)) args.push(String(request.arg));
+  args.push(...commandTargetArgs());
   let child;
   try {
     child = platform.spawnPowerShell(args, { stdio: ['ignore', 'pipe', 'ignore'] });
@@ -372,6 +706,17 @@ function command(kind, arg = 0) {
         child.kill();
       } catch {
         // already gone
+      }
+      if (request.kind === 'seek' && result.ok) {
+        if (smtcFrame.active) {
+          const duration = Math.max(0, Number(smtcFrame.duration) || 0);
+          smtcFrame = {
+            ...smtcFrame,
+            position: duration ? Math.min(duration, request.arg) : request.arg,
+            updated: Date.now(),
+          };
+          publishSelected(true);
+        }
       }
       resolve(result);
     };
@@ -414,11 +759,18 @@ function current() {
 module.exports = {
   start,
   stop,
+  setPausedHideMin,
+  holdPausedResume,
   command,
   normalizeCommand,
+  commandTargetArgs,
+  classifyMediaFrame,
+  selectMediaFrame,
+  shouldPollNetease,
   onChange,
   current,
   refreshSoon,
   prepareLiveFrame,
   attachLiveInfo,
+  liveLookupTarget,
 };

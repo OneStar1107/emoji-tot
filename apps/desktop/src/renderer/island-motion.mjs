@@ -120,3 +120,28 @@ export function geometryAt(compact, expanded, progress) {
     radius: mix(compact.radius, expanded.radius),
   };
 }
+
+/**
+ * Whether an open panel is larger than the native transparent stage.
+ *
+ * `prepareBox()` normally grows the Windows surface before the first morph
+ * frame. If its IPC reply is delayed or lost, the panel can remain laid out at
+ * its final size inside the compact window and every lower row is clipped. This
+ * predicate lets the renderer detect that recoverable mismatch after the morph
+ * has settled and report the box again.
+ */
+export function stageNeedsRecovery(viewport, panel, padX = 0, padY = 0, tolerance = 2) {
+  const viewportWidth = Number(viewport?.width);
+  const viewportHeight = Number(viewport?.height);
+  const panelWidth = Number(panel?.width);
+  const panelHeight = Number(panel?.height);
+  if (![viewportWidth, viewportHeight, panelWidth, panelHeight].every(Number.isFinite)) return false;
+  if (panelWidth <= 0 || panelHeight <= 0) return false;
+  const pad = Math.max(0, Number(tolerance) || 0);
+  const wantedWidth = panelWidth + Math.max(0, Number(padX) || 0);
+  const wantedHeight = panelHeight + Math.max(0, Number(padY) || 0);
+  return (
+    viewportWidth + pad < wantedWidth ||
+    viewportHeight + pad < wantedHeight
+  );
+}

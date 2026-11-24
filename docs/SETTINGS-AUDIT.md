@@ -97,6 +97,7 @@
 | `music.lyrics` | `true` | 音乐与歌词 | 渲染进程 | `island.js music page` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `music.islandLyrics` | `true` | 音乐与歌词 | 渲染进程 | `island.js renderPillStatus()` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `music.offset` | `0.35` | 音乐与歌词 | 渲染进程 | `island.js lyric sync` | 即时 |  | lists every path · writes dotted keys through setPath |
+| `music.pausedHideMin` | `15` | 音乐与歌词 | 主进程 | `main.js media.start/settings change · island.js paused resume idle timer` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `focus.work` | `25` | 专注与饮水 | 主进程 | `services/focus.js prefs().work` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `focus.rest` | `5` | 专注与饮水 | 主进程 | `services/focus.js prefs().rest` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `focus.enabled` | `false` | 专注与饮水 | 主进程 | `services/focus.js prefs().enabled` | 即时 |  | has a SERVICE_PLAN entry · lists every path |

@@ -28,8 +28,14 @@ import { islandHeaderState, pagingVisibility } from './island-header.mjs';
 import {
   PILL_EXPRESSION,
   fitStatusRow,
-  nowPlayingText,
+  isLiveMedia,
+  isMusicMedia,
+  lyricPreviewWindow,
+  mediaSourceLabel,
+  mediaTimingLabel,
+  pausedResumeVisible,
   pillContentPlan,
+  shouldCollapseForPausedMusic,
   visiblePillStatusKeys,
 } from './island-pill.mjs';
 import {
@@ -38,7 +44,12 @@ import {
   seekFromRatio,
   seekPercent,
 } from './media-controls.mjs';
-import { createSpring, geometryAt } from './island-motion.mjs';
+import {
+  lyricIndexAt,
+  mediaPlaybackSeconds,
+  nextLyricDelayMs,
+} from './lyric-clock.mjs';
+import { createSpring, geometryAt, stageNeedsRecovery } from './island-motion.mjs';
 
 const api = window.islandAPI;
 /* The bridge always reports none now; keep the dataset for old profiles and
@@ -50,6 +61,8 @@ const islandEl = document.getElementById('island');
 const frameEl = document.getElementById('frame');
 const pillEl = document.getElementById('pill');
 const pillStatus = document.getElementById('pill-status');
+const pausedResumeEl = document.getElementById('paused-resume');
+const pausedResumeArtEl = document.getElementById('paused-resume-art');
 const panelEl = document.getElementById('panel');
 /* The page + header + dots, the layer the fold keeps at its natural size while
    the panel's box (and its rounded clip) does the folding. */
@@ -117,9 +130,12 @@ let weather = null;
  * was the same lie as a blank one.
  */
 let weatherError = '';
-let media = { active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '', liveSince: 0 };
+let media = { active: false, title: '', artist: '', album: '', playing: false, position: 0, duration: 0, art: '', source: '', liveSince: 0, sampledAt: 0 };
 /** Wall time the live clock froze at while the stream was paused, or 0 when it runs. */
 let liveFrozenAt = 0;
+let pausedResumeSince = 0;
+let pausedResumeTimer = 0;
+let pausedResumePending = false;
 let lyrics = null;
 /*
  * The music page's second state: the words own the page. This is a view flag,
@@ -201,17 +217,13 @@ const clock = (seconds) => {
   return `${m}:${String(s).padStart(2, '0')}`;
 };
 
+const lyricLeadSeconds = () => Number(prefs.music?.offset ?? 0.35);
+const currentPlaybackSeconds = () => mediaPlaybackSeconds(media, Date.now());
+
 /** The lyric line that should be highlighted at a given playback position. */
-function lyricAt(seconds) {
+function lyricAt(seconds = currentPlaybackSeconds()) {
   if (!lyrics || !lyrics.synced || !lyrics.lines?.length) return -1;
-  const offset = Number(prefs.music?.offset ?? 0.35);
-  const t = seconds + offset;
-  let index = -1;
-  for (let i = 0; i < lyrics.lines.length; i += 1) {
-    if (lyrics.lines[i].t <= t) index = i;
-    else break;
-  }
-  return index;
+  return lyricIndexAt(lyrics.lines, seconds, lyricLeadSeconds());
 }
 
 /* ------------------------------------------------------------- measurement */
@@ -405,30 +417,6 @@ function renderHeader() {
 }
 
 /**
- * Start the compact title marquee only when the capped viewport hides text.
- *
- * The capsule's width is measured before this runs. The viewport therefore
- * already has its final width, and the inner span can publish the exact travel
- * distance without feedback into the pill's own sizing.
- */
-function fitNowPlayingTitle() {
-  const viewport = pillStatus.querySelector('.now-playing-pill');
-  if (!viewport) return;
-  const textEl = viewport.firstElementChild;
-  viewport.dataset.over = 'false';
-  viewport.style.removeProperty('--pill-title-shift');
-  if (!textEl || !viewport.clientWidth) return;
-  const over = textEl.scrollWidth > viewport.clientWidth + 2;
-  viewport.dataset.over = String(over);
-  if (over) {
-    viewport.style.setProperty(
-      '--pill-title-shift',
-      textEl.scrollWidth - viewport.clientWidth + 8 + 'px',
-    );
-  }
-}
-
-/**
  * Trim the status row at a component boundary, never mid-number.
  *
  * The capsule is capped by --pill-max-w; past that cap the row is what gives
@@ -561,7 +549,6 @@ function finishPillWidth() {
   stopPillWidthDriver();
   writePillWidth(pillWidthTarget);
   writePillStage(pillWidthTarget);
-  fitNowPlayingTitle();
   pillStatus.style.opacity = '';
   reportHit();
   measure();
@@ -590,10 +577,6 @@ function startPillWidthDriver(from, target) {
        or make a shrinking pill become narrower than its destination. */
     const width = Math.min(pillWidthMax, Math.max(pillWidthMin, sample.position));
     writePillWidth(width);
-    /* Start a marquee as soon as the viewport reaches its final width. Waiting
-       for the spring's quiet threshold delays the scroll by almost a second on
-       a long title even though the text is already clipped. */
-    if (Math.abs(width - pillWidthTarget) < 0.5) fitNowPlayingTitle();
     reportHit();
     const elapsed = frameNow - pillWidthStartedAt;
     const settled =
@@ -637,7 +620,6 @@ function syncPillWidth({ immediate = false } = {}) {
     stopPillWidthDriver();
     writePillWidth(target);
     writePillStage(target);
-    fitNowPlayingTitle();
     pillStatus.style.opacity = '';
     pillWidthReady = true;
     reportHit();
@@ -664,6 +646,57 @@ function schedulePillWidth(options) {
     pillWidthQueued = false;
     syncPillWidth(options);
   });
+}
+
+const pausedHideMinutes = () => Math.max(0, Number(prefs.music?.pausedHideMin ?? 15) || 0);
+
+function pausedResumeEnabled() {
+  return prefs.music?.islandLyrics !== false;
+}
+
+function pausedResumeIsVisible(now = Date.now()) {
+  return pausedResumeEnabled() && pausedResumeVisible({
+    media,
+    pausedSince: pausedResumeSince,
+    hideAfterMin: pausedHideMinutes(),
+    now,
+  });
+}
+
+function schedulePausedResumeExpiry(visible) {
+  if (pausedResumeTimer) clearTimeout(pausedResumeTimer);
+  pausedResumeTimer = 0;
+  const minutes = pausedHideMinutes();
+  if (!visible || !minutes || !pausedResumeSince) return;
+  const remaining = pausedResumeSince + minutes * 60_000 - Date.now();
+  pausedResumeTimer = setTimeout(() => {
+    pausedResumeTimer = 0;
+    renderPillStatus();
+  }, Math.max(0, remaining) + 16);
+}
+
+function syncPausedResumeControl(visible) {
+  const track = [media.title, media.artist].map((value) => String(value ?? '').trim()).filter(Boolean).join(' - ');
+  pausedResumeEl.hidden = !visible;
+  pausedResumeEl.disabled = pausedResumePending;
+  pausedResumeEl.setAttribute('aria-label', `继续播放：${track || '当前歌曲'}`);
+  pausedResumeEl.title = `继续播放：${track || '当前歌曲'}`;
+  pillEl.dataset.pausedResume = String(visible);
+  const art = typeof media.art === 'string' && /^data:image\//iu.test(media.art) ? media.art : '';
+  if (visible && art) {
+    pausedResumeArtEl.src = art;
+    pausedResumeArtEl.hidden = false;
+  } else {
+    pausedResumeArtEl.removeAttribute('src');
+    pausedResumeArtEl.hidden = true;
+  }
+}
+
+function refreshPausedResumeIdle() {
+  if (pausedResumeEl.hidden || !isMusicMedia(media) || media.playing !== false) return;
+  pausedResumeSince = Date.now();
+  schedulePausedResumeExpiry(true);
+  void api.holdPausedResume?.().catch(() => {});
 }
 
 function renderPillStatus() {
@@ -701,15 +734,25 @@ function renderPillStatus() {
       parts.push(`<span class="stat dim kaomoji" title="颜文字">${PILL_EXPRESSION}</span>`);
     }
   }
-  /* Playing media owns the row; pausing or stopping restores the components. */
+  /*
+   * Paused music gives the row back to the readings while a small resume
+   * button keeps the session actionable. The button is part of the same
+   * preference as the island lyric view: switching island media off also
+   * leaves the capsule alone when paused.
+   */
+  const resumeVisible = pausedResumeIsVisible();
+  syncPausedResumeControl(resumeVisible);
+  schedulePausedResumeExpiry(resumeVisible);
   const plan = pillContentPlan({
     statusCount: parts.length,
     media,
     showNowPlaying: prefs.music?.islandLyrics !== false,
+    lyricLine: currentLyricLine(),
+    resumeVisible,
   });
   if (plan.mode === 'status') pillStatus.innerHTML = parts.join('');
   else if (plan.mode === 'nowPlaying') {
-    pillStatus.innerHTML = `<span class="stat now-playing-pill" title="${escapeHtml(plan.text)}"><span class="now-playing-pill__text">${escapeHtml(plan.text)}</span></span>`;
+    pillStatus.innerHTML = `<span class="stat now-playing-pill" data-kind="${plan.lyric ? 'lyric' : 'track'}" title="${escapeHtml(plan.track)}"><span class="now-playing-pill__text">${escapeHtml(plan.text)}</span>${plan.lyric ? `<span class="now-playing-pill__track">${escapeHtml(plan.track)}</span>` : ''}</span>`;
   } else pillStatus.innerHTML = '';
   pillEl.dataset.status = String(plan.statusCount);
   fitPillStatus();
@@ -766,15 +809,21 @@ const stateBlock = (tone, line, hint = '', actionLabel = '', action = '') => `
     ${actionLabel ? `<button type="button" class="ghost state-go" ${action}>${escapeHtml(actionLabel)}</button>` : ''}
   </div>`;
 
-/** The line that should read as "now" in the collapsed pill. */
-function currentLyricLine() {
-  const index = lyricAt(media.position);
-  if (index < 0 || !lyrics?.lines?.[index]) return '';
-  return lyrics.lines[index].text;
+function lyricEmptyLabel() {
+  if (lyrics?.loading) return '正在同步歌词…';
+  if (lyrics?.unavailable) return '歌词服务连接失败';
+  return '这首歌没有同步歌词';
+}
+
+function currentLyricLine(index = lyricAt()) {
+  if (!lyrics?.synced || !lyrics.lines?.length) return '';
+  return lyricPreviewWindow(lyrics.lines, index)[1] || '';
 }
 
 function lyricSliceHtml(index, span = 3) {
-  if (!lyrics?.synced || !lyrics.lines.length) return '<span class="lyric-empty">这首歌没有同步歌词</span>';
+  if (!lyrics?.synced || !lyrics.lines.length) {
+    return `<span class="lyric-empty">${lyricEmptyLabel()}</span>`;
+  }
   /*
    * data-n is the signed distance from "now": the default window shows one
    * line either side, lyrics mode two, and the stylesheet fades by |data-n|.
@@ -792,8 +841,20 @@ function lyricSliceHtml(index, span = 3) {
     .join('');
 }
 
-/** Live streams and video tabs often report no duration at all. */
-const isLiveMedia = () => !media.duration;
+/**
+ * The large lyric preview inside the cover row.
+ *
+ * Three rows keep the current lyric in the middle, with the previous and next
+ * lines as quiet context above and below.
+ */
+function lyricPreviewHtml(index) {
+  if (!lyrics?.synced || !lyrics.lines?.length) {
+    return `<span class="music-lyric-empty">${lyricEmptyLabel()}</span>`;
+  }
+  const [previous, current, next] = lyricPreviewWindow(lyrics.lines, index);
+  if (!current) return '<span class="music-lyric-empty">等待歌词</span>';
+  return `<span class="music-prev-lyric" data-prev-lyric>${escapeHtml(previous)}</span><span data-current-lyric>${escapeHtml(current)}</span><span class="music-next-lyric" data-next-lyric>${escapeHtml(next)}</span>`;
+}
 
 /**
  * How long the broadcast has been on: wall time since the main process saw it.
@@ -822,8 +883,12 @@ function musicPage() {
   if (!media.active) {
     return stateBlock('good', '没有在播放的媒体', '打开播放器后这里会显示', '去设置', 'data-action="settings:music"');
   }
-  const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
-  const live = isLiveMedia();
+  const duration = Number(media.duration) > 0
+    ? Number(media.duration)
+    : Number(lyrics?.duration) || 0;
+  const playback = currentPlaybackSeconds();
+  const pct = duration ? Math.min(100, (playback / duration) * 100) : 0;
+  const live = isLiveMedia(media);
   /*
    * The rail is draggable only when the frame carries a length. A broadcast
    * reports none, and a paused player that reports none is the same shape:
@@ -852,27 +917,39 @@ function musicPage() {
    */
   const canLyrics = prefs.music?.lyrics !== false && Boolean(lyrics?.synced && lyrics.lines?.length);
   const lyricMode = canLyrics && musicLyricsMode;
+  const lyricIndex = lyricAt(playback);
+  const source = mediaSourceLabel(media);
+  const timing = mediaTimingLabel(media, {
+    position: playback,
+    liveSeconds: liveElapsed(),
+    fallbackDuration: duration,
+  });
+  const lyricToggle = canLyrics
+    ? ` role="button" tabindex="0" data-lyric-toggle="1" aria-pressed="${lyricMode}" aria-label="${lyricMode ? '收起歌词' : '展开歌词'}"`
+    : '';
   /*
-   * Cover + one lyric line + progress + four keys, stacked to the top of the
-   * page. The old block centred a 56px cover and a three-line 54px lyric
-   * window, so the page read as three islands inside the card. The lyric stays
-   * a one-line window: the current sentence at reading size, the next one dimmed
-   * underneath (the previous line is hidden by CSS), and the heights are fixed
-   * so a long title or a font preference cannot push the controls past 205px.
+   * One stage, two columns: the cover is the visual anchor and the lyric tile
+   * owns the words and seek rail. Transport keys sit in a separate footer so
+   * seeking never competes with the words for the same horizontal row.
    */
+  const progress = seekable
+    ? `<div class="music-seek" data-seek role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="${Math.round(media.duration)}" aria-valuenow="${Math.round(playback)}" aria-valuetext="${clock(playback)} / ${clock(media.duration)}"><div class="music-bar"><i data-progress style="width:${pct.toFixed(1)}%"></i></div><span class="music-thumb" data-thumb style="left:${pct.toFixed(1)}%"></span></div><div class="music-times"><span class="music-time-pair" data-time-pair title="播放位置 / 媒体总时长">${escapeHtml(timing)}</span><span class="music-source" data-source title="播放来源：${escapeHtml(source)}">${escapeHtml(source)}</span></div>`
+    : live
+      ? `<div class="music-bar live"><i></i></div><div class="music-times"><span class="music-live" data-live title="${Number(media.live?.startedAt) > 0 ? '主播已开播时长' : '直播中，开播时间暂不可用'}">${escapeHtml(timing)}</span><span class="music-source" data-source title="直播来源：${escapeHtml(source)}">${escapeHtml(source)}</span></div>`
+      : `<div class="music-bar"><i data-progress style="width:0%"></i></div><div class="music-times"><span class="music-time-pair" data-time-pair title="播放位置 / 媒体总时长">${escapeHtml(timing)}</span><span class="music-source" data-source title="播放来源：${escapeHtml(source)}">${escapeHtml(source)}</span></div>`;
   return `<div class="music" data-music="${lyricMode ? 'lyrics' : 'default'}">
     <div class="music-row">
       <div class="music-cover">${art}</div>
       <div class="music-meta">
-        <b>${escapeHtml(nowPlayingText(media) || '未命名')}</b>
+        ${prefs.music?.lyrics === false
+          ? ''
+          : `<div class="music-current-lyric"${lyricToggle}>${lyricPreviewHtml(lyricIndex)}</div>`}
+        ${prefs.music?.lyrics === false
+          ? ''
+          : `<div class="lyric-box" data-lyric-box${lyricToggle}>${lyricMode ? lyricSliceHtml(lyricIndex, 5) : ''}</div>`}
+        <div class="music-progress">${progress}</div>
       </div>
     </div>
-    ${prefs.music?.lyrics === false
-      ? ''
-      : `<div class="lyric-box" data-lyric-box${canLyrics ? ` role="button" tabindex="0" data-lyric-toggle="1" aria-pressed="${lyricMode}" aria-label="${lyricMode ? '收起歌词' : '展开歌词'}"` : ''}>${lyricSliceHtml(lyricAt(media.position), lyricMode ? 5 : 3)}</div>`}
-    ${seekable
-      ? `<div class="music-seek" data-seek role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="${Math.round(media.duration)}" aria-valuenow="${Math.round(media.position)}" aria-valuetext="${clock(media.position)} / ${clock(media.duration)}"><div class="music-bar"><i data-progress style="width:${pct.toFixed(1)}%"></i></div><span class="music-thumb" data-thumb style="left:${pct.toFixed(1)}%"></span></div><div class="music-times"><span data-pos>${clock(media.position)}</span><span data-dur>${clock(media.duration)}</span></div>`
-      : '<div class="music-bar live"><i></i></div><div class="music-times"><span data-pos>' + clock(media.position) + '</span><span data-live title="直播时长">' + liveClock(liveElapsed()) + '</span></div>'}
     <div class="music-controls">
       <button type="button" data-media="prev" aria-label="上一首">${svg(ICON.prev)}</button>
       <button type="button" class="main" data-media="toggle" aria-label="${media.playing ? '暂停' : '播放'}">${svg(media.playing ? ICON.pause : ICON.play)}</button>
@@ -1151,6 +1228,58 @@ function setVolumeMute(next) {
 
 /** Cheap per-second update: progress, time and the lyric window only. */
 let lastLyricIndex = -2;
+let lyricTimer = 0;
+
+function paintMusicLyricWindow(index) {
+  if (!open || enabledPages()[pageIndex]?.key !== 'music') return;
+  const preview = pagesEl.querySelector('.music-current-lyric');
+  if (preview) preview.innerHTML = lyricPreviewHtml(index);
+  const box = pagesEl.querySelector('[data-lyric-box]');
+  if (box && box.closest('.music')?.dataset.music === 'lyrics') {
+    box.innerHTML = lyricSliceHtml(index, 5);
+  }
+}
+
+/** Only repaint the expanded lyric window when the selected line changes. */
+function paintCurrentLyric(force = false) {
+  const index = lyricAt();
+  if (!force && index === lastLyricIndex) return index;
+  lastLyricIndex = index;
+  paintMusicLyricWindow(index);
+  /*
+   * The folded capsule has a fixed content slot. Replace only its text here:
+   * rebuilding the status on every lyric boundary used to measure the same
+   * width again and made the island spring pulse while a song was playing.
+   */
+  const pillLyric = pillStatus.querySelector(
+    '.now-playing-pill[data-kind="lyric"] .now-playing-pill__text',
+  );
+  if (pillLyric) pillLyric.textContent = currentLyricLine(index);
+  return index;
+}
+
+function stopLyricClock() {
+  if (lyricTimer) clearTimeout(lyricTimer);
+  lyricTimer = 0;
+}
+
+/**
+ * A media frame is sampled once a second, but a lyric boundary is not. Wake
+ * exactly when the next lead-adjusted line starts instead of waiting for the
+ * next one-second media tick.
+ */
+function scheduleLyricClock() {
+  stopLyricClock();
+  if (!media.active || !media.playing || !lyrics?.synced || !lyrics.lines?.length) return;
+  const seconds = currentPlaybackSeconds();
+  const index = paintCurrentLyric();
+  const delay = nextLyricDelayMs(lyrics.lines, index, seconds, lyricLeadSeconds(), media.rate);
+  if (delay === null) return;
+  lyricTimer = setTimeout(() => {
+    lyricTimer = 0;
+    scheduleLyricClock();
+  }, Math.max(8, delay + 8));
+}
 
 function updateMusicLive() {
   const page = enabledPages()[pageIndex];
@@ -1158,27 +1287,39 @@ function updateMusicLive() {
   /* The live clock is wall time, and the bar it sits beside does not exist on a
      live page — update it before the progress branch gives up. */
   const live = pagesEl.querySelector('[data-live]');
-  if (live) live.textContent = liveClock(liveElapsed());
+  const duration = Number(media.duration) > 0
+    ? Number(media.duration)
+    : Number(lyrics?.duration) || 0;
+  const playback = currentPlaybackSeconds();
+  const timing = mediaTimingLabel(media, {
+    position: playback,
+    liveSeconds: liveElapsed(),
+    fallbackDuration: duration,
+  });
+  if (live) live.textContent = timing;
+  const timePair = pagesEl.querySelector('[data-time-pair]');
+  if (timePair) timePair.textContent = timing;
+  /*
+   * Lyrics follow the authoritative position even while the rail is held.
+   * A main-process seek can arrive during the short hold window, and delaying
+   * the words until after it used to make the lyric look one line behind.
+   */
+  const index = lyricAt(playback);
+  if (index !== lastLyricIndex) {
+    lastLyricIndex = index;
+    paintMusicLyricWindow(index);
+  }
   /* The rail belongs to whoever is holding it, and to the value they just
      committed until the player's next frame confirms it. */
   if (seekDrag || Date.now() < seekHoldUntil) return;
   const bar = pagesEl.querySelector('[data-progress]');
   if (!bar) return;
-  const pct = media.duration ? Math.min(100, (media.position / media.duration) * 100) : 0;
+  const pct = duration ? Math.min(100, (playback / duration) * 100) : 0;
   bar.style.width = pct.toFixed(1) + '%';
   const thumb = pagesEl.querySelector('[data-thumb]');
   if (thumb) thumb.style.left = pct.toFixed(1) + '%';
   const position = pagesEl.querySelector('[data-pos]');
-  if (position) position.textContent = clock(media.position);
-  const index = lyricAt(media.position);
-  if (index !== lastLyricIndex) {
-    lastLyricIndex = index;
-    const box = pagesEl.querySelector('[data-lyric-box]');
-    if (box) {
-      const span = box.closest('.music')?.dataset.music === 'lyrics' ? 5 : 3;
-      box.innerHTML = lyricSliceHtml(index, span);
-    }
-  }
+  if (position) position.textContent = clock(playback);
 }
 
 /*
@@ -1409,8 +1550,8 @@ const CURRENCY_MARKS = { CNY: '¥', USD: '$' };
  * The agent block under the balance.
  *
  * The balance and the linkage share one page and one snapshot, so this block
- * answers the two questions the page can: how many sessions are watched, and
- * which one is working or waiting for how long. Rows are read-only on purpose:
+ * answers the two questions the page can: how many sources are listened to, and
+ * which one is running or merely open. Rows are read-only on purpose:
  * the sources are status files, not windows, and no mapping from a source to a
  * window handle exists — a button that cannot switch anywhere would be worse
  * than a plain row. The one action is the summary line, which opens the
@@ -1433,8 +1574,8 @@ function agentAge(ms) {
 function paintAgentAges() {
   const now = Date.now();
   for (const node of document.querySelectorAll('[data-agent-since]')) {
-    if (node.dataset.agentUnknown === '1') continue;
-    const prefix = node.dataset.agentRunning === '1' ? '运行 ' : '等待 ';
+    if (node.dataset.agentUnknown === '1' || node.dataset.agentActive !== '1') continue;
+    const prefix = node.dataset.agentRunning === '1' ? '运行 ' : '已启动 ';
     node.textContent = prefix + agentAge(now - Number(node.dataset.agentSince));
   }
 }
@@ -1459,25 +1600,30 @@ function startAgentClock() {
 function agentBlock() {
   const list = Array.isArray(agentsState) ? agentsState : [];
   const on = list.filter((agent) => agent.on);
+  const active = on.filter((agent) => agent.active).length;
   const running = on.filter((agent) => agent.running).length;
-  const idle = Math.max(0, on.length - running);
+  const idle = Math.max(0, active - running);
+  const stopped = Math.max(0, on.length - active);
   const label = on.length
-    ? `Agent 联动：${on.length} 个会话，${running} 个运行中，${idle} 个空闲；打开 AI 额度设置`
+    ? `Agent 联动：${on.length} 个监听来源，${running} 个运行中，${idle} 个空闲，${stopped} 个未启动；打开 AI 额度设置`
     : 'Agent 联动：没有启用的状态来源；打开 AI 额度设置';
   const rows = on.slice(0, AGENT_ROWS).map((agent) => {
     const since = Number(agent.since);
-    const known = Number.isFinite(since) && since > 0;
-    const state = agent.running ? 'run' : known ? 'wait' : 'unknown';
-    const time = known ? (agent.running ? '运行 ' : '等待 ') + agentAge(Date.now() - since) : '—';
-    return `<div class="quota-agent-row" data-state="${state}" title="${escapeHtml(agent.label)}">
+    const known = agent.active && Number.isFinite(since) && since > 0;
+    const state = agent.running ? 'run' : agent.active ? 'open' : 'unknown';
+    const time = known
+      ? (agent.running ? '运行 ' : '已启动 ') + agentAge(Date.now() - since)
+      : agent.active ? '已启动' : '未启动';
+    const taskTitle = Number(agent.taskCount) > 0 ? ` · ${Number(agent.taskCount)} 个任务` : '';
+    return `<div class="quota-agent-row" data-state="${state}" title="${escapeHtml(agent.label + taskTitle)}">
       <i class="quota-agent-dot" aria-hidden="true"></i>
       <span class="quota-agent-label">${escapeHtml(agent.label)}</span>
-      <span class="quota-agent-time" data-agent-since="${known ? since : ''}" data-agent-running="${agent.running ? '1' : '0'}" data-agent-unknown="${known ? '0' : '1'}">${escapeHtml(time)}</span>
+      <span class="quota-agent-time" data-agent-since="${known ? since : ''}" data-agent-active="${agent.active ? '1' : '0'}" data-agent-running="${agent.running ? '1' : '0'}" data-agent-unknown="${known ? '0' : '1'}">${escapeHtml(time)}</span>
     </div>`;
   }).join('');
   return `<div class="quota-agents">
     <button type="button" class="quota-agent-sum" data-action="settings:quota" aria-label="${escapeHtml(label)}" title="在设置里改 Agent 联动">
-      <span class="quota-agent-figures"><b>${on.length}</b>会话<i>/</i><b>${running}</b>运行<i>/</i><b>${idle}</b>空闲</span>
+      <span class="quota-agent-figures"><b>${on.length}</b>监听<i>/</i><b>${running}</b>运行<i>/</i><b>${idle}</b>空闲<i>/</i><b>${stopped}</b>未启动</span>
       <svg class="quota-agent-open" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
     </button>
     ${rows || '<p class="quota-agent-none">没有启用 Agent 联动</p>'}
@@ -1511,11 +1657,11 @@ function quotaPage() {
       .map((account) => `<button type="button" data-local="quota:select" data-id="${escapeHtml(account.id)}" aria-current="${account.current ? 'true' : 'false'}" aria-label="${escapeHtml(account.name)}" title="${escapeHtml(account.name)}"></button>`)
       .join('') + `</span>`
     : '';
+  const refresh = '<button type="button" class="ghost quota-refresh" data-local="quota:refresh">刷新</button>';
   const meta = `<div class="quota-meta">
       <span class="quota-id"><b>${escapeHtml(provider)}</b>${currency ? `<i>·</i>${escapeHtml(currency)}` : ''}</span>
-      ${dots}
+      <span class="quota-meta-actions">${dots}${refresh}</span>
     </div>`;
-  const refresh = '<button type="button" class="ghost" data-local="quota:refresh">刷新</button>';
   if (!last || last.error) {
     /* What failed is the lookup, not the account: the line names the state and
        the second line carries the provider and the reason the service gave. */
@@ -1547,20 +1693,22 @@ function quotaPage() {
   const split = topped + granted;
   const share = split > 0 ? Math.round((topped / split) * 100) : 0;
   return `<div class="quota" data-gauge="true" style="--quota-share:${share}">
-    ${meta}
-    <div class="quota-balance"><span class="quota-amount"><small>${mark}</small>${escapeHtml(last.total)}</span></div>
-    <div class="quota-ratio">
-      <span class="quota-meter" aria-hidden="true"></span>
-      <div class="quota-legend">
-        <span class="quota-part topped"><i class="quota-piece"></i>充值 ${mark}${escapeHtml(last.topped)}</span>
-        <span class="quota-part granted"><i class="quota-piece"></i>赠送 ${mark}${escapeHtml(last.granted)}</span>
+    <div class="quota-summary">
+      ${meta}
+      <div class="quota-balance"><span class="quota-amount"><small>${mark}</small>${escapeHtml(last.total)}</span></div>
+      <div class="quota-ratio">
+        <span class="quota-meter" aria-hidden="true"></span>
+        <div class="quota-legend">
+          <span class="quota-part topped"><i class="quota-piece"></i>充值 ${mark}${escapeHtml(last.topped)}</span>
+          <span class="quota-part granted"><i class="quota-piece"></i>赠送 ${mark}${escapeHtml(last.granted)}</span>
+        </div>
       </div>
     </div>
-    ${agentBlock()}
-    <div class="quota-foot">
-      <span>更新于 ${timeOf(last.at)}</span>
-      <span class="spacer"></span>
-      ${refresh}
+    <div class="quota-scroll" tabindex="0" aria-label="Agent 状态，可滚动">
+      ${agentBlock()}
+      <div class="quota-foot">
+        <span>更新于 ${timeOf(last.at)}</span>
+      </div>
     </div>
   </div>`;
 }
@@ -2754,6 +2902,7 @@ function renderPage(animate = false) {
   cancelSeek();
   if (!list.length) {
     document.body.dataset.pages = '0';
+    delete pagesEl.dataset.page;
     /* Write the inner span, never the host: textContent on #page-title would
        delete the span the marquee needs, and every later render would find
        nothing to write into. */
@@ -2778,6 +2927,7 @@ function renderPage(animate = false) {
   // One page means the paging arrows would be dead controls.
   document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
+  pagesEl.dataset.page = page.key;
   /* The menu belongs to the weather page; paging away drops it. */
   if (page.key !== 'weather') cityMenuOpen = false;
   const nameEl = document.getElementById('page-name');
@@ -2803,6 +2953,7 @@ function renderPage(animate = false) {
     pagesEl.classList.add(pageDir > 0 ? 'page-in-left' : 'page-in-right');
   }
   measure();
+  if (open && !morph && !preparing) scheduleOpenStageRecovery();
   syncDevicesFocus();
 }
 
@@ -2830,7 +2981,7 @@ function renderPage(animate = false) {
  * a wheel over a list with nothing to scroll still pages as it always did.
  */
 const WHEEL_OWNERS =
-  '.clip-list, .shelf-list, .todo-list, .dev-list, .msg-list, .mail-page, .mail';
+  '.clip-list, .shelf-list, .todo-list, .dev-list, .msg-list, .mail-page, .mail, .quota-scroll';
 
 /** The page-level scroll block under the pointer, or null when the wheel pages. */
 function wheelOwner(target) {
@@ -2856,7 +3007,11 @@ document.addEventListener(
       return;
     }
     const list = wheelOwner(event.target);
-    if (list && list.scrollHeight > list.clientHeight + 1) event.stopPropagation();
+    if (list && (list.matches('.quota-scroll') || list.scrollHeight > list.clientHeight + 1)) {
+      // The workbench's lower block is a strict wheel boundary: even when it
+      // has nothing to scroll, a wheel there must not turn the page.
+      event.stopPropagation();
+    }
   },
   { capture: true },
 );
@@ -2903,6 +3058,8 @@ const MORPH_GUARD_MS = 520;
 let morphFrame = 0;
 /** Fires if the rAF chain dies mid-flight (hidden or occluded window). */
 let morphGuard = 0;
+/* A delayed IPC reply must not leave the panel painted inside the pill stage. */
+let openStageTimers = new Set();
 /** True from the moment a fold starts until the pill is the surface again. */
 let closing = false;
 /** Monotonic token so a delayed native resize cannot start a stale morph. */
@@ -3050,6 +3207,70 @@ function createMorphState(open, compact, expanded) {
   };
 }
 
+function cancelOpenStageRecovery() {
+  for (const timer of openStageTimers) clearTimeout(timer);
+  openStageTimers = new Set();
+}
+
+/**
+ * Verify the native stage after the morph has landed.
+ *
+ * `prepareBox()` has a timeout below, but Windows can still acknowledge a
+ * setBounds call before DWM has presented it. A few bounded retries recover
+ * from that transient state; they never run while a morph owns the surface and
+ * stop immediately when the panel closes.
+ */
+function scheduleOpenStageRecovery() {
+  cancelOpenStageRecovery();
+  for (const delay of [0, 90, 260, 700]) {
+    const timer = setTimeout(() => {
+      openStageTimers.delete(timer);
+      if (!open || morph || preparing || closing || panelEl.hidden) return;
+      const panel = {
+        width: Math.ceil(panelEl.offsetWidth),
+        height: Math.ceil(panelEl.offsetHeight),
+      };
+      if (
+        stageNeedsRecovery(
+          { width: window.innerWidth, height: window.innerHeight },
+          panel,
+          0,
+          0,
+          1,
+        )
+      ) {
+        api.reportBox(panel);
+        reportHit();
+      }
+    }, delay);
+    openStageTimers.add(timer);
+  }
+}
+
+/**
+ * Grow the native window before painting the first open frame.
+ *
+ * The invoke normally answers in one task. A stuck renderer/main reply used to
+ * hold `preparing` forever, which made every later measurement return early and
+ * left the full panel clipped to the compact capsule. The deadline is long
+ * enough for a loaded IPC queue and short enough to be invisible.
+ */
+async function prepareNativeBox(expanded) {
+  const box = { w: expanded.width, h: expanded.height };
+  let timer = 0;
+  try {
+    const prepared = await Promise.race([
+      api.prepareBox(box).then(() => true).catch(() => false),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(false), 220);
+      }),
+    ]);
+    if (!prepared) api.reportBox(box);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /**
  * Run one spring on the compact/expanded pair.
  *
@@ -3125,6 +3346,7 @@ function landOpen() {
   reportHit();
   measure();
   requestGlass();
+  scheduleOpenStageRecovery();
 }
 
 /*
@@ -3164,7 +3386,6 @@ function closeMorph() {
     closing = false;
     pillEl.hidden = false;
     syncPillWidth({ immediate: true });
-    fitNowPlayingTitle();
   }
   closing = true;
   islandEl.dataset.closing = 'true';
@@ -3197,7 +3418,6 @@ function landClosed() {
   pillEl.style.animation = 'none';
   stopMorph();
   syncPillWidth({ immediate: true });
-  fitNowPlayingTitle();
   syncAvoidVisual();
   syncSize();
   reportHit();
@@ -3224,6 +3444,7 @@ async function setOpen(next) {
   const folding = next === false && open;
   /* Already there, or the same toggle twice: nothing to move. */
   if (!opening && !folding) return;
+  if (folding) cancelOpenStageRecovery();
   cancelCollapseResizeHold();
   /* Folding releases the photograph in the same task: a full-screen bitmap has
      no business outliving the panel that shows it. */
@@ -3307,15 +3528,8 @@ async function setOpen(next) {
     panelEl.style.borderRadius = `${compact.radius}px`;
     panelEl.style.clipPath = `inset(0 round ${compact.radius}px)`;
     pillEl.style.opacity = '1';
-    if (typeof api.prepareBox === 'function') {
-      try {
-        await api.prepareBox({ w: expanded.width, h: expanded.height });
-      } catch {
-        api.reportBox({ w: expanded.width, h: expanded.height });
-      }
-    } else {
-      api.reportBox({ w: expanded.width, h: expanded.height });
-    }
+    if (typeof api.prepareBox === 'function') await prepareNativeBox(expanded);
+    else api.reportBox({ w: expanded.width, h: expanded.height });
     if (intent !== morphIntent || !open) {
       preparing = null;
       delete document.body.dataset.preparing;
@@ -3449,6 +3663,21 @@ function openFromPointer(event) {
 }
 document.addEventListener('pointerdown', openFromPointer, true);
 
+pausedResumeEl.addEventListener('pointerenter', refreshPausedResumeIdle);
+pausedResumeEl.addEventListener('focus', refreshPausedResumeIdle);
+pausedResumeEl.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (pausedResumePending) return;
+  pausedResumePending = true;
+  syncPausedResumeControl(true);
+  Promise.resolve(api.control('toggle'))
+    .catch(() => {})
+    .finally(() => {
+      pausedResumePending = false;
+      syncPausedResumeControl(pausedResumeIsVisible());
+    });
+});
 
 btnSettings.addEventListener('click', () => api.openSettings());
 
@@ -3744,7 +3973,7 @@ panelEl.addEventListener('click', (event) => {
     if (kind === 'devices' && page === 'refresh') refreshDevices();
     return;
   }
-  const dot = event.target.closest('[data-page]');
+  const dot = event.target.closest('#dots [data-page]');
   if (dot) {
     const next = Number(dot.dataset.page);
     pageDir = next >= pageIndex ? 1 : -1;
@@ -3983,6 +4212,10 @@ let hoverCloseTimer = null;
 function scheduleHoverOpen() {
   clearTimeout(hoverCloseTimer);
   if (open) return;
+  if (
+    !pausedResumeEl.hidden &&
+    (pausedResumeEl.matches(':hover') || document.activeElement === pausedResumeEl)
+  ) return;
   clearTimeout(hoverOpenTimer);
   // A profile written before this setting existed has no value: default on.
   const raw = prefs.hoverOpenDelay;
@@ -4012,6 +4245,8 @@ function scheduleHoverClose() {
  */
 function pointerOverContent(event) {
   if (!event) return false;
+  const target = event.target instanceof Node ? event.target : null;
+  if (target?.closest?.('#paused-resume')) return false;
   /*
    * A pointerdown dispatched on the pill itself (the desktop smoke test does
    * this, and a page script may too) carries no real coordinates, but its
@@ -4019,7 +4254,6 @@ function pointerOverContent(event) {
    * Real clicks in the transparent padding land on body/#island, not here.
    */
   const surface = activeHitSurface();
-  const target = event.target instanceof Node ? event.target : null;
   if (target && surface.contains(target)) return true;
   if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return false;
   const rect = surface.getBoundingClientRect();
@@ -4155,11 +4389,20 @@ api.onWeather((value) => {
 
 api.onMedia((value) => {
   if (!value) return;
+  const previous = media;
+  const collapseForPausedMusic = shouldCollapseForPausedMusic(previous, value);
+  const pausedMusic = isMusicMedia(value) && value.playing === false;
+  const wasPausedMusic = isMusicMedia(previous) && previous.playing === false;
+  const pausedTrackChanged =
+    pausedMusic &&
+    (!wasPausedMusic || value.title !== previous.title || value.artist !== previous.artist);
+  if (!pausedMusic) pausedResumeSince = 0;
+  else if (pausedTrackChanged) pausedResumeSince = Date.now();
   const trackChanged = value.title !== media.title || value.active !== media.active;
   const playingChanged = value.playing !== media.playing;
-  /* A stream that gains or loses a duration is a different row: a live clock
-     on one side, a total length on the other. */
-  const liveChanged = !value.duration !== !media.duration;
+  /* A provider resolving live metadata changes the rail and timing row even
+     when the player's duration stays at zero. */
+  const liveChanged = isLiveMedia(value) !== isLiveMedia(media);
   const liveInfoChanged =
     value.live?.roomTitle !== media.live?.roomTitle ||
     value.live?.anchorName !== media.live?.anchorName ||
@@ -4171,11 +4414,20 @@ api.onMedia((value) => {
    * keeps liveSince across a pause, so unfreezing on the next playing frame
    * continues from the real start rather than from the pause or from zero.
    */
-  const liveFrame = Boolean(value.active) && !value.duration;
+  const liveFrame = isLiveMedia(value);
   if (!liveFrame || Number(value.liveSince) !== Number(media.liveSince)) liveFrozenAt = 0;
   else if (!value.playing) liveFrozenAt = liveFrozenAt || Date.now();
   else liveFrozenAt = 0;
   media = value;
+  pausedResumePending = false;
+  if (collapseForPausedMusic) {
+    musicLyricsMode = false;
+    if (enabledPages()[pageIndex]?.key === 'music') {
+      const pages = enabledPages();
+      const preferred = pages.findIndex((page) => page.key === prefs.defaultPage);
+      if (preferred >= 0) pageIndex = preferred;
+    }
+  }
   renderPillStatus();
   renderSub();
   renderHeader();
@@ -4187,6 +4439,8 @@ api.onMedia((value) => {
       updateMusicLive();
     }
   }
+  scheduleLyricClock();
+  if (collapseForPausedMusic && open) setOpen(false);
 });
 
 api.onLyrics((value) => {
@@ -4194,6 +4448,7 @@ api.onLyrics((value) => {
   lastLyricIndex = -2;
   renderPillStatus();
   if (open && enabledPages()[pageIndex]?.key === 'music') renderPage();
+  scheduleLyricClock();
 });
 
 api.onFocus((value) => {
@@ -4305,6 +4560,7 @@ api.onPrefs((next) => {
   // A page was switched on or reordered in settings: the dots and the current
   // page have to follow, otherwise the island keeps showing the old set.
   if (open) renderPage();
+  scheduleLyricClock();
 });
 
 const boot = await api.bootstrap();
@@ -4322,7 +4578,8 @@ battery = boot?.battery ?? null;
 weather = boot?.weather ?? null;
 media = boot?.media ?? media;
 // Opening the panel mid-pause must not restart the clock; freeze it at boot too.
-if (!media.duration && media.active && !media.playing && media.liveSince) liveFrozenAt = Date.now();
+if (isLiveMedia(media) && !media.playing && media.liveSince) liveFrozenAt = Date.now();
+if (isMusicMedia(media) && media.playing === false) pausedResumeSince = Date.now();
 lyrics = boot?.lyrics ?? null;
 applyLocal(boot);
 quotaState = boot?.quotaAgent?.quota ?? quotaState;
@@ -4341,6 +4598,7 @@ const bootPages = enabledPages();
 const preferred = bootPages.findIndex((page) => page.key === prefs.defaultPage);
 pageIndex = preferred >= 0 ? preferred : 0;
 setOpen(false);
+scheduleLyricClock();
 /* Skip the repaint while the window is not on screen: a hidden window still
    runs timers, and rebuilding the status row for nobody is pure garbage. */
 setInterval(() => {
@@ -4352,7 +4610,7 @@ setInterval(() => {
  * position to advance), so the page cannot lean on them for its second hand.
  */
 setInterval(() => {
-  if (!open || enabledPages()[pageIndex]?.key !== 'music' || !isLiveMedia()) return;
+  if (!open || enabledPages()[pageIndex]?.key !== 'music' || !isLiveMedia(media)) return;
   updateMusicLive();
 }, 1000);
 reportHit();

@@ -50,8 +50,322 @@ const media = require('../src/main/services/media.js');
 const douyu = require('../src/main/services/douyu.js');
 Module._load = originalLoad;
 
+describe('media source priority', () => {
+  const smtc = { active: true, title: 'SMTC track', source: 'Spotify.exe', duration: 180, playing: true };
+  const fallback = {
+    active: true,
+    title: 'NetEase track',
+    source: 'cloudmusic.exe',
+    position: 40,
+    duration: 180,
+    playing: true,
+    art: '',
+  };
+
+  it('keeps an on-demand SMTC player ahead of the NetEase fallback', () => {
+    assert.equal(media.selectMediaFrame(smtc, fallback), smtc);
+  });
+
+  it('lets playing music outrank a finite-length video or podcast', () => {
+    const video = {
+      active: true,
+      title: 'A recorded stream',
+      source: 'msedge.exe',
+      type: 'Video',
+      duration: 3600,
+      playing: true,
+    };
+    assert.equal(media.classifyMediaFrame(video), 'onDemand');
+    assert.equal(media.selectMediaFrame(video, fallback), fallback);
+  });
+
+  it('lets playing NetEase music outrank a live SMTC session', () => {
+    const live = {
+      active: true,
+      title: '主播正在直播 - 哔哩哔哩直播',
+      source: 'msedge.exe',
+      type: 'Music',
+      duration: 0,
+      playing: true,
+    };
+    assert.equal(media.selectMediaFrame(live, fallback), fallback);
+  });
+
+  it('keeps paused music ahead of a playing live session', () => {
+    const live = {
+      active: true,
+      title: '主播正在直播 - 哔哩哔哩直播',
+      source: 'msedge.exe',
+      type: 'Music',
+      duration: 0,
+      playing: true,
+    };
+    const pausedMusic = { ...fallback, playing: false };
+    assert.equal(media.selectMediaFrame(live, pausedMusic), pausedMusic);
+  });
+
+  it('keeps a paused SMTC music session ahead of a playing live fallback', () => {
+    const pausedMusic = { ...smtc, playing: false };
+    const live = {
+      active: true,
+      title: '主播正在直播 - 哔哩哔哩直播',
+      source: 'msedge.exe',
+      type: 'Music',
+      duration: 0,
+      playing: true,
+    };
+    assert.equal(media.selectMediaFrame(pausedMusic, live), pausedMusic);
+  });
+
+  it('hands paused music over to live when the resume window expires', () => {
+    const pausedMusic = { ...smtc, playing: false };
+    const live = {
+      active: true,
+      title: '主播正在直播 - 哔哩哔哩直播',
+      source: 'msedge.exe',
+      type: 'Music',
+      duration: 0,
+      playing: true,
+    };
+    const window = { pausedSince: 1_000, pausedHideMin: 1, now: 60_999 };
+    assert.equal(media.selectMediaFrame(pausedMusic, null, live, window), pausedMusic);
+    assert.equal(
+      media.selectMediaFrame(pausedMusic, null, live, { ...window, now: 61_000 }),
+      live,
+    );
+  });
+
+  it('falls through to another playing medium, then clears when nothing else remains', () => {
+    const pausedMusic = { ...smtc, playing: false };
+    const video = {
+      active: true,
+      title: 'A recorded stream',
+      source: 'vlc.exe',
+      type: 'Video',
+      duration: 3600,
+      playing: true,
+    };
+    const window = { pausedSince: 1_000, pausedHideMin: 15, now: 901_000 };
+    assert.equal(media.selectMediaFrame(pausedMusic, null, video, window), video);
+    assert.equal(media.selectMediaFrame(pausedMusic, null, null, window).active, false);
+  });
+
+  it('keeps polling a paused NetEase audio session while live is active', () => {
+    assert.equal(typeof media.shouldPollNetease, 'function', 'the fallback polling rule must be testable');
+    const live = {
+      active: true,
+      title: '主播正在直播 - 哔哩哔哩直播',
+      source: 'msedge.exe',
+      duration: 0,
+      playing: true,
+    };
+    assert.equal(
+      media.shouldPollNetease({ session: true, playing: false }, live),
+      true,
+      'a paused music session must remain available as the preferred media owner',
+    );
+  });
+
+  it('does not poll NetEase while SMTC already owns music', () => {
+    assert.equal(typeof media.shouldPollNetease, 'function', 'the fallback polling rule must be testable');
+    assert.equal(media.shouldPollNetease({ session: true, playing: true }, smtc), false);
+  });
+
+  it('uses NetEase as soon as SMTC reports no active session', () => {
+    assert.equal(media.selectMediaFrame({ active: false }, fallback), fallback);
+  });
+
+  it('uses the history clock when NetEase publishes SMTC metadata without a timeline', () => {
+    const incomplete = {
+      active: true,
+      title: 'NetEase track',
+      source: 'cloudmusic.exe',
+      duration: 0,
+      position: 0,
+      art: 'data:image/png;base64,cover',
+      playing: false,
+    };
+    const selected = media.selectMediaFrame(incomplete, fallback);
+    assert.equal(selected.position, 40, 'the history clock supplies the missing position');
+    assert.equal(selected.duration, 180, 'the history row supplies the missing duration');
+    assert.equal(selected.art, incomplete.art, 'SMTC artwork is retained when it exists');
+    assert.equal(selected.playing, false, 'SMTC play/pause state stays authoritative');
+  });
+
+  it('does not combine the timeline of one player with the title and cover of another', () => {
+    const wrongFallback = {
+      ...fallback,
+      title: 'Another song',
+      trackId: '999',
+    };
+    const incomplete = {
+      active: true,
+      title: 'NetEase track',
+      source: 'cloudmusic.exe',
+      trackId: '123',
+      duration: 0,
+      art: '',
+      playing: true,
+    };
+    const selected = media.selectMediaFrame(incomplete, wrongFallback);
+    assert.equal(selected.title, incomplete.title);
+    assert.equal(selected.duration, 0, 'a different track must not donate its clock');
+  });
+
+  it('keeps the NetEase fallback cover when it is the winning frame', () => {
+    const art = 'data:image/jpeg;base64,bmV0ZWFzZQ==';
+    const musicalFallback = { ...fallback, art };
+    const live = {
+      active: true,
+      title: 'room - anchor - 哔哩哔哩直播',
+      source: 'msedge.exe',
+      duration: 0,
+      playing: true,
+      art: 'data:image/png;base64,bGl2ZQ==',
+    };
+    const selected = media.selectMediaFrame(live, musicalFallback);
+    assert.equal(selected, musicalFallback);
+    assert.equal(selected.title, musicalFallback.title);
+    assert.equal(selected.art, art, 'artwork belongs to the selected media, never the live thumbnail');
+  });
+
+  it('classifies the four kinds without treating duration zero as proof of live', () => {
+    assert.equal(
+      media.classifyMediaFrame({ active: true, source: 'Spotify.exe', duration: 0 }),
+      'music',
+    );
+    assert.equal(
+      media.classifyMediaFrame({
+        active: true,
+        source: 'msedge.exe',
+        title: 'room - anchor - 哔哩哔哩直播',
+        duration: 0,
+      }),
+      'live',
+    );
+    assert.equal(
+      media.classifyMediaFrame({ active: true, source: 'vlc.exe', duration: 7200 }),
+      'onDemand',
+    );
+    assert.equal(
+      media.classifyMediaFrame({ active: true, source: 'unknown.exe', duration: 0 }),
+      'generic',
+    );
+  });
+
+  it('lets explicit live evidence override a misleading Music playback type', () => {
+    assert.equal(
+      media.classifyMediaFrame({
+        active: true,
+        source: 'egolite',
+        title: 'gta6！赚够100W再下播 - 棉花大哥哥 - 哔哩哔哩直播',
+        type: 'Music',
+        duration: 0,
+      }),
+      'live',
+      'a browser live stream may report PlaybackType=Music',
+    );
+  });
+
+  it('keeps the native SMTC chooser on the same priority ladder', () => {
+    const script = src('main/services/media.ps1');
+    assert.match(script, /function Test-MusicSession/, 'music classification must have one named rule');
+    assert.match(script, /function Test-LiveSession/, 'live classification must have one named rule');
+    assert.match(
+      script,
+      /if \(-not \$snapshot\.IsMusic -and -not \$snapshot\.IsPlaying\) \{ continue \}/,
+      'paused music must stay in the native candidate set while paused non-music is filtered out',
+    );
+    assert.match(
+      script,
+      /Sort-Object -Property Rank -Descending/,
+      'the native selector must rank music before playback status',
+    );
+    assert.match(
+      script,
+      /return \[bool\]\(\$musicType -or \$musicName\)/,
+      'the native classifier must recognize both Music playback types and known music apps',
+    );
+    assert.match(script, /if \(\$duration -gt 0\) \{ return 300 \}/);
+    assert.match(
+      script,
+      /if \(\$liveName\) \{ return 200 \}[\s\S]*if \(Test-MusicSession/,
+      'strong live evidence must be checked before the misleading PlaybackType',
+    );
+    assert.match(script, /if \(\$videoType\) \{ return 200 \}/);
+    assert.match(script, /return 100/);
+  });
+
+  it('carries an alternate player through to the resume handoff', () => {
+    const script = src('main/services/media.ps1');
+    const service = src('main/services/media.js');
+    const preload = src('preload-island.js');
+    assert.match(script, /function Get-PlayerSnapshots/);
+    assert.match(script, /\$alternate\s*=/);
+    assert.match(script, /TargetSource/);
+    assert.match(service, /alternateFrame/);
+    assert.match(service, /setPausedHideMin/);
+    assert.match(preload, /holdPausedResume/);
+  });
+
+  it('runs the native watcher correctly under Windows PowerShell 5', () => {
+    const script = src('main/services/media.ps1');
+    assert.doesNotMatch(
+      script,
+      /[^\x00-\x7F]/,
+      'Windows PowerShell 5 reads BOM-less scripts as ANSI, so source literals must stay ASCII',
+    );
+    assert.match(
+      script,
+      /\[char\]0x54D4,\s*\[char\]0x54E9,\s*\[char\]0x54D4,\s*\[char\]0x54E9/,
+      'the Bilibili live-name evidence must be built from Unicode code points',
+    );
+    assert.match(
+      script,
+      /\[Console\]::OutputEncoding\s*=\s*\[System\.Text\.UTF8Encoding\]/,
+      'the JSON stream must be decoded consistently by Node',
+    );
+  });
+
+  it('still reports a broken SMTC watcher when NetEase has nothing', () => {
+    const error = { active: false, error: true };
+    assert.equal(media.selectMediaFrame(error, null), error);
+  });
+
+  it('lets a fallback seek publish without an SMTC timeline', () => {
+    const service = src('main/services/media.js');
+    assert.match(
+      service,
+      /function handleNeteaseFrame\(frame\)\s*\{[\s\S]*?publishSelected\(\)/,
+      'every NetEase frame must reach the renderer even while SMTC has active zero-length metadata',
+    );
+  });
+});
+
+describe('media artwork follows delayed SMTC thumbnail updates', () => {
+  it('rechecks the thumbnail after the track metadata key stops changing', () => {
+    const script = src('main/services/media.ps1');
+    const loop = script.slice(script.lastIndexOf('function New-SessionFrame'));
+    assert.match(loop, /\$entry\s*=\s*@\{ art = ""; checkedAt = \[datetime\]::MinValue \}/);
+    assert.match(
+      loop,
+      /\(\$now\s*-\s*\$entry\.checkedAt\)\.TotalMilliseconds\s*-ge\s*500/,
+      'the cover must be sampled again even when title, artist and album are unchanged',
+    );
+    assert.match(
+      loop,
+      /\$p\.Thumbnail[\s\S]{0,800}\$entry\.checkedAt\s*=\s*\$now/,
+      'a completed thumbnail read advances its own retry clock',
+    );
+  });
+});
+
 describe('live frames keep a usable cover and the real start time', () => {
   const bilibiliTitle = 'gta6！赚够100W再下播 - 棉花大哥哥 - 哔哩哔哩直播，二次元弹幕直播平台';
+
+  it('treats a missing alternate live frame as no lookup', () => {
+    assert.equal(media.liveLookupTarget(null), null);
+  });
 
   it('drops the Bilibili placeholder thumbnail so the real cover lookup can run', () => {
     const frame = media.prepareLiveFrame({
@@ -246,6 +560,14 @@ describe('the more panel only draws what the player claims', () => {
 });
 
 describe('media.command whitelist', () => {
+  it('addresses controls to the player currently shown', () => {
+    assert.deepEqual(
+      media.commandTargetArgs({ active: true, source: 'msedge.exe', title: 'Bilibili live' }),
+      ['-TargetSource', 'msedge.exe', '-TargetTitle', 'Bilibili live'],
+    );
+    assert.deepEqual(media.commandTargetArgs({ active: false, source: 'msedge.exe' }), []);
+  });
+
   it('refuses every kind the script has no branch for', () => {
     for (const kind of ['stop', 'PLAY', 'rate:', 'toggle ', '', null, undefined, 42, {}, ['next']]) {
       assert.equal(media.normalizeCommand(kind, 1), null, 'unknown kind ' + String(kind));
@@ -368,7 +690,7 @@ describe('one action list across page, IPC, service and script', () => {
   it('feeds the rail from the pure module instead of a second copy of the maths', () => {
     assert.match(island, /from '\.\/media-controls\.mjs'/, 'the page imports the shared helpers');
     assert.match(island, /const seekable = canSeek\(media\)/, 'the rail is gated by canSeek');
-    assert.match(island, /\$\{seekable\s*$|\$\{seekable/, 'the seekable branch decides the rail markup');
+    assert.match(island, /const progress = seekable\s*\?/, 'the seekable branch decides the rail markup');
     assert.match(island, /data-seek role="slider" tabindex="0"/, 'the rail is a keyboard-reachable slider');
   });
 

@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CONSUMERS,
   DEFAULTS,
+  PAUSED_HIDE_MINUTES,
   PAGE_MANIFEST,
   PRESET_MANIFEST,
   STATUS_MANIFEST,
@@ -127,6 +128,12 @@ describe('schema: defaults', () => {
     assert.equal(order[1], 'music');
     assert.ok(!order.includes('gone'));
     assert.equal(order.length, PAGE_MANIFEST.length);
+  });
+
+  it('lets paused resume controls recede after 15 idle minutes by default', () => {
+    assert.equal(withDefaults({}).music.pausedHideMin, 15);
+    assert.equal(withDefaults({ music: { pausedHideMin: 0 } }).music.pausedHideMin, 0);
+    assert.deepEqual(PAUSED_HIDE_MINUTES, [0, 1, 15, 30, 60, 120]);
   });
 });
 
@@ -419,6 +426,14 @@ describe('settings UI actually reads and writes the schema', () => {
         'renderPillStatus never draws "' + item.key + '" — the switch would look on and do nothing',
       );
     }
+  });
+
+  it('offers the paused-resume idle limit from the music settings', () => {
+    assert.match(settings, /music\.pausedHideMin/);
+    assert.match(settings, /PAUSED_HIDE_MINUTES/);
+    assert.match(src('renderer/i18n.js'), /music\.paused\.never/);
+    assert.match(island, /pausedResumeVisible/);
+    assert.match(island, /pausedResume/);
   });
 
   it('applies the reduce-motion switch to the page', () => {

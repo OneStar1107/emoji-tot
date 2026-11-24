@@ -68,6 +68,15 @@ describe('island paging affordances', () => {
   it('keeps both paging paths when more than one page exists', () => {
     assert.deepEqual(pagingVisibility(2), { arrows: true, dots: true });
   });
+
+  it('only treats a page dot as navigation when clicks bubble from page content', () => {
+    const source = readFileSync(resolve(here, '..', 'src', 'renderer', 'island.js'), 'utf8');
+    const handler = source.slice(
+      source.indexOf("panelEl.addEventListener('click'"),
+      source.indexOf("panelEl.addEventListener('change'"),
+    );
+    assert.match(handler, /event\.target\.closest\('#dots \[data-page\]'\)/);
+  });
 });
 
 /*
@@ -102,7 +111,7 @@ describe('island mailbox page fits its 205px budget', () => {
   it('does not flip pages when the wheel is over that column', () => {
     assert.match(
       islandJs,
-      /const WHEEL_OWNERS =\s*'\.clip-list, \.shelf-list, \.todo-list, \.dev-list, \.msg-list, \.mail-page, \.mail'/,
+      /const WHEEL_OWNERS =\s*'\.clip-list, \.shelf-list, \.todo-list, \.dev-list, \.msg-list, \.mail-page, \.mail, \.quota-scroll'/,
       'the wheel over the mailbox belongs to the mailbox',
     );
     const handler = islandJs.slice(islandJs.indexOf('function wheelOwner'));
@@ -136,7 +145,7 @@ describe('island devices page owns its own wheel', () => {
       islandJs.indexOf("document.addEventListener(\n  'wheel'"),
       islandJs.indexOf('{ capture: true }'),
     );
-    assert.match(handler, /if \(list && list\.scrollHeight > list\.clientHeight \+ 1\) event\.stopPropagation\(\)/, 'a scrolling list swallows the wheel even at its start or end: ' + handler);
+    assert.match(handler, /list\.scrollHeight > list\.clientHeight \+ 1[\s\S]{0,300}event\.stopPropagation\(\)/, 'a scrolling list swallows the wheel even at its start or end: ' + handler);
     assert.doesNotMatch(handler, /scrollTop/, 'no boundary check re-arms paging at the ends');
   });
 
@@ -148,6 +157,70 @@ describe('island devices page owns its own wheel', () => {
   it('covers the message centre list the same way', () => {
     const owners = islandJs.match(/const WHEEL_OWNERS =[\s\S]{0,200}?;/);
     assert.match(owners[0], /\.msg-list\b/, '.msg-list scrolls inside the page too');
+  });
+});
+
+describe('AI workbench scrolls its lower block without stealing page paging', () => {
+  it('separates open idle platforms from platforms that are not running', () => {
+    const block = islandJs.slice(islandJs.indexOf('function agentBlock'), islandJs.indexOf('function quotaPage'));
+    assert.match(block, /const idle = Math\.max\(0, active - running\)/);
+    assert.match(block, /const stopped = Math\.max\(0, on\.length - active\)/);
+    assert.match(block, /<b>\$\{stopped\}<\/b>未启动/);
+  });
+
+  it('keeps refresh on the provider line instead of the scrolling footer', () => {
+    const block = islandJs.slice(islandJs.indexOf('function quotaPage'), islandJs.indexOf('/**\n * "(3) 张三"'));
+    const meta = block.match(/const meta = `<div class="quota-meta">([\s\S]*?)<\/div>`;/);
+    assert.ok(meta, 'the provider line must remain a named block');
+    assert.match(meta[1], /\$\{refresh\}/, 'refresh belongs on the provider line');
+    const footer = block.slice(
+      block.indexOf('<div class="quota-foot">'),
+      block.indexOf('</div>', block.indexOf('<div class="quota-foot">')),
+    );
+    assert.doesNotMatch(footer, /\$\{refresh\}/, 'the footer keeps only its update stamp');
+  });
+
+  it('wraps the agent block and footer in one named scroller', () => {
+    const block = islandJs.slice(islandJs.indexOf('function quotaPage'), islandJs.indexOf('/**\n * "(3) 张三"'));
+    assert.match(block, /class="quota-scroll"/);
+    const open = block.indexOf('class="quota-scroll"');
+    const agents = block.indexOf('${agentBlock()}');
+    const footer = block.indexOf('class="quota-foot"');
+    assert.ok(open < agents && agents < footer);
+  });
+
+  it('makes that block a wheel owner', () => {
+    const owners = islandJs.match(/const WHEEL_OWNERS =[\s\S]{0,240}?;/);
+    assert.ok(owners, 'the wheel-owner list must be a named constant');
+    assert.match(owners[0], /\.quota-scroll\b/);
+  });
+
+  it('never pages while the wheel is inside the lower block', () => {
+    const handler = islandJs.slice(
+      islandJs.indexOf("document.addEventListener(\n  'wheel'"),
+      islandJs.indexOf('{ capture: true }'),
+    );
+    assert.match(handler, /list\.matches\('\.quota-scroll'\)/, 'the quota block stays a strict wheel boundary');
+  });
+
+  it('keeps scrolling while hiding only its scrollbar', () => {
+    const block = islandCss.slice(islandCss.indexOf('.quota-scroll {'));
+    const rule = block.slice(0, block.indexOf('}'));
+    assert.match(rule, /overflow-y:\s*auto/);
+    assert.match(rule, /scrollbar-width:\s*none/);
+    assert.match(rule, /overscroll-behavior:\s*contain/);
+    assert.match(islandCss, /\.quota-scroll::-webkit-scrollbar\s*\{[^}]*display:\s*none/);
+  });
+
+  it('marks the pages box with the current key', () => {
+    assert.match(islandJs, /pagesEl\.dataset\.page\s*=\s*page\.key/);
+    assert.match(islandCss, /\.pages\[data-page="quota"\]\s*\{[^}]*scrollbar-width:\s*none/);
+  });
+
+  it('shrinks the balance stack rather than spending the scroller budget on it', () => {
+    const block = islandCss.slice(islandCss.indexOf('.quota-amount {'));
+    const rule = block.slice(0, block.indexOf('}'));
+    assert.match(rule, /font-size:\s*25px/);
   });
 });
 

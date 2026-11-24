@@ -171,6 +171,14 @@ export const SKINS = Object.freeze(['frost', 'solid', 'plain']);
  * them — which made the ball's always-on-top switch render as off while the
  * window was pinned.
  */
+/**
+ * The selectable idle limits for the paused-music resume control.
+ *
+ * Zero is a real choice ("never hide"), not a missing value. Keeping the list
+ * beside the default means the settings UI and its schema audit cannot drift.
+ */
+export const PAUSED_HIDE_MINUTES = Object.freeze([0, 1, 15, 30, 60, 120]);
+
 export const DEFAULTS = {
   /* display */
   displayMode: 'island',
@@ -321,7 +329,7 @@ export const DEFAULTS = {
    * explicit false, which the merge below never overwrites.
    */
   weather: { city: '香港', unit: 'c', intervalMin: 15, autoLocate: true },
-  music: { lyrics: true, islandLyrics: true, offset: 0.35 },
+  music: { lyrics: true, islandLyrics: true, offset: 0.35, pausedHideMin: 15 },
   focus: { work: 25, rest: 5, enabled: false },
   health: { waterMin: 45, standMin: 60, enabled: false },
   todo: { enabled: true, notify: true },
@@ -842,6 +850,11 @@ export const CONSUMERS = {
   'music.lyrics': { scope: 'renderer', at: 'island.js music page', live: true },
   'music.islandLyrics': { scope: 'renderer', at: 'island.js renderPillStatus()', live: true },
   'music.offset': { scope: 'renderer', at: 'island.js lyric sync', live: true },
+  'music.pausedHideMin': {
+    scope: 'main',
+    at: 'main.js media.start/settings change · island.js paused resume idle timer',
+    live: true,
+  },
 
   'focus.enabled': { scope: 'main', at: 'services/focus.js prefs().enabled', live: true },
   'focus.work': { scope: 'main', at: 'services/focus.js prefs().work', live: true },

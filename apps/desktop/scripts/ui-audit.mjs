@@ -13,8 +13,8 @@
  *
  * What it measures
  * ----------------
- *   island (all pages)  .pages is a fixed 217px box with 12px of top padding,
- *                       so 205px of content is visible and 200px is the working
+ *   island (all pages)  .pages is a fixed 260px box with 12px of top padding,
+ *                       so 248px of content is visible and 243px is the working
  *                       budget (every page leaves the bottom 5px clear).
  *                       scrollHeight above the box, content that spills out of
  *                       it, text that is clipped without an ellipsis, scroll
@@ -303,7 +303,12 @@ function pageProbeFactory(minimumControlHeight) {
     const style = getComputedStyle(element);
     return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0.01;
   };
-  const ellipsis = (style) => style.textOverflow === 'ellipsis' && (style.whiteSpace === 'nowrap' || style.whiteSpace === 'pre');
+  const ellipsis = (style) => {
+    if (style.textOverflow !== 'ellipsis') return false;
+    if (style.whiteSpace === 'nowrap' || style.whiteSpace === 'pre') return true;
+    const lineClamp = Number.parseInt(style.webkitLineClamp, 10);
+    return Number.isFinite(lineClamp) && lineClamp > 0;
+  };
   const clippedByAncestor = (element, stopAt) => {
     const box = element.getBoundingClientRect();
     let node = element.parentElement;
@@ -1045,7 +1050,7 @@ function printSkinTable(passes, stress) {
   const pageCount = Math.max(...skins.map((pass) => pass.island.pages.length));
   const width = Math.max(4, ...skins.map((pass) => displayWidth(pass.skin))) + 2;
   console.log('');
-  console.log('Skins' + (stress ? ' @ stress' : '') + ' · island .pages scrollHeight (px) · contract ≤ 217');
+  console.log('Skins' + (stress ? ' @ stress' : '') + ' · island .pages scrollHeight (px) · contract ≤ 260');
   if (stress) console.log('  all skins measured at mono / 600 / 140%');
   console.log('  ' + pad('page', 12) + skins.map((pass) => pad(pass.skin, width)).join(''));
   for (let index = 0; index < pageCount; index += 1) {

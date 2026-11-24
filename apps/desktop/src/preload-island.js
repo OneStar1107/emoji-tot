@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('islandAPI', {
   onMedia: (listener) => on('island:media', listener),
   onLyrics: (listener) => on('island:lyrics', listener),
   control: (kind, arg) => ipcRenderer.invoke('media:control', { kind, arg }),
+  holdPausedResume: () => ipcRenderer.invoke('media:hold-paused'),
   volumeGet: () => ipcRenderer.invoke('volume:get'),
   volumeSet: (level) => ipcRenderer.invoke('volume:set', level),
   volumeMute: (muted) => ipcRenderer.invoke('volume:mute', muted),

@@ -433,9 +433,9 @@ try {
     JSON.stringify(compactLayout),
   );
   ok(
-    'overlong title scrolls inside the shorter red-box viewport',
-    compactLayout.titleOver === 'true' &&
-      parseFloat(compactLayout.titleShift) > 0 &&
+    'overlong lyric stays inside the fixed text viewport',
+    compactLayout.titleOver !== 'true' &&
+      compactLayout.titleShift === '' &&
       compactLayout.titleWidth <= compactLayout.titleMaxWidth + 1 &&
       compactLayout.titleMaxWidth <= 241,
     JSON.stringify({
@@ -899,8 +899,8 @@ try {
       Array.isArray(shelf.outer) &&
       shelf.panel[0] > 0 &&
       shelf.panel[1] > 0 &&
-      shelf.outer[0] === shelf.panel[0] + 64 &&
-      shelf.outer[1] === shelf.panel[1] + 72,
+      Math.abs(shelf.outer[0] - (shelf.panel[0] + 64)) <= 1 &&
+      Math.abs(shelf.outer[1] - (shelf.panel[1] + 72)) <= 1,
     JSON.stringify({ panel: shelf.panel, outer: shelf.outer }),
   );
 

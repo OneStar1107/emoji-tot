@@ -52,6 +52,8 @@ const { safeSend } = guard;
 const platform = require('./main/platform');
 const { passThroughWhileDragging, sameDisplayId } = require('./main/window-state');
 const { nextAgentMtime } = require('./main/agent-file');
+const { classifyAgent, orderActiveAgents } = require('./main/agent-status');
+const agentPresence = require('./main/services/agent-presence');
 const trayPanel = require('./main/tray-panel');
 // One face, one owner: the bus is plain state, so the sequence guarantees are
 // testable without Electron (apps/desktop/test/face-sync.test.mjs).
@@ -171,6 +173,9 @@ let pointerTimer = null;
 let clickThrough = true;
 let clickThroughEnabled = true;
 let agentWatch = {};
+let agentPresenceUnsubscribe = null;
+/** Last file observation per source; never sent to the renderer. */
+const agentObservation = {};
 /**
  * One arbiter for the agents.
  *
@@ -919,40 +924,44 @@ function ensureStateFile() {
 /**
  * What the island's agent row draws.
  *
- * The sources already map their own status files into protocol ids, so the row
- * reuses that vocabulary instead of starting a second state machine: one
- * enabled source is one session, and that session runs while its file maps
- * into the agent-work segment (30–49). A source that is off or has no file is
- * idle; nothing here invents a measured zero for a missing snapshot.
+ * A configured switch is a listener, not a session. The row says "active" only
+ * when that application is present, or (before the process watcher's first
+ * sample) its status file is fresh. A stale status file stays a receipt.
  */
-const AGENT_WORK = [30, 49];
-
-/** Last running flag and the moment it changed, written by the poll below. */
-const agentRunning = {};
-const agentSince = {};
-
 function agentSnapshot() {
   const prefs = readPrefs();
-  return AGENT_SOURCES.map((source) => {
+  const presence = agentPresence.snapshot();
+  const now = Date.now();
+  const rows = AGENT_SOURCES.map((source) => {
     const on = Boolean(prefs[`agent_${source.id}`]);
-    const running = on && Boolean(agentRunning[source.id]);
+    const observed = agentObservation[source.id] ?? {};
+    const state = classifyAgent({
+      raw: observed.raw ?? null,
+      heartbeatAt: observed.fileAt ?? 0,
+      present: presence ? presence[source.id] : undefined,
+      now,
+      wasActive: Boolean(observed.active),
+      since: observed.since ?? 0,
+    });
+    agentObservation[source.id] = { ...observed, ...state };
     return {
       id: source.id,
       label: source.label,
       on,
-      running,
-      /* When this state began. A source with no readable file has never been
-         observed, so it reports null instead of a made-up zero. */
-      since: on ? (agentSince[source.id] ?? null) : null,
+      active: on && state.active,
+      running: on && state.running,
+      taskCount: on ? state.taskCount : 0,
+      since: on && state.active ? state.since : null,
     };
   });
+  return orderActiveAgents(rows);
 }
 
 /**
  * One snapshot for the AI page.
  *
  * The balance and the agent list are one screen, so they travel in one event
- * and the island paints them in one pass. The 350ms agent poll and the quota
+ * and the island paints them in one pass. The one-second agent poll and the quota
  * service both call this; the JSON comparison keeps the channel quiet until
  * either half actually changes.
  */
@@ -978,38 +987,80 @@ function pushQuotaAgent() {
  */
 function startAgentWatch(prefs) {
   stopAgentWatch();
+  if (AGENT_SOURCES.some((source) => prefs[`agent_${source.id}`])) {
+    agentPresenceUnsubscribe = agentPresence.onChange(() => {
+      // Reclassify the last file against the new process snapshot. The UI is
+      // updated even when no file changed, because opening an idle agent is a
+      // real state change.
+      agentSnapshot();
+      pushQuotaAgent();
+    });
+    agentPresence.start();
+  }
   for (const source of AGENT_SOURCES) {
     if (!prefs[`agent_${source.id}`]) continue;
     const file = source.file();
     let last = 0;
+    let knownRaw = null;
     const tick = () => {
       let stat;
       try {
         stat = fs.statSync(file);
       } catch {
+        const previous = agentObservation[source.id] ?? {};
+        const next = classifyAgent({
+          raw: null,
+          heartbeatAt: 0,
+          present: agentPresence.snapshot()?.[source.id],
+          wasActive: Boolean(previous.active),
+          since: previous.since ?? 0,
+        });
+        agentObservation[source.id] = {
+          raw: null,
+          fileAt: 0,
+          ...next,
+        };
+        if (!next.running) agentArbiter?.remove('agent:' + source.id);
+        pushQuotaAgent();
         return;
       }
-      if (stat.mtimeMs === last) return;
-      // A file caught mid-write parses as null; leave `last` alone so the next
-      // tick retries instead of waiting for the writer to touch it again.
-      const raw = readJson(file, null);
-      if (raw == null) return;
-      last = nextAgentMtime(last, stat.mtimeMs, raw);
-      const id = source.map(raw);
-      const work = Number(id);
-      const running = Number.isInteger(work) && work >= AGENT_WORK[0] && work <= AGENT_WORK[1];
-      /* The duration the page shows is the age of this transition, not a timer
-         that restarts whenever the island repaints. */
-      if (!(source.id in agentSince) || running !== Boolean(agentRunning[source.id])) {
-        agentSince[source.id] = Date.now();
+      if (stat.mtimeMs !== last) {
+        // A file caught mid-write parses as null; leave `last` alone so the next
+        // tick retries instead of waiting for the writer to touch it again.
+        const raw = readJson(file, null);
+        if (raw == null) {
+          pushQuotaAgent();
+          return;
+        }
+        last = nextAgentMtime(last, stat.mtimeMs, raw);
+        knownRaw = raw;
       }
-      agentRunning[source.id] = running;
-      if (id) agentsArbiter().update({ sessionId: 'agent:' + source.id, emotionId: id });
+      const previous = agentObservation[source.id] ?? {};
+      const next = classifyAgent({
+        raw: knownRaw,
+        heartbeatAt: stat.mtimeMs,
+        present: agentPresence.snapshot()?.[source.id],
+        wasActive: Boolean(previous.active),
+        since: previous.since ?? 0,
+      });
+      agentObservation[source.id] = {
+        raw: knownRaw,
+        fileAt: stat.mtimeMs,
+        ...next,
+      };
+      const id = source.map(knownRaw);
+      if (id && next.running) {
+        agentsArbiter().update({ sessionId: 'agent:' + source.id, emotionId: id });
+      } else {
+        // Done / error / stale files are receipts, not live sessions. Removing
+        // the arbiter entry is what stops a success face from running forever.
+        agentArbiter?.remove('agent:' + source.id);
+      }
       pushQuotaAgent();
     };
     tick();
     /* One stat per second, not three. The tick wakes the main process and
-       walks the same file; at 350ms that is a permanent 3Hz heartbeat for a
+       walks the same file; at 350ms that was a permanent 3Hz heartbeat for a
        number that changes a few times a minute. A file caught mid-write is
        retried on the next tick either way, so the worst case is 650ms more
        latency on a status flip nobody is timing. */
@@ -1020,13 +1071,15 @@ function startAgentWatch(prefs) {
 function stopAgentWatch() {
   for (const timer of Object.values(agentWatch)) clearInterval(timer);
   agentWatch = {};
-  for (const id of Object.keys(agentRunning)) delete agentRunning[id];
-  for (const id of Object.keys(agentSince)) delete agentSince[id];
+  agentPresenceUnsubscribe?.();
+  agentPresenceUnsubscribe = null;
+  agentPresence.stop();
+  for (const id of Object.keys(agentObservation)) delete agentObservation[id];
   if (agentArbiter) {
     for (const source of AGENT_SOURCES) agentArbiter.remove('agent:' + source.id);
   }
-  // A source switched off in settings is still shown as a session that is off;
-  // pushing here keeps the row from claiming it runs until the next app start.
+  // A source switched off is still shown as a source that is off; pushing here
+  // keeps the row from claiming it runs until the next app start.
   pushQuotaAgent();
 }
 
@@ -1625,6 +1678,7 @@ let weatherTimer = null;
 let lastBattery = null;
 let lastLyricTrack = '';
 let lastLyrics = null;
+let lyricRequest = 0;
 
 /**
  * Battery is polled every 30s instead of watched: Windows has no push event
@@ -1695,7 +1749,11 @@ const SERVICE_PLAN = {
       weatherTimer = null;
     },
   },
-  media: { feature: 'media', start: () => media.start(), stop: () => media.stop() },
+  media: {
+    feature: 'media',
+    start: () => media.start({ pausedHideMin: readPrefs().music?.pausedHideMin ?? 15 }),
+    stop: () => media.stop(),
+  },
   focus: { start: () => focus.startService(), stop: () => focus.stopService() },
   health: { start: () => health.startService(), stop: () => health.stopService() },
   todo: { start: () => todo.startService(), stop: () => todo.stopService() },
@@ -1810,18 +1868,47 @@ function startServices() {
   media.onChange(() => applyMediaEmotion());
   media.onChange((state) => {
     island.send('island:media', state);
-    const key = state.active ? state.title + '|' + state.artist : '';
+    const key = state.active ? lyrics.trackLookupKey(state) : '';
     if (key === lastLyricTrack) return;
     lastLyricTrack = key;
+    const request = ++lyricRequest;
     if (!state.active) {
       lastLyrics = null;
       island.send('island:lyrics', null);
       return;
     }
-    lyrics.get(state).then((value) => {
-      lastLyrics = value;
-      island.send('island:lyrics', value);
-    });
+    /*
+     * A slow catalogue answer for the previous song must not replace the
+     * current one. Clearing the old lines immediately also prevents the next
+     * track from briefly showing the previous song's lyrics.
+     */
+    lastLyrics = {
+      title: state.title,
+      synced: false,
+      lines: [],
+      duration: Number(state.duration) || 0,
+      loading: true,
+      source: '',
+    };
+    island.send('island:lyrics', lastLyrics);
+    lyrics.get(state)
+      .then((value) => {
+        if (request !== lyricRequest || key !== lastLyricTrack) return;
+        lastLyrics = value;
+        island.send('island:lyrics', value);
+      })
+      .catch(() => {
+        if (request !== lyricRequest || key !== lastLyricTrack) return;
+        lastLyrics = {
+          title: state.title,
+          synced: false,
+          lines: [],
+          duration: Number(state.duration) || 0,
+          unavailable: true,
+          source: '',
+        };
+        island.send('island:lyrics', lastLyrics);
+      });
   });
 
   focus.onChange((value) => island.send('island:focus', value));
@@ -2069,6 +2156,9 @@ function startServices() {
     const control = await media.command(payload.kind, Number(payload.arg) || 0);
     return { ...media.current(), control };
   }, { check: checkMedia, maxBytes: 1024 });
+  guard.guardedHandle('media:hold-paused', ['island'], () => ({
+    held: media.holdPausedResume(),
+  }));
 
   // Master volume: a read is cheap once the watcher is warm, and the set path
   // returns the new state so the panel never shows a value it did not apply.
@@ -2272,6 +2362,7 @@ if (!gotTheLock) {
       applyForm();
       applyMainPrefs();
       applyServicePlan();
+      media.setPausedHideMin(next.music?.pausedHideMin ?? 15);
       if (changes.weatherReschedule) scheduleWeather();
       if (changes.weatherRefresh) refreshWeather();
       if (changes.quotaReschedule) quota.reschedule();

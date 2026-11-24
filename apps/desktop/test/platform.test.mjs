@@ -62,7 +62,7 @@ describe('platform: one place decides what this machine can do', () => {
 });
 
 describe('services only spawn through the platform layer', () => {
-  const files = ['battery', 'media', 'fullscreen', 'devices', 'messenger', 'weather', 'lyrics', 'quota', 'calendar'];
+  const files = ['battery', 'media', 'fullscreen', 'devices', 'messenger', 'weather', 'lyrics', 'agent-presence', 'quota', 'calendar'];
 
   it('has no raw spawn or execFile left in a service', () => {
     for (const name of files) {
@@ -74,7 +74,7 @@ describe('services only spawn through the platform layer', () => {
   });
 
   it('attaches an error listener where a watcher can fail', () => {
-    for (const name of ['media', 'fullscreen', 'devices', 'messenger']) {
+    for (const name of ['media', 'fullscreen', 'devices', 'messenger', 'agent-presence']) {
       const source = src('main/services/' + name + '.js');
       const handled = source.includes(".on('error'") || source.includes('onError');
       assert.ok(handled, name + ' spawns a watcher with no error path');

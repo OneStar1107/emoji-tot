@@ -33,9 +33,10 @@ packages/protocol 两位数协议：解析、仲裁、事件桥
 | --- | --- | --- |
 | battery | 无 | PowerShell CIM |
 | weather | `cache-weather.json` | Open-Meteo，PowerShell 子进程 |
-| media | 无 | PowerShell + WinRT SMTC 长驻子进程 |
-| lyrics | `cache-lyrics-*.json` | LRCLIB，PowerShell 子进程 |
+| media | 无 | PowerShell + WinRT SMTC 长驻子进程；网易云通过只读增量解析 `cloudmusic.elog` 获取精确时间线，`webdb.dat` 只补元数据，CoreAudio 判断音频会话 |
+| lyrics | `cache-lyrics-*.json` | LRCLIB 搜索，PowerShell 子进程；收起胶囊显示当前同步歌词 |
 | quota | `secrets.bin` | DeepSeek，密钥经 safeStorage、走环境变量传子进程 |
+| agent-presence | 无 | PowerShell/CIM 只输出打开状态布尔值，不保存命令参数 |
 | mail | `mail.json` | imapflow（MIT） |
 | calendar | `cache-calendar.json` | 无 |
 | focus / health / todo | 各自 `cache-*.json` | 无（通知用 Electron Notification） |

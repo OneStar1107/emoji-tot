@@ -19,7 +19,7 @@ pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：三套皮肤�
 
 | 面 | 指标 | 判定 |
 | --- | --- | --- |
-| 岛（每页） | `.pages` 的 `scrollHeight` | 大于 `clientHeight`（= 217）即内容溢出 |
+| 岛（每页） | `.pages` 的 `scrollHeight` | 大于 `clientHeight`（= 260）即内容溢出 |
 | 岛（每页） | 内容盒实际占用 | 最底部子元素的底边减内容区顶边；超过可用高度即溢出 |
 | 岛（每页） | 横向越界元素 | 元素盒子越过 `.pages` 内容盒左右边，且不是被内层 `overflow: hidden` 主动裁掉的装饰 |
 | 岛（每页） | 被裁文字 | 自己或某个祖先 `overflow: hidden/clip` 裁掉了文字，而该处没有 `text-overflow: ellipsis` |
@@ -36,7 +36,7 @@ pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：三套皮肤�
 
 ## 皮肤（--skin / --skins all）
 
-岛有三套皮肤：`frost`（界面名 Liquid Glass，当前是半透明实色）、`solid`（实色）、`plain`（极简）。皮肤改变的是填充、字体与装饰，`.pages` 的 217px 盒高不变；但同一页在 frost 下守得住，不代表在另外两套版下也守得住。所以每套皮肤都要把 11 个岛页重新量一遍。
+岛有三套皮肤：`frost`（界面名 Liquid Glass，当前是半透明实色）、`solid`（实色）、`plain`（极简）。皮肤改变的是填充、字体与装饰，`.pages` 的 260px 盒高不变；但同一页在 frost 下守得住，不代表在另外两套版下也守得住。所以每套皮肤都要把 11 个岛页重新量一遍。
 
 - `--skin <key>`：把皮肤写进临时 profile 的 `prefs.json`，再启动应用，只测这一套。
 - `--skins all`：按 `frost → solid → plain` 依次起三次应用，每套量 11 个岛页。设置窗 15 页只在第一套（frost）量一次：`skin` 只作用于岛窗口（`island.js applyPrefs() → body[data-skin]`），设置窗不套皮肤、布局完全相同，重新量三遍只会得到三份一样的数字。报告里每个被跳过的设置窗都会注明这一点。
@@ -104,13 +104,13 @@ pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：三套皮肤�
 
 ```css
 /* apps/desktop/src/renderer/island.css */
-.pages { padding: 12px 2px 0; height: 217px; overflow-y: auto; overflow-x: hidden; }
+.pages { padding: 12px 2px 0; height: var(--pages-h); overflow-y: auto; overflow-x: hidden; }
 ```
 
-- **217** 是 `.pages` 的固定盒高。面板不随页面变高，翻页时窗口不跳。
+- **260** 是 `.pages` 的固定盒高（由 `--pages-h` 统一控制）。面板不随页面内容变高，翻页时窗口不跳。
 - **12** 是它的 `padding-top`。这 12px 是视觉留白，不属于可用内容。
-- **205 = 217 − 12**，是一页真正能画东西的高度。内容超过 205 时 `scrollHeight` 会大于 217，而面板高度固定、翻页靠左右箭头，所以溢出就是 bug，不是「可以滚一滚」。滚动条属于页内自己封顶的列表（待办、消息、置物架、设备），不属于页面本身。
-- **200** 是每页的工作预算：每页底部固定留 5px 余量（`.pages > * { max-height: calc(100% - 5px) }`）。改动前音乐 / 邮箱 / 待办三页靠 `height: 100%` 撑满内容盒，`usedHeight` 正好 205.0——一点字体度量误差就会变成违规；现在三页收在 200 / 192 / 200，其余页不受影响。
+- **248 = 260 − 12**，是一页真正能画东西的高度。内容超过 248 时 `scrollHeight` 会大于 260，而面板高度固定、翻页靠左右箭头，所以溢出就是 bug，不是「可以滚一滚」。滚动条属于页内自己封顶的列表（待办、消息、置物架、设备），不属于页面本身。
+- **243** 是每页的工作预算：每页底部固定留 5px 余量（`.pages > * { max-height: calc(100% - 5px) }`）。改动前音乐 / 邮箱 / 待办三页靠 `height: 100%` 撑满内容盒，`usedHeight` 正好 248.0——一点字体度量误差就会变成违规；现在各页在自己的内容块内安排高度，媒体页用多出的空间承载封面、三行歌词、进度和独立控制条。
 - **20px** 是最小可点高度。当前设计里开关是 20–22px（`.switch`），20 是下限；低于 20 的按钮在 140% 缩放下很难点中。
 - 测量值允许 **1px** 误差（`TOLERANCE`），避免小数像素和字体度量造成假阳性。
 
@@ -153,14 +153,14 @@ pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：三套皮肤�
 `--skins all` 每套皮肤一个小节，三套跑完再打一张总表；矩阵模式下每节标题带 `@ stress`，总表也换成 `Skins @ stress`，提醒这 33 个岛页全部跑在压力 prefs 下：
 
 ```text
-Skins · island .pages scrollHeight (px) · contract ≤ 217
+Skins · island .pages scrollHeight (px) · contract ≤ 260
   page        frost  solid  plain
   音乐         205    205    205
   ...
   verdict     ok     ok     ok
 ```
 
-矩阵模式把首行换成 `Skins @ stress · island .pages scrollHeight (px) · contract ≤ 217`，并在标题下多印一行 `all skins measured at mono / 600 / 140%`。
+矩阵模式把首行换成 `Skins @ stress · island .pages scrollHeight (px) · contract ≤ 260`，并在标题下多印一行 `all skins measured at mono / 600 / 140%`。
 
 总表一眼能看出「哪套皮肤、哪一页先撞线」；最后一行是全局 PASS/FAIL，只要有任意一套违规就是 `FAIL`，退出码 1。`--json` 输出同样内容的机器可读版本，除 `passes` 外还有「皮肤」一节描述的 `skins`：
 

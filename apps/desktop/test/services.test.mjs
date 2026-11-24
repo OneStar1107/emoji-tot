@@ -239,7 +239,7 @@ describe('health: the counters belong to a local date', () => {
 
 describe('lyrics: a failed lookup is remembered for minutes, not days', () => {
   const track = { title: 'Offline Song', artist: 'Nobody', duration: 120 };
-  const key = createHash('sha1').update(track.title + '|' + track.artist + '|' + track.duration).digest('hex').slice(0, 16);
+  const key = createHash('sha1').update(lyrics.trackLookupKey(track)).digest('hex').slice(0, 16);
   const cacheFile = join(dataDir, 'cache-lyrics-' + key + '.json');
 
   it('treats the short TTL as strictly shorter than a real hit', () => {
@@ -276,6 +276,81 @@ describe('lyrics: a failed lookup is remembered for minutes, not days', () => {
     if (platform.supported) {
       assert.ok(stats.execFile > before, 'the retry must reach the lookup');
     }
+  });
+});
+
+describe('lyrics: search results are ranked for the exact media session', () => {
+  it('prefers the player catalogue for NetEase and keeps track identity in the lookup key', () => {
+    assert.deepEqual(lyrics.providerOrder({ source: 'cloudmusic.exe' }), ['netease', 'lrclib']);
+    assert.deepEqual(lyrics.providerOrder({ source: 'Spotify.exe' }), ['lrclib']);
+    assert.notEqual(
+      lyrics.trackLookupKey({ title: 'Song', artist: 'Artist', trackId: '1', source: 'cloudmusic.exe' }),
+      lyrics.trackLookupKey({ title: 'Song', artist: 'Artist', trackId: '2', source: 'cloudmusic.exe' }),
+    );
+  });
+
+  it('keeps the catalogue duration so the island can label a player without a timeline', () => {
+    assert.equal(typeof lyrics.lyricsValue, 'function');
+    const value = lyrics.lyricsValue({
+      trackName: 'ghosts',
+      duration: 125,
+      syncedLyrics: '[00:10.00] I don\'t wanna fucking die here',
+    }, { title: 'ghosts', artist: 'Shinigami', duration: 0 });
+    assert.equal(value.duration, 125);
+    assert.equal(value.synced, true);
+  });
+
+  it('accepts a synced match even when the clip duration differs from the catalogue', () => {
+    const candidates = [
+      {
+        id: 1,
+        trackName: 'get me high (live)',
+        artistName: 'Marco Luka',
+        duration: 16,
+        syncedLyrics: '[00:01.00] live version',
+      },
+      {
+        id: 2,
+        trackName: 'get me high',
+        artistName: 'Marco Luka',
+        duration: 105,
+        syncedLyrics: '[00:10.18] Run right through my mind',
+      },
+      {
+        id: 3,
+        trackName: 'get me high',
+        artistName: 'Somebody Else',
+        duration: 16,
+        syncedLyrics: '[00:01.00] wrong artist',
+      },
+    ];
+    const picked = lyrics.pickLyricsCandidate(candidates, {
+      title: 'get me high',
+      artist: 'marco luka',
+      duration: 16,
+    });
+    assert.equal(picked.id, 2);
+  });
+
+  it('never uses an instrumental or unsynced result as timed lyrics', () => {
+    const picked = lyrics.pickLyricsCandidate([
+      { id: 1, trackName: 'Song', artistName: 'Artist', instrumental: true, syncedLyrics: '[00:01.00] x' },
+      { id: 2, trackName: 'Song', artistName: 'Artist', syncedLyrics: '' },
+    ], { title: 'Song', artist: 'Artist' });
+    assert.equal(picked, null);
+  });
+
+  it('applies an LRC offset once to every repeated timestamp', () => {
+    const parsed = lyrics.parseLrc([
+      '[offset:500]',
+      '[00:10.00]first',
+      '[00:12.00][00:20.00]chorus',
+    ].join('\n'));
+    assert.deepEqual(parsed.map((line) => [line.t, line.text]), [
+      [9.5, 'first'],
+      [11.5, 'chorus'],
+      [19.5, 'chorus'],
+    ]);
   });
 });
 
