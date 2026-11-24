@@ -367,6 +367,27 @@ describe('live frames keep a usable cover and the real start time', () => {
     assert.equal(media.liveLookupTarget(null), null);
   });
 
+  it('reruns live metadata lookup when the same room becomes the primary media', () => {
+    const frame = {
+      active: true,
+      title: bilibiliTitle,
+      source: 'egolite.exe',
+      duration: 0,
+    };
+    const lookup = media.liveLookupTarget(frame);
+    assert.ok(lookup);
+    assert.equal(
+      media.liveLookupCacheKey(lookup, true),
+      media.liveLookupCacheKey(lookup, true),
+      'frames in the same media role must reuse one lookup',
+    );
+    assert.notEqual(
+      media.liveLookupCacheKey(lookup, true),
+      media.liveLookupCacheKey(lookup, false),
+      'moving from alternate to primary must not suppress artwork resolution',
+    );
+  });
+
   it('drops the Bilibili placeholder thumbnail so the real cover lookup can run', () => {
     const frame = media.prepareLiveFrame({
       active: true,

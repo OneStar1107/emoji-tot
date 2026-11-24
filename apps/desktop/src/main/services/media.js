@@ -301,6 +301,19 @@ function liveLookupTarget(frame) {
 }
 
 /**
+ * Keep a broadcast's lookup tied to its current media role.
+ *
+ * The same live frame can begin as a paused-music alternate and become primary
+ * when that music player exits. Reusing the alternate lookup key would skip
+ * the second lookup even though the prepared primary frame deliberately clears
+ * its SMTC placeholder artwork.
+ */
+function liveLookupCacheKey(lookup, isAlternate) {
+  if (!lookup?.key) return '';
+  return JSON.stringify([isAlternate ? 'alternate' : 'primary', lookup.key]);
+}
+
+/**
  * Fill a missing NetEase cover without changing which frame owns playback.
  *
  * The returned image is written back to every observation of the same track,
@@ -463,8 +476,9 @@ function handleLine(line) {
   const primaryLookup = liveLookupTarget(next);
   const lookupIsAlternate = !primaryLookup && Boolean(alternateFrame);
   const lookup = primaryLookup || liveLookupTarget(alternateFrame);
-  if (lookup && lookup.key !== liveLookupKey) {
-    liveLookupKey = lookup.key;
+  const lookupCacheKey = liveLookupCacheKey(lookup, lookupIsAlternate);
+  if (lookup && lookupCacheKey !== liveLookupKey) {
+    liveLookupKey = lookupCacheKey;
     const title = lookupIsAlternate ? alternateFrame.title : next.title;
     const artist = lookupIsAlternate ? alternateFrame.artist : next.artist;
     const source = lookupIsAlternate ? alternateFrame.source : next.source;
@@ -481,7 +495,7 @@ function handleLine(line) {
           current.source !== source ||
           current.live?.roomId === info.roomId
         ) {
-          if (!info && liveLookupKey === lookup.key) liveLookupKey = '';
+          if (!info && liveLookupKey === lookupCacheKey) liveLookupKey = '';
           return;
         }
         if (lookupIsAlternate) alternateFrame = attachLiveInfo(alternateFrame, info);
@@ -489,7 +503,7 @@ function handleLine(line) {
         publishSelected(true);
       })
       .catch(() => {
-        if (liveLookupKey === lookup.key) liveLookupKey = '';
+        if (liveLookupKey === lookupCacheKey) liveLookupKey = '';
       });
   } else if (!lookup) {
     liveLookupKey = '';
@@ -773,4 +787,5 @@ module.exports = {
   prepareLiveFrame,
   attachLiveInfo,
   liveLookupTarget,
+  liveLookupCacheKey,
 };
