@@ -6,7 +6,7 @@
  * look without re-picking fifteen characters.
  *
  * - `flat`    — solid fill, no outline, quiet face. The default.
- * - `sticker` — thick darker outline, a corner highlight, a couple of sparks.
+ * - `sticker` — thick paper outline, like a die-cut sticker.
  * - `glow`    — radial gradient, a pale outer ring, a soft halo.
  * - `dots`    — the silhouette printed as a grid of dots (halftone).
  * - `line`    — outline only, no fill: pen on paper.
