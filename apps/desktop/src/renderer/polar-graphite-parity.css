@@ -10,6 +10,8 @@
   --pgm-fg: #edf5f8;
   --pgm-muted: rgba(237, 245, 248, 0.58);
   --pgm-quiet: rgba(237, 245, 248, 0.36);
+  /* Readable faint text: quiet stays for hairlines/disabled/placeholder only. */
+  --faint-strong: rgba(237, 245, 248, 0.50);
   --pgm-hairline: rgba(237, 245, 248, 0.095);
   --pgm-hairline-strong: rgba(237, 245, 248, 0.17);
   --pgm-track: rgba(237, 245, 248, 0.115);
@@ -39,16 +41,18 @@ body[data-theme="light"] :is(#island, #settings) {
   --pgm-fg: #161a1d;
   --pgm-muted: rgba(22, 26, 29, 0.62);
   --pgm-quiet: rgba(22, 26, 29, 0.4);
+  /* Readable faint text: quiet stays for hairlines/disabled/placeholder only. */
+  --faint-strong: rgba(22, 26, 29, 0.63);
   --pgm-hairline: rgba(22, 26, 29, 0.1);
   --pgm-hairline-strong: rgba(22, 26, 29, 0.18);
   --pgm-track: rgba(22, 26, 29, 0.12);
   --pgm-brand: #161a1d;
   --pgm-brand-ink: #edf5f8;
-  --pgm-good: #48796f;
+  --pgm-good: #3f6b64;
   --pgm-warn: #826633;
   --pgm-bad: #8a5751;
   --pgm-info: #536e89;
-  --pgm-good-soft: rgba(72, 121, 111, 0.1);
+  --pgm-good-soft: rgba(63, 107, 100, 0.1);
   --pgm-warn-soft: rgba(130, 102, 51, 0.1);
   --pgm-bad-soft: rgba(138, 87, 81, 0.1);
   --pgm-info-soft: rgba(83, 110, 137, 0.1);
@@ -90,22 +94,24 @@ body[data-theme="light"] :is(#island, #settings) {
   gap: 3px;
   border-radius: 0;
   font-size: 7.5px;
-  color: rgba(237, 245, 248, 0.48);
+  color: var(--faint-strong);
 }
 body[data-theme="light"] #island .pgm-island-foot .pager {
-  color: rgba(22, 26, 29, 0.48);
+  color: var(--faint-strong);
 }
 #island .pgm-island-foot .pager svg {
   width: 10px;
   height: 10px;
 }
-#island .pgm-island-foot .pager::after {
+/* The 22px rail is the visual track only. A transparent pseudo layer on each
+   arrow extends the real pointer target downward to >=44x32 (44px min-width
+   from the pager rule + 10px below the 22px row) without changing the
+   computed height of the button or the 22px footer row. position:relative is
+   set on .pgm-page-btn in its main rule below. */
+:is(#island,#settings) .pgm-page-btn::after {
   content: "";
   position: absolute;
-  inset: -1px 0;
-}
-#island .pgm-island-foot .pager {
-  position: relative;
+  inset: 0 0 -10px 0;
 }
 #settings {
   width: 100%;
@@ -320,7 +326,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-work-caption .pgm-no {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font: 500 8px/1 var(--pgm-number);
     letter-spacing: 0.08em;
   }
@@ -334,7 +340,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-work-caption span:last-child {
     grid-column: 2;
     overflow: visible;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 8px;
     line-height: 1.45;
     text-overflow: clip;
@@ -414,7 +420,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
     display: block;
     margin-top: 3px;
     overflow: visible;
-    color: rgba(237, 245, 248, 0.43);
+    color: var(--faint-strong);
     font-size: 7.5px;
     line-height: 1.25;
     text-overflow: clip;
@@ -423,7 +429,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-island-title span {
-    color: rgba(22, 26, 29, 0.45);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-island-meta {
@@ -510,19 +516,20 @@ body[data-theme="light"] #settings .pgm-chip-button {
 
   :is(#island,#settings) .pgm-page-btn {
     min-width: 0;
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 3px;
     padding: 0;
     border: 0;
     background: transparent;
-    color: rgba(237, 245, 248, 0.48);
+    color: var(--faint-strong);
     font-size: 7.5px;
     white-space: nowrap;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-page-btn {
-    color: rgba(22, 26, 29, 0.48);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-page-btn:last-child {
@@ -571,13 +578,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-page-count {
-    color: rgba(237, 245, 248, 0.5);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
     white-space: nowrap;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-page-count {
-    color: rgba(22, 26, 29, 0.5);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-media {
@@ -660,27 +667,27 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-media-copy .pgm-artist {
     margin-top: 4px;
     overflow: hidden;
-    color: rgba(237, 245, 248, 0.48);
+    color: var(--faint-strong);
     font-size: 8px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-media-copy .pgm-artist {
-    color: rgba(22, 26, 29, 0.48);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-lyrics {
     display: grid;
     gap: 4px;
     margin-top: 12px;
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font-size: 8px;
     line-height: 1.45;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-lyrics {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-lyrics .is-current {
@@ -708,11 +715,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
     max-height: none;
     display: block;
     overflow: visible;
+    /* The parent .pgm-lyrics already carries --faint-strong; a second
+       opacity here used to multiply it down to ~0.2 effective ink. */
     color: inherit;
     font-size: 8px;
     font-weight: 400;
     line-height: 1.45;
-    opacity: 0.42;
+    opacity: 1;
     text-overflow: clip;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -871,12 +880,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
     display: flex;
     justify-content: space-between;
     margin-top: 5px;
-    color: rgba(237, 245, 248, 0.46);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-time-row {
-    color: rgba(22, 26, 29, 0.46);
+    color: var(--faint-strong);
   }
 
   #island .pgm-media.music .pgm-time-row.music-times {
@@ -884,12 +893,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
     justify-content: space-between;
     gap: 10px;
     margin-top: 5px;
-    color: rgba(237, 245, 248, 0.46);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
   }
 
   body[data-theme="light"] #island .pgm-media.music .pgm-time-row.music-times {
-    color: rgba(22, 26, 29, 0.46);
+    color: var(--faint-strong);
   }
 
   #island .pgm-media.music .pgm-time-row.music-times > span {
@@ -978,13 +987,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-weather-copy span {
-    color: rgba(237, 245, 248, 0.46);
+    color: var(--faint-strong);
     font-size: 8px;
     line-height: 1.45;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-weather-copy span {
-    color: rgba(22, 26, 29, 0.46);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-forecast {
@@ -1012,12 +1021,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-forecast span {
-    color: rgba(237, 245, 248, 0.44);
+    color: var(--faint-strong);
     font: 500 7px/1.2 var(--pgm-number);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-forecast span {
-    color: rgba(22, 26, 29, 0.44);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-ai {
@@ -1035,12 +1044,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-label {
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font-size: 7.5px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-label {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-big-number {
@@ -1054,13 +1063,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-ai-note {
-    color: rgba(237, 245, 248, 0.48);
+    color: var(--faint-strong);
     font-size: 8px;
     line-height: 1.5;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-ai-note {
-    color: rgba(22, 26, 29, 0.48);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-ai-list {
@@ -1109,12 +1118,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font-size: 7.5px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-summary-row {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-summary-row b {
@@ -1162,24 +1171,24 @@ body[data-theme="light"] #settings .pgm-chip-button {
     display: block;
     margin-top: 3px;
     overflow: hidden;
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font-size: 7px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-rule-copy span {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-rule-meta {
-    color: rgba(237, 245, 248, 0.48);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
     text-align: right;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-rule-meta {
-    color: rgba(22, 26, 29, 0.48);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-focus {
@@ -1223,12 +1232,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
 
   :is(#island,#settings) .pgm-ring-copy span {
     margin-top: 5px;
-    color: rgba(237, 245, 248, 0.44);
+    color: var(--faint-strong);
     font-size: 7px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-ring-copy span {
-    color: rgba(22, 26, 29, 0.44);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-focus-copy {
@@ -1242,13 +1251,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-focus-copy p {
-    color: rgba(237, 245, 248, 0.44);
+    color: var(--faint-strong);
     font-size: 8px;
     line-height: 1.6;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-focus-copy p {
-    color: rgba(22, 26, 29, 0.44);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-chip-button {
@@ -1290,12 +1299,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-todo-count span {
-    color: rgba(237, 245, 248, 0.45);
+    color: var(--faint-strong);
     font-size: 8px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-todo-count span {
-    color: rgba(22, 26, 29, 0.45);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-check-list {
@@ -1333,12 +1342,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-check-row span:last-child {
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-check-row span:last-child {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-health {
@@ -1408,13 +1417,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
     padding: 0 8px;
     border: 1px dashed rgba(237, 245, 248, 0.14);
     border-radius: 7px;
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font-size: 7px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-shelf-head {
     border-color: rgba(22, 26, 29, 0.14);
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-file-row {
@@ -1441,13 +1450,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-file-row span {
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font: 500 6.5px/1 var(--pgm-number);
     text-align: right;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-file-row span {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-device {
@@ -1474,13 +1483,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-battery-large span {
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font-size: 7.5px;
     line-height: 1.5;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-battery-large span {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-device-list {
@@ -1547,12 +1556,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
     display: grid;
     place-items: center;
     border-radius: 50%;
-    color: rgba(237, 245, 248, 0.5);
+    color: var(--faint-strong);
     font: 500 6.5px/1 var(--pgm-number);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-month-grid span {
-    color: rgba(22, 26, 29, 0.5);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-month-grid span.is-selected {
@@ -1584,12 +1593,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-event time {
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font: 500 7px/1.3 var(--pgm-number);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-event time {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-event b {
@@ -1601,12 +1610,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-event span {
     display: block;
     margin-top: 3px;
-    color: rgba(237, 245, 248, 0.4);
+    color: var(--faint-strong);
     font-size: 6.5px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-event span {
-    color: rgba(22, 26, 29, 0.4);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-messages {
@@ -1633,13 +1642,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-unread span {
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font-size: 7.5px;
     line-height: 1.45;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-unread span {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-message-row {
@@ -1689,24 +1698,24 @@ body[data-theme="light"] #settings .pgm-chip-button {
     display: block;
     margin-top: 3px;
     overflow: hidden;
-    color: rgba(237, 245, 248, 0.4);
+    color: var(--faint-strong);
     font-size: 6.5px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-message-copy span {
-    color: rgba(22, 26, 29, 0.4);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-message-row em {
-    color: rgba(237, 245, 248, 0.48);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
     font-style: normal;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-message-row em {
-    color: rgba(22, 26, 29, 0.48);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-true-image {
@@ -1766,12 +1775,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-window-brand span {
-    color: rgba(237, 245, 248, 0.36);
+    color: var(--faint-strong);
     font-size: 8px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-window-brand span {
-    color: rgba(22, 26, 29, 0.36);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-window-dots {
@@ -1830,13 +1839,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-rail-brand span {
     display: block;
     margin-top: 4px;
-    color: rgba(237, 245, 248, 0.38);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
     letter-spacing: 0.06em;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-rail-brand span {
-    color: rgba(22, 26, 29, 0.38);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-rail-scroll {
@@ -1847,13 +1856,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
 
   :is(#island,#settings) .pgm-rail-group {
     padding: 8px 8px 5px;
-    color: rgba(237, 245, 248, 0.24);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
     letter-spacing: 0.11em;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-rail-group {
-    color: rgba(22, 26, 29, 0.24);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-rail-item {
@@ -1898,12 +1907,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-rail-no {
-    color: rgba(237, 245, 248, 0.3);
+    color: var(--faint-strong);
     font: 500 6.5px/1 var(--pgm-number);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-rail-no {
-    color: rgba(22, 26, 29, 0.3);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-rail-icon {
@@ -1942,13 +1951,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
 
   :is(#island,#settings) .pgm-settings-main-head p {
     margin-top: 8px;
-    color: rgba(237, 245, 248, 0.42);
+    color: var(--faint-strong);
     font-size: 8.5px;
     line-height: 1.55;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-settings-main-head p {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-settings-content {
@@ -1969,13 +1978,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
 
   :is(#island,#settings) .pgm-set-section-title {
     margin-bottom: 8px;
-    color: rgba(237, 245, 248, 0.46);
+    color: var(--faint-strong);
     font: 510 8px/1.3 var(--pgm-ui);
     letter-spacing: 0.02em;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-set-section-title {
-    color: rgba(22, 26, 29, 0.46);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-role-grid {
@@ -2107,12 +2116,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-tray-menu-head span {
     display: block;
     margin-top: 3px;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 6.5px;
   }
 
   :is(#island,#settings) .pgm-tray-menu-head em {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font: 500 6.5px/1 var(--pgm-number);
     font-style: normal;
   }
@@ -2172,7 +2181,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-tray-shortcut {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font: 500 6.5px/1 var(--pgm-number);
   }
 
@@ -2208,12 +2217,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-tray-dock span {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 6.5px;
   }
 
   :is(#island,#settings) .pgm-tray-dock em {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font: 500 6px/1 var(--pgm-number);
     font-style: normal;
   }
@@ -2248,7 +2257,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
     padding: 3px 5px;
     border: 1px solid var(--pgm-hairline);
     border-radius: 4px;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font: 500 6.5px/1 var(--pgm-number);
   }
 
@@ -2282,7 +2291,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-tray-pref > i {
     width: 14px;
     height: 14px;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-tray-pref-copy {
@@ -2298,7 +2307,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-tray-pref-copy span {
     display: block;
     margin-top: 3px;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 6.5px;
     line-height: 1.4;
   }
@@ -2330,13 +2339,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-set-copy span {
     display: block;
     margin-top: 4px;
-    color: rgba(237, 245, 248, 0.36);
+    color: var(--faint-strong);
     font-size: 7px;
     line-height: 1.45;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-set-copy span {
-    color: rgba(22, 26, 29, 0.36);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-toggle {
@@ -2356,11 +2365,15 @@ body[data-theme="light"] #settings .pgm-chip-button {
     position: absolute;
     inset: 4px 2px;
     border-radius: 999px;
-    background: rgba(237, 245, 248, 0.16);
+    /* Strong track + inset line: the off state no longer relies on a hairline
+       to be distinguishable from the card behind it. */
+    background: var(--pgm-strong);
+    box-shadow: inset 0 0 0 1px var(--pgm-hairline-strong);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-toggle::before {
-    background: rgba(22, 26, 29, 0.16);
+    background: var(--pgm-strong);
+    box-shadow: inset 0 0 0 1px rgba(22, 26, 29, 0.18);
   }
 
   :is(#island,#settings) .pgm-toggle i {
@@ -2436,12 +2449,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
     display: grid;
     place-items: center;
     border-radius: 4px;
-    color: rgba(237, 245, 248, 0.4);
+    color: var(--faint-strong);
     font-size: 7px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-segment span {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-segment span.is-active {
@@ -2462,16 +2475,20 @@ body[data-theme="light"] #settings .pgm-chip-button {
     align-items: center;
     justify-content: space-between;
     padding: 0 9px;
-    border: 1px solid rgba(237, 245, 248, 0.1);
+    /* Strong border + inset shadow instead of a hairline: the input boundary
+       stays identifiable at a glance without repainting the whole control. */
+    border: 1px solid var(--pgm-strong);
     border-radius: 6px;
     background: #17191d;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
     color: rgba(237, 245, 248, 0.68);
     font: 500 7.5px/1 var(--pgm-number);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-field {
-    border-color: rgba(22, 26, 29, 0.11);
+    border-color: var(--pgm-strong);
     background: #f8fafb;
+    box-shadow: inset 0 1px 2px rgba(22, 26, 29, 0.12);
     color: rgba(22, 26, 29, 0.68);
   }
 
@@ -2514,13 +2531,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-slider span {
-    color: rgba(237, 245, 248, 0.46);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
     text-align: right;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-slider span {
-    color: rgba(22, 26, 29, 0.46);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-settings-preview {
@@ -2550,12 +2567,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-preview-head span {
-    color: rgba(237, 245, 248, 0.28);
+    color: var(--faint-strong);
     font: 500 6.5px/1 var(--pgm-number);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-preview-head span {
-    color: rgba(22, 26, 29, 0.28);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-preview-pill {
@@ -2588,22 +2605,22 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-preview-pill span {
     display: block;
     margin-top: 3px;
-    color: rgba(237, 245, 248, 0.36);
+    color: var(--faint-strong);
     font-size: 6.5px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-preview-pill span {
-    color: rgba(22, 26, 29, 0.36);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-preview-pill em {
-    color: rgba(237, 245, 248, 0.38);
+    color: var(--faint-strong);
     font: 500 6.5px/1 var(--pgm-number);
     font-style: normal;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-preview-pill em {
-    color: rgba(22, 26, 29, 0.38);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-preview-card {
@@ -2671,12 +2688,12 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .pgm-preview-metrics span {
     display: block;
     margin-top: 4px;
-    color: rgba(237, 245, 248, 0.34);
+    color: var(--faint-strong);
     font-size: 6px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-preview-metrics span {
-    color: rgba(22, 26, 29, 0.34);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-preview-tags {
@@ -2693,27 +2710,27 @@ body[data-theme="light"] #settings .pgm-chip-button {
     padding: 0 6px;
     border: 1px solid rgba(237, 245, 248, 0.085);
     border-radius: 999px;
-    color: rgba(237, 245, 248, 0.4);
+    color: var(--faint-strong);
     font-size: 6px;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-preview-tags span {
     border-color: rgba(22, 26, 29, 0.085);
-    color: rgba(22, 26, 29, 0.4);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-preview-note {
     margin-top: 13px;
     padding-top: 11px;
     border-top: 1px solid rgba(237, 245, 248, 0.08);
-    color: rgba(237, 245, 248, 0.35);
+    color: var(--faint-strong);
     font-size: 6.5px;
     line-height: 1.6;
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-preview-note {
     border-color: rgba(22, 26, 29, 0.08);
-    color: rgba(22, 26, 29, 0.35);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-settings-index {
@@ -2744,7 +2761,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-settings-index button span {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
   }
 
@@ -2813,8 +2830,8 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .order-item:focus-visible,
   :is(#island,#settings) .order-item button:focus-visible,
   :is(#island,#settings) .switch:focus-visible {
-    outline: 1px solid var(--pgm-fg);
-    outline-offset: 2px;
+    outline: 2px solid var(--pgm-info);
+    outline-offset: 3px;
   }
 
   :is(#island,#settings) input.pgm-field {
@@ -2880,13 +2897,13 @@ body[data-theme="light"] #settings .pgm-chip-button {
     border: 0;
     border-radius: 4px;
     background: transparent;
-    color: rgba(237, 245, 248, 0.4);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-ui);
   }
 
   body[data-theme="light"] :is(#island,#settings) .pgm-segment button,
   body[data-theme="light"] :is(#island,#settings) .pgm-segment span {
-    color: rgba(22, 26, 29, 0.42);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .pgm-segment button.is-active,
@@ -2963,7 +2980,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-empty-card > span {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 7px;
     line-height: 1.55;
   }
@@ -3003,7 +3020,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-role-preview-copy small {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font: 500 7px/1 var(--pgm-number);
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -3072,14 +3089,14 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .pgm-tray-item:focus-visible {
-    outline: 1px solid var(--pgm-fg);
-    outline-offset: 1px;
+    outline: 2px solid var(--pgm-info);
+    outline-offset: 3px;
   }
 
   :is(#island,#settings) .note,
   :is(#island,#settings) .hint {
     margin-top: 8px;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 7px;
     line-height: 1.55;
   }
@@ -3130,7 +3147,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .preset-card span {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 6.5px;
     line-height: 1.45;
   }
@@ -3286,7 +3303,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .order-name em {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 6.5px;
     font-style: normal;
   }
@@ -3304,7 +3321,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
     border: 0;
     border-radius: 4px;
     background: transparent;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .order-move button:hover:not(:disabled) {
@@ -3466,7 +3483,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .avoid-empty,
   :is(#island,#settings) .avoid-none {
     padding: 10px 0;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 7.5px;
     line-height: 1.5;
   }
@@ -3527,7 +3544,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   :is(#island,#settings) .avoid-sub,
   :is(#island,#settings) .avoid-hint,
   :is(#island,#settings) .avoid-confirm p {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 7.5px;
     line-height: 1.55;
   }
@@ -3594,7 +3611,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
 
   :is(#island,#settings) .avoid-text em,
   :is(#island,#settings) .avoid-reason {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font: 500 6.5px/1.35 var(--pgm-ui);
     font-style: normal;
   }
@@ -3637,7 +3654,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
     height: 14px;
     display: grid;
     place-items: center;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .dev-grip svg,
@@ -3664,7 +3681,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   }
 
   :is(#island,#settings) .dev-main span {
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
     font-size: 6.5px;
   }
 
@@ -3699,7 +3716,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--pgm-quiet);
+    color: var(--faint-strong);
   }
 
   :is(#island,#settings) .dev-star svg {
@@ -3745,6 +3762,34 @@ body[data-theme="light"] #settings .pgm-chip-button {
   border: 0 !important;
 }
 
+/* The 1x1 boxes above (mail tabs, "all read", calendar/todo shortcuts) are
+   still in the tab order. A keyboard user must never land on a fully
+   invisible control, so :focus-visible grows them into a small readable chip;
+   the resting state above is untouched. */
+#island .pgm-visually-hidden:focus-visible,
+#settings .pgm-visually-hidden:focus-visible {
+  position: fixed !important;
+  top: 8px !important;
+  left: 8px !important;
+  z-index: 9999 !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: min(280px, calc(100vw - 16px)) !important;
+  padding: 6px 10px !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  white-space: normal !important;
+  border: 1px solid var(--pgm-hairline-strong) !important;
+  border-radius: 8px !important;
+  background: var(--pgm-raised) !important;
+  color: var(--pgm-fg) !important;
+  font: 500 10px/1.4 var(--pgm-ui) !important;
+  box-shadow: var(--pgm-shadow) !important;
+}
+
 #island .pgm-summary-link,
 #island .mail-allread,
 #island .mail-msg-entry,
@@ -3771,7 +3816,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font-size: 7.5px;
 }
 
@@ -3792,7 +3837,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
 
 #island .quota-page .quota-id i {
   font-style: normal;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
 }
 
 #island .quota-page .quota-accounts {
@@ -3867,7 +3912,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
 }
 
 #island .quota-page .quota-agent-none {
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font-size: 7.5px;
   line-height: 1.5;
 }
@@ -4004,7 +4049,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   opacity: 0;
 }
 
@@ -4058,7 +4103,7 @@ body[data-theme="light"] #settings .pgm-chip-button {
 
 #island .msg-more {
   padding: 5px 0 0;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font-size: 7px;
   text-align: right;
 }
@@ -4104,7 +4149,7 @@ body[data-theme="light"] #island .pgm-ring::before {
 }
 
 #island .pgm-focus-copy .focus-stat {
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font: 500 7px/1 var(--pgm-number);
   text-align: left;
 }
@@ -4264,7 +4309,7 @@ body[data-theme="light"] #island .pgm-ring::before {
 }
 
 #island .pgm-check-row.is-done .todo-text {
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   text-decoration: line-through;
 }
 
@@ -4272,7 +4317,7 @@ body[data-theme="light"] #island .pgm-ring::before {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font: 500 7px/1 var(--pgm-number);
 }
 
@@ -4297,7 +4342,7 @@ body[data-theme="light"] #island .pgm-ring::before {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   opacity: 0;
 }
 
@@ -4308,7 +4353,7 @@ body[data-theme="light"] #island .pgm-ring::before {
 
 #island .pgm-todo-empty {
   margin-top: 10px;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font-size: 8px;
   line-height: 1.55;
 }
@@ -4351,7 +4396,7 @@ body[data-theme="light"] #island .pgm-ring::before {
 
 #island .pgm-shelf .shelf-drop-note {
   flex: none;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font-size: 6.5px;
 }
 
@@ -4379,7 +4424,7 @@ body[data-theme="light"] #island .pgm-ring::before {
   height: 12px;
   display: grid;
   place-items: center;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
 }
 
 #island .pgm-file-row .shelf-icon svg {
@@ -4415,7 +4460,7 @@ body[data-theme="light"] #island .pgm-ring::before {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font: 500 6.5px/1 var(--pgm-number);
   text-align: right;
   overflow-wrap: anywhere;
@@ -4427,7 +4472,7 @@ body[data-theme="light"] #island .pgm-ring::before {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   opacity: 0;
 }
 
@@ -4439,7 +4484,7 @@ body[data-theme="light"] #island .pgm-ring::before {
 #island .pgm-shelf-empty,
 #island .shelf-noresult {
   padding: 12px 3px;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font-size: 8px;
   line-height: 1.55;
 }
@@ -4478,7 +4523,7 @@ body[data-theme="light"] #island .pgm-ring::before {
   padding: 0 8px;
   border: 0;
   background: transparent;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font: inherit;
 }
 
@@ -4497,7 +4542,7 @@ body[data-theme="light"] #island .pgm-ring::before {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font: 7px/1 var(--pgm-ui);
 }
 
@@ -4552,7 +4597,7 @@ body[data-theme="light"] #island .pgm-ring::before {
   position: absolute;
   right: 0;
   bottom: 0;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font-size: 6.5px;
 }
 
@@ -4702,8 +4747,11 @@ body[data-theme="light"] #island .pgm-island-body[data-page="notification"] > .p
    ========================================================================== */
 
 /* Media: the approved resting frame is cover, title, lyric stack and one
-   centred transport key. The secondary transport buttons reveal together on
-   hover or keyboard focus so their real functionality remains available. */
+   centred transport key. All five transport keys stay visible at rest —
+   hover/focus used to hide four of them behind opacity:0, which left the
+   real controls unreachable without a pointer over the exact strip. The
+   14x14 visual key and the ::before 24x24 hit area come from the base rule
+   above; only the resting opacity is corrected here. */
 #island .pgm-media.music .pgm-media-controls.music-controls {
   gap: 10px;
   margin-top: 12px;
@@ -4719,8 +4767,12 @@ body[data-theme="light"] #island .pgm-island-body[data-page="notification"] > .p
   background: transparent;
   box-shadow: none;
   color: rgba(237, 245, 248, 0.72);
-  opacity: 0;
-  transition: opacity 120ms ease;
+  opacity: 1;
+}
+
+#island .pgm-media.music .pgm-media-controls.music-controls:hover > button,
+#island .pgm-media.music .pgm-media-controls.music-controls:focus-within > button {
+  opacity: 1;
 }
 
 #island .pgm-media.music .pgm-media-controls.music-controls > .is-main {
@@ -4731,15 +4783,6 @@ body[data-theme="light"] #island .pgm-island-body[data-page="notification"] > .p
   border-radius: 50%;
   background: rgba(237, 245, 248, 0.055);
   color: rgba(237, 245, 248, 0.72);
-  opacity: 1;
-}
-
-#island .pgm-media.music .pgm-media-controls.music-controls:hover > button,
-#island .pgm-media.music .pgm-media-controls.music-controls:focus-within > button {
-  opacity: 1;
-}
-
-#island .pgm-media.music .pgm-media-controls.music-controls > .is-main {
   opacity: 1;
 }
 
@@ -4847,25 +4890,25 @@ body[data-theme="light"] #island .quota-page .pgm-ai-row .quota-agent-time {
 
 #island .mail-page .mail-row .pgm-rule-copy span {
   margin-top: 3px;
-  color: rgba(237, 245, 248, 0.42);
+  color: var(--faint-strong);
   font: 400 7px/1.25 var(--pgm-ui);
 }
 
 body[data-theme="light"] #island .mail-page .mail-row .pgm-rule-copy span {
-  color: rgba(22, 26, 29, 0.42);
+  color: var(--faint-strong);
 }
 
 #island .mail-page .mail-row .pgm-rule-meta {
   min-height: 0;
   display: block;
-  color: rgba(237, 245, 248, 0.48);
+  color: var(--faint-strong);
   font: 500 7px/1 var(--pgm-number);
   text-align: right;
   white-space: nowrap;
 }
 
 body[data-theme="light"] #island .mail-page .mail-row .pgm-rule-meta {
-  color: rgba(22, 26, 29, 0.48);
+  color: var(--faint-strong);
 }
 
 #island .mail-page .mail-row .pgm-rule-delete {
@@ -4876,7 +4919,7 @@ body[data-theme="light"] #island .mail-page .mail-row .pgm-rule-meta {
   height: 18px;
   transform: translateY(-50%);
   border-radius: 4px;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   background: var(--pgm-raised);
 }
 
@@ -4952,12 +4995,12 @@ body[data-theme="light"] #island .pgm-focus-copy button.pgm-tag.focus-key {
 
 #island .pgm-focus-copy .focus-stat {
   display: block;
-  color: rgba(237, 245, 248, 0.44);
+  color: var(--faint-strong);
   font: 500 7px/1 var(--pgm-number);
 }
 
 body[data-theme="light"] #island .pgm-focus-copy .focus-stat {
-  color: rgba(22, 26, 29, 0.44);
+  color: var(--faint-strong);
 }
 
 /* Todo: clean rules and circular checks, no legacy priority stripes or
@@ -5032,7 +5075,7 @@ body[data-theme="light"] #island .pgm-todo .todo-item .pgm-check-toggle.todo-che
 }
 
 #island .pgm-todo .todo-item.done .todo-text {
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   text-decoration: line-through;
 }
 
@@ -5042,12 +5085,12 @@ body[data-theme="light"] #island .pgm-todo .todo-item .pgm-check-toggle.todo-che
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  color: rgba(237, 245, 248, 0.42);
+  color: var(--faint-strong);
   font: 500 7px/1 var(--pgm-number);
 }
 
 body[data-theme="light"] #island .pgm-todo .todo-item .pgm-check-meta {
-  color: rgba(22, 26, 29, 0.42);
+  color: var(--faint-strong);
 }
 
 #island .pgm-todo .todo-item .pgm-check-meta .todo-due,
@@ -5153,7 +5196,7 @@ body[data-theme="light"] #island .pgm-todo .pgm-todo-input {
 #island .pgm-shelf .pgm-file-row .shelf-group-pick {
   max-width: 116px;
   overflow: hidden;
-  color: rgba(237, 245, 248, 0.42);
+  color: var(--faint-strong);
   font: 500 6.5px/1 var(--pgm-number);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5161,7 +5204,7 @@ body[data-theme="light"] #island .pgm-todo .pgm-todo-input {
 }
 
 body[data-theme="light"] #island .pgm-shelf .pgm-file-row .shelf-group-pick {
-  color: rgba(22, 26, 29, 0.42);
+  color: var(--faint-strong);
 }
 
 #island .pgm-shelf .pgm-file-row .shelf-del {
@@ -5189,7 +5232,7 @@ body[data-theme="light"] #island .pgm-shelf .pgm-file-row .shelf-group-pick {
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: rgba(237, 245, 248, 0.4);
+  color: var(--faint-strong);
   font: 500 7px/1 var(--pgm-ui);
 }
 
@@ -5203,7 +5246,7 @@ body[data-theme="light"] #island .pgm-shelf .pgm-file-row .shelf-group-pick {
 
 body[data-theme="light"] #island .pgm-device .pgm-battery-large .pgm-segment .dev-foot,
 body[data-theme="light"] #island .pgm-device .pgm-battery-large .pgm-segment button {
-  color: rgba(22, 26, 29, 0.42);
+  color: var(--faint-strong);
 }
 
 body[data-theme="light"] #island .pgm-device .pgm-battery-large .pgm-segment .dev-foot.is-active,
@@ -5267,12 +5310,12 @@ body[data-theme="light"] #island .pgm-calendar .pgm-month-head .cal-nav {
 }
 
 #island .pgm-calendar .pgm-event.cal-event time {
-  color: rgba(237, 245, 248, 0.42);
+  color: var(--faint-strong);
   font: 500 7px/1.3 var(--pgm-number);
 }
 
 body[data-theme="light"] #island .pgm-calendar .pgm-event.cal-event time {
-  color: rgba(22, 26, 29, 0.42);
+  color: var(--faint-strong);
 }
 
 #island .pgm-calendar .pgm-event.cal-event b {
@@ -5286,14 +5329,14 @@ body[data-theme="light"] #island .pgm-calendar .pgm-event.cal-event time {
 #island .pgm-calendar .pgm-event.cal-event span {
   margin-top: 3px;
   overflow: hidden;
-  color: rgba(237, 245, 248, 0.4);
+  color: var(--faint-strong);
   font: 400 6.5px/1.25 var(--pgm-ui);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 body[data-theme="light"] #island .pgm-calendar .pgm-event.cal-event span {
-  color: rgba(22, 26, 29, 0.4);
+  color: var(--faint-strong);
 }
 
 /* Messages: reset the legacy app-card row back to the master conversation
@@ -5364,21 +5407,21 @@ body[data-theme="light"] #island .pgm-messages .pgm-message-row .pgm-avatar {
 
 #island .pgm-messages .pgm-message-copy span {
   margin-top: 3px;
-  color: rgba(237, 245, 248, 0.4);
+  color: var(--faint-strong);
   font: 400 6.5px/1.2 var(--pgm-ui);
 }
 
 body[data-theme="light"] #island .pgm-messages .pgm-message-copy span {
-  color: rgba(22, 26, 29, 0.4);
+  color: var(--faint-strong);
 }
 
 #island .pgm-messages .pgm-message-row em {
-  color: rgba(237, 245, 248, 0.48);
+  color: var(--faint-strong);
   font: 500 7px/1 var(--pgm-number);
 }
 
 body[data-theme="light"] #island .pgm-messages .pgm-message-row em {
-  color: rgba(22, 26, 29, 0.48);
+  color: var(--faint-strong);
 }
 
 /* Final settings corrections after the legacy renderer rules. */
@@ -5403,7 +5446,7 @@ body[data-theme="light"] #island .pgm-messages .pgm-message-row em {
 #settings .pgm-set-row.order-item .pgm-page-index {
   display: inline;
   margin: 0;
-  color: var(--pgm-quiet);
+  color: var(--faint-strong);
   font: 500 7px/1 var(--pgm-number);
 }
 
@@ -5471,8 +5514,8 @@ body[data-theme="light"] :is(#island,#settings) .pgm-select-caret {
 }
 
 :is(#island,#settings) .pgm-select-shell:focus-within {
-  outline: 1px solid var(--pgm-fg);
-  outline-offset: 2px;
+  outline: 2px solid var(--pgm-info);
+  outline-offset: 3px;
 }
 
 :is(#island,#settings) .pgm-select-menu {
@@ -5537,4 +5580,37 @@ body[data-theme="light"] #settings .pgm-chip-button {
   border-color: rgba(22, 26, 29, 0.12);
   background: #161a1d;
   color: #edf5f8;
+}
+
+/* Decorative artboard controls (visualToggle/Select/Field/Slider/Segment):
+   illustrations only. They must not answer hover, must not be hit-tested and
+   are slightly softened so they never read as live, clickable controls. */
+:is(#island,#settings) [data-decorative="true"] {
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.9;
+  transition: none;
+}
+
+/* ==========================================================================
+   Unified keyboard focus (parity layer is loaded last, so this wins over the
+   1px/none outlines, .shelf-q{outline:0}, tray items and the select shell's
+   :focus-within rule above). One 2px info ring, 3px offset, everywhere.
+   ========================================================================== */
+:is(#island,#settings) :is(button,[role="button"],a[href],input,select,textarea,[tabindex]):focus-visible {
+  outline: 2px solid var(--pgm-info);
+  outline-offset: 3px;
+}
+
+/* A focus ring must never be suppressed by an older outline:none/0 rule. */
+:is(#island,#settings) :is(button,[role="button"],a[href],input,select,textarea,[tabindex]):focus-visible:not(:disabled) {
+  outline-style: solid;
+}
+
+/* The shelf search box is reset with outline:0 in island.css and its legacy
+   :focus rule also cleared the outline. Pin the shared 2px info ring here so
+   the parity layer always wins over those lower-priority resets. */
+:is(#island,#settings) .shelf-q:focus-visible {
+  outline: 2px solid var(--pgm-info);
+  outline-offset: 3px;
 }

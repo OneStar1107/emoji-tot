@@ -14,6 +14,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   DEFAULTS,
+  PAGE_MANIFEST,
   STATUS_MANIFEST,
   defaultStatusItems,
   enabledStatusKeys,
@@ -215,5 +216,41 @@ describe('status-view: one set of reading rules', () => {
     assert.equal(quotaText(null), '');
     assert.equal(quotaText({}), '');
     assert.equal(quotaText({ total: 3, error: 'expired' }), '');
+  });
+});
+
+/*
+ * Current schema for the two lists the settings window renders. The old
+ * 61-state expression grid is gone: page management is eleven schema-backed
+ * .order-item rows, and the cast page lists the 15 official CORE.CAST roles.
+ */
+describe('settings schema: eleven page rows and fifteen official roles', () => {
+  it('page management renders one .order-item per enabled page inside [data-order-list="pages"]', () => {
+    assert.equal(PAGE_MANIFEST.length, 11, 'the island ships exactly eleven pages');
+    const settings = src('renderer/settings.js');
+    const block = settings.slice(
+      settings.indexOf('function pagePages()'),
+      settings.indexOf('function pageMusic()'),
+    );
+    assert.ok(block.length > 0, 'pagePages() must exist');
+    assert.match(block, /orderedPageKeys\(prefs\)/, 'rows come from the schema-backed page order');
+    assert.match(block, /data-order-list="pages"/, 'the list is a schema-backed order list');
+    assert.match(block, /class="pgm-set-row order-item"/, 'each page is one .order-item row');
+    assert.match(block, /role="switch" aria-checked=/, 'each row has a real labelled switch');
+    assert.doesNotMatch(block, /pgm-face-grid|pgm-face-cell/, 'no 61-state face grid remains on this page');
+  });
+
+  it('the cast page lists all 15 official roles from the runtime cast source', () => {
+    const settings = src('renderer/settings.js');
+    assert.match(settings, /function pageCast\(\)/);
+    assert.match(settings, /pgm-role-grid/, 'roles render in the artboard role grid');
+    assert.match(settings, /pgm-role-option/, 'each role is a .pgm-role-option button');
+    assert.match(settings, /data-act="action" data-kind="cast"/, 'selecting a role drives the cast channel');
+    assert.doesNotMatch(settings, /pgm-face-grid|pgm-face-cell|\[data-value="sad"\]/,
+      'the retired 61-state expression grid and its sad cell are gone');
+    const cast = src('renderer/vendor/core/cast.js');
+    const ids = [...cast.matchAll(/^\s*\['([a-z]+)',/gm)].map((match) => match[1]);
+    assert.equal(ids.length, 15, 'CORE.CAST lists exactly 15 official roles');
+    assert.ok(ids.includes('tot') && ids.includes('jiqiren'), 'the first and last official roles are present');
   });
 });

@@ -316,6 +316,7 @@ try {
   await evaluate(browser, islandSession, [
     'window.islandAPI.patchPrefs({',
     '  ...(' + JSON.stringify(boot.prefs) + '),',
+    '  theme: ' + JSON.stringify(theme) + ',',
     '  avoidEnabled: false,',
     '  pages: { ...' + JSON.stringify(boot.prefs.pages || {}) + ', music: true },',
     '})',
@@ -328,6 +329,23 @@ try {
   );
   if (fixtureApplied !== true) {
     throw new Error('The renderer rejected the approved master-board fixture.');
+  }
+  /* The fixture must never be allowed to restore its own theme: a --theme light
+     capture that still paints dark is worse than no capture at all. The renderer
+     collapses 'system' to dark/light via resolveTheme(), so the dataset value is
+     always one of those two. */
+  await waitFor(
+    browser,
+    islandSession,
+    'document.body.dataset.theme === "dark" || document.body.dataset.theme === "light"',
+    'renderer theme resolution',
+  );
+  const capturedTheme = await evaluate(browser, islandSession, 'document.body.dataset.theme');
+  if (theme !== 'system' && capturedTheme !== theme) {
+    throw new Error('Theme mismatch: requested ' + theme + ', renderer painted ' + capturedTheme + '.');
+  }
+  if (theme === 'system' && !['dark', 'light'].includes(capturedTheme)) {
+    throw new Error('Invalid system theme resolution: ' + capturedTheme + '.');
   }
   await sleep(500);
   await capture(

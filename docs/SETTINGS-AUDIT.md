@@ -53,7 +53,7 @@
 | `skin` | `frost` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-skin]` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `blur` | `true` | 外观 | 渲染进程 | `island.js applyPrefs() → body[data-blur]` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `uiScale` | `100` | 外观 | 渲染进程 | `island.js --ui-scale · settings.js zoom` | 即时 |  | lists every path · writes dotted keys through setPath |
-| `radius` | `22` | 外观 | 渲染进程 | `island.js --radius` | 即时 |  | lists every path · writes dotted keys through setPath |
+| `radius` | `30` | 外观 | 渲染进程 | `island.js --radius` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `font` | `system` | 外观 | 渲染进程 | `island.js --ui-font / settings.js applyChrome` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `weight` | `400` | 外观 | 渲染进程 | `island.js --ui-weight / settings.js applyChrome` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `fontSize` | `0` | 外观 | 渲染进程 | `island.js --ui-size` | 即时 |  | lists every path · writes dotted keys through setPath |
@@ -75,7 +75,7 @@
 | `avoidApps` | `[]` | 隐藏与交互 | 主进程 | `main/services/avoidance.js update() → avoidance.ps1 owner 链匹配` | 即时 | 按 exe 完整路径匹配 | has a SERVICE_PLAN entry · lists every path |
 | `mediaEmotion` | `true` | 常规 | 主进程 | `main.js applyEmotionWatch() → main/media-emotion.js` | 即时 | 媒体情绪映射总开关 | has a SERVICE_PLAN entry · lists every path |
 | `idleMoods` | `true` | 角色与表情 | 主进程 | `main.js createIdleMoods() · main/idle-mood.js` | 即时 | 空闲小动作：待机时借表情的时钟 | has a SERVICE_PLAN entry · lists every path |
-| `trayIcon` | `true` | 隐藏与交互 | 主进程 | `main.js createTray()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
+| `trayIcon` | `true` | tray | 主进程 | `main.js createTray()` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `hotkey` | `true` | 隐藏与交互 | 主进程 | `main.js applyMainPrefs() globalShortcut` | 即时 |  | has a SERVICE_PLAN entry · lists every path |
 | `wheelPaging` | `true` | 隐藏与交互 | 渲染进程 | `island.js wheel handler` | 即时 |  | lists every path · writes dotted keys through setPath |
 | `blurCollapse` | `true` | 隐藏与交互 | 渲染进程 | `island.js blur handler` | 即时 |  | lists every path · writes dotted keys through setPath |

@@ -13,7 +13,7 @@
   <div id="island" data-open="false">
     <div id="frame">
     <!-- Collapsed: one pill. The face is the character; the rest is status. -->
-    <button class="pill" id="pill" type="button" aria-expanded="false" aria-label="展开 EmojiTot">
+    <button class="pill" id="pill" type="button" aria-expanded="false" aria-label="展开 EmojiTot" aria-describedby="pill-status">
       <!-- Frost is a layered CSS surface; nothing is captured or filtered. -->
       <span class="pill-face"><emojitot-ball cast="tot" size="24" state="idle" live></emojitot-ball></span>
       <span class="pill-status" id="pill-status"></span>
@@ -41,6 +41,9 @@
         </span>
         <span id="top-clock" class="top-clock pgm-island-meta">--:--</span>
         <span id="top-battery" class="top-battery pgm-island-meta pgm-battery" hidden></span>
+        <!-- Page switches are announced to assistive tech without touching the
+             header's geometry: the span stays visually hidden. -->
+        <span id="page-announcer" class="pgm-visually-hidden" role="status" aria-live="polite" aria-atomic="true"></span>
         <button type="button" class="icon-btn pgm-gear" id="btn-settings" title="设置" aria-label="设置">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.05V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.14.4.44.73.85.94.27.13.57.2.87.2H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
         </button>

@@ -1,10 +1,10 @@
 /**
  * The settings window: one page, left rail, grouped cards.
  *
- * It is a normal resizable window, not an overlay: settings are the one place
- * the user is allowed to stop and read. Every control writes straight to
- * prefs.json and tells the other windows — there is no apply button, and no
- * second copy of the state.
+ * It is a fixed-size, non-maximizable window, not a resizable overlay: settings
+ * are the one place the user is allowed to stop and read. Every control writes
+ * straight to prefs.json and tells the other windows — there is no apply
+ * button, and no second copy of the state.
  */
 const { BrowserWindow, ipcMain, screen, shell, app } = require('electron');
 const path = require('node:path');
@@ -109,8 +109,12 @@ function create(page) {
   win = new BrowserWindow({
     width: 1080,
     height: 760,
-    minWidth: 900,
-    minHeight: 620,
+    /* The approved artboard is a fixed 1080x760 reading surface. Allowing a
+       resize or a maximise reflows the 212/1fr/276 rail and the 710px content
+       column away from the design, so both are disabled at the OS level and
+       the title bar's maximise button is disabled to match. */
+    resizable: false,
+    maximizable: false,
     frame: false,
     transparent: false,
     /*

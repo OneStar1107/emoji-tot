@@ -35,9 +35,11 @@ const SKINS = ['frost', 'solid', 'plain'];
  */
 FRAME.onboarding = /^file:\/\/.*renderer[\\/]onboarding\.html$/i;
 
-/** Fixed, small, and centred: this window has one job and disappears. */
-const WIDTH = 520;
-const HEIGHT = 420;
+/** Fixed and centred: the guide is a real 780x630 window, matching the
+ *  capture-ui.mjs emulation, so CJK headings and body copy have room to
+ *  breathe without being broken across lines. */
+const WIDTH = 780;
+const HEIGHT = 630;
 
 let win = null;
 
@@ -102,8 +104,8 @@ function create() {
     frame: false,
     /*
      * A frameless window still gets the WS_THICKFRAME border by default, which
-     * measures 522×422 inside the page. Turning it off makes 520×420 mean
-     * exactly 520×420 CSS pixels; `center` is done after the window exists
+     * inflates the page by two pixels. Turning it off makes 780×630 mean
+     * exactly 780×630 CSS pixels; `center` is done after the window exists
      * because passing it here inflates both dimensions by two as well.
      */
     thickFrame: false,
@@ -124,7 +126,7 @@ function create() {
   guard.claim('onboarding', win.webContents);
   win.loadFile(path.join(__dirname, '..', 'renderer', 'onboarding.html'));
   win.once('ready-to-show', () => {
-    // 520×420 at the centre of the primary display; the buttons stay where the
+    // 780×630 at the centre of the primary display; the buttons stay where the
     // eye found them instead of depending on where the last window was.
     const area = screen.getPrimaryDisplay().workArea;
     win.setBounds({

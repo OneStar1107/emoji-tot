@@ -77,7 +77,7 @@ body[data-theme="light"] {
   --pg-hairline: rgba(22, 26, 29, 0.1);
   --pg-hairline-strong: rgba(22, 26, 29, 0.18);
   --pg-track: rgba(22, 26, 29, 0.13);
-  --pg-good: #48796f;
+  --pg-good: #3f6b64;
   --pg-warning: #826633;
   --pg-bad: #8a5751;
   --pg-info: #536e89;
@@ -1308,7 +1308,7 @@ body:is([data-morphing="true"], [data-preparing="true"]) #island .panel {
   inset: auto;
   width: auto;
   min-width: 44px;
-  height: 32px;
+  height: 22px;
   padding: 0 5px;
   border: 0;
   border-radius: 5px;

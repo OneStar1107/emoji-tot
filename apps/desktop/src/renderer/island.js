@@ -1752,8 +1752,8 @@ function messengerPage() {
         <button type="button" class="pgm-message-row msg-row" data-local="messenger:activate" data-id="${escapeHtml(app.handle)}" title="${escapeHtml(name)}" aria-label="${escapeHtml(aria)}">
           <i class="pgm-avatar" aria-hidden="true">${escapeHtml(Array.from(appName)[0] || '消')}</i>
           <span class="pgm-message-copy">
-            <b>${escapeHtml(appName)}${conversation ? ' · ' + escapeHtml(conversation) : ''}</b>
-            <span>${escapeHtml(preview)}</span>
+            <b title="${escapeHtml(appName + (conversation ? ' · ' + conversation : ''))}">${escapeHtml(appName)}${conversation ? ' · ' + escapeHtml(conversation) : ''}</b>
+            <span title="${escapeHtml(preview)}">${escapeHtml(preview)}</span>
           </span>
           <em>${pending || ''}</em>
         </button>
@@ -2038,7 +2038,7 @@ function calendarPage() {
         <span><b>${title}</b></span>
         <span>${reminderCount ? reminderCount + ' 项提醒' : '暂无安排'}${headKey}</span>
       </div>
-      ${!calendarDraft && festival ? `<em class="cal-festival">${festival}</em>` : ''}
+      ${!calendarDraft && festival ? `<em class="cal-festival" title="${escapeHtml(festival)}">${festival}</em>` : ''}
       ${form}
       ${!calendarDraft && rows ? `<div class="pgm-event-list">${rows}</div>` : ''}
       ${!calendarDraft && !rows ? '<p class="pgm-cal-empty">这一天还没有安排，点 + 新建。</p>' : ''}
@@ -2307,7 +2307,7 @@ function todoPage() {
   }
   const itemHtml = (item) => `<div class="pgm-check-row todo-item${item.done ? ' done is-done' : ''}" data-id="${item.id}" data-priority="${item.priority || 'mid'}">
       <button type="button" class="pgm-check-toggle todo-check" data-local="todo:toggle" data-id="${item.id}" aria-label="${item.done ? '标为未完成' : '完成'}">${item.done ? '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>' : '<i></i>'}</button>
-      <span class="todo-text">${escapeHtml(item.text)}</span>
+      <span class="todo-text" title="${escapeHtml(item.text)}">${escapeHtml(item.text)}</span>
       <span class="pgm-check-meta">
         ${item.repeat ? `<em class="todo-repeat">${REPEAT_LABEL[item.repeat] ?? ''}</em>` : ''}
         ${item.due ? `<em class="todo-due${item.due < Date.now() && !item.done ? ' late' : ''}">${escapeHtml(item.displayDue || (item.done && item.nextDue ? '下次 ' + dueLabel(item.nextDue) : dueLabel(item.due)))}</em>` : '<em>今天</em>'}
@@ -2436,7 +2436,7 @@ function shelfPage() {
     return stateBlock('warn', '置物架已关闭', '打开后可以把文件拖上来', '去打开', 'data-action="settings:todo"');
   }
   const clips = clipboardItems.map((item) => `<div class="clip-item">
-      <button type="button" class="clip-text" data-local="clipboard:copy" data-id="${escapeHtml(item.id)}" title="点击复制">${escapeHtml(clipLabel(item.text))}</button>
+      <button type="button" class="clip-text" data-local="clipboard:copy" data-id="${escapeHtml(item.id)}" title="${escapeHtml(item.text)} · 点击复制">${escapeHtml(clipLabel(item.text))}</button>
       <button type="button" class="clip-pin${item.pinned ? ' on' : ''}" data-local="clipboard:togglePin" data-id="${escapeHtml(item.id)}" aria-label="固定">★</button>
     </div>`).join('');
   const clipOpen = clipboardExpanded && clipboardItems.length > 0;
@@ -2838,6 +2838,14 @@ function stepPage(delta, animate = true) {
   }
   pageDir = next > current ? 1 : -1;
   pageIndex = next;
+  /* Announce the successful switch once. renderPage() writes the very same
+     string for its other repaint paths, so the live region is not spoken twice;
+     a failed step (next === current above) never reaches this line. */
+  const announcer = document.getElementById('page-announcer');
+  if (announcer) {
+    const spoken = `${list[next].title}，第 ${next + 1} 页，共 ${list.length} 页`;
+    if (announcer.textContent !== spoken) announcer.textContent = spoken;
+  }
   renderPage(animate);
   return true;
 }
@@ -2914,6 +2922,8 @@ function renderPage(animate = false) {
     dotsEl.innerHTML = '';
     dotsEl.hidden = true;
     if (pageCountEl) pageCountEl.textContent = '00 / 00';
+    const announcer = document.getElementById('page-announcer');
+    if (announcer && announcer.textContent !== '还没有页面') announcer.textContent = '还没有页面';
     for (const pager of document.querySelectorAll('.pager')) {
       pager.hidden = true;
       pager.disabled = true;
@@ -2950,6 +2960,13 @@ function renderPage(animate = false) {
   if (pageCountEl) {
     pageCountEl.textContent =
       String(pageIndex + 1).padStart(2, '0') + ' / ' + String(list.length).padStart(2, '0');
+  }
+  /* Announce the switch once per distinct page. renderPage() also runs on data
+     refreshes, so rewriting the same string would spam the live region. */
+  const announcer = document.getElementById('page-announcer');
+  if (announcer) {
+    const spoken = `${page.title}，第 ${pageIndex + 1} 页，共 ${list.length} 页`;
+    if (announcer.textContent !== spoken) announcer.textContent = spoken;
   }
   dotsEl.hidden = !paging.dots;
   for (const pager of document.querySelectorAll('.pager')) {
@@ -4169,6 +4186,11 @@ panelEl.addEventListener('drop', async (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && open) setOpen(false);
   if (!open) return;
+  /* Caret navigation inside a field must never page away and drop the draft:
+     the todo/shelf/calendar inputs all live inside the panel, so their arrow
+     keys bubble up to this document-level handler. */
+  if (event.target instanceof Element &&
+      event.target.closest('input, textarea, select, [contenteditable]')) return;
   if (event.key === 'ArrowRight' && stepPage(1)) event.preventDefault();
   if (event.key === 'ArrowLeft' && stepPage(-1)) event.preventDefault();
 });

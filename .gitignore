@@ -27,3 +27,7 @@ apps/desktop/.ui-capture/
 # scratch workspace: screenshots, one-off scripts, subagent evidence
 .agents/
 build/cert/
+
+# WorkBuddy session data: project memory, install backups and QA captures.
+# Local only — never publish (contains a 250 MB runtime backup and machine paths).
+.workbuddy/

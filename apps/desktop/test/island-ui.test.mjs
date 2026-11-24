@@ -254,3 +254,79 @@ describe('island focus page reports both windows', () => {
     assert.match(css, /text-align:\s*right/, 'the numbers are right-aligned');
   });
 });
+
+/*
+ * Static source contracts for the document-level keyboard paging guard and the
+ * unified focus ring. The wheel behaviour is covered by the capture-phase
+ * stopPropagation() assertions above — those are the real fix and stay exactly
+ * as they are; no wheelOwner() early-return guard is part of the design.
+ */
+describe('Polar Graphite keyboard guard and focus ring (static source)', () => {
+  const read = (rel) => readFileSync(resolve(here, '..', 'src', rel), 'utf8');
+  const parity = read('renderer/polar-graphite-parity.css');
+
+  it('skips caret keys inside inputs, and handles Escape before that guard', () => {
+    /* Slice from the DOCUMENT-level keydown handler (not the panel-level one):
+       this is the handler that turns ArrowLeft/ArrowRight into paging. */
+    const handler = islandJs.slice(
+      islandJs.lastIndexOf("document.addEventListener('keydown'"),
+    );
+    const escapeAt = handler.indexOf("event.key === 'Escape'");
+    const guardAt = handler.indexOf("closest('input, textarea, select, [contenteditable]')");
+    assert.ok(escapeAt >= 0, 'Escape must still close the island');
+    assert.ok(guardAt >= 0, 'a caret guard must skip input/textarea/select/[contenteditable]');
+    assert.ok(escapeAt < guardAt,
+      'Escape must be handled before the guard returns, or a focused field would trap Escape');
+    assert.match(handler, /event\.key === 'ArrowRight'[\s\S]{0,120}stepPage\(1\)/);
+    assert.match(handler, /event\.key === 'ArrowLeft'[\s\S]{0,120}stepPage\(-1\)/);
+  });
+
+  it('pins one 2px info focus ring at 3px offset, including the shelf search box', () => {
+    /* .shelf-q is reset with outline:0 in island.css; the parity layer is the
+       last sheet loaded, so its ring must win for both generic controls and the
+       search box specifically. */
+    assert.match(
+      parity,
+      /:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--pgm-info\)[^}]*outline-offset:\s*3px/s,
+      'one shared 2px info ring at 3px offset',
+    );
+    assert.match(parity, /\.shelf-q:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--pgm-info\)/s,
+      'the shelf search box keeps the same ring');
+  });
+});
+
+/*
+ * The pager is a 22px artboard rail, not a tall control. A transparent
+ * ::after on .pgm-page-btn (inset: 0 0 -10px 0) extends the real pointer
+ * target 10px DOWNWARD, so the hit area is 32px tall and >=44px wide. The
+ * button is position: relative to anchor that absolute layer. The withdrawn
+ * square target and the old nav-level pseudo selector are absent here.
+ */
+describe('Polar Graphite pager hit layer (static source)', () => {
+  const parity = readFileSync(
+    resolve(here, '..', 'src', 'renderer', 'polar-graphite-parity.css'),
+    'utf8',
+  );
+
+  it('the 22px pager keeps a >=44x32 transparent hit layer', () => {
+    const rail = parity.slice(
+      parity.indexOf('#island .pgm-island-foot .pager {'),
+      parity.indexOf('#settings {'),
+    );
+    assert.match(rail, /height:\s*22px/, 'the visual rail stays exactly 22px tall');
+    assert.match(rail, /min-width:\s*44px/, 'the rail stays at least 44px wide');
+
+    const layer = parity.match(/:is\(#island,#settings\) \.pgm-page-btn::after\s*\{[^}]*\}/);
+    assert.ok(layer, 'the hit layer is a ::after on .pgm-page-btn');
+    assert.match(layer[0], /content:\s*""/, 'the layer is transparent, with no content');
+    assert.match(layer[0], /position:\s*absolute/, 'the layer is absolutely positioned');
+    assert.match(layer[0], /inset:\s*0 0 -10px 0/,
+      '10px downward extension turns 22px into a 32px hit height');
+
+    const button = parity.match(/:is\(#island,#settings\) \.pgm-page-btn\s*\{[^}]*\}/);
+    assert.ok(button, 'the button itself is a positioned anchor');
+    assert.match(button[0], /position:\s*relative/);
+    assert.doesNotMatch(parity, /\[data-page-nav\]::after/,
+      'no withdrawn nav-level pseudo selector remains');
+  });
+});

@@ -260,13 +260,14 @@ const rowSelect = (label, sub, key, options, selected) => {
 
 const rowInput = (label, sub, key, value, placeholder) =>
   row(label, sub, '<input class="pgm-field" data-act="set" data-key="' + key + '" value="' + escapeHtml(value ?? '') +
-    '" placeholder="' + escapeHtml(placeholder ?? '') + '" spellcheck="false" />');
+    '" placeholder="' + escapeHtml(placeholder ?? '') + '" aria-label="' + escapeHtml(label) + '" spellcheck="false" />');
 
 const rowRange = (label, sub, key, min, max, step, suffix) =>
   row(label, sub, '<span class="pgm-slider"><span data-range-value>' +
     Number(valueOf(key) ?? min) + escapeHtml(suffix ?? '') + '</span><input type="range" min="' + min +
     '" max="' + max + '" step="' + step + '" value="' + Number(valueOf(key) ?? min) +
-    '" data-act="set" data-key="' + key + '" data-suffix="' + escapeHtml(suffix ?? '') + '" /></span>');
+    '" data-act="set" data-key="' + key + '" data-suffix="' + escapeHtml(suffix ?? '') +
+    '" aria-label="' + escapeHtml(label) + '" /></span>');
 
 /**
  * Static controls used by the approved master artboard.
@@ -275,23 +276,29 @@ const rowRange = (label, sub, key, min, max, step, suffix) =>
  * not persist as a preference yet. They still need the same geometry, contrast
  * and state language as the working controls, so they use the same classes
  * without pretending to write a preference that the schema does not own.
+ *
+ * They are pure illustrations, never interactive: no role/aria-checked/aria-
+ * label (which made ~65 fake switches show up in screen readers and button
+ * audits). aria-hidden + data-decorative keep them out of the accessibility
+ * tree while the visible label on the row still explains the setting.
  */
+const DECORATIVE = 'aria-hidden="true" data-decorative="true" title="示意控件"';
+
 const visualToggle = (on) =>
-  '<span class="pgm-toggle' + (on ? ' is-on' : '') + '" role="switch" aria-checked="' +
-    Boolean(on) + '" aria-label="' + (on ? '已开启' : '已关闭') + '"><i></i></span>';
+  '<span class="pgm-toggle' + (on ? ' is-on' : '') + '" ' + DECORATIVE + '><i></i></span>';
 
 const visualSelect = (value) =>
-  '<span class="pgm-select" role="presentation" aria-label="' + escapeHtml(value) + '"><span>' +
+  '<span class="pgm-select" ' + DECORATIVE + '><span>' +
     escapeHtml(value) + '</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></span>';
 
 const visualField = (value) =>
-  '<span class="pgm-field">' + escapeHtml(value) + '</span>';
+  '<span class="pgm-field" ' + DECORATIVE + '>' + escapeHtml(value) + '</span>';
 
 const visualSlider = (value) =>
-  '<span class="pgm-slider"><span>' + escapeHtml(value) + '</span><div aria-hidden="true"></div></span>';
+  '<span class="pgm-slider" ' + DECORATIVE + '><span>' + escapeHtml(value) + '</span><div aria-hidden="true"></div></span>';
 
 const visualSegment = (items, active = 0) =>
-  '<span class="pgm-segment">' + items.map((item, index) =>
+  '<span class="pgm-segment" ' + DECORATIVE + '>' + items.map((item, index) =>
     '<span class="' + (index === active ? 'is-active' : '') + '">' + escapeHtml(item) + '</span>').join('') + '</span>';
 
 const copy = (zh, en) => (currentLang() === 'en' ? en : zh);
@@ -1198,7 +1205,7 @@ function pageWeather() {
         copy('可手动选择，也可以跟随系统定位。', 'Choose manually or follow system location.'),
         'weather.city',
         cityValue,
-        copy('香港', 'Hong Kong'),
+        '',
       ),
       rowToggle(
         copy('自动定位', 'Automatic location'),
@@ -2736,7 +2743,8 @@ rail.addEventListener('click', (event) => {
 });
 
 document.getElementById('btn-min').addEventListener('click', () => api.minimize());
-document.getElementById('btn-max').addEventListener('click', () => api.maximize());
+const maxBtn = document.getElementById('btn-max');
+maxBtn.addEventListener('click', () => { if (!maxBtn.disabled) api.maximize(); });
 document.getElementById('btn-close').addEventListener('click', () => api.close());
 
 /* Live device rows: a finished probe pushes its snapshot. Repainting only while

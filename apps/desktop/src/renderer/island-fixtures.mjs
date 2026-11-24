@@ -65,7 +65,6 @@ export function createMasterFixture(art = '') {
     },
     prefsPatch: {
       defaultPage: 'music',
-      theme: 'dark',
       focus: { enabled: true, work: 25, rest: 5 },
       todo: { enabled: true, notify: true },
       shelf: { enabled: true, showClipboard: false },

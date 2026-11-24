@@ -55,7 +55,7 @@
  * errors. Nothing is left under %TEMP% for the next run to trip over.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -121,6 +121,9 @@ function usage() {
     '  --exe <path>    installed or packed EmojiTot.exe (defaults to the installed app, then release/win-unpacked)',
     '  --skin <key>    one island skin: ' + SKINS.join(', '),
     '  --skins all     all three island skins; settings pages are measured once',
+    '  --theme <key>   dark or light (default dark); seeded into prefs before launch',
+    '  --dump-tokens   sample computed CSS tokens + WCAG contrast for 3 skins x 2 themes',
+    '  --out <path>    output JSON for --dump-tokens (default .ui-capture/theme-tokens.json)',
     '  -h, --help      this text',
     '',
     '  --skin cannot be combined with --skins.',
@@ -139,6 +142,11 @@ function parseArgs(argv) {
     portExplicit: false,
     skin: null,
     skins: null,
+    theme: null,
+    dumpTokens: false,
+    /* --dump-tokens writes here by default; --out overrides it (e.g. to a temp
+       path, so a QA run does not collide with the screenshot .ui-capture dir). */
+    out: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -169,11 +177,21 @@ function parseArgs(argv) {
       const value = takeValue('--skins');
       if (value !== 'all') throw new Error('--skins only accepts "all" (got "' + value + '")');
       options.skins = 'all';
-    } else {
+    } else if (arg === '--dump-tokens') options.dumpTokens = true;
+    else if (arg === '--theme' || arg.startsWith('--theme=')) {
+      const value = takeValue('--theme');
+      if (!['dark', 'light'].includes(value)) throw new Error('--theme must be dark or light (got "' + value + '")');
+      options.theme = value;
+    }
+    else if (arg === '--out' || arg.startsWith('--out=')) options.out = takeValue('--out');
+    else {
       throw new Error('unknown argument: ' + arg + '\n\n' + usage());
     }
   }
   if (options.skin && options.skins) throw new Error('--skin and --skins are mutually exclusive');
+  if (options.dumpTokens && (options.skin || options.skins || options.stress)) {
+    throw new Error('--dump-tokens runs its own 3x2 matrix; do not combine with --skin/--skins/--stress');
+  }
   options.exe = options.exe ? resolve(options.exe) : '';
   return options;
 }
@@ -418,12 +436,40 @@ function pageProbeFactory(minimumControlHeight) {
     }
     return found;
   };
+  /* A visually small control can still be comfortably clickable when its
+     ::before / ::after paints a larger transparent hit layer. The artboard's
+     media transport glyphs are 14x14 with a `::before { inset: -5px }` layer
+     that yields a 24x24 target, so measuring only the element box would flag
+     a correct design. Expand the box by any negative inset on a positioned
+     pseudo element before comparing against the minimum. */
+  const hitBox = (element, box) => {
+    let top = 0;
+    let bottom = 0;
+    let left = 0;
+    let right = 0;
+    for (const name of ['::before', '::after']) {
+      const style = getComputedStyle(element, name);
+      if (!style || style.content === 'none' || style.content === 'normal') continue;
+      if (style.position !== 'absolute' && style.position !== 'fixed') continue;
+      const t = parseFloat(style.top);
+      const b = parseFloat(style.bottom);
+      const l = parseFloat(style.left);
+      const r = parseFloat(style.right);
+      if (Number.isFinite(t) && t < 0) top = Math.max(top, -t);
+      if (Number.isFinite(b) && b < 0) bottom = Math.max(bottom, -b);
+      if (Number.isFinite(l) && l < 0) left = Math.max(left, -l);
+      if (Number.isFinite(r) && r < 0) right = Math.max(right, -r);
+    }
+    if (!top && !bottom && !left && !right) return box;
+    return { height: box.height + top + bottom, width: box.width + left + right };
+  };
   const smallControls = (root) => {
     const found = [];
     for (const element of root.querySelectorAll('button, input, select, textarea, a[href], [role="button"]')) {
       if (!visible(element)) continue;
       const box = element.getBoundingClientRect();
-      if (box.height < minimumControlHeight) found.push({ element: describe(element), height: round(box.height), width: round(box.width), text: sample(element) });
+      const hit = hitBox(element, box);
+      if (hit.height < minimumControlHeight) found.push({ element: describe(element), height: round(hit.height), width: round(hit.width), text: sample(element) });
     }
     return found;
   };
@@ -532,10 +578,13 @@ function pageProbeFactory(minimumControlHeight) {
 
 /* -------------------------------------------------------------- launch */
 
-function seedPrefs(stress, skin) {
+function seedPrefs(stress, skin, theme) {
   const keys = schema.PAGE_MANIFEST.map((page) => page.key);
   const prefs = {
     displayMode: 'island',
+    /* A light audit must be seeded before launch: a dark profile that is
+       flipped at runtime would measure a layout drawn under the wrong theme. */
+    theme: theme ?? 'dark',
     /* The skin is written before launch, not switched at runtime: a fresh
        profile then measures exactly what prefs.json asked the build to draw. */
     skin: skin ?? 'frost',
@@ -638,7 +687,7 @@ async function launchApp(options) {
   }
 
   const profile = mkdtempSync(join(tmpdir(), 'emojitot-ui-audit-'));
-  const prefs = seedPrefs(options.stress, options.skin);
+  const prefs = seedPrefs(options.stress, options.skin, options.theme);
   writeFileSync(join(profile, 'prefs.json'), JSON.stringify(prefs, null, 2), 'utf8');
 
   /* The DSH session exports ELECTRON_RUN_AS_NODE=1. Without deleting it,
@@ -1125,6 +1174,165 @@ function printSkinTable(passes, stress) {
   console.log('  ' + pad('verdict', 12) + skins.map((pass) => pad(pass.issues.length ? 'FAIL' : 'ok', width)).join(''));
 }
 
+/* ------------------------------------------------------- token matrix */
+/**
+ * --dump-tokens samples *computed* CSS custom properties from the live
+ * #island element, not from the stylesheet text. That matters: token values
+ * are declared on :is(#island,#settings) and overridden by
+ * body[data-theme="light"], and skins can restyle the island window. Reading
+ * the source would miss every one of those layers.
+ *
+ * One launch is enough. Changing body.dataset.theme / body.dataset.skin flips
+ * the same CSS the app uses, and a forced reflow makes getComputedStyle return
+ * the new cascade immediately. Six samples cost one Electron start, not six.
+ */
+const TOKEN_KEYS = [
+  '--pgm-ground', '--pgm-surface', '--pgm-raised', '--pgm-fg',
+  '--pgm-muted', '--pgm-quiet', '--faint-strong', '--pgm-good',
+  '--pgm-good-soft', '--pgm-warn', '--pgm-bad', '--pgm-info',
+  '--pgm-hairline', '--pgm-hairline-strong',
+];
+
+const TOKEN_PROBE = `(() => {
+  const body = document.body;
+  const root = document.getElementById('island') || document.getElementById('settings');
+  if (!root) return { error: 'no #island / #settings root' };
+  const before = { theme: body.dataset.theme, skin: body.dataset.skin };
+  const keys = ${JSON.stringify(TOKEN_KEYS)};
+
+  const color = (raw) => {
+    const s = String(raw == null ? '' : raw).trim();
+    let m;
+    if ((m = s.match(/^#([0-9a-f]{6})$/i))) {
+      return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16), 1];
+    }
+    if ((m = s.match(/^#([0-9a-f]{3})$/i))) {
+      return [parseInt(m[1][0] + m[1][0], 16), parseInt(m[1][1] + m[1][1], 16), parseInt(m[1][2] + m[1][2], 16), 1];
+    }
+    if ((m = s.match(/^rgba?\\(([^)]+)\\)$/i))) {
+      const p = m[1].split(/[,/\\s]+/).filter(Boolean).map(Number);
+      if (p.length < 3 || p.some((n) => !Number.isFinite(n))) return null;
+      return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+    }
+    return null;
+  };
+  const over = (fg, bg) => {
+    if (!fg || !bg) return null;
+    const a = Math.max(0, Math.min(1, fg[3]));
+    return [fg[0] * a + bg[0] * (1 - a), fg[1] * a + bg[1] * (1 - a), fg[2] * a + bg[2] * (1 - a), 1];
+  };
+  const luminance = (c) => {
+    const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  };
+  const ratio = (a, b) => {
+    if (!a || !b) return null;
+    const la = luminance(a), lb = luminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  };
+  const round = (n) => n == null ? null : Math.round(n * 100) / 100;
+
+  const combos = [];
+  for (const skin of ['frost', 'solid', 'plain']) {
+    for (const theme of ['dark', 'light']) {
+      body.dataset.skin = skin;
+      body.dataset.theme = theme;
+      void root.offsetHeight;
+      const cs = getComputedStyle(root);
+      const tokens = {};
+      for (const key of keys) tokens[key] = cs.getPropertyValue(key).trim();
+
+      const ground = color(tokens['--pgm-ground']) || color(tokens['--pgm-surface']);
+      const surface = color(tokens['--pgm-surface']) || ground;
+      const raised = color(tokens['--pgm-raised']) || surface;
+      const fg = color(tokens['--pgm-fg']);
+      const muted = color(tokens['--pgm-muted']);
+      const quiet = color(tokens['--pgm-quiet']);
+      const faint = color(tokens['--faint-strong']);
+      const good = color(tokens['--pgm-good']);
+      const info = color(tokens['--pgm-info']);
+      const bg = ground;
+
+      combos.push({
+        /* Echo the dataset back so a report can prove the switch really
+           happened instead of accidentally sampling frost/dark six times. */
+        applied: { skin: body.dataset.skin, theme: body.dataset.theme },
+        skin, theme,
+        tokens,
+        contrast: {
+          fg_on_ground: round(ratio(over(fg, bg), bg)),
+          fg_on_surface: round(ratio(over(fg, surface), surface)),
+          muted_on_ground: round(ratio(over(muted, bg), bg)),
+          quiet_on_ground: round(ratio(over(quiet, bg), bg)),
+          faint_strong_on_ground: round(ratio(over(faint, bg), bg)),
+          faint_strong_on_raised: round(ratio(over(faint, raised), raised)),
+          good_on_ground: round(ratio(over(good, bg), bg)),
+          info_on_ground: round(ratio(over(info, bg), bg)),
+        },
+        wcag: {
+          /* 4.5 is normal text, 3.0 is large text / UI component boundary. */
+          fg_aa: round(ratio(over(fg, bg), bg)) >= 4.5,
+          faint_aa: round(ratio(over(faint, bg), bg)) >= 4.5,
+          good_ui: round(ratio(over(good, bg), bg)) >= 3,
+          info_ui: round(ratio(over(info, bg), bg)) >= 3,
+        },
+      });
+    }
+  }
+  body.dataset.theme = before.theme == null ? '' : before.theme;
+  body.dataset.skin = before.skin == null ? '' : before.skin;
+  if (before.theme == null) delete body.dataset.theme;
+  if (before.skin == null) delete body.dataset.skin;
+  return { root: root.id, combos };
+})()`;
+
+async function dumpTokens(options) {
+  const out = options.out || join(dirname(fileURLToPath(import.meta.url)), '../.ui-capture/theme-tokens.json');
+  const { child, profile } = await launchApp({ ...options, stress: false, skin: null, theme: null });
+  let browser = null;
+  try {
+    const version = await (await fetch('http://127.0.0.1:' + options.port + '/json/version')).json();
+    browser = await Cdp.connect(version.webSocketDebuggerUrl);
+    const islandTarget = await waitForTarget(browser, (item) => item.type === 'page' && item.url.includes('island.html'), 'island window');
+    const session = (await browser.send('Target.attachToTarget', { targetId: islandTarget.targetId, flatten: true })).sessionId;
+    await browser.send('Runtime.enable', {}, session);
+    await waitFor(browser, session, "document.readyState === 'complete' && !!document.getElementById('island')", 'island ready');
+    await sleep(600);
+    const sampled = JSON.parse(await evaluate(browser, session, 'JSON.stringify(' + TOKEN_PROBE + ')', 30000));
+    if (sampled.error) throw new Error(sampled.error);
+
+    const result = {
+      tool: 'ui-audit',
+      mode: 'dump-tokens',
+      generatedAt: new Date().toISOString(),
+      exe: options.exe,
+      skins: ['frost', 'solid', 'plain'],
+      themes: ['dark', 'light'],
+      tokenKeys: TOKEN_KEYS,
+      samples: sampled.combos,
+    };
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, JSON.stringify(result, null, 2), 'utf8');
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log('token matrix: ' + sampled.combos.length + ' samples (3 skins x 2 themes) -> ' + out);
+      for (const c of sampled.combos) {
+        console.log('  ' + c.skin.padEnd(6) + ' / ' + c.theme.padEnd(5) +
+          '  fg=' + String(c.contrast.fg_on_ground).padStart(6) +
+          '  faint=' + String(c.contrast.faint_strong_on_ground).padStart(6) +
+          '  good=' + String(c.contrast.good_on_ground).padStart(6) +
+          '  info=' + String(c.contrast.info_on_ground).padStart(6) +
+          '  AA(fg)=' + c.wcag.fg_aa + ' AA(faint)=' + c.wcag.faint_aa);
+      }
+    }
+    return result;
+  } finally {
+    browser?.close();
+    await stopApp(child, profile);
+  }
+}
+
 /* ---------------------------------------------------------------- main */
 
 let schema = null;
@@ -1150,6 +1358,11 @@ async function main() {
     if (options.port !== requested) console.error('[ui-audit] port ' + requested + ' is busy; using ' + options.port);
   }
   schema = await loadSchema();
+  /* --dump-tokens is a separate one-launch measurement, not an audit pass. */
+  if (options.dumpTokens) {
+    await dumpTokens(options);
+    return;
+  }
   const skinsMode = Boolean(options.skin || options.skins);
   const skinPlan = options.skins === 'all' ? SKINS : (options.skin ? [options.skin] : []);
   const passNames = options.stress ? ['default', 'stress'] : ['default'];

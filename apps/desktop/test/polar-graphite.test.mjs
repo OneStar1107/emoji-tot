@@ -74,13 +74,34 @@ describe('Polar Graphite island controls', () => {
     assert.doesNotMatch(html, /rotate\(/);
   });
 
-  it('keeps the pager hit area at the desktop accessibility floor', () => {
+  it('keeps the pager visual track at 22px and the real hit area at 44x32', () => {
     const css = src('renderer/polar-graphite.css');
+    const parity = src('renderer/polar-graphite-parity.css');
     const pager = css.slice(css.indexOf('.island-footer .pager {'), css.indexOf('.island-footer .pager.next {'));
     assert.match(pager, /min-width:\s*44px/);
-    assert.match(pager, /height:\s*32px/);
+    assert.match(pager, /height:\s*22px/);
     assert.match(css, /\.dots \.dot\s*\{/);
     assert.doesNotMatch(css, /\.dots button/);
+    /* The 22px rail is the artboard truth (polar-graphite.css height:22px).
+       The parity layer, loaded last, keeps that visual height and adds a
+       transparent ::after on .pgm-page-btn with inset: 0 0 -10px 0, extending
+       the real pointer target DOWN to >=44x32 (44px min-width, 22px visual
+       row + 10px). The withdrawn square target and its old inset do not apply.
+       The button is position: relative so its absolute pseudo layer is
+       anchored to it. */
+    const rail = parity.slice(
+      parity.indexOf('#island .pgm-island-foot .pager {'),
+      parity.indexOf('#settings {'),
+    );
+    assert.match(rail, /min-width:\s*44px/);
+    assert.match(rail, /height:\s*22px/);
+    const afterRule = parity.match(/:is\(#island,#settings\) \.pgm-page-btn::after\s*\{[^}]*\}/);
+    assert.ok(afterRule, '.pgm-page-btn::after must exist in the parity layer');
+    assert.match(afterRule[0], /position:\s*absolute/);
+    assert.match(afterRule[0], /inset:\s*0 0 -10px 0/);
+    const buttonRule = parity.match(/:is\(#island,#settings\) \.pgm-page-btn\s*\{[^}]*\}/);
+    assert.ok(buttonRule, '.pgm-page-btn main rule must exist');
+    assert.match(buttonRule[0], /position:\s*relative/);
   });
 
   it('bounds page navigation and disables the endpoint control', () => {

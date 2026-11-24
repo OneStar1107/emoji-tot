@@ -40,6 +40,23 @@ body::before {
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.58), transparent 72%);
 }
 
+/* The guide is now a real 780x630 window (matching capture-ui.mjs), so CJK
+   headings and body copy have enough width. Keep Chinese words such as
+   "专注" intact instead of splitting them across lines. */
+.welcome-title,
+.title,
+.line,
+.setup-line,
+.group-label,
+.eyebrow,
+.feature-strip span,
+.guide-brand,
+.guide-progress {
+  word-break: keep-all;
+  line-break: strict;
+  overflow-wrap: normal;
+}
+
 .dragbar {
   z-index: 5;
   height: 42px;

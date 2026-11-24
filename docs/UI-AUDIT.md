@@ -11,6 +11,9 @@ pnpm ui:audit -- --exe <path>  # 指定另一个安装版 exe
 pnpm ui:audit -- --skin solid  # 只跑一套皮肤
 pnpm ui:audit -- --skins all   # 三套皮肤各量 11 个岛页，设置窗只量一次
 pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：三套皮肤各量 11 页，全在等宽 / 600 / 140%
+pnpm ui:audit -- --theme light --exe <path>  # 浅色主题整轮（写入临时 profile 的 prefs，启动前生效）
+pnpm ui:audit -- --dump-tokens --exe <path>  # 3 皮肤 × 2 主题 computed token + WCAG 对比度 → .ui-capture/theme-tokens.json
+pnpm ui:audit -- --dump-tokens --out <file>  # 指定 token 报告输出路径
 ```
 
 脚本只读界面：它不修改 `renderer/` 或 `main/` 的源码，也不碰你正在用的 profile；唯一的写入是 `%TEMP%` 下自己的临时 profile。退出码在发现违规时为 1，可以直接当闸门。
@@ -112,9 +115,23 @@ pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：三套皮肤�
 - **248 = 260 − 12**，是一页真正能画东西的高度。内容超过 248 时 `scrollHeight` 会大于 260，而面板高度固定、翻页靠左右箭头，所以溢出就是 bug，不是「可以滚一滚」。滚动条属于页内自己封顶的列表（待办、消息、置物架、设备），不属于页面本身。
 - **243** 是每页的工作预算：每页底部固定留 5px 余量（`.pages > * { max-height: calc(100% - 5px) }`）。改动前音乐 / 邮箱 / 待办三页靠 `height: 100%` 撑满内容盒，`usedHeight` 正好 248.0——一点字体度量误差就会变成违规；现在各页在自己的内容块内安排高度，媒体页用多出的空间承载封面、三行歌词、进度和独立控制条。
 - **20px** 是最小可点高度。当前设计里开关是 20–22px（`.switch`），20 是下限；低于 20 的按钮在 140% 缩放下很难点中。
+- **页轨是唯一例外**：灵动岛上一页/下一页按钮视觉高度严格 **22px**（画板真值），不能为了凑 20px 放大视觉盒。其真实命中区 **≥44×32** 由 `.pgm-page-btn::after { inset: 0 0 -10px 0 }` 提供（parity 层），曾经出现过的 **44×44 口径已撤回**——`overflow:hidden` 与底部 12px padding 下不可达。另外媒体页 transport 按钮按画板为 14×14，靠 `::before { inset: -5px }` 撑出 24×24 热区；这两类「视觉小、热区足」的控件都不算违规。
+- **有效命中区计入伪元素热区**：`smallControls()` 通过 `hitBox()` 读取 `::before` / `::after` 的负 inset，把元素盒按热区外扩后再与 20px 比较。只量 `getBoundingClientRect()` 会把上述设计误判成违规。测量变准确，不是放宽标准。
+- 焦点环统一 `outline: 2px solid var(--pgm-info)` + `outline-offset: 3px`（parity 层），静止态的 `outline:none` 保留，仅焦点可见态生效。
 - 测量值允许 **1px** 误差（`TOLERANCE`），避免小数像素和字体度量造成假阳性。
 
 这些阈值不写死在脚本里：可用高度由运行时的 `clientHeight − padding` 算出，所以改 `.pages` 高度时脚本会跟着变；页数由 schema 提供。脚本只负责「现在是否守住了契约」。
+
+## 主题 token 与对比度矩阵（--dump-tokens）
+
+`--dump-tokens` 一次启动 Electron，在岛窗口内切换 `body.dataset.skin`（frost / solid / plain）与 `body.dataset.theme`（dark / light），从 `#island` 读 **computed** CSS 自定义属性（不是读样式表文本），输出 6 组到 `apps/desktop/.ui-capture/theme-tokens.json`。每组带 `applied` 回读，证明确实切换过，而不是把同一套值重复六次。
+
+- 采集 token：`--pgm-ground`、`--pgm-surface`、`--pgm-raised`、`--pgm-fg`、`--pgm-muted`、`--pgm-quiet`、`--faint-strong`、`--pgm-good`、`--pgm-good-soft`、`--pgm-warn`、`--pgm-bad`、`--pgm-info`、`--pgm-hairline`、`--pgm-hairline-strong`。
+- 对比度按 WCAG 计算，半透明前景先与背景做 alpha 合成再算相对亮度。判定阈值：正文 ≥ 4.5（AA），大字/UI 边界 ≥ 3。
+- 颜色 token 定义在 `:is(#island,#settings)`，亮色由 `body[data-theme="light"]` 覆盖；**皮肤只改填充/字体/装饰，不改色板**。所以同一主题下三套皮肤的 token 与对比度相同是正确结果，差异只体现在主题轴上。
+- 最终实测（2026-11-24）：暗色 `fg 17.1 / faint 4.93 / good 8.52 / info 7.76`，浅色 `fg 13.38 / faint 4.58 / good 4.59 / info 4.05`，6 组正文与次要文字全部达 AA，`good`、`info` 全部 ≥ 3。浅色 `--pgm-good` 为 `#3f6b64`，`--faint-strong` 为 `rgba(22,26,29,0.63)`。
+
+截图密度口径：当前 `final-dark` / `final-light` / `current-source-dark` / `current-source-light` 均为 **1:1** CSS 像素；早期 `after-clipping-final*` 是 **1.5×** 且布局过期，**已作废**，不与新基线混用换算。
 
 ## 怎么跑起来
 
@@ -176,3 +193,21 @@ Skins · island .pages scrollHeight (px) · contract ≤ 260
 ```
 
 每个页面对象里的 `metrics` 是原始测量值，`issues` 是这一页的违规（带 `element`、`height`、`text` 等细节）。`errors` 收集渲染层的未捕获异常——页面脚本抛错也算违规。
+
+## 真机安装版实测
+
+最终构建已安装到用户日常使用的 `D:\EmojiTot`（版本 `0.8.20.26`）：只替换 `EmojiTot.exe`、`EmojiTotRuntime.exe`、`resources/app.asar` 三个程序文件，卸载器、`resources/elevate.exe` 与 `%APPDATA%\Roaming\EmojiTot` 下的用户数据全部保留；原件备份在 `.workbuddy/install-backup-2026-11-24/` 可回滚。
+
+```powershell
+pnpm ui:audit -- --exe D:/EmojiTot/EmojiTot.exe                  # 暗色 PASS 27 pages, 0 violation(s)
+pnpm ui:audit -- --theme light --exe D:/EmojiTot/EmojiTot.exe   # 浅色 PASS 27 pages, 0 violation(s)
+$env:EMOJITOT_APP_EXE = "D:/EmojiTot/EmojiTot.exe"
+node apps/desktop/scripts/window-smoke.mjs                       # 36/36 checks passed
+```
+
+`window-smoke.mjs` 用 `EMOJITOT_APP_EXE` 指向真实安装版、`EMOJITOT_SMOKE_SCREENSHOT` 输出截图（本次为 `.workbuddy/truetest/island-real.png`），并使用独立临时 profile，不读写用户真实数据。它做真实点击、角色联动、翻页、设置窗、固定尺寸与键盘焦点验证；源码构建跑同一脚本同样 36/36。
+
+两点写断言时容易踩的坑（本次已修，均为测试代码而非 UI 缺陷）：
+
+- **焦点环**：`--pgm-info` 定义在 `:is(#island,#settings)` 上，把探针 span 挂到 `<body>`（祖先）读不到该变量，会回退成继承文字色；对普通按钮程序化 `.focus()` 也不会可靠触发 `:focus-visible`。正确做法是在设置窗口会话里聚焦文本输入框（`input` 按规范始终匹配 `:focus-visible`），并把探针挂在 `#settings` 内。缩放屏下 `outline-offset` 可能读到 `2.66667px` 而非字符串 `3px`，按数值容差比较。
+- **媒体五键**：`musicPage()` 在 `!media.active` 时渲染「没有在播放的媒体」空状态，不生成 `.pgm-media-controls`；干净 profile 下必然走这个分支。断言不能假设本机有音乐在播放，应分别校验「有媒体 → 5 键 `opacity:1`」与「无媒体 → 空状态文案完整 + 去设置按钮可点」两种合法状态。

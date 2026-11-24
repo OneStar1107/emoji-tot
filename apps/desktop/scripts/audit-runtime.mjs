@@ -1,8 +1,8 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve, win32 } from 'node:path';
 
-import { isAsciiPath } from './electron-runtime.mjs';
+import { copyDirectorySync, isAsciiPath } from './electron-runtime.mjs';
 
 /**
  * Electron 45 exits before its main process can run when the executable path
@@ -44,7 +44,7 @@ export function stageAsciiAuditRuntime(exePath, options = {}) {
   mkdirSync(baseDir, { recursive: true });
   const stagingDir = mkdtempSync(join(baseDir, 'emojitot-ui-runtime-'));
   try {
-    cpSync(dirname(plan.exe), stagingDir, { recursive: true, force: true });
+    copyDirectorySync(dirname(plan.exe), stagingDir);
     const exe = join(stagingDir, basename(plan.exe));
     if (!existsSync(exe)) {
       throw new Error('copied app did not produce ' + exe);

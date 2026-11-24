@@ -265,6 +265,10 @@ try {
     })())
   `));
   ok(
+    /* This measures the COLLAPSED .pill capsule, a different element from the
+       expanded .panel checked below. The capsule is deliberately a flat fill
+       with no gradient/glass stack; only the expanded panel carries the
+       two-layer gradient. Keep gradients === 0 here. */
     'collapsed graphite capsule has uniform corners and no glass stack',
     surface.radius?.every((value) => value === surface.radius[0]) &&
       surface.radius?.[0] !== '0px' &&
@@ -896,15 +900,34 @@ try {
 
   const pagingTargets = JSON.parse(await evaluate(`
     JSON.stringify((() => {
-      const rect = (selector) => {
+      /* The pager keeps a 22px visual rail; a transparent pseudo layer is the
+         real >=44x32 pointer target. Measure both the box and the layer. */
+      const probe = (selector) => {
         const node = document.querySelector(selector);
         if (!node) return null;
         const box = node.getBoundingClientRect();
-        return { w: box.width, h: box.height };
+        const after = getComputedStyle(node, '::after');
+        const top = parseFloat(after.top) || 0;
+        const bottom = parseFloat(after.bottom) || 0;
+        const left = parseFloat(after.left) || 0;
+        const right = parseFloat(after.right) || 0;
+        /* ::after is inset: 0 0 -10px 0 — it extends DOWNWARD by 10px, so the
+           real hit target must be probed just below the 22px visual box, not
+           above it. 6px below sits inside that 10px extension. */
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.bottom + 6);
+        return {
+          w: box.width,
+          h: box.height,
+          hotW: box.width - left - right,
+          hotH: box.height - top - bottom,
+          pseudoPosition: after.position,
+          pseudoContent: after.content,
+          hitOwnArrow: Boolean(hit && hit.closest('[data-page-nav]') === node),
+        };
       };
       return {
-        previous: rect('[data-page-nav="-1"]'),
-        next: rect('[data-page-nav="1"]'),
+        previous: probe('[data-page-nav="-1"]'),
+        next: probe('[data-page-nav="1"]'),
         pages: Number.parseInt(document.body.dataset.pages || '0', 10),
         decorativeDots: document.querySelectorAll('.dots .dot').length,
         dotButtons: document.querySelectorAll('.dots button').length,
@@ -912,11 +935,24 @@ try {
     })())
   `));
   ok(
-    'island pager targets are usable and progress dots stay decorative',
-    pagingTargets.previous?.w >= 44 &&
-      pagingTargets.previous?.h >= 32 &&
+    /* The 22px rail is the artboard truth. ::after (inset: 0 0 -10px 0)
+       extends the real pointer target down to >=44x32. The withdrawn square
+       target and its old inset do not apply. The visual height stays 22px. */
+    'island pager keeps the 22px artboard rail, a >=44x32 hit area and decorative dots',
+    pagingTargets.previous?.h === 22 &&
+      pagingTargets.next?.h === 22 &&
+      pagingTargets.previous?.w >= 44 &&
       pagingTargets.next?.w >= 44 &&
-      pagingTargets.next?.h >= 32 &&
+      pagingTargets.previous?.pseudoPosition === 'absolute' &&
+      pagingTargets.next?.pseudoPosition === 'absolute' &&
+      pagingTargets.previous?.pseudoContent !== 'none' &&
+      pagingTargets.next?.pseudoContent !== 'none' &&
+      pagingTargets.previous?.hotW >= 44 &&
+      pagingTargets.previous?.hotH >= 32 &&
+      pagingTargets.next?.hotW >= 44 &&
+      pagingTargets.next?.hotH >= 32 &&
+      pagingTargets.previous?.hitOwnArrow === true &&
+      pagingTargets.next?.hitOwnArrow === true &&
       pagingTargets.pages > 0 &&
       pagingTargets.decorativeDots === pagingTargets.pages &&
       pagingTargets.dotButtons === 0,
@@ -939,11 +975,117 @@ try {
     })())
   `));
   ok(
-    'expanded graphite surface keeps all four CSS corners',
+    /* The artboard island body is a radial-gradient + linear-gradient stack,
+       so the old "gradients === 0" assertion was wrong: two layers is truth. */
+    'expanded graphite surface keeps its two-layer gradient and four CSS corners',
     panelSurface.radius?.every((value) => value === panelSurface.radius[0]) &&
       panelSurface.radius?.[0] !== '0px' &&
-      panelSurface.gradients === 0,
+      panelSurface.gradients >= 2,
     JSON.stringify(panelSurface),
+  );
+
+  /* Regression: caret navigation inside a field must not page away and drop
+     the draft. stepPage() clamps at both ends, so walk to the first page and
+     then forward to the todo page before dispatching the arrow keys. */
+  const keyboardGuard = JSON.parse(await evaluate(`
+    (async () => {
+      const press = (nav) => document.querySelector('[data-page-nav="' + nav + '"]')
+        ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+      const pages = document.getElementById('pages');
+      for (let i = 0; i < 14; i += 1) { press('-1'); await new Promise((r) => setTimeout(r, 80)); }
+      for (let i = 0; i < 14 && pages?.dataset.page !== 'todo'; i += 1) {
+        press('1'); await new Promise((r) => setTimeout(r, 80));
+      }
+      const before = pages?.dataset.page ?? '';
+      const input = document.querySelector('[data-todo-input]');
+      if (!input) return JSON.stringify({ before, found: false });
+      input.focus();
+      input.value = '草稿不要丢';
+      for (const key of ['ArrowLeft', 'ArrowRight']) {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      }
+      await new Promise((r) => setTimeout(r, 140));
+      return JSON.stringify({
+        before,
+        after: pages?.dataset.page ?? '',
+        found: true,
+        focused: document.activeElement === input,
+        draft: input.value,
+      });
+    })()
+  `));
+  ok(
+    'arrow keys inside a todo input never turn the page or lose the draft',
+    keyboardGuard.found === true &&
+      keyboardGuard.focused === true &&
+      keyboardGuard.before === 'todo' &&
+      keyboardGuard.before === keyboardGuard.after &&
+      keyboardGuard.draft === '草稿不要丢',
+    JSON.stringify(keyboardGuard),
+  );
+
+  /* A7-1: the music page has TWO legitimate runtime states. With a live media
+     session it renders the five 14x14 transport keys, and parity CSS pins them
+     to opacity 1 at rest. With NO media — the normal state of a clean smoke
+     profile, since musicPage() starts with `if (!media.active) return
+     stateBlock(...)` — those keys do not exist in the DOM at all. The old probe
+     assumed the host was always playing music, so it flaked between runs.
+     Assert whichever state the INSTALLED build actually paints is complete and
+     usable. Music is made the only enabled page so the view is deterministic
+     without any synthetic pager presses, then prefs are restored. */
+  let mediaPage = null;
+  for (let attempt = 0; attempt < 20 && !mediaPage?.ready; attempt += 1) {
+    const value = await evaluate(`
+      (async () => {
+        const island = document.getElementById('island');
+        if (island?.dataset.open !== 'true') {
+          document.getElementById('pill')?.dispatchEvent(
+            new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+          await new Promise((r) => setTimeout(r, 150));
+        }
+        const boot = await window.islandAPI.bootstrap();
+        const onlyMusic = Object.fromEntries(
+          Object.keys(boot.prefs.pages || {}).map((key) => [key, key === 'music']));
+        await window.islandAPI.patchPrefs({ pages: onlyMusic });
+        const pagesEl = document.getElementById('pages');
+        for (let n = 0; n < 20 && pagesEl && pagesEl.dataset.page !== 'music'; n += 1) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        let result;
+        if (!pagesEl || pagesEl.dataset.page !== 'music') {
+          result = { ready: false, page: pagesEl ? pagesEl.dataset.page : '' };
+        } else {
+          const keys = [...document.querySelectorAll('.pgm-media.music .pgm-media-controls.music-controls > button')];
+          const action = pagesEl.querySelector('[data-action="settings:music"]')
+            || [...pagesEl.querySelectorAll('button, [role="button"], a[href]')]
+                 .find((el) => el.textContent.includes('去设置'));
+          result = keys.length
+            ? { ready: true, state: 'playing', count: keys.length,
+                opacities: keys.map((k) => getComputedStyle(k).opacity) }
+            : { ready: Boolean(action), state: 'idle',
+                actionText: action ? action.textContent.trim() : '',
+                actionTag: action ? action.tagName : '',
+                actionEnabled: action ? action.disabled !== true : false,
+                actionHeight: action ? Math.round(action.getBoundingClientRect().height) : 0,
+                emptyText: pagesEl.textContent.trim().slice(0, 48) };
+        }
+        await window.islandAPI.patchPrefs({ pages: boot.prefs.pages });
+        return JSON.stringify(result);
+      })()
+    `);
+    mediaPage = value ? JSON.parse(value) : null;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  ok(
+    'music page paints five visible transport keys, or a usable empty state when nothing is playing',
+    mediaPage?.ready === true &&
+      (mediaPage.state === 'playing'
+        ? mediaPage.count === 5 && mediaPage.opacities.every((o) => Number(o) === 1)
+        : mediaPage.actionText.includes('去设置') &&
+          mediaPage.actionEnabled === true &&
+          mediaPage.actionHeight > 0 &&
+          mediaPage.emptyText.includes('没有在播放的媒体')),
+    JSON.stringify(mediaPage),
   );
 
   await evaluate("window.islandAPI.openSettings('weather')");
@@ -982,77 +1124,272 @@ try {
       if (!cityField) await new Promise((resolve) => setTimeout(resolve, 150));
     }
     ok(
+      /* The master artboard's sField("香港") is a STATIC example value, not a
+         placeholder. The renderer must never paint its internal city fallback
+         into the input's placeholder: cityField.placeholder === '' is a real
+         source-level contract (see startup-polish.test.mjs), so this assertion
+         stays strict and must NOT be relaxed or removed. */
       'empty weather city field stays visually empty',
       cityField?.value === '' && cityField?.placeholder === '',
       JSON.stringify(cityField),
     );
 
-    let facePicker = null;
-    for (let i = 0; i < 40 && !facePicker; i += 1) {
+    let rolePicker = null;
+    for (let i = 0; i < 40 && !rolePicker; i += 1) {
       const value = await settingsEvaluate(`
         JSON.stringify((() => {
           const nav = document.querySelector('[data-nav="cast"]');
           if (!nav) return null;
           nav.click();
-          const labels = [...document.querySelectorAll('.pgm-face-grid .pgm-face-cell span')]
+          const labels = [...document.querySelectorAll('.pgm-role-grid .pgm-role-option b')]
             .map((node) => node.textContent.trim());
           return labels.length ? {
             count: labels.length,
-            unnamed: labels.filter((label) => !label || !/[\\u3400-\\u9fff]/.test(label)),
+            unnamed: labels.filter((label) => !label),
+            chinese: labels.filter((label) => /[\\u3400-\\u9fff]/.test(label)).length,
             sample: labels.slice(0, 6),
           } : null;
         })())
       `);
-      facePicker = value ? JSON.parse(value) : null;
-      if (!facePicker) await new Promise((resolve) => setTimeout(resolve, 150));
+      rolePicker = value ? JSON.parse(value) : null;
+      if (!rolePicker) await new Promise((resolve) => setTimeout(resolve, 150));
     }
     ok(
-      'settings face picker lists all 61 states with Chinese names',
-      facePicker?.count === 61 && facePicker?.unnamed?.length === 0,
-      JSON.stringify(facePicker),
+      'settings offers the 15 official roles with non-empty Chinese names',
+      rolePicker?.count === 15 &&
+        rolePicker?.unnamed?.length === 0 &&
+        rolePicker?.chinese >= 14,
+      JSON.stringify(rolePicker),
     );
-    await settingsEvaluate("document.querySelector('.pgm-face-cell[data-value=\"sad\"]')?.click(); true");
-    let previewState = '';
-    for (let i = 0; i < 25 && previewState !== 'sad'; i += 1) {
-      previewState = await evaluate(`
-        document.querySelector('.pill-face emojitot-ball')?.shadowRoot
-          ?.querySelector('[data-et-runtime]')?.dataset.state ?? ''
+
+    /* Pick an unselected official role. The retired 61-state expression grid
+       and its "sad" cell no longer exist; selection now drives the cast. */
+    const castPick = await settingsEvaluate(`
+      (() => {
+        const options = [...document.querySelectorAll('.pgm-role-grid .pgm-role-option')];
+        const target = options.find((option) => !option.classList.contains('is-selected'));
+        if (!target) return '';
+        const id = target.dataset.value;
+        target.click();
+        return id;
+      })()
+    `);
+    let selectedRole = '';
+    for (let i = 0; i < 30 && selectedRole !== castPick; i += 1) {
+      selectedRole = await settingsEvaluate(`
+        document.querySelector('.pgm-role-grid .pgm-role-option.is-selected')?.dataset.value ?? ''
       `);
-      if (previewState !== 'sad') await new Promise((resolve) => setTimeout(resolve, 100));
+      if (selectedRole !== castPick) await new Promise((resolve) => setTimeout(resolve, 100));
     }
     ok(
-      'engine-only expression previews reach the live desktop face',
-      previewState === 'sad',
-      JSON.stringify({ previewState }),
+      'clicking an unselected official role moves the selection',
+      Boolean(castPick) && selectedRole === castPick,
+      JSON.stringify({ castPick, selectedRole }),
+    );
+
+    let liveCast = '';
+    for (let i = 0; i < 30 && liveCast !== castPick; i += 1) {
+      liveCast = await evaluate(`
+        document.querySelector('.pill-face emojitot-ball')?.getAttribute('cast') ?? ''
+      `);
+      if (liveCast !== castPick) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    ok(
+      'the selected role reaches the live island face through the cast channel',
+      Boolean(castPick) && liveCast === castPick,
+      JSON.stringify({ castPick, liveCast }),
     );
 
     await settingsEvaluate("document.querySelector('[data-nav=\"pages\"]')?.click(); true");
-    let residency = null;
-    for (let i = 0; i < 40 && !residency; i += 1) {
+    /* The master board's 页面管理 page renders page rows only; it has no
+       residency capsule. settings.js residencyCard() is implemented but never
+       mounted, so there is no .residency-pill in the DOM to measure. The old
+       "centred in its card" probe therefore measured a node that never exists
+       and always returned null. Removed rather than forcing a card the board
+       does not ask for. */
+
+    /* Page management exposes all eleven pages as schema-backed order rows. */
+    let pageRows = null;
+    for (let i = 0; i < 40 && !pageRows; i += 1) {
       const value = await settingsEvaluate(`
         JSON.stringify((() => {
-          const pill = document.querySelector('.residency-pill');
-          const parent = pill?.parentElement;
-          if (!pill || !parent) return null;
-          const pillBox = pill.getBoundingClientRect();
-          const parentBox = parent.getBoundingClientRect();
+          const rows = [...document.querySelectorAll('[data-order-list="pages"] .order-item')];
+          if (rows.length !== 11) return null;
           return {
-            left: pillBox.left - parentBox.left,
-            right: parentBox.right - pillBox.right,
-            width: pillBox.width,
-            available: parentBox.width,
+            count: rows.length,
+            labels: rows.map((row) => row.getAttribute('aria-label') ?? ''),
+            switches: rows.map((row) => {
+              const toggle = row.querySelector('[role="switch"]');
+              return toggle ? {
+                checked: toggle.getAttribute('aria-checked'),
+                named: Boolean(toggle.getAttribute('aria-label')),
+              } : null;
+            }),
           };
         })())
       `);
-      residency = value ? JSON.parse(value) : null;
-      if (!residency) await new Promise((resolve) => setTimeout(resolve, 100));
+      pageRows = value ? JSON.parse(value) : null;
+      if (!pageRows) await new Promise((resolve) => setTimeout(resolve, 100));
     }
     ok(
-      'settings residency preview is centred in its card',
-      residency &&
-        Math.abs(residency.left - residency.right) <= 1 &&
-        residency.width < residency.available,
-      JSON.stringify(residency),
+      'page management lists 11 pages with an accessible visibility switch each',
+      pageRows?.count === 11 &&
+        pageRows.labels.every((label) => label.length > 0) &&
+        pageRows.switches.length === 11 &&
+        pageRows.switches.every((sw) => sw && sw.checked !== null && sw.named === true),
+      JSON.stringify(pageRows),
+    );
+
+    /* ------------------------------------------------------------- A7 -----
+     * Four runtime probes (A7-2..A7-5) from the R2 final QA pass, plus A7-1
+     * sampled just above openSettings() while the island is still expanded.
+     * They read a live Electron DOM. Nothing here loosens an existing
+     * assertion: MIN_CONTROL_HEIGHT stays 20 and the 22px pager rail is
+     * artboard truth, its >=44x32 hit area coming from .pgm-page-btn::after.
+     */
+
+    // A7-2: verify the unified focus ring on the INSTALLED build.
+    // The old probe was wrong in three independent ways:
+    //   1. it used the island session, but openSettings() has already made the
+    //      settings window the foreground surface by this point;
+    //   2. it called btn.focus() on a plain button — CDP cannot reliably put a
+    //      window into :focus-visible keyboard modality, so getComputedStyle
+    //      came back from the RESTING rule (outline-style: none);
+    //   3. it resolved --pgm-info from a probe appended to <body>, but that
+    //      token is declared on :is(#island,#settings) — <body> is an ANCESTOR,
+    //      so the probe fell back to the inherited cold-white text colour.
+    // None of those three said anything about the CSS truth, which is correct:
+    //   :is(#island,#settings) :is(button,...,input,...):focus-visible {
+    //     outline: 2px solid var(--pgm-info); outline-offset: 3px; }
+    // Fix: work in the settings window, put Chromium in keyboard modality with
+    // a real Tab, focus a text INPUT (per the selectors spec a keyboard-input
+    // element always matches :focus-visible, even when focused from script),
+    // and resolve the token INSIDE #settings where it is actually declared.
+    await browser.send('Input.dispatchKeyEvent',
+      { type: 'rawKeyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 },
+      8000, settingsSession.sessionId).catch(() => {});
+    await browser.send('Input.dispatchKeyEvent',
+      { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 },
+      8000, settingsSession.sessionId).catch(() => {});
+    await settingsEvaluate("document.querySelector('[data-nav=\"weather\"]')?.click(); true");
+    let focusRing = null;
+    for (let attempt = 0; attempt < 20 && !focusRing?.found; attempt += 1) {
+      focusRing = JSON.parse(await settingsEvaluate(`
+        JSON.stringify((() => {
+          const host = document.getElementById('settings');
+          const input = host?.querySelector('input[data-key="weather.city"]');
+          if (!host || !input) return { found: false };
+          const probe = document.createElement('span');
+          probe.style.color = 'var(--pgm-info)';
+          host.appendChild(probe);
+          const info = getComputedStyle(probe).color;
+          const hostColor = getComputedStyle(host).color;
+          probe.remove();
+          input.focus();
+          const s = getComputedStyle(input);
+          return {
+            found: true,
+            theme: document.body.dataset.theme || '',
+            tag: input.tagName,
+            focusVisible: input.matches(':focus-visible'),
+            outlineWidth: s.outlineWidth,
+            outlineStyle: s.outlineStyle,
+            outlineOffset: s.outlineOffset,
+            outlineColor: s.outlineColor,
+            info,
+            hostColor,
+          };
+        })())
+      `));
+      if (!focusRing.found) await new Promise((r) => setTimeout(r, 100));
+    }
+    // A 2px / 3px ring can read as 2.6667px / 4px under a non-unity zoom
+    // factor, so compare parsed numbers with a small tolerance. The colour
+    // check stays exact: outlineColor must equal the RESOLVED token, and that
+    // token must differ from the inherited host colour — otherwise the old
+    // <body> probe bug (infoColor falling back to the text colour) is back.
+    const ringWidth = parseFloat(focusRing?.outlineWidth);
+    const ringOffset = parseFloat(focusRing?.outlineOffset);
+    ok(
+      'focus ring is 2px solid var(--pgm-info) at a 3px offset',
+      focusRing?.found === true &&
+        focusRing.focusVisible === true &&
+        Number.isFinite(ringWidth) && Math.abs(ringWidth - 2) <= 1 &&
+        focusRing.outlineStyle === 'solid' &&
+        Number.isFinite(ringOffset) && Math.abs(ringOffset - 3) <= 1 &&
+        focusRing.outlineColor === focusRing.info &&
+        focusRing.info !== focusRing.hostColor,
+      JSON.stringify(focusRing),
+    );
+
+    // A7-3: decorative mock controls never pretend to be interactive spans,
+    // and every [data-decorative] node is aria-hidden. The general page carries
+    // the illustration toggles, so switch there before counting.
+    let decorative = null;
+    for (let attempt = 0; attempt < 20 && !decorative; attempt += 1) {
+      const value = await settingsEvaluate(`
+        JSON.stringify((() => {
+          const nav = document.querySelector('[data-nav="general"]');
+          if (nav) nav.click();
+          const fakeSpans = document.querySelectorAll('span[role="switch"], span[aria-checked]').length;
+          const decs = [...document.querySelectorAll('[data-decorative="true"]')];
+          if (!decs.length) return null;
+          return {
+            fakeSwitchSpans: fakeSpans,
+            decorativeCount: decs.length,
+            allHidden: decs.every((d) => d.getAttribute('aria-hidden') === 'true'),
+            dataActCount: document.querySelectorAll('[data-act]').length,
+          };
+        })())
+      `);
+      decorative = value ? JSON.parse(value) : null;
+      if (!decorative) await new Promise((r) => setTimeout(r, 100));
+    }
+    ok(
+      'decorative mock controls are aria-hidden and never fake interactive spans',
+      decorative?.fakeSwitchSpans === 0 &&
+        decorative?.decorativeCount > 0 &&
+        decorative.allHidden,
+      JSON.stringify(decorative),
+    );
+
+    // A7-4: the fixed-size maximise button is disabled; the live-preview
+    // aside stays aria-hidden and keeps its i18n/aria contract.
+    const semantics = JSON.parse(await settingsEvaluate(`
+      JSON.stringify((() => {
+        const max = document.getElementById('btn-max');
+        const preview = document.getElementById('preview');
+        return {
+          maxDisabled: max ? max.disabled === true : false,
+          maxAriaDisabled: max ? max.getAttribute('aria-disabled') === 'true' : false,
+          previewHidden: preview ? preview.getAttribute('aria-hidden') === 'true' : false,
+          previewI18nAria: preview ? preview.getAttribute('data-i18n-aria') : '',
+          previewAriaLabel: preview ? preview.getAttribute('aria-label') : '',
+        };
+      })())
+    `));
+    ok(
+      '#btn-max is disabled and #preview keeps aria-hidden with its i18n label',
+      semantics.maxDisabled &&
+        semantics.maxAriaDisabled &&
+        semantics.previewHidden &&
+        semantics.previewI18nAria === 'preview.title' &&
+        semantics.previewAriaLabel === '实时预览',
+      JSON.stringify(semantics),
+    );
+
+    // A7-5: fixed 1080x760 settings surface. frame:false can shave 1-2px, so
+    // report the measured values first and allow that dust rather than hardcode
+    // a value that may not hold; the main controller can tighten to === in the
+    // final smoke if the measured window turns out exact.
+    const settingsGeometry = JSON.parse(await settingsEvaluate(
+      'JSON.stringify({ innerWidth: window.innerWidth, innerHeight: window.innerHeight })',
+    ));
+    ok(
+      'settings window keeps the fixed 1080x760 surface',
+      Math.abs(settingsGeometry.innerWidth - 1080) <= 2 &&
+        Math.abs(settingsGeometry.innerHeight - 760) <= 2,
+      JSON.stringify({ ...settingsGeometry, target: '1080x760', tolerancePx: 2 }),
     );
   }
 

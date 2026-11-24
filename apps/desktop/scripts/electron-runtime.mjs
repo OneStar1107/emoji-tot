@@ -1,13 +1,17 @@
 import { createHash } from 'node:crypto';
 import {
-  cpSync,
+  copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
+  readlinkSync,
   realpathSync,
   renameSync,
   rmSync,
+  symlinkSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -21,6 +25,42 @@ export function isAsciiPath(value) {
 
 export function runtimeCachePath(base, version, key, platform = process.platform) {
   return join(base, `electron-${version}-${key}${platform === 'win32' ? '' : '-' + platform}`);
+}
+
+/**
+ * Copy a directory tree with primitive fs calls instead of `fs.cpSync`.
+ *
+ * On Windows, `cpSync` aborts the whole Node process with STATUS_STACK_BUFFER_OVERRUN
+ * (0xC0000409 / exit -1073740791) when the *source* path contains non-ASCII
+ * characters — exactly the case for a checkout under `E:\项目\...` being staged
+ * into an ASCII Electron cache. A readdir/lstat/copyFile walk avoids that libuv
+ * code path entirely and works for ASCII sources too.
+ *
+ * `destination` is created when missing; existing contents are left in place.
+ * Both callers stage into a freshly-created temp directory, so this function
+ * never needs a recursive delete and never touches anything outside the
+ * staging directory the caller owns. Symlinks are reproduced verbatim from
+ * their link target (matching `cpSync({ verbatimSymlinks: true })`), so a link
+ * to a directory is not followed and cannot recurse forever.
+ */
+export function copyDirectorySync(source, destination) {
+  mkdirSync(destination, { recursive: true });
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    const from = join(source, entry.name);
+    const to = join(destination, entry.name);
+    // lstat, not stat: keep symlinks visible as symlinks even on Windows,
+    // where a junction would otherwise be reported as a directory.
+    const stat = lstatSync(from);
+    if (stat.isSymbolicLink()) {
+      symlinkSync(readlinkSync(from), to);
+    } else if (stat.isDirectory()) {
+      copyDirectorySync(from, to);
+    } else if (stat.isFile()) {
+      copyFileSync(from, to);
+    }
+    // Sockets, FIFOs and device nodes do not occur in an Electron dist or a
+    // packed app; skipping them keeps the copy deterministic and portable.
+  }
 }
 
 function packageRoot() {
@@ -79,7 +119,7 @@ export function resolveElectronBinary(options = {}) {
   const staging = join(tempRoot, 'dist');
   try {
     console.warn(`[electron] caching ASCII runtime at ${cache}`);
-    cpSync(distDir, staging, { recursive: true, verbatimSymlinks: true });
+    copyDirectorySync(distDir, staging);
     try {
       renameSync(staging, cache);
     } catch (error) {
