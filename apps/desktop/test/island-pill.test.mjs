@@ -23,6 +23,7 @@ const {
 const here = dirname(fileURLToPath(import.meta.url));
 const islandJs = readFileSync(resolve(here, '..', 'src', 'renderer', 'island.js'), 'utf8');
 const islandCss = readFileSync(resolve(here, '..', 'src', 'renderer', 'island.css'), 'utf8');
+const parityCss = readFileSync(resolve(here, '..', 'src', 'renderer', 'polar-graphite-parity.css'), 'utf8');
 const islandHtml = readFileSync(resolve(here, '..', 'src', 'renderer', 'island.html'), 'utf8');
 
 /** The declared block for a selector, or '' when the selector is gone. */
@@ -324,7 +325,7 @@ describe('the collapsed pill keeps lyrics inside a fixed slot', () => {
   });
 
   it('repaints the pill once when a new lyric document arrives', () => {
-    const start = islandJs.indexOf('api.onLyrics((value) =>');
+    const start = islandJs.indexOf('api.onLyrics(');
     const body = islandJs.slice(start, islandJs.indexOf('api.onFocus', start));
     assert.match(body, /renderPillStatus\(\)/);
   });
@@ -542,19 +543,23 @@ describe('music page title and lyric readability', () => {
     assert.match(full, /text-overflow:\s*ellipsis/);
   });
 
-  it('puts the lyric and seek rail in a right-hand tile beside the cover', () => {
-    assert.match(cssBlock('.music-row'), /display:\s*grid/);
-    assert.match(cssBlock('.music-row'), /grid-template-columns:\s*96px\s+minmax\(0,\s*1fr\)/);
-    assert.match(cssBlock('.music-meta'), /justify-content:\s*center/);
-    assert.match(cssBlock('.music-meta'), /border:\s*1px\s+solid\s+var\(--line\)/);
-    const page = islandJs.slice(islandJs.indexOf('return `<div class="music"'), islandJs.indexOf('/*\n * The volume key'));
+  it('keeps cover left and lyrics, transport then seek in the copy column', () => {
+    assert.match(
+      parityCss,
+      /#island \.pgm-island-body > \.pgm-media\.music \{[^}]*grid-template-columns:\s*134px\s+minmax\(0,\s*1fr\)/,
+    );
+    assert.match(parityCss, /#island \.pgm-media\.music > \.pgm-cover/);
+    const page = islandJs.slice(
+      islandJs.indexOf('return `<div class="music pgm-media"'),
+      islandJs.indexOf('/*\n * The volume key'),
+    );
     assert.ok(
-      page.indexOf('<div class="music-current-lyric"') < page.indexOf('<div class="music-progress">'),
+      page.indexOf('class="pgm-lyrics music-current-lyric') < page.indexOf('pgm-media-controls music-controls'),
       'the lyric is painted above the seek rail',
     );
     assert.ok(
-      page.indexOf('<div class="music-progress">') < page.indexOf('<div class="music-controls">'),
-      'the seek rail belongs to the stage, not the transport footer',
+      page.indexOf('pgm-media-controls music-controls') < page.indexOf('${progress}'),
+      'the seek rail follows the transport in the same copy column',
     );
   });
 

@@ -721,7 +721,7 @@ describe('one action list across page, IPC, service and script', () => {
   });
 
   it('keeps the lyrics-settings shortcut out of the transport', () => {
-    const start = island.indexOf('<div class="music-controls">');
+    const start = island.indexOf('<div class="pgm-media-controls music-controls"');
     const controls = island.slice(start, island.indexOf('</div>', start));
     assert.ok(start >= 0 && controls, 'the media transport markup is present');
     assert.doesNotMatch(controls, /data-action="settings:music"/, 'the transport has no lyrics-settings hamburger');

@@ -11,6 +11,7 @@
     "prestart": "node scripts/copy-vendor.mjs",
     "start": "node scripts/electron-launch.mjs .",
     "dev": "node scripts/electron-launch.mjs . --dev",
+    "capture:ui": "node scripts/copy-vendor.mjs && node scripts/capture-ui.mjs",
     "prepack": "node scripts/copy-vendor.mjs",
     "pack": "node scripts/electron-builder.mjs --dir",
     "predist": "node scripts/copy-vendor.mjs",

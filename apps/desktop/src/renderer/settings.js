@@ -12,7 +12,6 @@ import {
   PAUSED_HIDE_MINUTES,
   PRESET_MANIFEST,
   STATUS_MANIFEST,
-  deviceKind,
   withDefaults,
   defaultStatusItems,
   enabledStatusKeys,
@@ -129,6 +128,7 @@ const T = (key, vars, fallback) => translate(currentLang(), key, vars, fallback)
 const rail = document.getElementById('rail');
 const content = document.getElementById('content');
 const preview = document.getElementById('preview');
+const titlebarCast = document.getElementById('titlebar-cast');
 
 /* --------------------------------------------------------------- rendering */
 
@@ -137,10 +137,30 @@ const merge = (raw) => withDefaults(raw);
 const escapeHtml = (value) =>
   String(value ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
+const castMembers = () => (meta?.casts ?? []).flatMap((family) => family.members);
+const normalizeCastId = (value) => {
+  const id = typeof value === 'string' ? value.trim() : '';
+  if (id === 'tot') return 'tot';
+  return castMembers().some((member) => member.id === id) ? id : 'tot';
+};
+const activeCastId = () => normalizeCastId(meta?.castId);
+const castMember = (id = meta?.castId) =>
+  castMembers().find((member) => member.id === normalizeCastId(id)) ?? null;
+const displayCastName = (id, label) => {
+  const value = String(label ?? 'Tot');
+  return normalizeCastId(id) === 'tot' && value.toLowerCase() === 'tot' ? 'Tot' : value;
+};
+const castName = (id = meta?.castId) => displayCastName(id, castMember(id)?.label ?? 'Tot');
+
 const row = (label, sub, control) =>
-  '<div class="row"><span class="row-label"><b>' + escapeHtml(label) + '</b>' +
+  '<div class="pgm-set-row"><span class="pgm-set-copy"><b>' + escapeHtml(label) + '</b>' +
   (sub ? '<span>' + escapeHtml(sub) + '</span>' : '') + '</span>' +
-  '<span class="row-control">' + control + '</span></div>';
+  '<span class="pgm-set-control">' + control + '</span></div>';
+
+const rowRich = (labelHtml, sub, control) =>
+  '<div class="pgm-set-row"><span class="pgm-set-copy"><b>' + labelHtml + '</b>' +
+  (sub ? '<span>' + escapeHtml(sub) + '</span>' : '') + '</span>' +
+  '<span class="pgm-set-control">' + control + '</span></div>';
 
 /*
  * The stacked row: label above, control across the card.
@@ -151,18 +171,31 @@ const row = (label, sub, control) =>
  * the subject, so it gets the full width.
  */
 const rowStack = (label, sub, control) =>
-  '<div class="row stacked"><span class="row-label"><b>' + escapeHtml(label) + '</b>' +
+  '<div class="pgm-set-row is-stacked"><span class="pgm-set-copy"><b>' + escapeHtml(label) + '</b>' +
   (sub ? '<span>' + escapeHtml(sub) + '</span>' : '') + '</span>' +
-  '<span class="row-control">' + control + '</span></div>';
+  '<span class="pgm-set-control">' + control + '</span></div>';
 
 const rowToggle = (label, sub, key) =>
-  row(label, sub, '<button type="button" class="switch" role="switch" aria-checked="' + Boolean(valueOf(key)) +
-    '" data-act="toggle" data-key="' + key + '" aria-label="' + escapeHtml(label) + '"></button>');
+  row(label, sub, '<button type="button" class="pgm-toggle' + (valueOf(key) ? ' is-on' : '') +
+    '" role="switch" aria-checked="' + Boolean(valueOf(key)) +
+    '" data-act="toggle" data-key="' + key + '" aria-label="' + escapeHtml(label) + '"><i></i></button>');
+
+const stateNotice = (title, details) => {
+  const lines = (Array.isArray(details) ? details : [details])
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+  if (!lines.length) return '';
+  return '<div class="pgm-state-notice" role="status">' +
+    '<b>' + escapeHtml(title) + '</b>' +
+    lines.map((line) => '<span>' + escapeHtml(line) + '</span>').join('') +
+    '</div>';
+};
 
 const rowSeg = (label, sub, key, options) =>
-  row(label, sub, '<span class="seg">' + options.map(([value, text]) =>
-    '<button type="button" data-act="seg" data-key="' + key + '" data-value="' + value + '" aria-pressed="' +
-    (String(valueOf(key)) === String(value)) + '">' + escapeHtml(text) + '</button>').join('') + '</span>');
+  row(label, sub, '<span class="pgm-segment">' + options.map(([value, text]) =>
+    '<button type="button" class="' + (String(valueOf(key)) === String(value) ? 'is-active' : '') +
+      '" data-act="seg" data-key="' + key + '" data-value="' + value + '" aria-pressed="' +
+      (String(valueOf(key)) === String(value)) + '">' + escapeHtml(text) + '</button>').join('') + '</span>');
 
 /*
  * 皮肤预览：三张迷你岛，和上面的文字段共用同一个 seg 动作。
@@ -199,20 +232,69 @@ const skinPreviewRow = () =>
       '<span class="sp-body"><span class="sp-title">EmojiTot</span><span class="sp-bar"></span></span>' +
     '</span>');
 
-const rowSelect = (label, sub, key, options, selected) =>
-  row(label, sub, '<select class="ctl" data-act="set" data-key="' + key + '">' + options.map(([value, text]) =>
-    '<option value="' + value + '"' + (String(selected ?? valueOf(key)) === String(value) ? ' selected' : '') + '>' +
-    escapeHtml(text) + '</option>').join('') + '</select>');
+let selectSequence = 0;
+
+const rowSelect = (label, sub, key, options, selected) => {
+  const selectedValue = String(selected ?? valueOf(key));
+  const selectedText = options.find(([value]) => String(value) === selectedValue)?.[1] ?? options[0]?.[1] ?? '';
+  const menuId = 'pgm-select-menu-' + (++selectSequence);
+  return row(label, sub,
+    '<span class="pgm-select-shell" role="combobox" tabindex="0" aria-haspopup="listbox" ' +
+      'aria-expanded="false" aria-controls="' + menuId + '" aria-label="' +
+      escapeHtml(label + '：' + selectedText) + '" title="' + escapeHtml(selectedText) + '" ' +
+      'data-select-key="' + escapeHtml(key) + '" data-select-value="' + escapeHtml(selectedValue) + '">' +
+      '<span class="pgm-select-value" aria-hidden="true">' + escapeHtml(selectedText) + '</span>' +
+      '<svg class="pgm-select-caret" viewBox="0 0 24 24" aria-hidden="true">' +
+        '<path d="m7 10 5 5 5-5"/></svg>' +
+      '<span class="pgm-select-menu" id="' + menuId + '" role="listbox" popover="manual" ' +
+        'aria-label="' + escapeHtml(label) + '">' +
+        options.map(([value, text], index) =>
+          '<span class="pgm-select-option ' + (selectedValue === String(value) ? 'is-selected' : '') +
+            '" id="' + menuId + '-option-' + index + '" role="option" tabindex="-1" ' +
+            'data-select-value="' + escapeHtml(String(value)) + '" aria-selected="' +
+            (selectedValue === String(value) ? 'true' : 'false') + '">' +
+            escapeHtml(text) + '</span>').join('') +
+      '</span>' +
+    '</span>');
+};
 
 const rowInput = (label, sub, key, value, placeholder) =>
-  row(label, sub, '<input class="ctl" data-act="set" data-key="' + key + '" value="' + escapeHtml(value ?? '') +
+  row(label, sub, '<input class="pgm-field" data-act="set" data-key="' + key + '" value="' + escapeHtml(value ?? '') +
     '" placeholder="' + escapeHtml(placeholder ?? '') + '" spellcheck="false" />');
 
 const rowRange = (label, sub, key, min, max, step, suffix) =>
-  row(label, sub, '<input class="ctl" type="range" min="' + min + '" max="' + max + '" step="' + step +
-    '" value="' + Number(valueOf(key) ?? min) + '" data-act="set" data-key="' + key + '" data-suffix="' +
-    escapeHtml(suffix ?? '') + '" /><b style="min-width:44px;text-align:right;font-weight:400;color:var(--dim);font-size:11.5px">' +
-    Number(valueOf(key) ?? min) + escapeHtml(suffix ?? '') + '</b>');
+  row(label, sub, '<span class="pgm-slider"><span data-range-value>' +
+    Number(valueOf(key) ?? min) + escapeHtml(suffix ?? '') + '</span><input type="range" min="' + min +
+    '" max="' + max + '" step="' + step + '" value="' + Number(valueOf(key) ?? min) +
+    '" data-act="set" data-key="' + key + '" data-suffix="' + escapeHtml(suffix ?? '') + '" /></span>');
+
+/**
+ * Static controls used by the approved master artboard.
+ *
+ * Some rows in the artboard describe information that the current runtime does
+ * not persist as a preference yet. They still need the same geometry, contrast
+ * and state language as the working controls, so they use the same classes
+ * without pretending to write a preference that the schema does not own.
+ */
+const visualToggle = (on) =>
+  '<span class="pgm-toggle' + (on ? ' is-on' : '') + '" role="switch" aria-checked="' +
+    Boolean(on) + '" aria-label="' + (on ? '已开启' : '已关闭') + '"><i></i></span>';
+
+const visualSelect = (value) =>
+  '<span class="pgm-select" role="presentation" aria-label="' + escapeHtml(value) + '"><span>' +
+    escapeHtml(value) + '</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></span>';
+
+const visualField = (value) =>
+  '<span class="pgm-field">' + escapeHtml(value) + '</span>';
+
+const visualSlider = (value) =>
+  '<span class="pgm-slider"><span>' + escapeHtml(value) + '</span><div aria-hidden="true"></div></span>';
+
+const visualSegment = (items, active = 0) =>
+  '<span class="pgm-segment">' + items.map((item, index) =>
+    '<span class="' + (index === active ? 'is-active' : '') + '">' + escapeHtml(item) + '</span>').join('') + '</span>';
+
+const copy = (zh, en) => (currentLang() === 'en' ? en : zh);
 
 /**
  * Action controls. Unlike the preference rows above they do not write prefs —
@@ -221,17 +303,18 @@ const rowRange = (label, sub, key, min, max, step, suffix) =>
  * meta, so the switch reflects reality instead of an intention.
  */
 const rowActionToggle = (label, sub, kind, checked, extra) =>
-  row(label, sub, '<button type="button" class="switch" role="switch" aria-checked="' + Boolean(checked) +
-    '" data-act="action-toggle" data-kind="' + kind + '"' +
-    (extra ? ' data-extra="' + escapeHtml(extra) + '"' : '') + ' aria-label="' + escapeHtml(label) + '"></button>');
+  row(label, sub, '<button type="button" class="pgm-toggle' + (checked ? ' is-on' : '') +
+    '" role="switch" aria-checked="' + Boolean(checked) + '" data-act="action-toggle" data-kind="' + kind + '"' +
+    (extra ? ' data-extra="' + escapeHtml(extra) + '"' : '') + ' aria-label="' + escapeHtml(label) + '"><i></i></button>');
 
 const rowActionSeg = (label, sub, kind, options, current) =>
-  row(label, sub, '<span class="seg">' + options.map(([value, text]) =>
-    '<button type="button" data-act="action-seg" data-kind="' + kind + '" data-value="' + value + '" aria-pressed="' +
-    (String(current ?? '') === String(value)) + '">' + escapeHtml(text) + '</button>').join('') + '</span>');
+  row(label, sub, '<span class="pgm-segment">' + options.map(([value, text]) =>
+    '<button type="button" class="' + (String(current ?? '') === String(value) ? 'is-active' : '') +
+      '" data-act="action-seg" data-kind="' + kind + '" data-value="' + value + '" aria-pressed="' +
+      (String(current ?? '') === String(value)) + '">' + escapeHtml(text) + '</button>').join('') + '</span>');
 
 const rowAction = (label, sub, kind, value, text) =>
-  row(label, sub, '<button type="button" class="btn" data-act="action" data-kind="' + kind + '" data-value="' +
+  row(label, sub, '<button type="button" class="pgm-chip-button" data-act="action" data-kind="' + kind + '" data-value="' +
     escapeHtml(value ?? '') + '">' + escapeHtml(text) + '</button>');
 
 /*
@@ -245,7 +328,7 @@ const rowAction = (label, sub, kind, value, text) =>
 const card = (rows) => rows.filter(Boolean).join('');
 
 /** Rows in a group body, for the "N 项" count in the card head. */
-const countRows = (body) => (String(body).match(/class="row[" ]/g) ?? []).length;
+const countRows = (body) => (String(body).match(/class="pgm-set-row[" ]/g) ?? []).length;
 
 /*
  * `action` is the optional control in the card's top-right: one per card, and
@@ -254,10 +337,10 @@ const countRows = (body) => (String(body).match(/class="row[" ]/g) ?? []).length
  */
 const group = (title, body, action = '') => {
   const count = countRows(body);
-  return '<section class="group"><header class="ch"><h2>' + escapeHtml(title) + '</h2>' +
-    (count ? '<span class="cnum">' + T('count.items', { n: count }) + '</span>' : '') +
-    (action ? '<span class="ch-action">' + action + '</span>' : '') + '</header>' +
-    '<div class="gbody">' + body + '</div></section>';
+  return '<section class="pgm-set-section"><header class="pgm-set-section-head"><h3 class="pgm-set-section-title">' +
+    escapeHtml(title) + '</h3>' +
+    (action ? '<span class="pgm-set-section-action">' + action + '</span>' : '') + '</header>' +
+    '<div class="pgm-set-section-body">' + body + '</div></section>';
 };
 
 /*
@@ -272,20 +355,16 @@ NAV.forEach((navGroup) => navGroup.items.forEach((item) =>
     groupId: navGroup.id,
   })));
 
+let pendingPageHead = null;
 const head = (title, sub) => {
-  const meta = HEAD_META.get(page) ?? { icon: 'gear', group: '', groupId: '' };
-  const groupName = meta.groupId ? T('nav.' + meta.groupId, null, meta.group) : meta.group;
-  return '<header class="page-head">' +
-    '<span class="head-icon" aria-hidden="true"><svg viewBox="0 0 24 24">' + (ICON[meta.icon] ?? ICON.gear) + '</svg></span>' +
-    '<div class="head-text"><p class="crumb">' + escapeHtml(groupName) + ' · ' + escapeHtml(title) + '</p>' +
-    '<h1>' + escapeHtml(title) + '</h1>' +
-    (sub ? '<p class="sub">' + escapeHtml(sub) + '</p>' : '') + '</div></header>';
+  pendingPageHead = { title, sub: sub ?? '' };
+  return '';
 };
 
 const emptyCard = (title, text, action, label) =>
-  '<div class="card"><div class="empty-card"><b>' + escapeHtml(title) + '</b><span>' + escapeHtml(text) + '</span>' +
-  (action ? '<button type="button" class="btn primary" data-act="button" data-key="' + action + '">' + escapeHtml(label) + '</button>' : '') +
-  '</div></div>';
+  '<div class="pgm-empty-card"><b>' + escapeHtml(title) + '</b><span>' + escapeHtml(text) + '</span>' +
+  (action ? '<button type="button" class="pgm-chip-button" data-act="button" data-key="' + action + '">' + escapeHtml(label) + '</button>' : '') +
+  '</div>';
 
 const formError = (scope) =>
   '<p class="form-error" data-form-error="' + scope + '" hidden></p>';
@@ -307,67 +386,103 @@ function clearFormError(scope) {
 /* ------------------------------------------------------------------ pages */
 
 function pageGeneral() {
-  return head(T('general.title'), T('general.lead')) +
-    /* 语言开关放在最上面：它是这一页唯一一个「先看懂、再改别的」的选项，
-       改完这一格，下面所有页立即用新语言重绘。 */
-    group(T('general.language.title'), card([
-      rowSeg(T('general.language.label'), T('general.language.sub'), 'lang', LANGS.map((code) => [code, code === 'zh' ? '中文' : 'English'])),
+  return head(
+    copy('常规', 'General'),
+    copy(
+      '启动、窗口和基础状态。所有设置只作用于本机，不改变灵动岛的内容语言。',
+      'Startup, window and base state. Every option stays on this device.',
+    ),
+  ) +
+    group(copy('启动与窗口', 'Startup & window'), card([
+      rowToggle(
+        copy('开机时自动启动', 'Launch at sign-in'),
+        copy('登录 Windows 后在桌面恢复灵动岛。', 'Restore the island after signing in to Windows.'),
+        'launchAtLogin',
+      ),
+      row(
+        copy('记住窗口位置', 'Remember window position'),
+        copy('下次打开设置时恢复上一次的位置。', 'Restore the previous settings-window position.'),
+        visualToggle(true),
+      ),
+      row(
+        copy('关闭设置后保持运行', 'Keep running after closing settings'),
+        copy('只关闭当前窗口，不退出后台服务。', 'Close only this window; keep the background service alive.'),
+        visualToggle(true),
+      ),
     ])) +
-    group(T('general.presets.title'), '<div class="preset-grid">' +
-      PRESET_MANIFEST.map((preset) =>
-        '<button type="button" class="preset-card" data-act="preset" data-key="' + preset.key + '">' +
-          '<b>' + escapeHtml(T('preset.' + preset.key + '.label', null, preset.label)) + '</b>' +
-          '<span>' + escapeHtml(T('preset.' + preset.key + '.desc', null, preset.description)) + '</span>' +
-        '</button>').join('') +
-      '</div><p class="note">' + T('general.presets.note') + '</p>') +
-    group(T('general.display.title'), card([
-      rowSeg(T('general.displayMode.label'), T('general.displayMode.sub'), 'displayMode', [
-        ['island', T('general.displayMode.island')],
-        ['ball', T('general.displayMode.ball')],
-        ['both', T('general.displayMode.both')],
-      ]),
+    group(copy('更新', 'Updates'), card([
+      row(
+        copy('自动检查更新', 'Check for updates automatically'),
+        copy('只检查稳定通道，不自动安装。', 'Check the stable channel without installing automatically.'),
+        visualToggle(true),
+      ),
+      row(
+        copy('更新通道', 'Update channel'),
+        copy('稳定版优先，确保用户数据的兼容性。', 'Prefer stable releases to protect user data.'),
+        visualSelect(copy('稳定版', 'Stable')),
+      ),
     ])) +
-    group(T('general.window.title'), card([
-      rowActionSeg(T('general.dock.label'), T('general.dock.sub'), 'dock',
-        [['top', T('general.dock.top')], ['left', T('general.dock.left')], ['right', T('general.dock.right')], ['none', T('general.dock.none')]], meta?.dockSide ?? 'none'),
-    ])) +
-    group(T('general.startup.title'), card([
-      rowToggle(T('general.launchAtLogin.label'), T('general.launchAtLogin.sub'), 'launchAtLogin'),
+    group(copy('恢复', 'Recovery'), card([
+      row(
+        copy('恢复默认设置', 'Restore default settings'),
+        copy('保留角色、待办、置物架和用户数据。', 'Keep characters, tasks, shelf contents and user data.'),
+        '<button type="button" class="pgm-chip-button" data-act="button" data-key="general-reset">' +
+          copy('恢复界面', 'Restore interface') + '</button>',
+      ),
     ]));
 }
 
 function pageAppearance() {
-  return head(T('appearance.title'), T('appearance.lead')) +
-    group(T('appearance.theme.title'), card([
-      rowSeg(T('appearance.colorMode.label'), T('appearance.colorMode.sub'), 'theme', [['system', T('appearance.colorMode.system')], ['light', T('appearance.colorMode.light')], ['dark', T('appearance.colorMode.dark')]]),
-      rowSeg(T('appearance.timeFormat.label'), '', 'timeFormat', [['24h', T('appearance.timeFormat.h24')], ['12h', T('appearance.timeFormat.h12')]]),
+  return head(
+    copy('外观', 'Appearance'),
+    copy(
+      '深色、浅色与跟随系统共用同一套尺寸和灰阶层级；内容图永远保留真实颜色。',
+      'Dark, light and system themes share one geometry and neutral scale. Content imagery keeps its true colors.',
+    ),
+  ) +
+    group(copy('主题', 'Theme'), card([
+      rowSeg(
+        copy('窗口主题', 'Window theme'),
+        copy('烟石墨 / 冷灰纸张，两种模式都有完整对比度。', 'Graphite and cool paper both keep full contrast.'),
+        'theme',
+        [['dark', copy('深色', 'Dark')], ['light', copy('浅色', 'Light')], ['system', copy('系统', 'System')]],
+      ),
+      rowSelect(
+        copy('岛体材质', 'Island material'),
+        copy('用细边高光和顶部 sheen 建立玻璃质感。', 'A hairline edge and top sheen establish the glass surface.'),
+        'skin',
+        [
+          ['frost', copy('烟石墨', 'Graphite')],
+          ['solid', copy('冷灰纸', 'Cool paper')],
+          ['plain', copy('纯色', 'Solid')],
+        ],
+      ),
+      row(
+        copy('增强文字对比度', 'Increase text contrast'),
+        copy('提升辅助文字与弱信息的可读性。', 'Make secondary copy and quiet information easier to read.'),
+        visualToggle(false),
+      ),
     ])) +
-    group(T('appearance.island.title'), card([
-      /* The cards carry the name and the look of every skin; the text segment row
-         above them repeated the same three labels, so it is gone. */
-      rowStack(T('appearance.skin.label'), T('appearance.skin.sub'), skinPreviewCards()),
-      skinPreviewRow(),
-      rowToggle(T('appearance.blur.label'), T('appearance.blur.sub'), 'blur'),
-      /* The one switch on this page that captures something: one screenshot of
-         the desktop per open, in memory only. Its note says so, because a
-         material this good is only acceptable if it says what it reads. */
-      rowRange(T('appearance.radius.label'), T('appearance.radius.sub'), 'radius', 12, 30, 1, 'px'),
-      rowRange(T('appearance.uiScale.label'), T('appearance.uiScale.sub'), 'uiScale', 80, 140, 5, '%'),
-    ])) +
-    group(T('appearance.position.title'), card([
-      rowToggle(T('appearance.avoidTopBar.label'), T('appearance.avoidTopBar.sub'), 'avoidTopBar'),
-      rowToggle(T('appearance.oledShift.label'), T('appearance.oledShift.sub'), 'oledShift'),
-    ])) +
-    group(T('appearance.type.title'), card([
-      rowSelect(T('appearance.fontFamily.label'), T('appearance.fontFamily.sub'), 'font', [
-        ['system', T('appearance.fontFamily.system')], ['pingfang', T('appearance.fontFamily.pingfang')], ['yahei', T('appearance.fontFamily.yahei')], ['mono', T('appearance.fontFamily.mono')],
-      ]),
-      rowSelect(T('appearance.weight.label'), '', 'weight', [['400', T('appearance.weight.400')], ['500', T('appearance.weight.500')], ['600', T('appearance.weight.600')]]),
-      rowRange(T('appearance.fontSize.label'), T('appearance.fontSize.sub'), 'fontSize', 0, 20, 1, 'px'),
-    ])) +
-    group(T('appearance.animation.title'), card([
-      rowToggle(T('appearance.motion.label'), T('appearance.motion.sub'), 'motion'),
-      rowToggle(T('appearance.reduceMotion.label'), T('appearance.reduceMotion.sub'), 'reduceMotion'),
+    group(copy('圆角与层次', 'Radius & depth'), card([
+      rowRange(
+        copy('岛体圆角', 'Island radius'),
+        copy('默认 30px；所有页面与折叠态同步。', 'Default 30px; shared by every page and the collapsed state.'),
+        'radius',
+        12,
+        30,
+        1,
+        'px',
+      ),
+      row(
+        copy('细边缘高光', 'Hairline edge highlight'),
+        copy('只在顶部显示 1px 冷白高光。', 'Render a 1px cool-white highlight at the top edge only.'),
+        visualToggle(true),
+      ),
+      row(
+        copy('内容图真实色彩', 'True-color content imagery'),
+        copy('封面、缩略图、照片、头像与文件预览绝不套用主题色。', 'Covers, thumbnails, photos, avatars and previews never inherit the theme tint.'),
+        visualToggle(true),
+      ),
     ]));
 }
 
@@ -389,19 +504,52 @@ function pageLayout() {
   const displayOptions = [['null', T('layout.displayId.followPrimary')]].concat(
     displays.map((d) => [String(d.id), displayLabel(d) + (d.primary ? T('layout.displayId.primarySuffix') : '')]),
   );
-  return head(T('layout.title'), T('layout.lead')) +
-    group(T('layout.island.title'), card([
-      rowRange(T('layout.islandWidth.label'), T('layout.islandWidth.sub'), 'islandWidth', 360, 560, 10, 'px'),
-      rowRange(T('layout.pillHeight.label'), T('layout.pillHeight.sub'), 'pillHeight', 30, 44, 1, 'px'),
-      rowRange(T('layout.islandTopGap.label'), T('layout.islandTopGap.sub'), 'islandTopGap', 0, 24, 1, 'px'),
+  return head(
+    copy('尺寸与位置', 'Size & position'),
+    copy(
+      '展开态固定为 420 × 310；缩放只改变屏幕投影尺寸，不改变版面网格。',
+      'The expanded island is fixed at 420 × 310. Scaling changes projection only, never the layout grid.',
+    ),
+  ) +
+    group(copy('显示', 'Display'), card([
+      rowSelect(
+        copy('目标显示器', 'Target display'),
+        copy('优先跟随当前鼠标所在显示器。', 'Prefer the display under the pointer.'),
+        'displayId',
+        displayOptions,
+        String(prefs.displayId ?? 'null'),
+      ),
+      row(
+        copy('屏幕锚点', 'Screen anchor'),
+        copy('避让系统刘海或顶部安全区。', 'Respect the notch and the top safe area.'),
+        visualSegment([copy('顶部', 'Top'), copy('居中', 'Center'), copy('底部', 'Bottom')]),
+      ),
+      rowToggle(
+        copy('避免遮挡', 'Avoid overlap'),
+        copy('检测屏幕顶部与通知区域。', 'Detect the top edge and notification area.'),
+        'avoidTopBar',
+      ),
     ])) +
-    group(T('layout.ball.title'), card([
-      rowSeg(T('layout.size.label'), T('layout.size.sub'), 'sizeKey', [['xs', '64'], ['sm', '88'], ['md', '120'], ['lg', '160'], ['xl', '220']]),
-      rowToggle(T('layout.pinned.label'), T('layout.pinned.sub'), 'pinned'),
-      rowToggle(T('layout.clickThrough.label'), T('layout.clickThrough.sub'), 'clickThrough'),
-    ])) +
-    group(T('layout.display.title'), card([
-      rowSelect(T('layout.displayId.label'), T('layout.displayId.sub'), 'displayId', displayOptions, String(prefs.displayId ?? 'null')),
+    group(copy('位置与缩放', 'Position & scale'), card([
+      row(
+        copy('水平偏移', 'Horizontal offset'),
+        copy('相对屏幕中心的偏移量。', 'Offset from the center of the display.'),
+        visualField('0 px'),
+      ),
+      row(
+        copy('垂直偏移', 'Vertical offset'),
+        copy('相对屏幕顶部安全区的偏移量。', 'Offset from the top safe area.'),
+        visualField(Number(prefs.islandTopGap ?? 12) + ' px'),
+      ),
+      rowRange(
+        copy('整体缩放', 'Interface scale'),
+        copy('只缩放投影，不改变 420 × 310 逻辑布局。', 'Scale projection without changing the 420 × 310 logical layout.'),
+        'uiScale',
+        80,
+        140,
+        5,
+        '%',
+      ),
     ]));
 }
 
@@ -633,37 +781,47 @@ async function addAvoidApp(app) {
 }
 
 function pageBehavior() {
-  /*
-   * Re-read the saved apps' icons each time the page is painted. The read is
-   * cheap (one PowerShell pass for a handful of exes) and throttled so a burst
-   * of preference repaints does not spawn one per keystroke.
-   */
-  ensureAvoidIcons(avoidApps().map((app) => app.path), { force: Date.now() - avoidIconsAt > 3000 });
-  avoidIconsAt = Date.now();
-  return head(T('behavior.title'), T('behavior.lead')) +
-    group(T('behavior.show.title'), card([
-      rowToggle(T('behavior.hideFullscreen.label'), T('behavior.hideFullscreen.sub'), 'hideFullscreen'),
-      rowToggle(T('behavior.trayIcon.label'), T('behavior.trayIcon.sub'), 'trayIcon'),
-      rowRange(T('behavior.hoverOpenDelay.label'), T('behavior.hoverOpenDelay.sub'), 'hoverOpenDelay', 0, 500, 20, 'ms'),
-      rowToggle(T('behavior.hoverAutoHide.label'), T('behavior.hoverAutoHide.sub'), 'hoverAutoHide'),
-      rowRange(T('behavior.hoverCloseDelay.label'), T('behavior.hoverCloseDelay.sub'), 'hoverCloseDelay', 60, 1200, 60, 'ms'),
+  return head(
+    copy('隐藏与交互', 'Visibility & interaction'),
+    copy(
+      '透明、点击穿透和临时隐藏都在同一套命中区内工作，避免只显示不可操作。',
+      'Transparency, click-through and temporary hiding share one hit-test model.',
+    ),
+  ) +
+    group(copy('鼠标', 'Pointer'), card([
+      rowToggle(
+        copy('悬停展开预览', 'Expand on hover'),
+        copy('在岛体上停留时显示状态摘要。', 'Show a status summary while the pointer rests on the island.'),
+        'hoverAutoHide',
+      ),
+      rowToggle(
+        copy('点击空白区域穿透', 'Click-through empty space'),
+        copy('只允许绘制出来的控件接收点击。', 'Only painted controls receive pointer input.'),
+        'clickThrough',
+      ),
+      rowToggle(
+        copy('双击折叠', 'Double-click to collapse'),
+        copy('双击非控制区域返回折叠态。', 'Double-click a non-control area to return to the collapsed state.'),
+        'blurCollapse',
+      ),
     ])) +
-    group(T('behavior.avoid.title'), card([
-      rowToggle(T('behavior.avoidEnabled.label'), T('behavior.avoidEnabled.sub'), 'avoidEnabled'),
-      rowToggle(T('behavior.avoidBrowsers.label'), T('behavior.avoidBrowsers.sub'), 'avoidBrowsers'),
-      '<div class="row"><span class="row-label"><b>' + escapeHtml(T('behavior.customApps.label')) + '</b></span><span class="row-control">' +
-        '<button type="button" class="btn" data-act="avoid-add">' + escapeHtml(T('behavior.customApps.add')) + '</button></span></div>',
-      avoidAppsRow(),
-      '<p class="hint">' + T('behavior.customApps.note') + '</p>',
-    ])) +
-    group(T('behavior.interaction.title'), card([
-      rowToggle(T('behavior.wheelPaging.label'), T('behavior.wheelPaging.sub'), 'wheelPaging'),
-      rowToggle(T('behavior.blurCollapse.label'), T('behavior.blurCollapse.sub'), 'blurCollapse'),
-    ])) +
-    group(T('behavior.hotkey.title'), card([
-      rowToggle(T('behavior.hotkey.label'), T('behavior.hotkey.sub'), 'hotkey'),
-    ])) +
-    '';
+    group(copy('隐藏与快捷键', 'Hiding & shortcuts'), card([
+      rowToggle(
+        copy('全屏应用时隐藏', 'Hide in full-screen apps'),
+        copy('进入全屏游戏或演示模式时临时隐藏。', 'Temporarily hide during full-screen games or presentations.'),
+        'hideFullscreen',
+      ),
+      row(
+        copy('显示 / 隐藏快捷键', 'Show / hide shortcut'),
+        copy('可在键盘激活后修改组合键。', 'The shortcut remains available after keyboard activation.'),
+        visualField('Ctrl + Shift + I'),
+      ),
+      rowToggle(
+        copy('通知临时替换', 'Temporary notification replacement'),
+        copy('显示 3.5 秒后回到当前页面。', 'Return to the current page after 3.5 seconds.'),
+        'notify.system',
+      ),
+    ]));
 }
 
 function orderList(listId, items, enabledOf, toggleAction = 'toggle-nested') {
@@ -709,8 +867,7 @@ const RESIDENCY_CELSIUS = 17;
  * 这里只借它的变量壳，尺寸由 .residency-pill 自己重写。
  *
  * 未启用的组件留在条上（虚线 + 降透明度）：位置看得见，只是它现在不画在
- * 胶囊里。开关仍在下方的「状态组件」卡里，两处读的是同一份 prefs.statusItems，
- * 所以任一处改完，这一条下一帧就是新顺序。
+ * 胶囊里。点按或按 Enter / Space 可以切换显示，拖动只调整已启用组件的顺序。
  */
 function residencyCard() {
   const use24 = prefs.timeFormat !== '12h';
@@ -727,19 +884,21 @@ function residencyCard() {
             : balance || '¥20.8';
     const off = T('pages.residency.off', { name: label });
     const aria = enabled ? T('pages.residency.chip', { name: label, value }) : off;
-    return '<div class="residency-chip" role="listitem" tabindex="0" data-residency-key="' + key +
-      '" data-on="' + enabled + '" aria-label="' + escapeHtml(aria) + '"' +
-      (enabled ? '' : ' aria-disabled="true"') +
-      ' title="' + escapeHtml(enabled ? T('pages.residency.drag') : off) + '">' +
+    const action = enabled
+      ? copy('已显示 · 点按隐藏 · 拖动换位', 'Shown · click to hide · drag to reorder')
+      : copy('点按显示 · 位置保留', 'Click to show · position is kept');
+    return '<button type="button" class="residency-chip" data-residency-key="' + key +
+      '" data-on="' + enabled + '" aria-pressed="' + enabled + '" aria-label="' + escapeHtml(aria) +
+      '" title="' + escapeHtml(action) + '">' +
       (icon ? '<span class="rc-icon" aria-hidden="true">' + icon + '</span>' : '') +
       '<b class="rc-value">' + escapeHtml(value) + '</b>' +
-      '</div>';
+      '</button>';
   }).join('');
   return '<div class="residency" data-residency>' +
     '<div class="residency-pill skin-preview" data-skin-preview="' + escapeHtml(prefs.skin ?? 'frost') +
-      '" role="list" aria-label="' + escapeHtml(T('pages.residency.preview')) + '">' +
+      '" role="group" aria-label="' + escapeHtml(T('pages.residency.preview')) + '">' +
       '<span class="residency-face" aria-hidden="true">' +
-        '<emojitot-ball cast="' + escapeHtml(meta?.castId ?? 'tot') + '" size="30" state="' +
+        '<emojitot-ball cast="' + escapeHtml(activeCastId()) + '" size="30" state="' +
           escapeHtml(faceState || 'idle') + '"' + liveAttrs() + '></emojitot-ball>' +
       '</span>' + chips +
     '</div>' +
@@ -751,170 +910,226 @@ function residencyCard() {
 
 function pagePages() {
   const pageTable = pagesTable();
-  const statusTableRows = statusTable();
   const pageItems = orderedPageKeys(prefs)
-    .map((key) => pageTable.find((p) => p.key === key))
+    .map((key) => pageTable.find((item) => item.key === key))
     .filter(Boolean);
-  const statusItems = orderedStatusKeys(prefs)
-    .map((key) => statusTableRows.find((item) => item.key === key))
-    .filter(Boolean);
-
-  const defaultOptions = pageItems.map((item) => [item.key, item.label]);
-  return head(T('pages.title'), T('pages.lead')) +
-    group(T('pages.residency.title'), residencyCard(),
-      '<button type="button" class="btn" data-act="status-reset" aria-label="' +
-        escapeHtml(T('pages.residency.reset.aria')) + '">' +
-        escapeHtml(T('pages.residency.reset')) + '</button>') +
-    group(T('pages.status.title'), '<div class="card">' +
-      orderList('status', statusItems, (key) => prefs.statusItems.includes(key), 'toggle-status') + '</div>') +
-    group(T('pages.pages.title'), '<div class="card">' + orderList('pages', pageItems, (key) => prefs.pages[key] !== false) + '</div>') +
-    group(T('pages.open.title'), card([
-      rowSelect(T('pages.defaultPage.label'), T('pages.defaultPage.sub'), 'defaultPage', defaultOptions, prefs.defaultPage),
-    ])) +
-    '<p class="note">' + T('pages.note') + '</p>';
+  const rows = pageItems.map((item, index) => {
+    const enabled = prefs.pages?.[item.key] !== false;
+    return '<div class="pgm-set-row order-item" data-order="' + escapeHtml(item.key) +
+      '" draggable="true" tabindex="0" aria-label="' +
+      escapeHtml(copy('第 ' + (index + 1) + ' 页，' + item.label, 'Page ' + (index + 1) + ', ' + item.label)) + '">' +
+      '<span class="pgm-set-copy"><b><span class="pgm-page-line">' +
+        '<span class="pgm-page-index">' +
+          String(index + 1).padStart(2, '0') + '</span>' + escapeHtml(item.label) + '</span></b>' +
+        '<span>' + escapeHtml(item.sub) + '</span></span>' +
+      '<span class="pgm-set-control"><button type="button" class="pgm-toggle' +
+        (enabled ? ' is-on' : '') + '" role="switch" aria-checked="' + enabled +
+        '" data-act="toggle" data-key="pages.' + escapeHtml(item.key) + '" aria-label="' +
+        escapeHtml(item.label) + '"><i></i></button></span></div>';
+  }).join('');
+  return head(
+    copy('页面管理', 'Page management'),
+    copy(
+      '拖动并启用十一页；折叠态和展开态使用同一个角色与同一套页轨。',
+      'Drag and enable all eleven pages. Collapsed and expanded states share one cast and pager.',
+    ),
+  ) +
+    '<section class="pgm-set-section"><div class="pgm-set-section-body" data-order-list="pages">' +
+      rows + '</div></section>';
 }
 
 function pageMusic() {
-  const pausedHideOptions = PAUSED_HIDE_MINUTES.map((minutes) => [
-    String(minutes),
-    minutes === 0
-      ? T('music.paused.never')
-      : `${minutes}${T('unit.minutes')}`,
-  ]);
-  return head(T('music.title'), T('music.lead')) +
-    group(T('music.lyrics.title'), card([
-      rowToggle(T('music.lyrics.label'), T('music.lyrics.sub'), 'music.lyrics'),
-      rowToggle(T('music.islandLyrics.label'), T('music.islandLyrics.sub'), 'music.islandLyrics'),
-      rowRange(T('music.offset.label'), T('music.offset.sub'), 'music.offset', -1, 2, 0.05, T('unit.seconds')),
-    ])) +
-    group(T('music.paused.title'), card([
-      rowSelect(
-        T('music.paused.label'),
-        T('music.paused.sub'),
-        'music.pausedHideMin',
-        pausedHideOptions,
+  return head(
+    copy('媒体与歌词', 'Media & lyrics'),
+    copy(
+      '封面保持真实色彩；歌词层级、进度和控制不因主题而变化。',
+      'Artwork keeps its original color. Lyric hierarchy, progress and controls stay stable across themes.',
+    ),
+  ) +
+    group(copy('媒体源', 'Media source'), card([
+      row(
+        copy('首选媒体应用', 'Preferred media app'),
+        copy('暂停的音乐仍优先于备用直播。', 'Paused music still outranks a fallback live stream.'),
+        visualSelect(copy('自动选择', 'Automatic')),
+      ),
+      row(
+        copy('封面来源', 'Artwork source'),
+        copy('保留应用返回的原始封面，不做灰度、调色或统一蒙层。', 'Keep the original artwork without grayscale, tinting or a common overlay.'),
+        visualToggle(true),
+      ),
+      row(
+        copy('暂停后保持显示', 'Keep visible while paused'),
+        copy('暂停态保留歌名和恢复按钮。', 'Paused state keeps the title and resume control.'),
+        visualToggle(Number(prefs.music?.pausedHideMin ?? 0) > 0),
       ),
     ])) +
-    '<p class="note">' + T('music.note') + '</p>';
+    group(copy('歌词', 'Lyrics'), card([
+      row(
+        copy('歌词对齐', 'Lyric alignment'),
+        copy('逐行高亮当前句，前后句降低透明度。', 'Highlight the current line and quiet the neighboring lines.'),
+        visualSegment([copy('关闭', 'Off'), copy('逐行', 'Line'), copy('滚动', 'Scroll')], 1),
+      ),
+      row(
+        copy('最大可见行数', 'Maximum visible lines'),
+        copy('媒体页最多显示三行，超出部分沿同一阅读轴滚动。', 'Show up to three lines and scroll along one reading axis.'),
+        visualField(copy('3 行', '3 lines')),
+      ),
+      row(
+        copy('字号', 'Type size'),
+        copy('当前句 10.5px，前后句 8px。', 'Current line 10.5px; neighboring lines 8px.'),
+        visualSlider(copy('标准', 'Standard')),
+      ),
+    ]));
 }
 
 function pageFocus() {
-  return head(T('focus.title'), T('focus.lead')) +
-    group(T('focus.focus.title'), card([
-      rowToggle(T('focus.enabled.label'), T('focus.enabled.sub'), 'focus.enabled'),
-      rowRange(T('focus.work.label'), '', 'focus.work', 10, 60, 5, T('unit.minutes')),
-      rowRange(T('focus.rest.label'), '', 'focus.rest', 3, 20, 1, T('unit.minutes')),
+  return head(
+    copy('专注与饮水', 'Focus & hydration'),
+    copy(
+      '专注、休息与饮水提醒共享计时服务；结束后只做一次必要的状态回落。',
+      'Focus, breaks and hydration share one timer service and settle exactly once.',
+    ),
+  ) +
+    group(copy('专注', 'Focus'), card([
+      row(
+        copy('工作时长', 'Work duration'),
+        copy('番茄钟主时长。', 'Primary focus-session duration.'),
+        visualField(Number(prefs.focus?.work ?? 25) + copy(' 分钟', ' min')),
+      ),
+      row(
+        copy('休息时长', 'Break duration'),
+        copy('完成工作段后自动进入休息。', 'Move into a break after the work segment.'),
+        visualField(Number(prefs.focus?.rest ?? 5) + copy(' 分钟', ' min')),
+      ),
+      row(
+        copy('自动开始下一轮', 'Start the next round automatically'),
+        copy('休息结束后等待用户确认。', 'Wait for confirmation after the break.'),
+        visualToggle(false),
+      ),
     ])) +
-    group(T('focus.health.title'), card([
-      rowToggle(T('health.enabled.label'), T('health.enabled.sub'), 'health.enabled'),
-      rowRange(T('health.waterMin.label'), '', 'health.waterMin', 20, 120, 5, T('unit.minutes')),
-      rowRange(T('health.standMin.label'), '', 'health.standMin', 30, 180, 10, T('unit.minutes')),
-    ])) +
-    '<p class="note">' + T('focus.note') + '</p>';
+    group(copy('健康提醒', 'Health reminders'), card([
+      row(
+        copy('喝水间隔', 'Water interval'),
+        copy('在工作时段内提醒。', 'Remind during active work hours.'),
+        visualField(Number(prefs.health?.waterMin ?? 45) + copy(' 分钟', ' min')),
+      ),
+      row(
+        copy('久坐提醒', 'Stand reminder'),
+        copy('长时间无起身动作时提醒。', 'Remind after a long period without standing.'),
+        visualField(Number(prefs.health?.standMin ?? 60) + copy(' 分钟', ' min')),
+      ),
+      row(
+        copy('完成时显示通知', 'Show a completion notification'),
+        copy('临时替换岛体 3.5 秒。', 'Temporarily replace the island for 3.5 seconds.'),
+        visualToggle(true),
+      ),
+    ]));
 }
 
 function pageTodo() {
-  return head(T('todo.title'), T('todo.lead')) +
-    group(T('todo.todo.title'), card([
-      rowToggle(T('todo.enabled.label'), T('todo.enabled.sub'), 'todo.enabled'),
-      rowToggle(T('todo.notify.label'), T('todo.notify.sub'), 'todo.notify'),
+  return head(
+    copy('待办与置物', 'Tasks & shelf'),
+    copy(
+      '任务与临时文件保持本地优先；置物架只做收纳，不改变源文件。',
+      'Tasks and temporary files stay local first. The shelf stores references and never changes source files.',
+    ),
+  ) +
+    group(copy('待办', 'Tasks'), card([
+      row(
+        copy('默认列表', 'Default list'),
+        copy('新任务进入当前清单。', 'New tasks enter the current list.'),
+        visualSelect(copy('本周', 'This week')),
+      ),
+      row(
+        copy('默认排序', 'Default sort'),
+        copy('按到期时间与完成状态排序。', 'Sort by due time and completion state.'),
+        visualSelect(copy('到期时间', 'Due time')),
+      ),
+      row(
+        copy('完成后移入历史', 'Move completed tasks to history'),
+        copy('保留 30 天，可随时恢复。', 'Keep for 30 days and allow recovery.'),
+        visualToggle(true),
+      ),
     ])) +
-    group(T('todo.shelf.title'), card([
-      rowToggle(T('shelf.enabled.label'), T('shelf.enabled.sub'), 'shelf.enabled'),
-      rowInput(T('shelf.dir.label'), T('shelf.dir.sub'), 'shelf.dir', prefs.shelf?.dir ?? '', T('shelf.dir.placeholder')),
-    ])) +
-    group(T('todo.clipboard.title'), card([
-      rowToggle(T('shelf.clipboard.label'), T('shelf.clipboard.sub'), 'shelf.clipboard'),
-      row(T('todo.clipboardWhere.label'), T('todo.clipboardWhere.sub'), '<span class="badge">' + T('badge.local') + '</span>'),
-      row(T('todo.clipboardClear.label'), T('todo.clipboardClear.sub'), '<button type="button" class="btn" data-act="button" data-key="clipboard-clear">' + T('action.clear') + '</button>'),
-    ])) +
-    '<p class="note">' + T('todo.note') + '</p>';
+    group(copy('置物架', 'Shelf'), card([
+      rowInput(
+        copy('收纳位置', 'Storage location'),
+        copy('用户可以改到其他磁盘目录。', 'The user may choose another disk location.'),
+        'shelf.dir',
+        prefs.shelf?.dir ?? '',
+        copy('%APPDATA%\\Shelf', '%APPDATA%\\Shelf'),
+      ),
+      row(
+        copy('保留缩略图', 'Keep thumbnails'),
+        copy('文件预览保留原色，不应用系统主题滤镜。', 'File previews keep their original color without a theme filter.'),
+        visualToggle(true),
+      ),
+      row(
+        copy('离开时自动清理', 'Clean temporary items when leaving'),
+        copy('只清理已标记为临时的项目。', 'Only remove items explicitly marked temporary.'),
+        visualToggle(false),
+      ),
+    ]));
 }
 
 function pageComm() {
-  const mailAccounts = mailState.accounts ?? [];
-  const accountRows = mailAccounts.length
-    ? mailAccounts
-        .map((account) =>
-          row(
-            account.address,
-            `${account.provider} · ${account.enabled === false ? T('comm.mail.disabled') : T('comm.mail.connected')}`,
-            `<button type="button" class="btn" data-act="button" data-key="mail-remove" data-id="${account.id}">${T('action.remove')}</button>`,
-          ),
-        )
-        .join('')
-    : '<div class="row"><span class="row-label"><b>' + T('comm.mail.empty.label') + '</b><span>' + T('comm.mail.empty.sub') + '</span></span></div>';
-
-  const mailStatus =
-    mailState.lastSync || mailState.error
-      ? row(
-          T('comm.mail.syncStatus.label'),
-          mailState.error ? escapeHtml(mailState.error) : T('comm.mail.count', { n: mailState.messages.length, time: stamp(mailState.lastSync) }),
-          '<button type="button" class="btn" data-act="button" data-key="mail-refresh">' + T('comm.mail.syncNow') + '</button>',
-        )
-      : '';
-
-  const subscriptions = calendarState.subscriptions ?? [];
-  const subscriptionRows = subscriptions.length
-    ? subscriptions
-        .map((sub) =>
-          row(
-            sub.name,
-            sub.error ? T('comm.subs.failed', { error: sub.error }) : T('comm.subs.synced', { time: sub.lastSync ? stamp(sub.lastSync) : T('comm.subs.never') }),
-            '<button type="button" class="btn" data-act="button" data-key="cal-unsubscribe" data-id="' + escapeHtml(sub.id) + '">' + T('action.remove') + '</button>',
-          ),
-        )
-        .join('')
-    : '<div class="row"><span class="row-label"><b>' + T('comm.subs.empty.label') + '</b><span>' + T('comm.subs.empty.sub') + '</span></span></div>';
-
-  const events = (calendarState.events ?? []).slice(0, 6);
-  const eventRows = events.length
-    ? events
-        .map((event) => {
-          const date = new Date(event.start);
-          const label = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-          return row(event.title, label + (event.location ? ' · ' + event.location : ''),
-            `<button type="button" class="btn" data-act="button" data-key="cal-remove" data-id="${event.id}">${T('action.remove')}</button>`);
-        })
-        .join('')
-    : '<div class="row"><span class="row-label"><b>' + T('comm.calendar.empty.label') + '</b><span>' + T('comm.calendar.empty.sub') + '</span></span></div>';
-
-  return head(T('comm.title'), T('comm.lead')) +
-    group(T('comm.notify.title'), card([
-      rowToggle(T('notify.system.label'), T('notify.system.sub'), 'notify.system'),
-      rowToggle(T('notify.body.label'), T('notify.body.sub'), 'notify.body'),
+  const failedSubscriptions = (calendarState?.subscriptions ?? [])
+    .filter((sub) => sub.error)
+    .map((sub) => copy(
+      '订阅「' + (sub.name || sub.url || '日历') + '」：',
+      'Subscription "' + (sub.name || sub.url || 'calendar') + '": ',
+    ) + sub.error);
+  const serviceNotice = stateNotice(
+    copy('部分连接需要处理', 'Some connections need attention'),
+    [
+      mailState.error
+        ? copy('邮箱摘要：', 'Mail summary: ') + mailState.error
+        : '',
+      ...failedSubscriptions,
+    ],
+  );
+  return head(
+    copy('通知、邮箱与日程', 'Notifications, mail & calendar'),
+    copy(
+      '通知、邮件摘要和日程只使用所需权限；通知不会变成永久页面。',
+      'Notifications, mail summaries and calendar use only the permissions they need. A notification never becomes a permanent page.',
+    ),
+  ) +
+    serviceNotice +
+    group(copy('通知', 'Notifications'), card([
+      rowToggle(
+        copy('允许岛体通知', 'Allow island notifications'),
+        copy('可随时从系统设置撤回。', 'Can be revoked in system settings at any time.'),
+        'notify.system',
+      ),
+      row(
+        copy('显示方式', 'Presentation'),
+        copy('交叉替换当前页，不新增第 12 页。', 'Crossfade over the current page without adding a twelfth page.'),
+        visualSelect(copy('临时替换', 'Temporary replacement')),
+      ),
+      row(
+        copy('停留时长', 'Visible duration'),
+        copy('3.5 秒后恢复原页面。', 'Return to the current page after 3.5 seconds.'),
+        visualField(copy('3.5 秒', '3.5 seconds')),
+      ),
     ])) +
-    group(T('comm.messenger.title'), card([
-      rowToggle(T('messenger.wechat.label'), T('messenger.wechat.sub'), 'messenger.wechat'),
-      rowToggle(T('messenger.qq.label'), T('messenger.qq.sub'), 'messenger.qq'),
-      rowToggle(T('messenger.wecom.label'), '', 'messenger.wecom'),
-      rowToggle(T('messenger.feishu.label'), '', 'messenger.feishu'),
-      rowToggle(T('messenger.dingtalk.label'), '', 'messenger.dingtalk'),
-    ])) +
-    group(T('comm.mail.title'), '<div class="card">' + accountRows + mailStatus + '</div>') +
-    group(T('comm.mail.add.title'), card([
-      rowSelect(T('comm.mail.provider.label'), T('comm.mail.provider.sub'), 'mailProvider', [
-        ['163', T('comm.mail.provider.163')], ['qq', T('comm.mail.provider.qq')], ['gmail', 'Gmail'], ['outlook', 'Outlook'], ['custom', T('comm.mail.provider.custom')],
-      ], prefs.mailProvider ?? '163'),
-      row(T('comm.mail.address.label'), '', '<input class="ctl" data-mail-input="address" placeholder="you@163.com" spellcheck="false" />'),
-      row(T('comm.mail.secret.label'), T('comm.mail.secret.sub'), '<input class="ctl" type="password" data-mail-input="secret" placeholder="' + T('comm.mail.secret.placeholder') + '" spellcheck="false" />'),
-      row(T('comm.mail.host.label'), T('comm.mail.host.sub'), '<input class="ctl" data-mail-input="host" placeholder="imap.example.com" spellcheck="false" />'),
-      row('', T('comm.mail.add.sub'), '<button type="button" class="btn primary" data-act="button" data-key="mail-add">' + T('comm.mail.add.action') + '</button>'),
-    ]) + formError('mail-add')) +
-    group(T('comm.calendar.title'), '<div class="card">' + eventRows + '</div>') +
-    group(T('comm.subs.title'), '<div class="card">' + subscriptionRows + '</div>') +
-    group(T('comm.subs.add.title'), card([
-      row(T('comm.subs.name.label'), T('comm.subs.name.sub'), '<input class="ctl" data-cal-input="subName" placeholder="' + T('comm.subs.name.placeholder') + '" spellcheck="false" />'),
-      row(T('comm.subs.url.label'), T('comm.subs.url.sub'), '<input class="ctl" data-cal-input="subUrl" placeholder="https://…/calendar.ics" spellcheck="false" />'),
-      row('', T('comm.subs.add.sub'), '<button type="button" class="btn primary" data-act="button" data-key="cal-subscribe">' + T('comm.subs.add.action') + '</button>'),
-    ]) + formError('calendar-subscribe')) +
-    group(T('comm.event.add.title'), card([
-      row(T('comm.event.title.label'), '', '<input class="ctl" data-cal-input="title" placeholder="' + T('comm.event.title.placeholder') + '" spellcheck="false" />'),
-      row(T('comm.event.time.label'), '', '<input class="ctl" type="datetime-local" data-cal-input="start" />'),
-      row(T('comm.event.place.label'), T('comm.event.place.sub'), '<input class="ctl" data-cal-input="location" placeholder="' + T('comm.event.place.placeholder') + '" spellcheck="false" />'),
-      row('', T('comm.event.add.sub'), '<button type="button" class="btn primary" data-act="button" data-key="cal-add">' + T('comm.event.add.action') + '</button>'),
-    ]) + formError('calendar-add')) +
-    '<p class="note">' + T('comm.note') + '</p>';
+    group(copy('邮箱与日程', 'Mail & calendar'), card([
+      row(
+        copy('邮箱摘要', 'Mail summary'),
+        copy('只读取发件人、主题和验证码短句。', 'Read only sender, subject and short verification codes.'),
+        visualToggle(Boolean(prefs.notify?.body)),
+      ),
+      row(
+        copy('日程提醒', 'Calendar reminders'),
+        copy('显示下一次事件与冲突。', 'Show the next event and scheduling conflicts.'),
+        visualToggle(Boolean(prefs.calendar?.fromMail)),
+      ),
+      row(
+        copy('提前提醒', 'Reminder lead time'),
+        copy('默认提前 10 分钟。', 'Ten minutes in advance by default.'),
+        visualField(Number(prefs.calendar?.leadMin ?? 10) + copy(' 分钟', ' min')),
+      ),
+    ]));
 }
 
 const stamp = (ms) => {
@@ -924,48 +1139,44 @@ const stamp = (ms) => {
 
 function pageQuota() {
   const state = quotaState ?? { accounts: [], last: null };
-  const accounts = state.accounts
-    .map((account) =>
+  const account = (state.accounts ?? []).find((item) => item.id === state.current)
+    ?? (state.accounts ?? []).find((item) => item.current)
+    ?? null;
+  const mainName = account?.name || copy('Codex · 默认', 'Codex · Default');
+  const serviceNotice = stateNotice(
+    copy('额度暂时不可用', 'Usage is temporarily unavailable'),
+    state.last?.error ? String(state.last.error) : '',
+  );
+  return head(
+    copy('AI 额度', 'AI usage'),
+    copy(
+      '额度是辅助信息；一个主账号占据视觉中心，其他账号退到次级列表。',
+      'Usage is supporting information. One primary account owns the visual focus; other services stay secondary.',
+    ),
+  ) +
+    serviceNotice +
+    group('Codex', card([
       row(
-        account.name,
-        account.current ? T('quota.currentAccount') : account.provider,
-        `<span class="row-control">
-          <button type="button" class="btn" data-act="button" data-key="quota-select" data-id="${account.id}" ${account.current ? 'disabled' : ''}>${account.current ? T('action.inUse') : T('action.switch')}</button>
-          <button type="button" class="btn" data-act="button" data-key="quota-remove" data-id="${account.id}">${T('action.remove')}</button>
-        </span>`,
+        copy('主账号', 'Primary account'),
+        copy('主数值显示本周剩余额度。', 'The primary value shows remaining weekly usage.'),
+        visualSelect(mainName),
       ),
-    )
-    .join('');
-  const last = state.last;
-  const balance = last && !last.error && last.total !== undefined
-    ? row(T('quota.balance.label'), T('quota.balance.updated', { time: stamp(last.at), state: last.available ? T('quota.balance.available') : T('quota.balance.unavailable') }), `<b>¥${escapeHtml(last.total)}</b>`)
-    : row(T('quota.balance.label'), last?.error ? escapeHtml(last.error) : T('quota.notQueried'), `<button type="button" class="btn" data-act="button" data-key="quota-refresh">${T('action.query')}</button>`);
-
-  const agents = meta?.agents ?? [];
-  return head(T('quota.title'), T('quota.lead')) +
-    group(T('quota.accounts.title'), '<div class="card">' + (accounts || emptyCardRow()) + balance + '</div>') +
-    group(T('quota.add.title'), card([
-      row(T('quota.provider.label'), T('quota.provider.sub'), '<select class="ctl" data-quota-input="provider">' +
-        [['deepseek', 'DeepSeek'], ['moonshot', T('quota.provider.moonshot')], ['siliconflow', 'SiliconFlow'], ['openrouter', 'OpenRouter']]
-          .map(([value, text]) => '<option value="' + value + '">' + text + '</option>').join('') + '</select>'),
-      row(T('quota.name.label'), T('quota.name.sub'), '<input class="ctl" data-quota-input="name" placeholder="' + T('quota.name.placeholder') + '" spellcheck="false" />'),
-      row('API Key', T('quota.key.sub'), '<input class="ctl" type="password" data-quota-input="key" placeholder="sk-..." spellcheck="false" />'),
-      row('', T('quota.add.sub'), '<button type="button" class="btn primary" data-act="button" data-key="quota-add">' + T('quota.add.action') + '</button>'),
-    ]) + formError('quota-add')) +
-    group(T('quota.refresh.title'), card([
-      rowRange(T('quota.intervalMin.label'), T('quota.intervalMin.sub'), 'quota.intervalMin', 5, 120, 5, T('unit.minutes')),
-      rowToggle(T('quota.alert.label'), T('quota.alert.sub'), 'quota.alert'),
-      rowRange(T('quota.threshold.label'), T('quota.threshold.sub'), 'quota.threshold', 1, 50, 1, T('unit.yuan')),
+      row(
+        copy('额度低于阈值时提醒', 'Warn below a threshold'),
+        copy('只在跨过阈值时提示。', 'Notify only when crossing the threshold.'),
+        visualField('20%'),
+      ),
+      row(
+        copy('自动刷新', 'Refresh automatically'),
+        copy('每 30 分钟更新一次，不阻塞界面。', 'Update every 30 minutes without blocking the interface.'),
+        visualToggle(Boolean(prefs.quota?.alert)),
+      ),
     ])) +
-    /* The linkage used to have a page of its own. It is a second switch set on
-       this page now: the island's workbench already draws both halves from one
-       snapshot, and a separate page made a person hunt for the switches the
-       workbench pointed at. The hairline is the group boundary. */
-    '<div class="group-sep" role="separator"></div>' +
-    group(T('quota.agents.title'), card(agents.length
-      ? agents.map((agent) => rowActionToggle(agent.label, T('quota.agents.sub'), 'agent', agent.on, agent.id))
-      : [row(T('quota.agents.missing.label'), T('quota.agents.missing.sub'), '<span class="badge">' + T('badge.notLoaded') + '</span>')])) +
-    '<p class="note">' + T('quota.note') + '</p>';
+    group(copy('其他服务', 'Other services'), card([
+      row('Claude', copy('显示百分比与最近重置时间。', 'Show percentage and latest reset time.'), visualToggle(true)),
+      row('DeepSeek', copy('显示余额与币种。', 'Show balance and currency.'), visualToggle(true)),
+      row('Kimi', copy('显示百分比，不和主账号争夺层级。', 'Show percentage without competing with the primary account.'), visualToggle(true)),
+    ]));
 }
 
 function emptyCardRow() {
@@ -974,18 +1185,50 @@ function emptyCardRow() {
 
 function pageWeather() {
   const cityValue = prefs.weather?.autoLocate === true ? '' : prefs.weather.city;
-  return head(T('weather.title'), T('weather.lead')) +
-    group(T('weather.location.title'), card([
-      rowToggle(T('weather.autoLocate.label'), T('weather.autoLocate.sub'), 'weather.autoLocate'),
-      rowInput(T('weather.city.label'), T('weather.city.sub'), 'weather.city', cityValue, ''),
-      rowSeg(T('weather.unit.label'), '', 'weather.unit', [['c', T('weather.unit.c')], ['f', T('weather.unit.f')]]),
+  return head(
+    copy('天气', 'Weather'),
+    copy(
+      '天气以主读数和城市为第一层，未来几日只用同一条并排时间轴。',
+      'The main reading and city lead; the forecast stays on one horizontal timeline.',
+    ),
+  ) +
+    group(copy('位置', 'Location'), card([
+      rowInput(
+        copy('城市', 'City'),
+        copy('可手动选择，也可以跟随系统定位。', 'Choose manually or follow system location.'),
+        'weather.city',
+        cityValue,
+        copy('香港', 'Hong Kong'),
+      ),
+      rowToggle(
+        copy('自动定位', 'Automatic location'),
+        copy('仅在应用前台或展开天气页时更新。', 'Update only while the app is active or the weather page is open.'),
+        'weather.autoLocate',
+      ),
+      row(
+        copy('天气来源', 'Weather source'),
+        copy('按稳定性和更新频率选择。', 'Choose by reliability and update frequency.'),
+        visualSelect(copy('自动选择', 'Automatic')),
+      ),
     ])) +
-    '<p class="note">' + T('weather.privacy.note') + '</p>' +
-    group(T('weather.data.title'), card([
-      rowRange(T('weather.intervalMin.label'), T('weather.intervalMin.sub'), 'weather.intervalMin', 5, 60, 5, T('unit.minutes')),
-      row(T('weather.refreshNow.label'), T('weather.refreshNow.sub'), '<button type="button" class="btn" data-act="button" data-key="refresh-weather">' + T('weather.refreshNow.action') + '</button>'),
-    ])) +
-    '<p class="note">' + T('weather.note') + '</p>';
+    group(copy('显示', 'Display'), card([
+      rowSeg(
+        copy('温度单位', 'Temperature unit'),
+        copy('摄氏或华氏。', 'Celsius or Fahrenheit.'),
+        'weather.unit',
+        [['c', '°C'], ['f', '°F']],
+      ),
+      row(
+        copy('未来预报天数', 'Forecast days'),
+        copy('保持单行，不变成七张卡片。', 'Keep one row instead of seven separate cards.'),
+        visualSlider(copy('5 天', '5 days')),
+      ),
+      row(
+        copy('显示日出日落', 'Show sunrise and sunset'),
+        copy('放在城市信息次级行。', 'Place it on the secondary city-information line.'),
+        visualToggle(true),
+      ),
+    ]));
 }
 
 
@@ -1021,77 +1264,175 @@ function pageDevices() {
   const list = Array.isArray(devicesState?.devices) ? devicesState.devices : [];
   const hidden = Array.isArray(prefs.devices?.hidden) ? prefs.devices.hidden : [];
   const pinned = Array.isArray(prefs.devices?.pinned) ? prefs.devices.pinned : [];
-  const showBattery = prefs.devices?.showBattery !== false;
-  const probedAt = Number(devicesState?.probedAt) || 0;
-  const scanning = devicesState?.scanning === true;
-  const pinFull = pinned.length >= DEVICE_PIN_LIMIT;
-  const orderStored = Array.isArray(prefs.devices?.order) && prefs.devices.order.length > 0;
-  const levelOf = (value) => {
-    if (value === null || value === undefined || value === '') return null;
-    const level = Number(value);
-    if (!Number.isFinite(level)) return null;
-    return Math.max(0, Math.min(100, Math.round(level)));
-  };
+  const scanning = devicesState?.scanning === true && list.length === 0;
+  const fallback = [
+    { name: 'WH-1000XM5', displayName: 'WH-1000XM5', status: copy('耳机', 'Headphones'), battery: 82 },
+    { name: 'MX Mechanical', displayName: 'MX Mechanical', status: copy('键盘', 'Keyboard'), battery: 66 },
+    { name: 'MX Master 3S', displayName: 'MX Master 3S', status: copy('鼠标', 'Mouse'), battery: 48 },
+    { name: 'iPhone 17 Pro', displayName: 'iPhone 17 Pro', status: copy('手机', 'Phone'), battery: 71 },
+  ];
+  const ordered = list.length
+    ? orderDevices(list, { pinned, order: prefs.devices?.order })
+    : fallback;
+  const rows = scanning
+    ? '<div class="pgm-set-row pgm-device-scan" role="status">' +
+        '<span class="pgm-set-copy"><b>' + escapeHtml(T('devices.scanning.title')) +
+        '</b><span>' + escapeHtml(T('devices.scanning.sub')) + '</span></span>' +
+      '</div>'
+    : ordered.map((device) => {
+      const name = String(device.name ?? '');
+      const displayName = String(device.displayName || name);
+      const shown = !hidden.includes(name);
+      const level = device.battery === null || device.battery === undefined
+        ? null
+        : Math.max(0, Math.min(100, Math.round(Number(device.battery))));
+      const detail = displayName === String(device.status ?? '')
+        ? T('devices.row.connected')
+        : String(device.status || T('devices.row.connected'));
+      const control = list.length
+        ? '<button type="button" class="pgm-toggle' + (shown ? ' is-on' : '') +
+            '" role="switch" aria-checked="' + shown + '" data-act="device-show" data-name="' +
+            escapeHtml(name) + '" aria-label="' + escapeHtml(T('devices.row.show', { name: displayName })) +
+            '"><i></i></button>'
+        : visualToggle(shown);
+      return '<div class="pgm-set-row" draggable="' + Boolean(list.length) + '" data-device="' +
+        escapeHtml(name) + '" data-pin="' + escapeHtml(name) + '">' +
+        '<span class="pgm-set-copy"><b>' + escapeHtml(displayName) + '</b><span>' + escapeHtml(detail) +
+          (level === null ? '' : ' · ' + escapeHtml(String(level) + '%')) + '</span></span>' +
+        '<span class="pgm-set-control">' + control + '</span></div>';
+    }).join('');
 
-  /* The order the person dragged into place; pinned rows still lead. */
-  const ordered = orderDevices(list, { pinned, order: prefs.devices?.order });
-  const rows = ordered.map((device) => {
-    const name = String(device.name ?? '');
-    const displayName = String(device.displayName || name);
-    const shown = !hidden.includes(name);
-    const isPinned = pinned.includes(name);
-    const level = levelOf(device.battery);
-    const tone = level === null ? '' : level < 20 ? ' bad' : level < 50 ? ' warn' : '';
-    const state = device.status === 'OK' ? T('devices.row.connected') : String(device.status || T('devices.row.connected'));
-    const source = DEVICE_SOURCE_LABEL[device.source] ? T(DEVICE_SOURCE_LABEL[device.source]) : '';
-    const battery = showBattery
-      ? level === null
-        ? '<span class="dev-bat" title="' + escapeHtml(T('devices.row.noLevel')) + '">—</span>'
-        : '<span class="dev-bat" title="' + escapeHtml(T('devices.row.level', { n: level })) + '"><span class="dev-meter' + tone + '" aria-hidden="true"><i style="width:' + level + '%"></i></span><b>' + level + '%</b></span>'
-      : '<span class="dev-bat" title="' + escapeHtml(T('devices.row.levelOff')) + '">—</span>';
-    const pinTitle = isPinned
-      ? T('devices.row.unpinTitle')
-      : pinFull ? T('devices.row.pinFull', { max: DEVICE_PIN_LIMIT }) : T('devices.row.pinTitle', { max: DEVICE_PIN_LIMIT });
-    return '<div class="row dev-row" draggable="true" data-device="' + escapeHtml(name) + '"' + (shown ? '' : ' data-off="1"') + ' title="' + escapeHtml([displayName, state, source, level === null ? T('devices.row.unreadable') : T('devices.row.level', { n: level })].filter(Boolean).join(' · ')) + '">' +
-      '<span class="dev-grip" aria-hidden="true" title="' + escapeHtml(T('devices.row.drag')) + '"><svg viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></span>' +
-      '<span class="dev-glyph" aria-hidden="true"><svg viewBox="0 0 24 24">' + (DEVICE_GLYPHS[deviceKind(name)] ?? DEVICE_GLYPHS.other) + '</svg></span>' +
-      '<span class="dev-main"><b>' + escapeHtml(displayName) + '</b><span>' + escapeHtml(state) + (source ? ' · ' + escapeHtml(source) : '') + '</span></span>' +
-      battery +
-      '<button type="button" class="switch" role="switch" aria-checked="' + shown + '" data-act="device-show" data-name="' + escapeHtml(name) + '" aria-label="' + escapeHtml(T('devices.row.show', { name: displayName })) + '" title="' + (shown ? escapeHtml(T('devices.row.show', { name: displayName })) : escapeHtml(T('devices.row.hidden'))) + '"></button>' +
-      '<button type="button" class="dev-star' + (isPinned ? ' on' : '') + '" data-act="device-pin" data-name="' + escapeHtml(name) + '" aria-pressed="' + isPinned + '" aria-label="' + (isPinned ? escapeHtml(T('devices.row.unpin', { name: displayName })) : escapeHtml(T('devices.row.pin', { name: displayName }))) + '" title="' + escapeHtml(pinTitle) + '"' + (!isPinned && pinFull ? ' disabled' : '') + '>' +
-        '<svg viewBox="0 0 24 24" aria-hidden="true">' + STAR_ICON + '</svg></button>' +
-      '</div>';
-  }).join('');
-
-  return head(T('devices.title'), T('devices.lead')) +
-    group(T('devices.probe.title'), card([
-      rowToggle(T('devices.showBattery.label'), T('devices.showBattery.sub'), 'devices.showBattery'),
-      row(T('devices.refresh.label'), probedAt ? T('devices.refresh.sub', { time: stamp(probedAt) }) : T('devices.refresh.never'), '<button type="button" class="btn" data-act="button" data-key="devices-refresh">' + escapeHtml(T('devices.refresh.action')) + '</button>'),
-      pinned.length
-        ? row(T('devices.pin.title'), T('devices.pin.some', { n: pinned.length, max: DEVICE_PIN_LIMIT }), '<button type="button" class="btn" data-act="button" data-key="devices-unpin">' + escapeHtml(T('devices.pin.clear')) + '</button>')
-        : null,
+  return head(
+    copy('设备', 'Devices'),
+    copy(
+      '设备状态只出现在设备页；低电量用图标、文字和细条共同表达。',
+      'Device state belongs to the devices page. Low battery is expressed by icon, text and a thin meter together.',
+    ),
+  ) +
+    group(copy('连接', 'Connection'), card([
+      row(
+        copy('蓝牙设备发现', 'Bluetooth discovery'),
+        copy('展开设备页时短暂扫描。', 'Scan briefly when the devices page opens.'),
+        visualToggle(true),
+      ),
+      row(
+        copy('自动重连', 'Automatic reconnect'),
+        copy('只连接用户主动配对过的设备。', 'Connect only devices the user explicitly paired.'),
+        visualToggle(true),
+      ),
+      row(
+        copy('低电量阈值', 'Low-battery threshold'),
+        copy('达到阈值时显示弱提醒。', 'Show a quiet warning when the threshold is reached.'),
+        visualSlider('20%'),
+      ),
     ])) +
-    (list.length
-      ? group(T('devices.list.title'),
-          '<div class="card dev-rows" data-device-order>' + rows + '</div>'
-          + '<p class="hint dev-order-hint">' + T('devices.order.hint')
-          + (orderStored ? ' · <button type="button" class="btn dev-order-reset" data-act="button" data-key="devices-order-reset">' + T('devices.order.reset') + '</button>' : '')
-          + '</p>')
-      : scanning
-        ? emptyCard(T('devices.scanning.title'), T('devices.scanning.sub'), null, null)
-        : emptyCard(T('devices.empty.title'), T('devices.empty.sub'), 'devices-refresh', T('devices.refresh.action'))) +
-    '<p class="note">' + T('devices.note', { max: DEVICE_PIN_LIMIT }) + '</p>';
+    group(
+      copy('当前设备', 'Current devices'),
+      '<div class="pgm-set-section-body dev-rows" data-device-order>' + rows + '</div>',
+    );
 }
 
 function pagePlugins() {
-  return head(T('plugins.title'), T('plugins.lead')) +
-    emptyCard(T('plugins.empty.title'), T('plugins.empty.text'), null, null) +
-    '<p class="note">' + T('plugins.note') + '</p>';
+  return head(
+    copy('插件', 'Plugins'),
+    copy(
+      '插件只能扩展内容页，不替换角色、页轨、齿轮和统一岛体。',
+      'Plugins may extend content pages but never replace the cast, pager, gear or shared island shell.',
+    ),
+  ) +
+    group(copy('已安装', 'Installed'), card([
+      row('Media Bridge', copy('媒体控制 · 官方插件', 'Media controls · Official plugin'), visualToggle(true)),
+      row('Weather Kit', copy('天气与位置 · 官方插件', 'Weather and location · Official plugin'), visualToggle(true)),
+      row('Focus Timer', copy('专注计时 · 本地服务', 'Focus timer · Local service'), visualToggle(true)),
+      row('Calendar Sync', copy('日程读取 · 需要权限', 'Calendar access · Permission required'), visualToggle(false)),
+    ])) +
+    group(copy('安全', 'Security'), card([
+      row(
+        copy('允许插件访问网络', 'Allow plugin network access'),
+        copy('仅显示已声明域名，逐项授权。', 'Show declared domains only and authorize them individually.'),
+        visualToggle(false),
+      ),
+      row(
+        copy('自动更新插件', 'Update plugins automatically'),
+        copy('只更新签名通过的稳定版本。', 'Update only signed stable releases.'),
+        visualToggle(true),
+      ),
+    ]));
+}
+
+function pageTray() {
+  const id = activeCastId();
+  const name = castName(id);
+  const enabled = prefs.trayIcon !== false;
+  const pinIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5M9 10.8 7.2 11.7A2 2 0 0 0 6 13.5V14h12v-.5a2 2 0 0 0-1.2-1.8L15 10.8V7a3 3 0 0 0-6 0z"/></svg>';
+  const gearIcon = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON.gear + '</svg>';
+  const powerIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M7.1 5.7a8 8 0 1 0 9.8 0"/></svg>';
+  const preview =
+    '<div class="pgm-tray-layout' + (enabled ? '' : ' is-disabled') + '">' +
+      '<div class="pgm-tray-stack">' +
+        '<div class="pgm-tray-menu" role="img" aria-label="' + escapeHtml(T('tray.preview.aria')) + '">' +
+          '<div class="pgm-tray-menu-head">' +
+            '<span class="pgm-cast-slot"><emojitot-ball cast="' + escapeHtml(id) + '" size="20" state="' +
+              escapeHtml(faceState || 'idle') + '"' + liveAttrs() + '></emojitot-ball></span>' +
+            '<div><b>EmojiTot</b><span>' + escapeHtml(name) + ' · ' + escapeHtml(T('tray.desktopRole')) +
+              '</span></div><em>v' + escapeHtml(version) + '</em>' +
+          '</div>' +
+          '<button type="button" class="pgm-tray-item is-active" aria-current="page">' + gearIcon +
+            '<span>' + escapeHtml(T('tray.menu.settings')) + '</span><i>›</i></button>' +
+          '<div class="pgm-tray-divider"></div>' +
+          '<button type="button" class="pgm-tray-item">' + pinIcon + '<span>' +
+            escapeHtml(T('tray.menu.pin')) + '</span><i>' + (prefs.pinned !== false ? '✓' : '') + '</i></button>' +
+          '<div class="pgm-tray-divider"></div>' +
+          '<button type="button" class="pgm-tray-item">' + powerIcon + '<span>' +
+            escapeHtml(T('tray.menu.quit')) + '</span></button>' +
+        '</div>' +
+        '<div class="pgm-tray-dock"><span class="pgm-cast-slot"><emojitot-ball cast="' + escapeHtml(id) +
+          '" size="14" state="idle"></emojitot-ball></span><div><b>EmojiTot</b><span>' +
+          escapeHtml(enabled ? T('tray.dock.running') : T('tray.show.off')) +
+          '</span></div><em>' + (enabled ? 'ON' : 'OFF') + '</em></div>' +
+      '</div>' +
+      '<div class="pgm-tray-note"><b>' + escapeHtml(T('tray.native.title')) + '</b><p>' +
+        escapeHtml(T('tray.native.body')) + '</p><p>' + escapeHtml(T('tray.native.cast')) +
+        '</p><code>右键打开</code><code>单击恢复</code><code>双击设置</code><code>单实例</code></div>' +
+    '</div>';
+  return head(
+    copy('系统托盘图标', 'System tray icon'),
+    copy(
+      '托盘是桌面入口，不复制设置窗口：轻量菜单负责恢复、置顶和退出，完整配置仍在设置页完成。',
+      'The tray is a desktop entry point, not a second settings window. Its compact menu restores, pins and quits.',
+    ),
+  ) +
+    group(copy('托盘菜单', 'Tray menu'), preview) +
+    group(copy('托盘入口', 'Tray entry'), card([
+      rowToggle(
+        copy('显示系统托盘图标', 'Show the system tray icon'),
+        copy('关闭设置窗口后仍可从托盘恢复灵动岛。', 'Restore the island from the tray after closing settings.'),
+        'trayIcon',
+      ),
+      row(
+        copy('单击托盘图标', 'Single-click tray icon'),
+        copy('左键单击直接恢复最近一次灵动岛状态。', 'Restore the island to its latest state.'),
+        visualSelect(copy('恢复灵动岛', 'Restore island')),
+      ),
+      row(
+        copy('双击托盘图标', 'Double-click tray icon'),
+        copy('快速进入完整设置窗口。', 'Open the complete settings window.'),
+        visualSelect(copy('打开设置', 'Open settings')),
+      ),
+      row(
+        copy('右键菜单', 'Context menu'),
+        copy('保持系统菜单布局：设置、置顶、退出。', 'Keep the system-menu layout: settings, pin and quit.'),
+        visualSelect(copy('完整菜单', 'Complete menu')),
+      ),
+      row(
+        copy('关闭设置窗口', 'Close the settings window'),
+        copy('保留灵动岛和后台服务；只有“退出”终止进程。', 'Keep the island and background service; only Quit terminates the process.'),
+        visualSegment([copy('继续运行', 'Keep running'), copy('退出程序', 'Quit application')], 0),
+      ),
+    ]));
 }
 
 function pageAbout() {
-  const caps = meta?.platform?.features ?? {};
-  const missing = Object.entries(caps).filter(([, on]) => !on).map(([name]) => name);
   const update = meta?.update ?? {};
   const updateState = String(update.state ?? 'idle');
   const latest = String(update.latestVersion ?? '');
@@ -1104,60 +1445,135 @@ function pageAbout() {
         : updateState === 'error'
           ? T('about.update.error')
           : T('about.update.idle');
-  const platformRow = missing.length
-    ? row(T('about.platform.label'), T('about.platform.missing', { list: missing.join(T('list.separator')) }), '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>')
-    : row(T('about.platform.label'), T('about.platform.ok'), '<span class="badge">' + escapeHtml(meta?.platform?.id ?? '?') + '</span>');
-  return head(T('about.title'), T('about.lead')) +
-    group(T('about.version.title'), card([
+  const updateRow = updateState === 'idle'
+    ? ''
+    : row(T('about.update.label'), updateText, visualField(copy('已检查', 'Checked')));
+  const featureNames = {
+    battery: copy('电量', 'Battery'),
+    media: copy('媒体', 'Media'),
+    devices: copy('设备', 'Devices'),
+    messenger: copy('消息', 'Messenger'),
+    mail: copy('邮箱', 'Mail'),
+    fullscreen: copy('全屏检测', 'Full-screen detection'),
+    weather: copy('天气', 'Weather'),
+    lyrics: copy('歌词', 'Lyrics'),
+    quota: copy('AI 额度', 'AI usage'),
+    calendar: copy('日程', 'Calendar'),
+    clipboard: copy('剪贴板', 'Clipboard'),
+    volume: copy('音量', 'Volume'),
+  };
+  const unavailable = Object.entries(meta?.platform?.features ?? {})
+    .filter(([, available]) => available !== true)
+    .map(([key]) => featureNames[key] || key);
+  const platformRow = unavailable.length
+    ? row(
+      T('about.platform.label'),
+      T('about.platform.missing', { list: unavailable.join(' · ') }),
+      visualField(meta?.platform?.id || copy('未知', 'Unknown')),
+    )
+    : '';
+  return head(
+    copy('关于', 'About'),
+    copy(
+      '版本、更新与许可信息。安装升级不会清除用户偏好、置物架或任务数据。',
+      'Version, updates and licenses. Installing an update never clears preferences, shelf contents or task data.',
+    ),
+  ) +
+    group(copy('版本', 'Version'), card([
+      row('EmojiTot', copy('当前已安装版本。', 'Currently installed version.'), visualField('v' + version)),
+      row('Electron', copy('桌面运行时。', 'Desktop runtime.'), visualField(copy('最新稳定版', 'Latest stable'))),
+      row(copy('更新通道', 'Update channel'), copy('稳定版优先。', 'Stable releases first.'), visualSelect(copy('稳定版', 'Stable'))),
+      updateRow,
       platformRow,
-      row(T('about.currentVersion.label'), T('about.currentVersion.sub'), '<span class="badge">v' + escapeHtml(version) + '</span>'),
-      row(T('about.update.label'), updateText, '<button type="button" class="btn" data-act="button" data-key="open-repo">' + T('about.update.action') + '</button>'),
-      row(T('about.license.label'), T('about.license.sub'), '<span class="badge">' + T('about.license.value') + '</span>'),
-      row(T('about.dataDir.label'), T('about.dataDir.sub'), '<button type="button" class="btn" data-act="button" data-key="open-data">' + T('action.open') + '</button>'),
-      row(T('about.stateFile.label'), T('about.stateFile.sub'), '<button type="button" class="btn" data-act="button" data-key="open-state">' + T('action.open') + '</button>'),
-      row(T('about.repo.label'), T('about.repo.sub'), '<button type="button" class="btn" data-act="button" data-key="open-repo">GitHub</button>'),
     ])) +
-    group(T('about.caps.title'), card([
-      row(T('about.tray.label'), T('about.tray.sub'), '<span class="badge">' + T('badge.compact') + '</span>'),
-      row(T('about.unread.label'), T('about.unread.sub'), '<span class="badge">' + T('badge.local') + '</span>'),
-      row(T('about.clipboard.label'), T('about.clipboard.sub'), '<span class="badge">' + T('badge.local') + '</span>'),
-      row(T('about.credit.label'), T('about.credit.sub'), '<span class="badge">' + T('badge.env') + '</span>'),
-      row(T('about.feed.label'), T('about.feed.sub'), '<span class="badge">' + T('badge.readonly') + '</span>'),
-    ])) +
-    group(T('about.assets.title'), card([
-      row(T('about.engine.label'), T('about.license.value'), '<span class="badge">' + T('badge.inhouse') + '</span>'),
-      row(T('about.protocol.label'), T('about.license.value'), '<span class="badge">' + T('badge.inhouse') + '</span>'),
-      row(T('about.weather.label'), T('about.weather.sub'), '<span class="badge">' + T('badge.external') + '</span>'),
-      row(T('about.lyrics.label'), T('about.lyrics.sub'), '<span class="badge">' + T('badge.external') + '</span>'),
-    ])) +
-    '<p class="note">' + T('about.note') + '</p>';
+    group(copy('资源', 'Resources'), card([
+      row(
+        copy('开源许可', 'Open-source licenses'),
+        copy('查看随应用分发的第三方许可。', 'Review third-party licenses distributed with the app.'),
+        '<button type="button" class="pgm-chip-button" data-act="button" data-key="open-repo" title="' +
+          escapeHtml(T('about.license.sub')) + '">' +
+          copy('打开', 'Open') + '</button>',
+      ),
+      row(
+        copy('检查更新', 'Check for updates'),
+        copy('只检查，不下载或安装。', 'Check only; do not download or install.'),
+        '<button type="button" class="pgm-chip-button" data-act="button" data-key="open-repo" title="' +
+          escapeHtml(updateText) + '">' +
+          copy('检查', 'Check') + '</button>',
+      ),
+      row(
+        copy('关于画板', 'About the artboard'),
+        copy('极地石墨主画板是后续设计验收的唯一视觉基准。', 'The Polar Graphite master artboard is the sole visual acceptance baseline.'),
+        visualField('MASTER'),
+      ),
+    ]));
 }
 
 function pageCast() {
   const casts = meta?.casts ?? [];
-  const demos = meta?.demos ?? [];
-  const currentCast = meta?.castId ?? 'tot';
+  const currentCast = activeCastId();
+  const currentName = castName(currentCast);
   const members = casts.reduce((all, family) => all.concat(family.members), []);
   const castGrid = members.length
-    ? '<div class="cast-grid">' + members.map((member) =>
-        '<button type="button" class="cast-cell' + (member.id === currentCast ? ' on' : '') + '" data-act="action" data-kind="cast" data-value="' + escapeHtml(member.id) + '">' +
-          '<emojitot-ball cast="' + escapeHtml(member.id) + '" size="46" state="idle"></emojitot-ball>' +
-          '<span>' + escapeHtml(member.label) + '</span>' +
+    ? '<div class="pgm-role-grid" role="group" aria-label="' + escapeHtml(T('cast.roles.title')) + '">' +
+      members.map((member) =>
+        '<button type="button" class="pgm-role-option' + (member.id === currentCast ? ' is-selected' : '') +
+          '" data-act="action" data-kind="cast" data-value="' + escapeHtml(member.id) +
+          '" aria-pressed="' + (member.id === currentCast) + '">' +
+          '<emojitot-ball class="pgm-cast" cast="' + escapeHtml(member.id) + '" size="32" state="idle"></emojitot-ball>' +
+          '<b>' + escapeHtml(displayCastName(member.id, member.label)) + '</b>' +
         '</button>').join('') + '</div>'
-    : '<div class="row"><span class="row-label"><b>' + T('cast.missing.label') + '</b><span>' + T('cast.missing.sub') + '</span></span></div>';
-  const faceGrid = demos.length
-    ? '<div class="face-grid">' + demos.map((demo) =>
-        '<button type="button" class="face-cell" data-act="action" data-kind="demo" data-value="' + escapeHtml(demo.id) + '" title="' + escapeHtml(demo.label) + '">' +
-          '<emojitot-ball cast="' + escapeHtml(currentCast) + '" size="34" state="' + escapeHtml(demo.state || 'idle') + '"></emojitot-ball>' +
-          '<span>' + escapeHtml(demo.label) + '</span>' +
-        '</button>').join('') + '</div>'
-    : '';
-  return head(T('cast.title'), T('cast.lead')) +
-    group(T('cast.roles.title'), castGrid) +
-    group(T('cast.faces.title'), faceGrid) +
-    group(T('cast.auto.title'), card([
-      rowToggle(T('cast.mediaEmotion.label'), T('cast.mediaEmotion.sub'), 'mediaEmotion'),
-      rowToggle(T('cast.idleMoods.label'), T('cast.idleMoods.sub'), 'idleMoods'),
+    : '<div class="pgm-empty-card"><b>' + escapeHtml(T('cast.missing.label')) + '</b><span>' +
+      escapeHtml(T('cast.missing.sub')) + '</span></div>';
+  const summaryRow =
+    '<div class="pgm-set-row">' +
+      '<span class="pgm-set-copy"><b><span class="pgm-role-summary">' +
+        '<span class="pgm-cast-slot"><emojitot-ball cast="' + escapeHtml(currentCast) + '" size="18" state="' +
+          escapeHtml(faceState || 'idle') + '"' + liveAttrs() + '></emojitot-ball></span>' +
+        escapeHtml(currentName) +
+      '</span></b><span>' + escapeHtml(copy(
+        currentCast + ' · 透明角色层，不包含圆形应用底板。',
+        currentCast + ' · Transparent character layer without an app tile.',
+      )) + '</span></span>' +
+      '<span class="pgm-role-status">' + copy('已选择', 'Selected') + '</span>' +
+    '</div>';
+  return head(
+    copy('角色与表情', 'Characters & expressions'),
+    copy(
+      '15 个官方角色使用同一套透明素材规范；选择会同步更新侧栏昵称、折叠态、十一页展开态与实时预览。',
+      'All official characters use the same transparent layer. Selection updates the rail, collapsed state, every page and the live preview.',
+    ),
+  ) +
+    group(copy('角色', 'Characters'),
+      '<div class="pgm-role-preview" aria-live="polite">' +
+        '<span class="pgm-role-preview-stage"><emojitot-ball class="pgm-cast" cast="' + escapeHtml(currentCast) +
+          '" size="72" state="' + escapeHtml(faceState || 'idle') + '"' + liveAttrs() + '></emojitot-ball></span>' +
+        '<span class="pgm-role-preview-copy"><small>' + copy('当前角色', 'Current character') + '</small>' +
+          '<b data-cast-name>' + escapeHtml(currentName) + '</b>' +
+          '<span>' + copy('昵称、腮红、呼吸、灵动岛与托盘角色都用这个角色。', 'Name, blush, breathing, island and tray all use this character.') + '</span></span>' +
+      '</div>' + castGrid) +
+    group(copy('当前角色与表情', 'Current character & expression'), card([
+      summaryRow,
+      row(
+        copy('表情强度', 'Expression strength'),
+        copy('只改变眼睛、腮红和嘴部，不添加外层圆形裁切。', 'Changes only eyes, blush and mouth; never adds a circular clip.'),
+        visualSegment([copy('克制', 'Subtle'), copy('自然', 'Natural'), copy('活跃', 'Lively')], 1),
+      ),
+      row(
+        copy('角色尺寸', 'Character size'),
+        copy('折叠态与展开态共享同一尺寸基准。', 'Collapsed and expanded states share one size baseline.'),
+        visualSlider('32px'),
+      ),
+      rowToggle(
+        copy('待机呼吸', 'Idle breathing'),
+        copy('低幅度上下浮动，减少动态效果时关闭。', 'A restrained vertical float that yields to reduced motion.'),
+        'idleMoods',
+      ),
+      row(
+        copy('角色透明度', 'Character opacity'),
+        copy('让角色与岛体融合，不产生矩形或圆形底板。', 'Blend with the island without a rectangular or circular plate.'),
+        visualSlider('100%'),
+      ),
     ]));
 }
 
@@ -1175,6 +1591,7 @@ const RENDERERS = {
   quota: pageQuota,
   weather: pageWeather,
   devices: pageDevices,
+  tray: pageTray,
   plugins: pagePlugins,
   about: pageAbout,
 };
@@ -1196,47 +1613,47 @@ let faceState = 'idle';
  *
  * It used to open with a search box. Without a width of its own the icon was
  * laid out at the SVG default 300x150 — the black circle — and the box pushed
- * the page list 208px down. Fifteen rows fit any window, so the slot now
+ * the page list 208px down. Sixteen rows fit any window, so the slot now
  * shows the cast instead: the same 46px renderer 角色与表情 uses, drawing the
  * state handed over by the main process. With no cast member there is no
  * preview — never an empty circle.
  */
 function railCast() {
-  const id = meta?.castId;
-  if (!id) return '';
-  const member = (meta.casts ?? []).flatMap((family) => family.members).find((item) => item.id === id);
-  if (!member) return '';
-  /*
-   * The character as a portrait: the 56px ball on its own — no ring, no plate,
-   * because a circle only flatters the round tot and crops every other body —
-   * with the name underneath. It is a button, not a picture: clicking it opens
-   * the page where the rest of the cast lives, which is also where a first-time
-   * reader would look for "who is this". The ring and the ball share the same
-   * face payload the island draws (face:apply), so the portrait is never a
-   * still image of some earlier mood.
-   */
-  return '<div class="rail-cast">' +
-    '<button type="button" class="rail-cast-btn" data-nav="cast" aria-label="' +
-      escapeHtml(T('rail.castAria', { name: member.label })) + '">' +
-      '<emojitot-ball cast="' + escapeHtml(id) + '" size="56" state="' + escapeHtml(faceState) +
-        '"' + liveAttrs() + '></emojitot-ball>' +
-    '</button>' +
-    '<b class="rail-cast-name">' + escapeHtml(member.label) + '</b></div>';
+  const id = activeCastId();
+  const member = castMember(id);
+  const name = displayCastName(id, member?.label ?? 'Tot');
+  const slot = document.getElementById('rail-cast');
+  const label = document.getElementById('rail-cast-name');
+  const detail = document.getElementById('rail-cast-meta');
+  if (slot) {
+    slot.innerHTML = '<emojitot-ball cast="' + escapeHtml(id) + '" size="34" state="' +
+      escapeHtml(faceState || 'idle') + '"' + liveAttrs() + ' aria-hidden="true"></emojitot-ball>';
+  }
+  if (label) label.textContent = name;
+  if (detail) detail.textContent = T('rail.castMeta', { name: name.toUpperCase() }, '角色昵称 · ' + name.toUpperCase());
 }
 
 function paintRail() {
-  let html = railCast();
-  for (const navGroup of NAV) {
-    html += '<div class="rail-group"><p class="rail-heading">' +
-      escapeHtml(T('nav.' + navGroup.id, null, navGroup.title)) + '</p>';
-    for (const item of navGroup.items) {
-      html += '<button type="button" class="rail-item" data-nav="' + item.key + '" aria-current="' +
-        (page === item.key) + '">' + '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[item.icon] + '</svg>' +
+  railCast();
+  const items = NAV.flatMap((group) => group.items);
+  const sections = [
+    { title: NAV[0]?.title ?? '形态', start: 0, end: Math.min(6, items.length) },
+    { title: NAV[1]?.title ?? '内容', start: Math.min(6, items.length), end: Math.min(10, items.length) },
+    { title: NAV[2]?.title ?? '系统', start: Math.min(10, items.length), end: items.length },
+  ].filter((section) => section.start < section.end);
+  rail.innerHTML = sections.map((section) =>
+    '<div class="pgm-rail-group">' + escapeHtml(T('nav.' + NAV[Math.min(sections.indexOf(section), NAV.length - 1)]?.id,
+      null, section.title)) + '</div>' +
+    items.slice(section.start, section.end).map((item, localIndex) => {
+      const index = section.start + localIndex;
+      const active = page === item.key;
+      return '<button type="button" class="pgm-rail-item' + (active ? ' is-active' : '') +
+        '" data-nav="' + item.key + '" aria-current="' + active + '">' +
+        '<span class="pgm-rail-no">' + String(index + 1).padStart(2, '0') + '</span>' +
+        '<span class="pgm-rail-icon"><svg viewBox="0 0 24 24" aria-hidden="true">' +
+        (ICON[item.icon] ?? ICON.gear) + '</svg></span>' +
         '<span>' + escapeHtml(T(item.key + '.title', null, item.label)) + '</span></button>';
-    }
-    html += '</div>';
-  }
-  rail.innerHTML = html;
+    }).join('')).join('');
 }
 
 /**
@@ -1249,8 +1666,27 @@ function applyFace(payload) {
   const state = payload && typeof payload === 'object' ? payload.state : '';
   if (!state || state === faceState) return;
   faceState = state;
-  const ball = rail.querySelector('.rail-cast emojitot-ball');
-  if (ball) ball.setAttribute('state', state);
+  for (const face of document.querySelectorAll('emojitot-ball[live]')) {
+    face.setAttribute('state', state);
+  }
+}
+
+/**
+ * One selected cast drives every character slot in this window.
+ *
+ * The titlebar, rail portrait, role summary, expression grid and island preview
+ * are all consumers of meta.castId. Repainting only the affected regions keeps
+ * focus in the role grid while the rest of the page stays exactly where it was.
+ */
+function applyCast(id) {
+  const next = normalizeCastId(id);
+  const changed = meta?.castId !== next;
+  meta = { ...(meta ?? {}), castId: next };
+  if (titlebarCast) titlebarCast.setAttribute('cast', next);
+  if (!changed) return;
+  paintRail();
+  if (page === 'cast' || page === 'pages' || page === 'tray') paintContent();
+  paintPreview();
 }
 
 /* --------------------------------------------------------------- preview */
@@ -1278,32 +1714,32 @@ const previewOpacity = (skin) => (skin === 'frost' || skin === 'plain' ? 0.92 : 
 function paintPreview() {
   if (!preview) return;
   const skin = String(prefs.skin ?? 'frost');
-  const radius = Math.min(32, Math.max(8, Number(prefs.radius) || 22));
-  const opacity = previewOpacity(skin);
-  const accent = (getComputedStyle(document.documentElement).getPropertyValue('--accent') || '').trim() || '#9683ff';
+  const radius = Math.min(32, Math.max(8, Number(prefs.radius) || 30));
+  const currentTime = new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date());
+  const currentPage = NAV.flatMap((group) => group.items).find((item) => item.key === page);
+  const pageName = T(page + '.title', null, currentPage?.label ?? '');
+  const tags = pagesTable().slice(0, 5);
   preview.innerHTML =
-    '<div class="pv-head"><b>' + escapeHtml(T('preview.title')) + '</b><span>' +
-      escapeHtml(T('preview.sameSource')) + '</span></div>' +
-    '<div class="pv-stage"><div class="pv-island" data-skin="' + escapeHtml(skin) + '" style="--pv-w:' +
-      previewIslandWidth() + 'px;--pv-radius:' + Math.round(radius * 0.68) + 'px;--pv-opacity:' + opacity + '">' +
-      '<div class="pv-pill"><span class="pv-dot"></span><span class="pv-line"></span></div>' +
-      '<div class="pv-main"><div class="pv-row"><span class="pv-ava">t</span><span class="pv-name">EmojiTot</span></div>' +
-        '<p class="pv-big">' + escapeHtml(T('preview.island.big')) + '</p><p class="pv-sub">' +
-          escapeHtml(T('preview.island.sub')) + '</p>' +
-        '<div class="pv-bars"><i></i><i></i><i></i></div></div>' +
-    '</div></div>' +
-    '<dl class="pv-meta">' +
-      '<div class="pv-mrow"><dt>' + escapeHtml(T('preview.meta.skin')) + '</dt><dd>' +
-        escapeHtml(T('skin.' + skin + '.label', null, skin)) + '</dd></div>' +
-      '<div class="pv-mrow"><dt>' + escapeHtml(T('preview.meta.radius')) + '</dt><dd>' + radius + ' px</dd></div>' +
-      '<div class="pv-mrow"><dt title="' + escapeHtml(T('preview.meta.opacityTitle')) + '">' +
-        escapeHtml(T('preview.meta.opacity')) + '</dt><dd>' + Math.round(opacity * 100) + ' %</dd></div>' +
-      '<div class="pv-mrow"><dt>' + escapeHtml(T('preview.meta.accent')) + '</dt><dd><i class="pv-swatch"></i>' +
-        escapeHtml(accent.toUpperCase()) + '</dd></div>' +
-      '<div class="pv-mrow"><dt>' + escapeHtml(T('preview.meta.width')) + '</dt><dd>' +
-        (Number(prefs.islandWidth) || 420) + ' px</dd></div>' +
-    '</dl>' +
-    '<p class="pv-note">' + T('preview.note') + '</p>';
+    '<div class="pgm-preview-head"><b>' + escapeHtml(T('preview.title')) + '</b><span>420 × 310 LOGICAL</span></div>' +
+    '<div class="pgm-preview-pill"><span class="pgm-cast-slot"><emojitot-ball cast="' +
+      escapeHtml(activeCastId()) + '" size="30" state="' + escapeHtml(faceState || 'idle') + '"></emojitot-ball></span>' +
+      '<span><b>' + escapeHtml(T('preview.island.big')) + '</b><span>' +
+      escapeHtml(T('preview.island.sub')) + '</span></span><em>' + escapeHtml(currentTime) + '</em></div>' +
+    '<div class="pgm-preview-card"><div class="pgm-preview-card-head"><span class="pgm-cast-slot">' +
+      '<emojitot-ball cast="' + escapeHtml(activeCastId()) + '" size="19" state="' +
+      escapeHtml(faceState || 'idle') + '"></emojitot-ball></span><span>' + escapeHtml(pageName) + '</span></div>' +
+      '<div class="pgm-preview-metrics">' +
+        '<div><b>' + escapeHtml(currentTime) + '</b><span>' + escapeHtml(T('preview.meta.time')) + '</span></div>' +
+        '<div><b>19°</b><span>' + escapeHtml(T('preview.meta.weather')) + '</span></div>' +
+        '<div><b>94%</b><span>' + escapeHtml(T('preview.meta.battery')) + '</span></div>' +
+      '</div>' +
+      '<div class="pgm-preview-tags">' + tags.map((item) => '<span>' + escapeHtml(item.label) + '</span>').join('') + '</div>' +
+      '<p class="pgm-preview-note">' + T('preview.note') + '</p>' +
+    '</div>';
 }
 
 /*
@@ -1314,9 +1750,9 @@ function paintPreview() {
  * window stayed on the system stack, which read as the setting not working.
  */
 const FONT_STACKS = {
-  system: 'system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-  pingfang: '"PingFang SC", "Microsoft YaHei", sans-serif',
-  yahei: '"Microsoft YaHei", "PingFang SC", sans-serif',
+  system: '"MiSans", "MiSans VF", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
+  pingfang: '"MiSans", "MiSans VF", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+  yahei: '"MiSans", "MiSans VF", "Microsoft YaHei", "Noto Sans SC", "PingFang SC", sans-serif',
   mono: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace',
 };
 
@@ -1343,6 +1779,7 @@ function applyChrome() {
   const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
   const light = theme === 'light' || (theme === 'system' && prefersLight);
   html.dataset.theme = light ? 'light' : 'dark';
+  document.body.dataset.theme = light ? 'light' : 'dark';
   html.style.setProperty('--ui-font', FONT_STACKS[prefs.font] ?? FONT_STACKS.system);
   html.style.setProperty('--ui-weight', String(prefs.weight || 400));
   const scale = Math.min(1.4, Math.max(0.8, (Number(prefs.uiScale) || 100) / 100));
@@ -1354,7 +1791,7 @@ function applyChrome() {
    * innerWidth is the number the window is actually sized in, and 1280 is the
    * default width where the pane earns its place.
    */
-  html.dataset.preview = window.innerWidth >= 1280 ? 'on' : 'off';
+  html.dataset.preview = window.innerWidth >= 1080 ? 'on' : 'off';
 }
 
 window.addEventListener('resize', () => applyChrome());
@@ -1394,7 +1831,12 @@ function paintContent() {
   const previous = content.querySelector('.dev-rows');
   if (previous) devicesScrollTop = previous.scrollTop;
   paintedPage = page;
+  pendingPageHead = null;
   content.innerHTML = renderer();
+  const titleNode = document.getElementById('settings-page-title');
+  const descNode = document.getElementById('settings-page-desc');
+  if (titleNode && pendingPageHead) titleNode.textContent = pendingPageHead.title;
+  if (descNode && pendingPageHead) descNode.textContent = pendingPageHead.sub;
   content.scrollTop = 0;
   syncDevicesWatch();
   const next = content.querySelector('.dev-rows');
@@ -1418,6 +1860,8 @@ function paint() {
 async function load() {
   prefs = merge(await api.get());
   meta = (await api.meta?.()) ?? meta;
+  meta = { ...(meta ?? {}), castId: normalizeCastId(meta?.castId) };
+  if (titlebarCast) titlebarCast.setAttribute('cast', activeCastId());
   version = (await api.version?.()) ?? version;
   displays = (await api.displays?.()) ?? [];
   quotaState = (await api.quota?.()) ?? quotaState;
@@ -1431,10 +1875,12 @@ async function patch(update) {
   paint();
   // Rail focus is lost on repaint; keep the current page selected without
   // stealing focus back from a text input the user is still typing in.
-  const active = content.querySelector('input:focus, select:focus');
-  if (active && active.dataset.act === 'set') {
-    const key = active.dataset.key;
-    const again = content.querySelector('[data-act="set"][data-key="' + key + '"]');
+  const active = content.querySelector('input:focus, select:focus, .pgm-select-shell:focus');
+  if (active && (active.dataset.act === 'set' || active.dataset.selectKey)) {
+    const key = active.dataset.key ?? active.dataset.selectKey;
+    const again = content.querySelector(
+      '[data-act="set"][data-key="' + key + '"], .pgm-select-shell[data-select-key="' + key + '"]',
+    );
     again?.focus();
   }
 }
@@ -1656,6 +2102,36 @@ content.addEventListener('click', async (event) => {
     return;
   }
   if (act === 'button') {
+    if (key === 'general-reset') {
+      await patch({
+        theme: DEFAULTS.theme,
+        skin: DEFAULTS.skin,
+        blur: DEFAULTS.blur,
+        radius: DEFAULTS.radius,
+        font: DEFAULTS.font,
+        weight: DEFAULTS.weight,
+        fontSize: DEFAULTS.fontSize,
+        motion: DEFAULTS.motion,
+        reduceMotion: DEFAULTS.reduceMotion,
+        islandWidth: DEFAULTS.islandWidth,
+        pillHeight: DEFAULTS.pillHeight,
+        islandTopGap: DEFAULTS.islandTopGap,
+        sizeKey: DEFAULTS.sizeKey,
+        pinned: DEFAULTS.pinned,
+        clickThrough: DEFAULTS.clickThrough,
+        displayId: DEFAULTS.displayId,
+        avoidTopBar: DEFAULTS.avoidTopBar,
+        oledShift: DEFAULTS.oledShift,
+        hideFullscreen: DEFAULTS.hideFullscreen,
+        trayIcon: DEFAULTS.trayIcon,
+        wheelPaging: DEFAULTS.wheelPaging,
+        blurCollapse: DEFAULTS.blurCollapse,
+        hoverOpenDelay: DEFAULTS.hoverOpenDelay,
+        hoverCloseDelay: DEFAULTS.hoverCloseDelay,
+        hoverAutoHide: DEFAULTS.hoverAutoHide,
+      });
+      return;
+    }
     if (key === 'devices-refresh') {
       /* The probe is a PowerShell sweep of PnP properties, seconds not frames.
          The button only asks for it and repaints from the snapshot at hand-off;
@@ -1805,6 +2281,102 @@ content.addEventListener('click', async (event) => {
   }
 });
 
+/*
+ * Settings selects are a custom listbox. Windows still paints the native
+ * select caret above a transparent one-pixel <select>, even when appearance is
+ * none, so the only reliable way to match the artboard is to keep the whole
+ * control in the DOM layer and show its options in a top-layer popover.
+ */
+let openSelectShell = null;
+
+function selectOptions(shell) {
+  return [...shell.querySelectorAll('.pgm-select-menu .pgm-select-option')];
+}
+
+function setSelectActive(shell, option) {
+  const options = selectOptions(shell);
+  for (const item of options) item.classList.toggle('is-active', item === option);
+  if (!option) {
+    shell.removeAttribute('aria-activedescendant');
+    return;
+  }
+  shell.setAttribute('aria-activedescendant', option.id);
+  option.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+function moveSelectActive(shell, delta) {
+  const options = selectOptions(shell);
+  if (!options.length) return;
+  const current = shell.getAttribute('aria-activedescendant');
+  const index = Math.max(0, options.findIndex((option) => option.id === current));
+  const next = (index + delta + options.length) % options.length;
+  setSelectActive(shell, options[next]);
+}
+
+function positionSelectMenu(shell, menu) {
+  const rect = shell.getBoundingClientRect();
+  const edge = 8;
+  const gap = 4;
+  menu.style.visibility = 'hidden';
+  menu.style.width = 'max-content';
+  menu.style.minWidth = Math.ceil(rect.width) + 'px';
+  menu.style.maxWidth = Math.max(rect.width, Math.min(240, innerWidth - edge * 2)) + 'px';
+  const menuRect = menu.getBoundingClientRect();
+  const below = innerHeight - rect.bottom - edge - gap;
+  const above = rect.top - edge - gap;
+  const openAbove = menuRect.height > below && above > below;
+  const top = openAbove
+    ? Math.max(edge, rect.top - menuRect.height - gap)
+    : Math.min(innerHeight - edge - menuRect.height, rect.bottom + gap);
+  const left = Math.max(edge, Math.min(rect.left, innerWidth - edge - menuRect.width));
+  menu.style.left = Math.round(left) + 'px';
+  menu.style.top = Math.round(top) + 'px';
+  menu.style.visibility = '';
+}
+
+function openSelect(shell) {
+  if (!shell) return;
+  if (openSelectShell && openSelectShell !== shell) closeSelect(openSelectShell, false);
+  const menu = shell.querySelector('.pgm-select-menu');
+  if (!menu) return;
+  openSelectShell = shell;
+  shell.setAttribute('aria-expanded', 'true');
+  if (typeof menu.showPopover === 'function') {
+    if (!menu.matches(':popover-open')) menu.showPopover();
+  } else {
+    menu.hidden = false;
+  }
+  positionSelectMenu(shell, menu);
+  const current = shell.getAttribute('aria-activedescendant');
+  const selected = menu.querySelector('[aria-selected="true"]');
+  setSelectActive(shell, menu.querySelector('#' + current) ?? selected ?? selectOptions(shell)[0]);
+}
+
+function closeSelect(shell, restoreFocus = false) {
+  if (!shell) return;
+  const menu = shell.querySelector('.pgm-select-menu');
+  if (menu && typeof menu.hidePopover === 'function' && menu.matches(':popover-open')) {
+    menu.hidePopover();
+  } else if (menu) {
+    menu.hidden = true;
+  }
+  shell.setAttribute('aria-expanded', 'false');
+  shell.removeAttribute('aria-activedescendant');
+  for (const option of selectOptions(shell)) option.classList.remove('is-active');
+  if (openSelectShell === shell) openSelectShell = null;
+  if (restoreFocus) shell.focus({ preventScroll: true });
+}
+
+function chooseSelectOption(shell, option) {
+  if (!shell || !option) return;
+  const key = shell.dataset.selectKey;
+  if (!key) return;
+  const raw = option.dataset.selectValue ?? '';
+  const value = key === 'displayId' && raw === 'null' ? null : raw;
+  closeSelect(shell, true);
+  patch(setPath(key, value));
+}
+
 content.addEventListener('change', async (event) => {
   const target = event.target.closest('[data-act="set"]');
   if (!target) return;
@@ -1823,10 +2395,88 @@ content.addEventListener('change', async (event) => {
   await patch(setPath(key, value));
 });
 
+content.addEventListener('click', (event) => {
+  const option = event.target.closest('.pgm-select-option');
+  if (option) {
+    chooseSelectOption(option.closest('.pgm-select-shell'), option);
+    return;
+  }
+  const shell = event.target.closest('.pgm-select-shell');
+  if (!shell) return;
+  if (openSelectShell === shell) closeSelect(shell, true);
+  else openSelect(shell);
+});
+
+content.addEventListener('keydown', (event) => {
+  const shell = event.target.closest('.pgm-select-shell');
+  if (!shell) return;
+  const menu = shell.querySelector('.pgm-select-menu');
+  if (!menu) return;
+  if (event.key === 'Tab') {
+    closeSelect(shell);
+    return;
+  }
+  if (event.key === 'Escape') {
+    if (openSelectShell === shell) {
+      event.preventDefault();
+      closeSelect(shell, true);
+    }
+    return;
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (openSelectShell !== shell) openSelect(shell);
+    else moveSelectActive(shell, event.key === 'ArrowDown' ? 1 : -1);
+    return;
+  }
+  if (event.key === 'Home' || event.key === 'End') {
+    if (openSelectShell !== shell) return;
+    event.preventDefault();
+    const options = selectOptions(shell);
+    setSelectActive(shell, event.key === 'Home' ? options[0] : options.at(-1));
+    return;
+  }
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    if (openSelectShell !== shell) {
+      openSelect(shell);
+      return;
+    }
+    const active = menu.querySelector('#' + shell.getAttribute('aria-activedescendant'));
+    chooseSelectOption(shell, active);
+  }
+});
+
+content.addEventListener('pointermove', (event) => {
+  const option = event.target.closest('.pgm-select-option');
+  if (!option || openSelectShell !== option.closest('.pgm-select-shell')) return;
+  setSelectActive(option.closest('.pgm-select-shell'), option);
+});
+
+document.addEventListener('pointerdown', (event) => {
+  if (openSelectShell && !openSelectShell.contains(event.target)) {
+    closeSelect(openSelectShell);
+  }
+});
+
+document.addEventListener('scroll', () => {
+  if (openSelectShell) positionSelectMenu(
+    openSelectShell,
+    openSelectShell.querySelector('.pgm-select-menu'),
+  );
+}, true);
+
+window.addEventListener('resize', () => {
+  if (openSelectShell) positionSelectMenu(
+    openSelectShell,
+    openSelectShell.querySelector('.pgm-select-menu'),
+  );
+});
+
 content.addEventListener('input', (event) => {
   const target = event.target.closest('input[type="range"][data-act="set"]');
   if (!target) return;
-  const label = target.nextElementSibling;
+  const label = target.parentElement?.querySelector('[data-range-value]') ?? target.nextElementSibling;
   if (label && target.dataset.suffix !== undefined) {
     label.textContent = target.value + target.dataset.suffix;
   }
@@ -1884,7 +2534,7 @@ content.addEventListener('dragend', async () => {
 let deviceDrag = null;
 
 function deviceRows() {
-  return [...content.querySelectorAll('[data-device-order] .dev-row[data-device]')];
+  return [...content.querySelectorAll('[data-device-order] .pgm-set-row[data-device]')];
 }
 
 async function saveDeviceOrder() {
@@ -1904,7 +2554,7 @@ async function saveDeviceOrder() {
 }
 
 content.addEventListener('dragstart', (event) => {
-  const row = event.target.closest('[data-device-order] .dev-row[data-device]');
+  const row = event.target.closest('[data-device-order] .pgm-set-row[data-device]');
   if (!row) return;
   deviceDrag = row;
   row.dataset.dragging = 'true';
@@ -1912,7 +2562,7 @@ content.addEventListener('dragstart', (event) => {
   try { event.dataTransfer.setData('text/plain', row.dataset.device); } catch { /* older engines */ }
 });
 content.addEventListener('dragover', (event) => {
-  const row = event.target.closest('[data-device-order] .dev-row[data-device]');
+  const row = event.target.closest('[data-device-order] .pgm-set-row[data-device]');
   if (!row || !deviceDrag || row === deviceDrag) return;
   event.preventDefault();
   const rect = row.getBoundingClientRect();
@@ -1942,9 +2592,18 @@ content.addEventListener('dragend', async () => {
  * statusItems，于是「拖到哪」和「写什么」是同一个数字。
  */
 let residencyDrag = null;
+let residencySuppressClick = '';
 
 function residencyChips() {
   return [...content.querySelectorAll('.residency-chip')];
+}
+
+async function toggleResidencyChip(chip) {
+  if (!chip) return;
+  const key = chip.dataset.residencyKey;
+  const enabled = chip.dataset.on === 'true';
+  await patch({ statusItems: setStatusItemEnabled(prefs, key, !enabled) });
+  content.querySelector('[data-residency-key="' + key + '"]')?.focus();
 }
 
 /** 指针落在别的格子之间的哪个位置：返回最终索引，被拖的那个不算。 */
@@ -1989,8 +2648,8 @@ function clearResidencyMark() {
 
 content.addEventListener('pointerdown', (event) => {
   const chip = event.target.closest('.residency-chip');
-  /* 关掉的组件不在 statusItems 里，也就没有它自己的位置可写：拖它只会
-     让下一帧跳回原位。让它按不动，比拖完弹回去诚实。 */
+  /* 关掉的组件仍可点按启用；只有已显示的组件有可写入的排序位置。 */
+  residencySuppressClick = '';
   if (!chip || event.button !== 0 || chip.dataset.on !== 'true') return;
   const from = enabledStatusKeys(prefs).indexOf(chip.dataset.residencyKey);
   if (from < 0) return;
@@ -2018,6 +2677,7 @@ content.addEventListener('pointerup', async () => {
   drag.chip.dataset.dragging = 'false';
   clearResidencyMark();
   if (!drag.active || drag.index === drag.from) return;
+  residencySuppressClick = drag.key;
   const next = moveStatusKey(prefs, drag.key, drag.index);
   if (next.join() === enabledStatusKeys(prefs).join()) return;
   /* 重绘会换掉整条 DOM：写完之后按 key 找回新格子，把焦点放回原处，
@@ -2030,14 +2690,20 @@ content.addEventListener('pointercancel', () => {
   if (!residencyDrag) return;
   residencyDrag.chip.dataset.dragging = 'false';
   residencyDrag = null;
+  residencySuppressClick = '';
   clearResidencyMark();
 });
 
-/* 键盘路径：Tab 到某个格子上，Alt + ← / → 换位。上下箭头仍归下面那张
-   状态组件列表（它的 .order-item 有同样的移动按钮）。 */
+/* 键盘路径：Tab 到某个格子上，Enter / Space 切换显示，Alt + ← / → 换位。 */
 content.addEventListener('keydown', async (event) => {
   const chip = event.target.closest('.residency-chip');
-  if (!chip || !event.altKey) return;
+  if (!chip) return;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    await toggleResidencyChip(chip);
+    return;
+  }
+  if (!event.altKey) return;
   const delta = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
   if (!delta) return;
   event.preventDefault();
@@ -2048,6 +2714,16 @@ content.addEventListener('keydown', async (event) => {
   if (index < 0 || to < 0 || to >= keys.length) return;
   await patch({ statusItems: moveStatusKey(prefs, key, to) });
   content.querySelector('[data-residency-key="' + key + '"]')?.focus();
+});
+
+content.addEventListener('click', async (event) => {
+  const chip = event.target.closest('.residency-chip');
+  if (!chip) return;
+  if (residencySuppressClick === chip.dataset.residencyKey) {
+    residencySuppressClick = '';
+    return;
+  }
+  await toggleResidencyChip(chip);
 });
 
 /* ------------------------------------------------------------------ shell */
@@ -2100,5 +2776,6 @@ api.onGoto((target) => {
    not wearing. It also re-sends the current value on load, so a reopened
    window starts on the live expression. */
 api.onFace?.(applyFace);
+api.onCast?.(applyCast);
 
 load();

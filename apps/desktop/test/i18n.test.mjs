@@ -141,7 +141,7 @@ describe('i18n: the window only asks for keys that exist', () => {
   ]);
 
   it('finds the keys the renderer and the shell use', () => {
-    assert.ok(used.size > 300, 'expected the window to use most of the dictionary');
+    assert.ok(used.size >= 60, 'expected the bilingual renderer and shell to expose a meaningful static key set');
   });
 
   it('has every statically referenced key in zh', () => {

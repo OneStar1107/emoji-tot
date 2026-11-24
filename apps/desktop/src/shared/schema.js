@@ -53,7 +53,7 @@ export const PAGE_MANIFEST = [
  * there is a test that walks this table and fails on a key nothing draws.
  */
 /**
- * The settings window's left rail: three groups, fifteen pages.
+ * The settings window's left rail: three groups, sixteen pages.
  *
  * It lives here rather than in the renderer because the site's docs page
  * prints the page count, and two copies of a list like this is exactly how a
@@ -80,6 +80,12 @@ export const SETTINGS_NAV = [
       { key: 'focus', label: '专注与饮水', icon: 'timer' },
       { key: 'todo', label: '待办与置物', icon: 'check' },
       { key: 'comm', label: '通知、邮箱与日程', icon: 'mail' },
+    ],
+  },
+  {
+    id: 'system',
+    title: '系统',
+    items: [
       { key: 'quota', label: 'AI 额度', icon: 'coin' },
       { key: 'weather', label: '天气', icon: 'sun' },
       /* The devices list used to have no page of its own: its two decisions
@@ -88,12 +94,7 @@ export const SETTINGS_NAV = [
          grows. The pages.devices switch on 页面管理 stays: it decides whether
          the island shows the page at all. */
       { key: 'devices', label: '设备', icon: 'tray' },
-    ],
-  },
-  {
-    id: 'system',
-    title: '系统',
-    items: [
+      { key: 'tray', label: '系统托盘图标', icon: 'tray' },
       { key: 'plugins', label: '插件', icon: 'plug' },
       { key: 'about', label: '关于', icon: 'info' },
     ],
@@ -215,7 +216,7 @@ export const DEFAULTS = {
    * card instead; nothing is captured, written, or uploaded.
    */
   uiScale: 100,
-  radius: 22,
+  radius: 30,
   font: 'system',
   weight: 400,
   fontSize: 0,
@@ -749,7 +750,7 @@ export function pageOfPath(path) {
     avoidEnabled: 'behavior',
     avoidBrowsers: 'behavior',
     avoidApps: 'behavior',
-    trayIcon: 'behavior',
+    trayIcon: 'tray',
     hotkey: 'behavior',
     wheelPaging: 'behavior',
     blurCollapse: 'behavior',

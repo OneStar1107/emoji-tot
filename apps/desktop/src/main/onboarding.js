@@ -71,6 +71,12 @@ function close() {
   if (win && !win.isDestroyed()) win.close();
 }
 
+/** Keep an already-open guide on the same cast as the running desktop. */
+function sendCast(cast) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('onboarding:cast', cast);
+}
+
 /** Apply the answer and close; returns the patch for the reply. */
 function finish(choice) {
   const patch = patchFor(choice);
@@ -102,7 +108,7 @@ function create() {
      */
     thickFrame: false,
     transparent: false,
-    backgroundColor: '#101013',
+    backgroundColor: '#101114',
     show: false,
     title: '欢迎使用 EmojiTot',
     webPreferences: {
@@ -168,4 +174,4 @@ function registerIpc() {
   );
 }
 
-module.exports = { registerIpc, maybeShow };
+module.exports = { registerIpc, maybeShow, sendCast };

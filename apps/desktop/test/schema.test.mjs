@@ -359,6 +359,7 @@ describe('schema: page presets', () => {
 
 describe('settings UI actually reads and writes the schema', () => {
   const settings = src('renderer/settings.js');
+  const settingsHtml = src('renderer/settings.html');
   const settingsCss = src('renderer/settings.css');
   const island = src('renderer/island.js');
 
@@ -379,23 +380,29 @@ describe('settings UI actually reads and writes the schema', () => {
     assert.ok(settings.includes('setPath(key, !valueOf(key))'), 'toggles must flip the value at the path');
   });
 
-  it('renders one canonical display mode control', () => {
-    assert.ok(settings.includes("'displayMode'"), 'settings must write displayMode');
+  it('keeps one canonical display-mode schema path without a legacy switch', () => {
+    assert.equal(DEFAULTS.displayMode, 'island');
+    assert.equal(withDefaults({ formBoth: true }).displayMode, 'both');
     assert.ok(!settings.includes("'formBoth'"), 'settings must not expose the legacy formBoth switch');
     assert.ok(!settings.includes("rowActionToggle('显示灵动岛'"), 'visibility is owned by displayMode');
   });
 
   it('opens the rail with the live character, not a search box', () => {
-    assert.ok(!settings.includes('rail-filter'), 'the search box is gone: fourteen rows need no filter');
+    assert.ok(!settings.includes('rail-filter'), 'the search box is gone: sixteen rows need no filter');
     assert.ok(!settings.includes('searchTextCache'), 'the page search index goes with it');
-    assert.ok(settings.includes('class="rail-cast"'), 'the rail starts with the cast preview');
+    assert.ok(settingsHtml.includes('class="pgm-rail-brand"'), 'the rail starts with the cast preview');
+    assert.ok(settingsHtml.includes('id="rail-cast-name"'), 'the rail reserves a line for the cast nickname');
     assert.ok(settings.includes('<emojitot-ball cast='), 'the preview must use the shared ball renderer');
-    assert.ok(settings.includes('if (!member) return'), 'a missing cast draws nothing, never an empty circle');
+    assert.ok(settings.includes("const id = activeCastId();"), 'the rail must use the normalized live cast');
+    assert.ok(
+      settings.includes("displayCastName(id, member?.label ?? 'Tot')"),
+      'a stale cast falls back to Tot',
+    );
   });
 
   it('draws the face the main process sends, never its own', () => {
     assert.ok(settings.includes('api.onFace?.(applyFace)'), 'the preview must subscribe to the main process face');
-    assert.ok(settings.includes("ball.setAttribute('state', state)"), 'the payload reaches the renderer unchanged');
+    assert.ok(settings.includes("face.setAttribute('state', state)"), 'the payload reaches every live character');
     assert.ok(!settings.includes('setInterval('), 'no mood clock in this window — the face has one owner');
   });
 
@@ -405,9 +412,10 @@ describe('settings UI actually reads and writes the schema', () => {
     assert.ok(settings.includes("event.key === 'ArrowDown'"), 'orders need a Down key path');
   });
 
-  it('renders page presets from the shared manifest', () => {
-    assert.ok(settings.includes('PRESET_MANIFEST.map'), 'preset choices must come from schema');
-    assert.ok(settings.includes('presetPatch('), 'preset cards must apply schema patches');
+  it('renders page management from the shared manifests', () => {
+    assert.ok(settings.includes('PAGE_MANIFEST.map'), 'page rows must come from the shared manifest');
+    assert.ok(settings.includes('orderedPageKeys(prefs)'), 'page order must come from the shared schema');
+    assert.ok(settings.includes('presetPatch('), 'shared preset patches remain the only preset writer');
   });
 
   it('keeps small secondary text at a readable dark-theme opacity', () => {

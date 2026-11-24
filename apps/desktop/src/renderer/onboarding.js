@@ -15,9 +15,16 @@ const welcome = document.getElementById('page-welcome');
 const setup = document.getElementById('page-setup');
 const formSeg = document.getElementById('form-seg');
 const skinCards = document.getElementById('skin-cards');
-const hero = document.querySelector('.hero');
+const liveCasts = [...document.querySelectorAll('[data-live-cast]')];
 const startBtn = document.getElementById('btn-start');
 const doneBtn = document.getElementById('btn-done');
+const stepLabel = document.getElementById('guide-step-label');
+const stepCount = document.getElementById('guide-step-count');
+
+function applyCast(cast) {
+  if (typeof cast !== 'string' || !cast) return;
+  for (const node of liveCasts) node.setAttribute('cast', cast);
+}
 
 /** Preselected from the current profile, so "完成" without touching anything
  *  means "keep what I already had" rather than "reset to the factory". */
@@ -56,6 +63,8 @@ function paint() {
 function showSetup() {
   welcome.hidden = true;
   setup.hidden = false;
+  stepLabel.textContent = '显示与外观';
+  stepCount.textContent = '02 / 02';
   doneBtn.focus();
 }
 
@@ -109,7 +118,7 @@ document.addEventListener('keydown', (event) => {
 async function boot() {
   const info = await window.onboardingAPI.get().catch(() => null);
   if (info) {
-    if (typeof info.cast === 'string' && info.cast) hero.setAttribute('cast', info.cast);
+    applyCast(info.cast);
     if (['island', 'ball', 'both'].includes(info.displayMode)) choice.displayMode = info.displayMode;
     if (SKIN_PREVIEWS.some(([value]) => value === info.skin)) choice.skin = info.skin;
     applyTheme(info.theme);
@@ -118,5 +127,9 @@ async function boot() {
   paint();
   startBtn.focus();
 }
+
+window.onboardingAPI.onCast?.((cast) => {
+  applyCast(cast);
+});
 
 boot();

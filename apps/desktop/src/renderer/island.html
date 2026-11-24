@@ -6,6 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' data:" />
 <title>EmojiTot Island</title>
 <link rel="stylesheet" href="./island.css" />
+<link rel="stylesheet" href="./polar-graphite.css" />
+<link rel="stylesheet" href="./polar-graphite-parity.css" />
 </head>
 <body>
   <div id="island" data-open="false">
@@ -24,36 +26,40 @@
     </button>
 
     <!-- Expanded: header, one page, dots. -->
-    <section class="panel" id="panel" hidden aria-label="EmojiTot 面板">
+    <section class="panel pgm-island" id="panel" hidden aria-label="EmojiTot 面板">
       <!-- The page and its chrome, as one layer the fold clips against the
            card's animated box (see paintMorph in island.js). The paging
            arrows stay outside: they are chrome that scales with the surface. -->
       <div class="panel-body" id="panel-body">
-      <header class="topbar">
-        <span class="top-face-col">
-          <span class="top-face"><emojitot-ball cast="tot" size="30" state="idle" live></emojitot-ball></span>
-          <em class="top-page-name" id="page-name">媒体</em>
+      <header class="pgm-island-head">
+        <span class="top-face pgm-cast-slot" aria-hidden="true">
+          <emojitot-ball cast="tot" size="32" state="idle" live></emojitot-ball>
         </span>
-        <span class="top-titles">
-          <strong id="page-title"><span></span></strong>
-          <em id="page-sub"><span>系统正在播放</span></em>
+        <span class="pgm-island-title">
+          <b id="page-name">媒体</b>
+          <span id="page-sub">系统正在播放</span>
         </span>
-        <span class="top-right">
-          <span id="top-battery" class="top-battery" hidden></span>
-          <span id="top-clock" class="top-clock">--:--</span>
-          <button type="button" class="icon-btn" id="btn-settings" title="设置" aria-label="设置">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.05V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.14.4.44.73.85.94.27.13.57.2.87.2H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
-          </button>
-        </span>
+        <span id="top-clock" class="top-clock pgm-island-meta">--:--</span>
+        <span id="top-battery" class="top-battery pgm-island-meta pgm-battery" hidden></span>
+        <button type="button" class="icon-btn pgm-gear" id="btn-settings" title="设置" aria-label="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.05V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.14.4.44.73.85.94.27.13.57.2.87.2H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+        </button>
       </header>
-      <div class="pages" id="pages"></div>
-      <button type="button" class="pager prev" data-page-nav="-1" aria-label="上一页">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg>
-      </button>
-      <button type="button" class="pager next" data-page-nav="1" aria-label="下一页">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
-      </button>
-      <nav class="dots" id="dots" aria-label="切换页面"></nav>
+      <main class="pages pgm-island-body" id="pages"></main>
+      <footer class="island-footer pgm-island-foot">
+        <button type="button" class="pager prev pgm-page-btn" data-page-nav="-1" aria-label="上一页">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          <span>上一页</span>
+        </button>
+        <span class="pgm-pager page-center">
+          <span class="pgm-pips dots" id="dots" aria-hidden="true"></span>
+          <span class="pgm-page-count page-count" id="page-count">01 / 11</span>
+        </span>
+        <button type="button" class="pager next pgm-page-btn" data-page-nav="1" aria-label="下一页">
+          <span>下一页</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </footer>
       </div>
     </section>
     <!-- Auto-avoid: the pill collapses to this strip while a listed app covers it. -->

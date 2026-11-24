@@ -127,12 +127,13 @@ describe('residency: the two lists are one list', () => {
     assert.deepEqual(orderedStatusKeys(off), ['quota', 'battery', 'weather', 'clock', 'kaomoji']);
   });
 
-  it('the settings page reads both lists from the schema, not from a copy', () => {
+  it('the settings page uses the schema-backed residency strip as its only status list', () => {
     const settings = src('renderer/settings.js');
     assert.ok(settings.includes('statusPreviewRows(prefs)'), 'the strip rows must come from schema');
-    assert.ok(settings.includes('orderedStatusKeys(prefs)'), 'the row list order comes from schema');
-    assert.ok(settings.includes("orderList('status', statusItems"), 'the row list stays on the page');
-    assert.ok(settings.includes('moveStatusKey(prefs'), 'a drag writes through the shared mover');
+    assert.ok(!settings.includes("orderList('status'"), 'the artboard has one list, not a duplicate table');
+    assert.ok(settings.includes('function toggleResidencyChip'), 'clicking a component toggles it');
+    assert.ok(settings.includes("chip.dataset.residencyKey"), 'the toggle writes the component key');
+    assert.ok(settings.includes('moveStatusKey(prefs'), 'dragging writes through the shared mover');
     assert.ok(settings.includes('defaultStatusItems()'), 'reset uses the schema default, not a literal');
     assert.ok(!/statusItems: \['battery'/.test(settings), 'no second copy of the default order in the renderer');
   });

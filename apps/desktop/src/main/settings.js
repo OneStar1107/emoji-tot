@@ -32,6 +32,13 @@ let actionHook = null;
  */
 let faceLoader = null;
 /**
+ * Injected by boot: replay the current cast when this window loads.
+ *
+ * Face and cast are independent state. A settings page can miss either one
+ * while it is closed, so both are replayed on did-finish-load.
+ */
+let castLoader = null;
+/**
  * Injected by boot: the window closed, so anything it was keeping alive for
  * its own page can be released. Only the devices page asks for such a thing —
  * its probe is started on demand because the island page may be switched off.
@@ -48,6 +55,10 @@ function setActionHook(fn) {
 
 function setFaceLoader(fn) {
   faceLoader = typeof fn === 'function' ? fn : null;
+}
+
+function setCastLoader(fn) {
+  castLoader = typeof fn === 'function' ? fn : null;
 }
 
 function setClosedHook(fn) {
@@ -82,6 +93,12 @@ function sendFace(payload) {
   win.webContents.send('face:apply', payload);
 }
 
+/** Push the selected cast to every character slot in the settings window. */
+function sendCast(id) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('settings:cast', id);
+}
+
 function create(page) {
   if (win && !win.isDestroyed()) {
     win.show();
@@ -105,7 +122,7 @@ function create(page) {
      * read. The user asked for the flat board back; --bg now carries the colour
      * and nothing is composited under it.
      */
-    backgroundColor: '#111114',
+    backgroundColor: '#101114',
     show: false,
     title: 'EmojiTot 设置',
     webPreferences: {
@@ -121,7 +138,10 @@ function create(page) {
   guard.claim('settings', win.webContents);
   win.loadFile(path.join(__dirname, '..', 'renderer', 'settings.html'));
   // A page that has just loaded missed every face broadcast while it was away.
-  win.webContents.on('did-finish-load', () => faceLoader?.());
+  win.webContents.on('did-finish-load', () => {
+    castLoader?.();
+    faceLoader?.();
+  });
   win.once('ready-to-show', () => {
     win.show();
     if (page) win.webContents.send('settings:goto', page);
@@ -328,10 +348,12 @@ module.exports = {
   onPrefs,
   applyPatch,
   sendFace,
+  sendCast,
   sendDevices,
   sendUpdateStatus,
   setWeatherRefresher,
   setActionHook,
   setFaceLoader,
+  setCastLoader,
   setClosedHook,
 };

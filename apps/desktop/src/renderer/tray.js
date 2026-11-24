@@ -7,6 +7,8 @@
 const api = window.trayAPI;
 const root = document.documentElement;
 const versionEl = document.getElementById('version');
+const castEl = document.getElementById('tray-cast');
+const castNameEl = document.getElementById('cast-name');
 const items = Array.from(document.querySelectorAll('.item'));
 const pinRow = document.querySelector('[data-act="pin"]');
 
@@ -14,6 +16,8 @@ function paint(state) {
   if (!state) return;
   root.dataset.theme = state.light ? 'light' : 'dark';
   versionEl.textContent = state.version ? 'v' + state.version : '';
+  if (state.castId) castEl.setAttribute('cast', state.castId);
+  if (state.castName) castNameEl.textContent = state.castName;
   pinRow.setAttribute('aria-checked', state.pinned ? 'true' : 'false');
 }
 

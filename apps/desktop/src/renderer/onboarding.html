@@ -5,40 +5,70 @@
 <meta name="color-scheme" content="dark" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' data:" />
 <title>欢迎使用 EmojiTot</title>
+<link rel="stylesheet" href="./polar-graphite.css" />
 <link rel="stylesheet" href="./onboarding.css" />
+<link rel="stylesheet" href="./onboarding-polar.css" />
 </head>
 <body>
   <div class="dragbar" aria-hidden="true"></div>
 
+  <header class="guidebar">
+    <div class="guide-brand">
+      <emojitot-ball class="guide-cast" data-live-cast cast="tot" state="idle" size="22" live></emojitot-ball>
+      <span>EmojiTot</span>
+    </div>
+    <div class="guide-progress">
+      <span id="guide-step-label">初次见面</span>
+      <span class="guide-divider" aria-hidden="true"></span>
+      <span id="guide-step-count">01 / 02</span>
+    </div>
+  </header>
+
   <!-- Page one: the character, one sentence, one button. -->
-  <section class="page" id="page-welcome" aria-labelledby="welcome-line">
+  <section class="page" id="page-welcome" aria-labelledby="welcome-title">
     <div class="content welcome">
-      <emojitot-ball class="hero" cast="tot" state="idle" size="96" live></emojitot-ball>
-      <p class="line" id="welcome-line">桌面上的小角色，用表情汇报媒体、电量和日程。</p>
+      <div class="hero-stage">
+        <span class="hero-ring" aria-hidden="true"></span>
+        <emojitot-ball class="hero" data-live-cast cast="tot" state="idle" size="104" live></emojitot-ball>
+      </div>
+      <div class="welcome-copy">
+        <span class="eyebrow">桌面常驻 · 本地优先</span>
+        <h1 class="welcome-title" id="welcome-title">把桌面留给你的角色</h1>
+        <p class="line" id="welcome-line">用一个表情汇报媒体、电量、日程与专注状态。</p>
+        <div class="feature-strip" aria-label="可显示的内容">
+          <span>媒体</span><span>日程</span><span>设备</span>
+        </div>
+      </div>
     </div>
     <div class="actions">
       <button type="button" class="btn primary" id="btn-start">开始</button>
-      <button type="button" class="btn ghost" id="btn-skip-welcome">跳过</button>
+      <button type="button" class="btn ghost" id="btn-skip-welcome">稍后再说</button>
     </div>
   </section>
 
   <!-- Page two: the two preferences this guide owns. -->
   <section class="page" id="page-setup" aria-labelledby="setup-title" hidden>
     <div class="content setup">
-      <h1 class="title" id="setup-title">选形态与皮肤</h1>
-
-      <div class="group">
-        <span class="group-label" id="form-label">形态</span>
-        <div class="seg" id="form-seg" role="group" aria-labelledby="form-label">
-          <button type="button" data-display-mode="island" aria-pressed="true">灵动岛</button>
-          <button type="button" data-display-mode="ball" aria-pressed="false">桌面球</button>
-          <button type="button" data-display-mode="both" aria-pressed="false">两者</button>
-        </div>
+      <div class="setup-intro">
+        <span class="eyebrow">显示与外观</span>
+        <h1 class="title" id="setup-title">选择形态与皮肤</h1>
+        <p class="setup-line">之后可以在设置的“外观”和“角色与表情”中随时调整。</p>
       </div>
 
-      <div class="group">
-        <span class="group-label" id="skin-label">皮肤</span>
-        <div class="skin-previews" id="skin-cards" role="group" aria-labelledby="skin-label"></div>
+      <div class="setup-fields">
+        <div class="group">
+          <span class="group-label" id="form-label">显示方式</span>
+          <div class="seg" id="form-seg" role="group" aria-labelledby="form-label">
+            <button type="button" data-display-mode="island" aria-pressed="true">灵动岛</button>
+            <button type="button" data-display-mode="ball" aria-pressed="false">桌面球</button>
+            <button type="button" data-display-mode="both" aria-pressed="false">两者</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <span class="group-label" id="skin-label">界面皮肤</span>
+          <div class="skin-previews" id="skin-cards" role="group" aria-labelledby="skin-label"></div>
+        </div>
       </div>
     </div>
     <div class="actions">

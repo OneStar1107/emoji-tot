@@ -6,26 +6,56 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'; connect-src 'self' data:" />
 <title>EmojiTot 设置</title>
 <link rel="stylesheet" href="./settings.css" />
+<link rel="stylesheet" href="./polar-graphite.css" />
+<link rel="stylesheet" href="./polar-graphite-parity.css" />
 </head>
-<body>
-  <header class="titlebar">
-    <span class="titlebar-name" data-i18n="app.title">EmojiTot 设置</span>
-    <span class="titlebar-spacer"></span>
-    <button type="button" class="win-btn" id="btn-min" title="最小化" aria-label="最小化" data-i18n-title="win.minimize" data-i18n-aria="win.minimize">
-      <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6h7"/></svg>
-    </button>
-    <button type="button" class="win-btn" id="btn-max" title="最大化" aria-label="最大化" data-i18n-title="win.maximize" data-i18n-aria="win.maximize">
-      <svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.6" y="2.6" width="6.8" height="6.8" rx="1.2"/></svg>
-    </button>
-    <button type="button" class="win-btn close" id="btn-close" title="关闭" aria-label="关闭" data-i18n-title="win.close" data-i18n-aria="win.close">
-      <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 3 6 6M9 3l-6 6"/></svg>
-    </button>
-  </header>
+<body data-theme="dark">
+  <div id="settings">
+    <div class="pgm-settings">
+      <header class="pgm-settings-titlebar">
+        <div class="pgm-window-brand">
+          <emojitot-ball id="titlebar-cast" class="titlebar-cast pgm-cast" cast="tot" size="24" state="idle" aria-hidden="true"></emojitot-ball>
+          <span class="titlebar-name" data-i18n="app.title">EmojiTot 设置</span>
+        </div>
+        <span class="titlebar-spacer"></span>
+        <span class="pgm-settings-window-controls">
+          <button type="button" class="win-btn" id="btn-min" title="最小化" aria-label="最小化" data-i18n-title="win.minimize" data-i18n-aria="win.minimize">
+            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6h7"/></svg>
+          </button>
+          <button type="button" class="win-btn" id="btn-max" title="最大化" aria-label="最大化" data-i18n-title="win.maximize" data-i18n-aria="win.maximize">
+            <svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.6" y="2.6" width="6.8" height="6.8" rx="1.2"/></svg>
+          </button>
+          <button type="button" class="win-btn close" id="btn-close" title="关闭" aria-label="关闭" data-i18n-title="win.close" data-i18n-aria="win.close">
+            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m3 3 6 6M9 3l-6 6"/></svg>
+          </button>
+        </span>
+      </header>
 
-  <div class="shell">
-    <aside class="rail" id="rail"></aside>
-    <main class="content" id="content"></main>
-    <aside class="preview" id="preview" aria-label="实时预览" data-i18n-aria="preview.title"></aside>
+      <div class="pgm-settings-grid">
+        <aside class="pgm-settings-rail" aria-label="设置页面导航">
+          <div class="pgm-rail-brand">
+            <span id="rail-cast" class="pgm-cast-slot" aria-hidden="true">
+              <emojitot-ball cast="tot" size="34" state="idle" live></emojitot-ball>
+            </span>
+            <div>
+              <b id="rail-cast-name">Tot</b>
+              <span id="rail-cast-meta">角色昵称 · TOT</span>
+            </div>
+          </div>
+          <div class="pgm-rail-scroll" id="rail"></div>
+        </aside>
+
+        <main class="pgm-settings-main">
+          <div class="pgm-settings-main-head">
+            <h2 id="settings-page-title">常规</h2>
+            <p id="settings-page-desc"></p>
+          </div>
+          <div class="pgm-settings-content" id="content"></div>
+        </main>
+
+        <aside class="pgm-settings-preview" id="preview" aria-label="实时预览" data-i18n-aria="preview.title"></aside>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="./vendor/core/element.js"></script>

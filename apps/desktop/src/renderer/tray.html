@@ -12,8 +12,8 @@
        stroke set, so this menu reads as part of the app and not as an OS menu. -->
   <main class="panel" role="menu" aria-label="EmojiTot">
     <header class="head">
-      <img class="mark" src="../../assets/icon.svg" width="14" height="14" alt="" />
-      <span class="name">EmojiTot</span>
+      <emojitot-ball class="mark" id="tray-cast" cast="tot" size="20" state="idle" aria-hidden="true"></emojitot-ball>
+      <span class="identity"><span class="name">EmojiTot</span><span class="cast-name" id="cast-name">Tot</span></span>
       <span class="version" id="version"></span>
     </header>
     <div class="items" id="items">
@@ -32,6 +32,7 @@
       </button>
     </div>
   </main>
+  <script type="module" src="./vendor/core/element.js"></script>
   <script type="module" src="./tray.js"></script>
 </body>
 </html>

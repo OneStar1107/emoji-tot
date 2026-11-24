@@ -265,7 +265,22 @@ async function waitFor(cdp, sessionId, expression, label, timeoutMs = 12000) {
     }
     await sleep(120);
   }
-  throw new Error('timed out waiting for ' + label + (lastError ? ': ' + lastError.message : ''));
+  let snapshot = '';
+  try {
+    snapshot = await evaluate(
+      cdp,
+      sessionId,
+      'JSON.stringify({ readyState: document.readyState, url: location.href, rail: document.querySelector("#rail")?.outerHTML.slice(0, 500) ?? "", railItems: document.querySelectorAll("#rail .pgm-rail-item").length, allRailItems: document.querySelectorAll(".pgm-rail-item").length, body: (document.body?.innerText ?? "").slice(0, 240) })',
+      3000,
+    );
+  } catch (error) {
+    snapshot = 'snapshot failed: ' + error.message;
+  }
+  throw new Error(
+    'timed out waiting for ' + label +
+      (lastError ? ': ' + lastError.message : '') +
+      ' [' + snapshot + ']',
+  );
 }
 
 async function waitForTarget(cdp, predicate, label, timeoutMs = 20000) {
@@ -298,6 +313,12 @@ function pageProbeFactory(minimumControlHeight) {
   };
   const sample = (element) => (element.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 48);
   const visible = (element) => {
+    /*
+     * Screen-reader-only controls are deliberately 1×1 and clipped. They are
+     * reachable through their labelled visible sibling or the accessibility
+     * tree, so neither the text-overflow nor hit-area probes apply to them.
+     */
+    if (element.closest('.pgm-visually-hidden')) return false;
     const box = element.getBoundingClientRect();
     if (box.width <= 0 || box.height <= 0) return false;
     const style = getComputedStyle(element);
@@ -308,6 +329,17 @@ function pageProbeFactory(minimumControlHeight) {
     if (style.whiteSpace === 'nowrap' || style.whiteSpace === 'pre') return true;
     const lineClamp = Number.parseInt(style.webkitLineClamp, 10);
     return Number.isFinite(lineClamp) && lineClamp > 0;
+  };
+  const fullValueExposed = (element) => {
+    const text = (element.textContent || '').replace(/\s+/g, ' ').trim();
+    let node = element;
+    for (let depth = 0; node && depth < 3; depth += 1, node = node.parentElement) {
+      if (node.getAttribute('data-allow-truncate') === 'true') return true;
+      const title = (node.getAttribute('title') || '').replace(/\s+/g, ' ').trim();
+      const aria = (node.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim();
+      if ((title && title.length >= text.length) || (aria && aria.length >= text.length)) return true;
+    }
+    return false;
   };
   const clippedByAncestor = (element, stopAt) => {
     const box = element.getBoundingClientRect();
@@ -337,9 +369,10 @@ function pageProbeFactory(minimumControlHeight) {
     return false;
   };
   /**
-   * Text that is cut off without an ellipsis is a bug; an ellipsis is the
-   * acknowledgement that the text does not fit. Only elements that own a text
-   * node count, so a decorative wrapper with hidden overflow is not reported.
+   * Detect every text box that loses content. An ellipsis is not a pass by
+   * itself: the complete value must also be exposed through title/aria-label
+   * (or an explicit approved marker) for dynamic copy. Static product copy is
+   * expected to wrap and remain fully visible.
    */
   const clippedText = (root, stopAt) => {
     const found = [];
@@ -349,13 +382,18 @@ function pageProbeFactory(minimumControlHeight) {
     for (const element of elements) {
       if (!visible(element)) continue;
       const style = getComputedStyle(element);
-      if (!ellipsis(style) && (style.overflowX === 'hidden' || style.overflowX === 'clip' || style.overflowY === 'hidden' || style.overflowY === 'clip')) {
-        const horizontal = element.scrollWidth > element.clientWidth + 1;
-        const vertical = element.scrollHeight > element.clientHeight + 1;
-        if (horizontal || vertical) {
-          found.push({ element: describe(element), axis: horizontal ? 'x' : 'y', text: sample(element) });
-          continue;
-        }
+      const horizontal = element.scrollWidth > element.clientWidth + 1;
+      const vertical = element.scrollHeight > element.clientHeight + 1;
+      const ownsOverflow = horizontal || vertical;
+      const intentionallyTruncated = ellipsis(style);
+      if (ownsOverflow && (!intentionallyTruncated || !fullValueExposed(element))) {
+        found.push({
+          element: describe(element),
+          axis: horizontal ? 'x' : 'y',
+          text: sample(element),
+          truncation: intentionallyTruncated ? 'ellipsis-without-full-value' : 'content-overflow',
+        });
+        continue;
       }
       const box = element.getBoundingClientRect();
       let node = element.parentElement;
@@ -366,7 +404,7 @@ function pageProbeFactory(minimumControlHeight) {
         const scrollX = outerStyle.overflowX === 'auto' || outerStyle.overflowX === 'scroll';
         const scrollY = outerStyle.overflowY === 'auto' || outerStyle.overflowY === 'scroll';
         if (scrollX || scrollY) break;
-        if ((hideX || hideY) && !ellipsis(outerStyle)) {
+        if ((hideX || hideY) && (!ellipsis(outerStyle) || !fullValueExposed(element))) {
           const outer = node.getBoundingClientRect();
           const x = hideX && (box.right > outer.right + 1 || box.left < outer.left - 1);
           const y = hideY && (box.bottom > outer.bottom + 1 || box.top < outer.top - 1);
@@ -406,6 +444,9 @@ function pageProbeFactory(minimumControlHeight) {
   function island() {
     const pages = document.getElementById('pages');
     if (!pages) throw new Error('missing #pages');
+    const inspectedText = [...pages.querySelectorAll('*')].filter((element) =>
+      visible(element) && [...element.childNodes].some((node) => node.nodeType === 3 && node.textContent.trim()),
+    ).length;
     const box = pages.getBoundingClientRect();
     const style = getComputedStyle(pages);
     const paddingTop = number(style.paddingTop);
@@ -439,6 +480,7 @@ function pageProbeFactory(minimumControlHeight) {
       paddingTop: round(paddingTop),
       availableHeight: round(available),
       usedHeight: round(used),
+      inspectedText,
       horizontalOverflow: horizontalOverflow(pages, bounds, pages),
       clippedText: clippedText(pages, pages),
       zeroScrollZones: scrollZones,
@@ -449,6 +491,9 @@ function pageProbeFactory(minimumControlHeight) {
   function settings() {
     const content = document.getElementById('content');
     if (!content) throw new Error('missing #content');
+    const inspectedText = [...content.querySelectorAll('*')].filter((element) =>
+      visible(element) && [...element.childNodes].some((node) => node.nodeType === 3 && node.textContent.trim()),
+    ).length;
     const box = content.getBoundingClientRect();
     const style = getComputedStyle(content);
     const contentLeft = box.left + number(style.paddingLeft);
@@ -474,6 +519,7 @@ function pageProbeFactory(minimumControlHeight) {
       documentScrollWidth: document.documentElement.scrollWidth,
       innerWidth,
       zoom: document.documentElement.style.zoom || '1',
+      inspectedText,
       horizontalOverflow: horizontalOverflow(content, bounds, content),
       cardOverflow,
       clippedText: clippedText(content, content),
@@ -690,7 +736,7 @@ async function auditIsland(cdp, sessionId, errors, label) {
       "  return {",
       "    open: island?.dataset.open,",
       "    panelHidden: panel?.hidden,",
-      "    dots: document.querySelectorAll('#dots button').length,",
+      "    pages: Number(document.body.dataset.pages) || 0,",
       "    morphing: document.body.dataset.morphing,",
       "    outer: window.outerWidth + 'x' + window.outerHeight,",
       "  };",
@@ -700,7 +746,7 @@ async function auditIsland(cdp, sessionId, errors, label) {
     opened = Boolean(await evaluate(cdp, sessionId, [
       "(() => {",
       "  const panel = document.getElementById('panel');",
-      "  return Boolean(panel && !panel.hidden && document.querySelectorAll('#dots button').length);",
+      "  return Boolean(panel && !panel.hidden && Number(document.body.dataset.pages) > 0);",
       "})()",
     ].join('\n')));
     if (!opened && !requested) {
@@ -716,27 +762,28 @@ async function auditIsland(cdp, sessionId, errors, label) {
   }
   if (!opened) throw new Error('island panel did not open: ' + states.join(' -> '));
   await sleep(700);
-  await waitFor(cdp, sessionId, "document.querySelectorAll('#dots button').length > 0", 'island dots');
+  await waitFor(cdp, sessionId, "Number(document.body.dataset.pages) > 0", 'island pages');
 
-  const dots = JSON.parse(await evaluate(cdp, sessionId,
-    "JSON.stringify([...document.querySelectorAll('#dots button')].map((button) => button.getAttribute('aria-label') || ''))"));
-  console.error('[ui-audit] ' + label + ': island ' + dots.length + ' pages');
+  const foundPages = Number(await evaluate(cdp, sessionId, 'Number(document.body.dataset.pages) || 0'));
+  console.error('[ui-audit] ' + label + ': island ' + foundPages + ' pages');
   const expected = schema.PAGE_MANIFEST;
   const pages = [];
   const issues = [];
   let consumedErrors = 0;
-  if (dots.length !== expected.length) {
-    issues.push(issue('page-count', '岛应有 ' + expected.length + ' 页，实际 ' + dots.length + ' 页'));
+  if (foundPages !== expected.length) {
+    issues.push(issue('page-count', '岛应有 ' + expected.length + ' 页，实际 ' + foundPages + ' 页'));
   }
 
-  for (let index = 0; index < dots.length; index += 1) {
-    const title = dots[index];
+  for (let index = 0; index < foundPages; index += 1) {
+    const title = await evaluate(
+      cdp,
+      sessionId,
+      "document.getElementById('page-name')?.textContent || ''",
+    );
     const manifest = expected.find((page) => page.title === title) ?? expected[index];
     const page = { index, key: manifest?.key ?? null, title, issues: [], metrics: null };
-    console.error('[ui-audit] ' + label + ': island ' + (index + 1) + '/' + dots.length + ' ' + title);
+    console.error('[ui-audit] ' + label + ': island ' + (index + 1) + '/' + foundPages + ' ' + title);
     try {
-      await evaluate(cdp, sessionId, 'document.querySelectorAll(\'#dots button\')[' + index + '].click()');
-      await waitFor(cdp, sessionId, 'document.getElementById(\'page-name\')?.textContent === ' + JSON.stringify(title), 'island page ' + title);
       await sleep(380);
       const raw = await evaluate(cdp, sessionId, 'JSON.stringify((' + pageProbeFactory.toString() + ')(' + MIN_CONTROL_HEIGHT + ').island())', 30000);
       const metrics = JSON.parse(raw);
@@ -756,8 +803,11 @@ async function auditIsland(cdp, sessionId, errors, label) {
       if (metrics.horizontalOverflow.length) {
         page.issues.push(issue('horizontal-overflow', metrics.horizontalOverflow.length + ' 个元素越出内容盒的左右边', metrics.horizontalOverflow));
       }
+      if (metrics.inspectedText <= 0) {
+        page.issues.push(issue('text-coverage', '没有检测到任何有文字的元素，文字边界审计结果不可用'));
+      }
       if (metrics.clippedText.length) {
-        page.issues.push(issue('clipped-text', metrics.clippedText.length + ' 处文字被裁且没有省略号', metrics.clippedText));
+        page.issues.push(issue('clipped-text', metrics.clippedText.length + ' 处文字被裁或截断值没有完整可访问内容', metrics.clippedText));
       }
       if (metrics.zeroScrollZones.length) {
         page.issues.push(issue('zero-scroll', metrics.zeroScrollZones.length + ' 个滚动区高度为 0', metrics.zeroScrollZones));
@@ -774,12 +824,21 @@ async function auditIsland(cdp, sessionId, errors, label) {
     consumedErrors = errors.length;
     pages.push(page);
     issues.push(...page.issues);
+    if (index + 1 < foundPages) {
+      await evaluate(cdp, sessionId, 'document.querySelector(\'[data-page-nav="1"]\').click()');
+      await waitFor(
+        cdp,
+        sessionId,
+        'document.getElementById("page-count")?.textContent.startsWith(' + JSON.stringify(String(index + 2).padStart(2, '0')) + ')',
+        'island page after ' + title,
+      );
+    }
   }
 
   for (const error of errors.slice(consumedErrors)) {
     issues.push(issue('page-error', '页面异常：' + error.text));
   }
-  return { expectedPages: expected.length, foundPages: dots.length, pages, issues };
+  return { expectedPages: expected.length, foundPages, pages, issues };
 }
 
 async function openSettings(cdp, islandSessionId, label) {
@@ -788,7 +847,7 @@ async function openSettings(cdp, islandSessionId, label) {
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId: target.targetId, flatten: true });
   surfaces.set(sessionId, 'settings');
   await cdp.send('Runtime.enable', {}, sessionId);
-  await waitFor(cdp, sessionId, "document.querySelectorAll('#rail .rail-item').length > 0 && !!document.getElementById('content')", 'settings rail');
+  await waitFor(cdp, sessionId, "document.querySelectorAll('#rail .pgm-rail-item').length > 0 && !!document.getElementById('content')", 'settings rail');
   await sleep(400);
   console.error('[ui-audit] ' + label + ': settings window ready');
   return sessionId;
@@ -796,7 +855,7 @@ async function openSettings(cdp, islandSessionId, label) {
 
 async function auditSettings(cdp, sessionId, errors, label) {
   const rail = JSON.parse(await evaluate(cdp, sessionId,
-    "JSON.stringify([...document.querySelectorAll('#rail .rail-item')].map((button) => ({ key: button.dataset.nav || '', label: (button.textContent || '').trim() })))"));
+    "JSON.stringify([...document.querySelectorAll('#rail .pgm-rail-item')].map((button) => ({ key: button.dataset.nav || '', label: (button.textContent || '').trim() })))"));
   console.error('[ui-audit] ' + label + ': settings ' + rail.length + ' pages');
   const expected = schema.SETTINGS_NAV.flatMap((group) => group.items);
   const pages = [];
@@ -811,9 +870,9 @@ async function auditSettings(cdp, sessionId, errors, label) {
     const page = { index, key: item.key, label: item.label, issues: [], metrics: null };
     console.error('[ui-audit] ' + label + ': settings ' + (index + 1) + '/' + rail.length + ' ' + item.label);
     try {
-      const selector = '#rail .rail-item[data-nav=' + JSON.stringify(item.key) + ']';
+      const selector = '#rail .pgm-rail-item[data-nav=' + JSON.stringify(item.key) + ']';
       await evaluate(cdp, sessionId, 'document.querySelector(' + JSON.stringify(selector) + ')?.click()');
-      await waitFor(cdp, sessionId, "document.querySelector('#rail .rail-item[aria-current=\"true\"]')?.dataset.nav === " + JSON.stringify(item.key), 'settings page ' + item.key);
+      await waitFor(cdp, sessionId, "document.querySelector('#rail .pgm-rail-item[aria-current=\"true\"]')?.dataset.nav === " + JSON.stringify(item.key), 'settings page ' + item.key);
       await sleep(380);
       const raw = await evaluate(cdp, sessionId, 'JSON.stringify((' + pageProbeFactory.toString() + ')(' + MIN_CONTROL_HEIGHT + ').settings())', 30000);
       const metrics = JSON.parse(raw);
@@ -830,8 +889,11 @@ async function auditSettings(cdp, sessionId, errors, label) {
       if (metrics.cardOverflow.length) {
         page.issues.push(issue('card-overflow', metrics.cardOverflow.length + ' 个元素越出卡片', metrics.cardOverflow));
       }
+      if (metrics.inspectedText <= 0) {
+        page.issues.push(issue('text-coverage', '没有检测到任何有文字的元素，文字边界审计结果不可用'));
+      }
       if (metrics.clippedText.length) {
-        page.issues.push(issue('clipped-text', metrics.clippedText.length + ' 处文字被裁且没有省略号', metrics.clippedText));
+        page.issues.push(issue('clipped-text', metrics.clippedText.length + ' 处文字被裁或截断值没有完整可访问内容', metrics.clippedText));
       }
       if (metrics.smallControls.length) {
         page.issues.push(issue('small-control', metrics.smallControls.length + ' 个控件低于 ' + MIN_CONTROL_HEIGHT + 'px', metrics.smallControls));

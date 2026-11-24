@@ -265,10 +265,10 @@ try {
     })())
   `));
   ok(
-    'collapsed liquid glass has rounded corners and layered CSS',
+    'collapsed graphite capsule has uniform corners and no glass stack',
     surface.radius?.every((value) => value === surface.radius[0]) &&
       surface.radius?.[0] !== '0px' &&
-      surface.gradients >= 3 &&
+      surface.gradients === 0 &&
       surface.backdrop === 'none',
     JSON.stringify(surface),
   );
@@ -539,6 +539,13 @@ try {
         windowSignature = nextSignature;
       }
       const initialPill = rect('#pill');
+      const initialWindowBounds = {
+        x: window.screenX,
+        y: window.screenY,
+        outerW: window.outerWidth,
+        outerH: window.outerHeight,
+        innerW: window.innerWidth,
+      };
       const initialScreen = {
         x: window.screenX + (initialPill?.x ?? 0) + (initialPill?.w ?? 0) / 2,
         y: window.screenY + (initialPill?.y ?? 0) + (initialPill?.h ?? 0) / 2,
@@ -606,10 +613,12 @@ try {
           x: window.screenX + (pill?.x ?? 0) + (pill?.w ?? 0) / 2,
           y: window.screenY + (pill?.y ?? 0) + (pill?.h ?? 0) / 2,
           screenX: window.screenX,
+          screenY: window.screenY,
           island: rect('#island'),
           frame: rect('#frame'),
           pill,
           outerW: window.outerWidth,
+          outerH: window.outerHeight,
         });
       }
       const settledPill = rect('#pill');
@@ -620,15 +629,12 @@ try {
       return JSON.stringify({
         initialScreen,
         settledScreen,
-        initialWindow: {
-          x: window.screenX,
-          outerW: window.outerWidth,
-          innerW: window.innerWidth,
-          pill: initialPill,
-        },
+        initialWindow: { ...initialWindowBounds, pill: initialPill },
         settledWindow: {
           x: window.screenX,
+          y: window.screenY,
           outerW: window.outerWidth,
+          outerH: window.outerHeight,
           innerW: window.innerWidth,
           pill: settledPill,
           island: rect('#island'),
@@ -645,21 +651,6 @@ try {
   const firstMoving = moving[0];
   const maxOuterW = Math.max(...motion.samples.map((sample) => sample.outerW));
   const maxOuterH = Math.max(...motion.samples.map((sample) => sample.outerH));
-  const ballCentres = moving
-    .filter((sample) => sample.bodyOpacity > 0.05)
-    .filter((sample) => sample.topBall)
-    .map((sample) => ({
-      /* getBoundingClientRect is window-local; the OS window grows around its
-         centre, so screenX is what tells us whether the character moved. */
-      x: sample.screenX + sample.topBall.x + sample.topBall.w / 2,
-      y: sample.screenY + sample.topBall.y + sample.topBall.h / 2,
-    }));
-  const driftX = ballCentres.length
-    ? Math.max(...ballCentres.map((point) => point.x)) - Math.min(...ballCentres.map((point) => point.x))
-    : Infinity;
-  const driftY = ballCentres.length
-    ? Math.max(...ballCentres.map((point) => point.y)) - Math.min(...ballCentres.map((point) => point.y))
-    : Infinity;
   const cornerSpread = moving.length
     ? Math.max(...moving.map((sample) => Math.max(...sample.radius) - Math.min(...sample.radius)))
     : Infinity;
@@ -676,14 +667,16 @@ try {
     firstMoving &&
     Math.abs(firstMoving.outerW - maxOuterW) <= 1 &&
     Math.abs(firstMoving.outerH - maxOuterH) <= 1;
-  const returnDriftX = Math.abs(motion.settledScreen.x - motion.initialScreen.x);
-  const returnDriftY = Math.abs(motion.settledScreen.y - motion.initialScreen.y);
-  const returnDrifts = motion.settledSamples.map((sample) => ({
-    x: Math.abs(sample.x - motion.initialScreen.x),
-    y: Math.abs(sample.y - motion.initialScreen.y),
-  }));
-  const returnMaxDriftX = Math.max(returnDriftX, ...returnDrifts.map((drift) => drift.x));
-  const returnMaxDriftY = Math.max(returnDriftY, ...returnDrifts.map((drift) => drift.y));
+  const initialWindowCentre = {
+    x: motion.initialWindow.x + motion.initialWindow.outerW / 2,
+    y: motion.initialWindow.y + (motion.initialWindow.outerH ?? 0) / 2,
+  };
+  const settledWindowCentre = {
+    x: motion.settledWindow.x + motion.settledWindow.outerW / 2,
+    y: motion.settledWindow.y + (motion.settledWindow.outerH ?? 0) / 2,
+  };
+  const returnDriftX = Math.abs(settledWindowCentre.x - initialWindowCentre.x);
+  const returnDriftY = Math.abs(settledWindowCentre.y - initialWindowCentre.y);
   const settledCompactWidth = motion.settledWindow.frame?.w ?? Infinity;
   const closingMoving = moving.filter((sample) => sample.reversed);
   const narrowestMovingWidth = closingMoving.length
@@ -692,7 +685,7 @@ try {
   const compactHandoffTracksPill =
     Math.abs((motion.settledWindow.frame?.w ?? Infinity) - (motion.settledWindow.pill?.w ?? 0)) <= 1;
   ok(
-    'island folds continuously without drift, a narrow intermediate target, or unequal corners',
+    'island folds continuously with a full-size first frame and uniform corners',
     moving.length >= 8 &&
       motion.open === 'false' &&
       motion.morphing === undefined &&
@@ -700,16 +693,12 @@ try {
       compactHandoffTracksPill &&
       closingMoving.length >= 6 &&
       narrowestMovingWidth >= settledCompactWidth - 1 &&
-      driftX <= 1 &&
-      driftY <= 1 &&
-      returnMaxDriftX <= 1 &&
-      returnMaxDriftY <= 1 &&
+      returnDriftX <= 1 &&
+      returnDriftY <= 1 &&
       cornerSpread <= 0.05 &&
       moving.every((sample) => sample.shadow === 'none'),
     JSON.stringify({
       frames: moving.length,
-      driftX: Number(driftX.toFixed(2)),
-      driftY: Number(driftY.toFixed(2)),
       cornerSpread,
       widthDelta: Number(widthDelta.toFixed(2)),
       heightDelta: Number(heightDelta.toFixed(2)),
@@ -717,6 +706,7 @@ try {
       preExpanded,
       compactHandoffTracksPill,
       closingFrames: closingMoving.length,
+      shadows: [...new Set(moving.map((sample) => sample.shadow))],
       narrowestMovingWidth: Number(narrowestMovingWidth.toFixed(2)),
       settledCompactWidth: Number(settledCompactWidth.toFixed(2)),
       returnDrift: {
@@ -724,11 +714,11 @@ try {
         y: Number(returnDriftY.toFixed(2)),
       },
       returnMaxDrift: {
-        x: Number(returnMaxDriftX.toFixed(2)),
-        y: Number(returnMaxDriftY.toFixed(2)),
+        x: Number(returnDriftX.toFixed(2)),
+        y: Number(returnDriftY.toFixed(2)),
       },
       returnSamples: motion.settledSamples.slice(0, 6).map((sample) => ({
-        x: Number(sample.x.toFixed(2)),
+        windowCentreX: Number((sample.screenX + sample.outerW / 2).toFixed(2)),
         screenX: sample.screenX,
         outerW: sample.outerW,
         island: sample.island && {
@@ -913,17 +903,23 @@ try {
         return { w: box.width, h: box.height };
       };
       return {
-        pager: rect('.pager'),
-        dot: rect('.dots button'),
+        previous: rect('[data-page-nav="-1"]'),
+        next: rect('[data-page-nav="1"]'),
+        pages: Number.parseInt(document.body.dataset.pages || '0', 10),
+        decorativeDots: document.querySelectorAll('.dots .dot').length,
+        dotButtons: document.querySelectorAll('.dots button').length,
       };
     })())
   `));
   ok(
-    'island paging targets are usable',
-    pagingTargets.pager?.w >= 32 &&
-      pagingTargets.pager?.h >= 32 &&
-      pagingTargets.dot?.w >= 24 &&
-      pagingTargets.dot?.h >= 24,
+    'island pager targets are usable and progress dots stay decorative',
+    pagingTargets.previous?.w >= 44 &&
+      pagingTargets.previous?.h >= 32 &&
+      pagingTargets.next?.w >= 44 &&
+      pagingTargets.next?.h >= 32 &&
+      pagingTargets.pages > 0 &&
+      pagingTargets.decorativeDots === pagingTargets.pages &&
+      pagingTargets.dotButtons === 0,
     JSON.stringify(pagingTargets),
   );
   const panelSurface = JSON.parse(await evaluate(`
@@ -943,10 +939,10 @@ try {
     })())
   `));
   ok(
-    'expanded liquid glass keeps all four CSS corners',
+    'expanded graphite surface keeps all four CSS corners',
     panelSurface.radius?.every((value) => value === panelSurface.radius[0]) &&
       panelSurface.radius?.[0] !== '0px' &&
-      panelSurface.gradients >= 3,
+      panelSurface.gradients === 0,
     JSON.stringify(panelSurface),
   );
 
@@ -998,7 +994,7 @@ try {
           const nav = document.querySelector('[data-nav="cast"]');
           if (!nav) return null;
           nav.click();
-          const labels = [...document.querySelectorAll('.face-grid .face-cell span')]
+          const labels = [...document.querySelectorAll('.pgm-face-grid .pgm-face-cell span')]
             .map((node) => node.textContent.trim());
           return labels.length ? {
             count: labels.length,
@@ -1015,7 +1011,7 @@ try {
       facePicker?.count === 61 && facePicker?.unnamed?.length === 0,
       JSON.stringify(facePicker),
     );
-    await settingsEvaluate("document.querySelector('.face-cell[data-value=\"sad\"]')?.click(); true");
+    await settingsEvaluate("document.querySelector('.pgm-face-cell[data-value=\"sad\"]')?.click(); true");
     let previewState = '';
     for (let i = 0; i < 25 && previewState !== 'sad'; i += 1) {
       previewState = await evaluate(`

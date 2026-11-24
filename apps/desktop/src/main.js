@@ -55,6 +55,7 @@ const { nextAgentMtime } = require('./main/agent-file');
 const { classifyAgent, orderActiveAgents } = require('./main/agent-status');
 const agentPresence = require('./main/services/agent-presence');
 const trayPanel = require('./main/tray-panel');
+const { DEFAULT_CAST, normalizeCastId } = require('./main/cast-state');
 // One face, one owner: the bus is plain state, so the sequence guarantees are
 // testable without Electron (apps/desktop/test/face-sync.test.mjs).
 const { createFaceBus } = require('./main/face-bus');
@@ -275,7 +276,7 @@ function agentsArbiter() {
   return agentArbiter;
 }
 /** The cast member the pet wears; persisted in prefs.json. */
-let castId = 'tot';
+let castId = DEFAULT_CAST;
 /** The engine's cast table, loaded as ESM from the vendored copy. */
 let CORE = null;
 /**
@@ -309,11 +310,57 @@ async function loadSchema() {
   }
 }
 
+function resolveCast(id) {
+  return normalizeCastId(id, CORE?.CAST_IDS ?? []);
+}
+
+function castLabel(id = castId) {
+  return CORE?.castMember?.(id)?.name?.zh ?? (id === DEFAULT_CAST ? 'Tot' : id);
+}
+
+/**
+ * The current cast as a native tray image.
+ *
+ * The engine already returns the original character SVG, so the tray reads the
+ * same asset as every renderer. A missing decoder falls back to the shipped
+ * tray PNG rather than leaving an empty notification area icon.
+ */
+function trayImageForCast(id = castId) {
+  if (!CORE || typeof CORE.renderCast !== 'function') return null;
+  try {
+    const size = process.platform === 'win32' ? 32 : 16;
+    const svg = CORE.renderCast({ id, state: 'idle', size, style: 'sticker' });
+    const image = nativeImage.createFromDataURL(
+      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    );
+    return image.isEmpty() ? null : image;
+  } catch {
+    return null;
+  }
+}
+
+function trayFallbackImage() {
+  const trayName = process.platform === 'win32' ? 'tray-32.png' : 'tray-16.png';
+  const iconPath = path.join(__dirname, '..', 'assets', trayName);
+  return fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
+}
+
+function syncTrayIdentity() {
+  if (!tray) return;
+  const image = trayImageForCast(castId) ?? trayFallbackImage();
+  if (!image.isEmpty()) tray.setImage(image);
+  tray.setToolTip(`EmojiTot · ${castLabel()}`);
+}
+
 function setCast(id) {
-  castId = id;
-  writeJson(prefsPath(), { ...readJson(prefsPath(), {}), cast: id });
-  island.send('island:cast', id);
-  if (win) safeSend(win, 'cast:changed', id);
+  const next = resolveCast(id);
+  castId = next;
+  writeJson(prefsPath(), { ...readJson(prefsPath(), {}), cast: next });
+  island.send('island:cast', next);
+  if (win && !win.isDestroyed()) safeSend(win, 'cast:changed', next);
+  settings.sendCast(next);
+  onboarding.sendCast(next);
+  syncTrayIdentity();
   refreshMenus();
 }
 
@@ -1116,7 +1163,13 @@ function trayState() {
   const theme = prefs.theme ?? 'dark';
   // The taste setting wins over the OS, the same way the settings window does.
   const light = theme === 'light' || (theme === 'system' && !nativeTheme.shouldUseDarkColors);
-  return { version: app.getVersion(), pinned, light };
+  return {
+    version: app.getVersion(),
+    pinned,
+    light,
+    castId,
+    castName: castLabel(),
+  };
 }
 
 /** The one place "always on top" flips, whichever surface asked. */
@@ -1423,11 +1476,10 @@ function applyMainPrefs() {
 function createTray() {
   // Pre-rendered at the tray's own size: scaling 512 down to 16 in the OS
   // produced stepped edges, which is exactly what the icon rework removed.
-  const trayName = process.platform === 'win32' ? 'tray-32.png' : 'tray-16.png';
-  const iconPath = path.join(__dirname, '..', 'assets', trayName);
-  const icon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
+  const fallback = trayFallbackImage();
+  const icon = trayImageForCast(castId) ?? fallback;
   tray = new Tray(icon);
-  tray.setToolTip('EmojiTot');
+  syncTrayIdentity();
   // Left and right click both open the panel: that is the menu, and a click
   // that silently toggles a window instead reads as an accident.
   // The click handlers receive (event, bounds, position); the anchor is read
@@ -1619,6 +1671,7 @@ faceBus.attach((payload) => settings.sendFace(payload));
 // The settings window is created lazily; a page that has just loaded missed
 // every broadcast while it was away.
 settings.setFaceLoader(() => faceBus.resend());
+settings.setCastLoader(() => settings.sendCast(castId));
 
 /**
  * The idle mood clock: the only source allowed to borrow a resting face.
@@ -2290,7 +2343,10 @@ if (!gotTheLock) {
     const bootServices = SCHEMA?.enabledServices(stored) ?? new Set();
     if (bootServices.has('devices')) devices.start();
     if (bootServices.has('weather')) void refreshWeather();
-    castId = typeof stored.cast === 'string' && stored.cast ? stored.cast : 'tot';
+    castId = resolveCast(stored.cast);
+    if (stored.cast !== castId) {
+      writeJson(prefsPath(), { ...readJson(prefsPath(), {}), cast: castId });
+    }
     displayMode = stored.displayMode;
     createWindow();
     if (win) {

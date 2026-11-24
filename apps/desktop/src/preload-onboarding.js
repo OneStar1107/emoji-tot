@@ -11,4 +11,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('onboardingAPI', {
   get: () => ipcRenderer.invoke('onboarding:get'),
   finish: (choice) => ipcRenderer.invoke('onboarding:finish', choice),
+  onCast: (listener) => {
+    const handler = (_event, cast) => listener(cast);
+    ipcRenderer.on('onboarding:cast', handler);
+    return () => ipcRenderer.removeListener('onboarding:cast', handler);
+  },
 });

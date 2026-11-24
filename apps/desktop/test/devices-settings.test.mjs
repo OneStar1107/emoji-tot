@@ -44,14 +44,14 @@ function functionBody(source, name) {
   assert.fail('unbalanced braces in ' + name);
 }
 
-describe('settings nav: the devices page lives under 内容', () => {
-  it('adds 设备 to the content group, after 天气', () => {
-    const content = SETTINGS_NAV.find((group) => group.id === 'content');
-    assert.ok(content, 'the content group is gone');
-    const keys = content.items.map((item) => item.key);
-    assert.ok(keys.includes('devices'), '设备 must be a content page');
-    assert.equal(keys[keys.length - 1], 'devices', '设备 trails 天气');
-    const item = content.items.find((entry) => entry.key === 'devices');
+describe('settings nav: the devices page lives under 系统', () => {
+  it('adds 设备 to the system group, after 天气', () => {
+    const system = SETTINGS_NAV.find((group) => group.id === 'system');
+    assert.ok(system, 'the system group is gone');
+    const keys = system.items.map((item) => item.key);
+    assert.ok(keys.includes('devices'), '设备 must be a system page');
+    assert.equal(keys.indexOf('devices'), keys.indexOf('weather') + 1, '设备 trails 天气');
+    const item = system.items.find((entry) => entry.key === 'devices');
     assert.equal(item.label, '设备');
     assert.equal(item.icon, 'tray');
   });
@@ -136,10 +136,11 @@ describe('the settings window renders and writes the devices page', () => {
   const main = src('main.js');
   const preload = src('preload-settings.js');
 
-  it('registers a devices renderer and reads the shared category helper', () => {
+  it('registers a devices renderer with the master row structure', () => {
     assert.ok(settings.includes('function pageDevices()'));
     assert.ok(settings.includes('devices: pageDevices'), 'RENDERERS must own the page');
-    assert.ok(settings.includes('deviceKind(name)'), 'the glyph must come from the shared classifier');
+    assert.ok(settings.includes('class="pgm-set-row"'), 'device rows use the master row');
+    assert.ok(!settings.includes('deviceKind(name)'), 'the master device rows have no category glyph');
     assert.ok(!/name\[0\]|charAt\(0\)/.test(settings), 'no first-letter icons');
   });
 
@@ -184,8 +185,9 @@ describe('the settings window renders and writes the devices page', () => {
     const batteryBody = functionBody(island, 'batteryEntries');
 
     assert.ok(settingsBody.includes('displayName'), 'settings rows render displayName');
-    assert.ok(settingsBody.includes('data-device="\' + escapeHtml(name) + \'"'), 'drag identity stays canonical');
-    assert.ok(settingsBody.includes('data-name="\' + escapeHtml(name) + \'"'), 'pin/hide identity stays canonical');
+    assert.ok(settingsBody.includes('data-device="'), 'drag identity stays canonical');
+    assert.ok(settingsBody.includes('data-pin="'), 'pin identity stays canonical');
+    assert.ok(settingsBody.includes('data-name="'), 'hide identity stays canonical');
     assert.ok(islandBody.includes('displayName'), 'island rows render displayName');
     assert.ok(islandBody.includes('data-pin="${escapeHtml(device.name)}"'), 'the island pin sends the canonical name');
     assert.ok(batteryBody.includes('displayName'), 'the rotating status line uses the localized label');

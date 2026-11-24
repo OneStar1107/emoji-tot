@@ -49,7 +49,7 @@ describe('island header title', () => {
 });
 
 describe('island paging affordances', () => {
-  it('removes paging controls when no page is enabled', () => {
+  it('replaces paging controls with a clear empty state when no page is enabled', () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const source = readFileSync(resolve(here, '..', 'src', 'renderer', 'island.js'), 'utf8');
     const branch = source.slice(
@@ -58,7 +58,8 @@ describe('island paging affordances', () => {
     );
     assert.ok(branch.includes('dotsEl.hidden = true'), 'zero pages must hide the dots');
     assert.ok(branch.includes('pager.hidden = true'), 'zero pages must hide both arrows');
-    assert.ok(!branch.includes('subEl.textContent ='), 'zero pages must preserve the reusable subtitle span');
+    assert.ok(branch.includes("pageCountEl.textContent = '00 / 00'"), 'zero pages must show an empty count');
+    assert.ok(branch.includes("subEl.textContent = '去设置里打开'"), 'zero pages must explain how to recover');
   });
 
   it('removes both arrows and dots when there is one page', () => {
@@ -69,13 +70,15 @@ describe('island paging affordances', () => {
     assert.deepEqual(pagingVisibility(2), { arrows: true, dots: true });
   });
 
-  it('only treats a page dot as navigation when clicks bubble from page content', () => {
+  it('keeps the progress rail decorative and supports keyboard pager activation', () => {
     const source = readFileSync(resolve(here, '..', 'src', 'renderer', 'island.js'), 'utf8');
     const handler = source.slice(
       source.indexOf("panelEl.addEventListener('click'"),
       source.indexOf("panelEl.addEventListener('change'"),
     );
-    assert.match(handler, /event\.target\.closest\('#dots \[data-page\]'\)/);
+    assert.match(handler, /event\.target\.closest\('\[data-page-nav\]'\)/);
+    assert.match(handler, /event\.detail === 0/);
+    assert.doesNotMatch(handler, /#dots \[data-page\]/);
   });
 });
 
@@ -96,8 +99,9 @@ describe('island mailbox page fits its 205px budget', () => {
     const block = islandJs.slice(islandJs.indexOf('function messengerPage'));
     const body = block.slice(0, block.indexOf('\n}'));
     assert.match(islandJs, /MESSAGE_ROWS/, 'the row cap is a named constant');
-    assert.match(body, /msg-more/, 'the overflow row tells the user how many are left');
-    assert.match(body, /messenger:activate/, 'a row still brings its window forward');
+    assert.match(body, /appCount - MESSAGE_ROWS/, 'the overflow count is derived from the row cap');
+    assert.match(body, /pgm-visually-hidden/, 'the overflow summary remains available to assistive tech');
+    assert.match(body, /data-local="messenger:activate"/, 'a row still brings its window forward');
   });
 
   it('lets the mailbox column scroll instead of clipping the button', () => {
@@ -170,7 +174,7 @@ describe('AI workbench scrolls its lower block without stealing page paging', ()
 
   it('keeps refresh on the provider line instead of the scrolling footer', () => {
     const block = islandJs.slice(islandJs.indexOf('function quotaPage'), islandJs.indexOf('/**\n * "(3) 张三"'));
-    const meta = block.match(/const meta = `<div class="quota-meta">([\s\S]*?)<\/div>`;/);
+    const meta = block.match(/const meta = `<div class="quota-meta[^"]*">([\s\S]*?)<\/div>`;/);
     assert.ok(meta, 'the provider line must remain a named block');
     assert.match(meta[1], /\$\{refresh\}/, 'refresh belongs on the provider line');
     const footer = block.slice(
@@ -180,13 +184,13 @@ describe('AI workbench scrolls its lower block without stealing page paging', ()
     assert.doesNotMatch(footer, /\$\{refresh\}/, 'the footer keeps only its update stamp');
   });
 
-  it('wraps the agent block and footer in one named scroller', () => {
+  it('keeps the agent rows in the lower list scroller', () => {
     const block = islandJs.slice(islandJs.indexOf('function quotaPage'), islandJs.indexOf('/**\n * "(3) 张三"'));
-    assert.match(block, /class="quota-scroll"/);
-    const open = block.indexOf('class="quota-scroll"');
-    const agents = block.indexOf('${agentBlock()}');
-    const footer = block.indexOf('class="quota-foot"');
-    assert.ok(open < agents && agents < footer);
+    assert.match(block, /class="pgm-ai-list quota-scroll"/);
+    const open = block.indexOf('class="pgm-ai-list quota-scroll"');
+    const agents = block.indexOf('${rows ||');
+    assert.ok(open >= 0 && open < agents, 'the lower list must own the scrolling agent rows');
+    assert.doesNotMatch(block, /class="quota-foot"/, 'the artboard has no separate quota footer');
   });
 
   it('makes that block a wheel owner', () => {
@@ -213,7 +217,7 @@ describe('AI workbench scrolls its lower block without stealing page paging', ()
   });
 
   it('marks the pages box with the current key', () => {
-    assert.match(islandJs, /pagesEl\.dataset\.page\s*=\s*page\.key/);
+    assert.match(islandJs, /pagesEl\.dataset\.page\s*=\s*showingNotification\s*\?\s*'notification'\s*:\s*page\.key/);
     assert.match(islandCss, /\.pages\[data-page="quota"\]\s*\{[^}]*scrollbar-width:\s*none/);
   });
 
@@ -231,11 +235,11 @@ describe('AI workbench scrolls its lower block without stealing page paging', ()
  * 15:00 nobody announced.
  */
 describe('island focus page reports both windows', () => {
-  it('prints today and this week as two tabular rows', () => {
+  it('prints the current round and current day as two tabular rows', () => {
     const block = islandJs.slice(islandJs.indexOf('function focusPage'), islandJs.indexOf('function healthPage'));
     assert.match(block, /focus-stats/, 'the two-row statistics block must be rendered');
-    assert.match(block, /statRow\('今日'/, 'today has its own row');
-    assert.match(block, /statRow\('本周'/, 'the week has its own row');
+    assert.match(block, /statRow\('本轮'/, 'the current round has its own row');
+    assert.match(block, /statRow\('本日'/, 'the current day has its own row');
     assert.match(block, /focus-ring/, 'the 96px ring is kept');
     assert.match(block, /focus-time/, 'the clock beside the ring is kept');
     assert.match(block, /focus-key/, 'the three keys are kept');

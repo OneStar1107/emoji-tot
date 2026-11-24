@@ -24,7 +24,7 @@ import {
   quotaText,
   temperatureText,
 } from '../shared/status-view.js';
-import { islandHeaderState, pagingVisibility } from './island-header.mjs';
+import { pagingVisibility } from './island-header.mjs';
 import {
   PILL_EXPRESSION,
   fitStatusRow,
@@ -69,8 +69,9 @@ const panelEl = document.getElementById('panel');
 const panelBodyEl = document.getElementById('panel-body');
 const pagesEl = document.getElementById('pages');
 const dotsEl = document.getElementById('dots');
-const titleEl = document.getElementById('page-title');
+const titleEl = document.getElementById('page-name');
 const subEl = document.getElementById('page-sub');
+const pageCountEl = document.getElementById('page-count');
 const topClock = document.getElementById('top-clock');
 const topBattery = document.getElementById('top-battery');
 const btnSettings = document.getElementById('btn-settings');
@@ -146,6 +147,7 @@ let musicLyricsMode = false;
 let focusState = { phase: 'idle', running: false, remaining: 0, total: 0, cycles: 0 };
 let healthState = { enabled: false, waterMin: 45, standMin: 60, sinceWater: 0, sinceStand: 0, waterDue: false, standDue: false, waterCount: 0, standCount: 0, trend: [] };
 let todos = [];
+let todoSummaryState = null;
 let shelfFiles = [];
 /*
  * The shelf's two pieces of view state: the search box and the folded groups.
@@ -157,6 +159,8 @@ const shelfFolded = new Set();
 let clipboardItems = [];
 let messengerState = { apps: [], unread: 0 };
 let devicesState = { devices: [] };
+/** One selected character feeds the pill, panel, notification and preview surfaces. */
+let activeCastId = 'tot';
 /** True while the refresh control waits for its probe to be handed off. */
 let devicesRefreshing = false;
 /** Why the Bluetooth footer is disabled, or '' while the system sheet opens. */
@@ -179,6 +183,14 @@ const today = new Date();
 let calendarView = { year: today.getFullYear(), month: today.getMonth(), selected: today.getDate() };
 let open = false;
 let pageIndex = 0;
+/** A temporary notification owns the page surface while it is present. */
+let notificationState = null;
+let notificationTimer = 0;
+let notificationReturnScroll = 0;
+/** Debug captures pin the clock to the approved board's example time. */
+let fixtureClock = '';
+/** Debug screenshots must not race the live service polling loop. */
+let fixtureLocked = false;
 
 /**
  * Which pages the panel shows, in order.
@@ -205,7 +217,7 @@ const enabledPages = () => {
 
 let timeFormat24 = true;
 
-const hhmm = () => clockReadout(new Date(), timeFormat24);
+const hhmm = () => fixtureClock || clockReadout(new Date(), timeFormat24);
 
 const escapeHtml = (value) =>
   String(value ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -214,7 +226,7 @@ const clock = (seconds) => {
   const total = Math.max(0, Math.round(Number(seconds) || 0));
   const m = Math.floor(total / 60);
   const s = total % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
 const lyricLeadSeconds = () => Number(prefs.music?.offset ?? 0.35);
@@ -341,37 +353,11 @@ function batteryEntries() {
 }
 
 function renderSub() {
-  const entries = batteryEntries();
-  if (!entries.length) {
-    /* Clear the inner span, never the host: writing textContent on the host
-       would delete the span the scroller needs. */
-    const empty = subEl.firstElementChild;
-    if (empty && empty.textContent !== '') empty.textContent = '';
-    subEl.dataset.muted = 'true';
-    subEl.dataset.over = 'false';
-    return;
-  }
-  if (batteryIndex >= entries.length) batteryIndex = 0;
-  const entry = entries[batteryIndex];
-  /*
-   * Line two: where you are, then the battery. The level still leads within its
-   * own segment so a truncated device name never hides the number, and the
-   * whole line scrolls when a long device name makes it wider than the slot.
-   */
-  /* The page name now lives under the ball, so this line is purely battery. */
-  const text = entry.level + '% · ' + entry.name;
-  const textEl = subEl.firstElementChild;
-  if (textEl && textEl.textContent !== text) textEl.textContent = text;
-  subEl.dataset.muted = 'false';
-  /*
-   * Measure the overflow after writing the text, every call: the first write
-   * happens before layout, so a one-off check would answer "fits" forever. The
-   * shift is published as a custom property so the keyframes can use it.
-   */
-  const over = subEl.scrollWidth > subEl.clientWidth + 2;
-  subEl.dataset.over = String(over);
-  if (over && textEl) subEl.style.setProperty('--sub-shift', (textEl.scrollWidth - subEl.clientWidth + 6) + 'px');
-  ensureBatteryRotation();
+  const page = enabledPages()[pageIndex];
+  const pageSub = page?.sub ?? '';
+  if (subEl.textContent !== pageSub) subEl.textContent = pageSub;
+  subEl.dataset.muted = String(!pageSub);
+  subEl.dataset.over = 'false';
 }
 
 /*
@@ -399,21 +385,10 @@ function ensureBatteryRotation() {
   }, BATTERY_ROTATE_MS);
 }
 
-/* The playing title owns the header line; the page name lives under the ball. */
 function renderHeader() {
-  const state = islandHeaderState(media);
-  const textEl = titleEl.firstElementChild;
-  if (textEl && textEl.textContent !== state.title) textEl.textContent = state.title;
-  /*
-   * Measure after writing: the first write happens before layout, so a one-off
-   * check would answer "fits" forever. The distance is handed to CSS through a
-   * custom property — the slot width is not known to the stylesheet.
-   */
-  const over = state.title.length > 0 && titleEl.scrollWidth > titleEl.clientWidth + 2;
-  titleEl.dataset.over = String(over);
-  if (over && textEl) {
-    titleEl.style.setProperty('--title-shift', textEl.scrollWidth - titleEl.clientWidth + 6 + 'px');
-  }
+  const page = enabledPages()[pageIndex];
+  if (page && titleEl.textContent !== page.title) titleEl.textContent = page.title;
+  titleEl.dataset.over = 'false';
 }
 
 /**
@@ -750,16 +725,21 @@ function renderPillStatus() {
     lyricLine: currentLyricLine(),
     resumeVisible,
   });
-  if (plan.mode === 'status') pillStatus.innerHTML = parts.join('');
-  else if (plan.mode === 'nowPlaying') {
-    pillStatus.innerHTML = `<span class="stat now-playing-pill" data-kind="${plan.lyric ? 'lyric' : 'track'}" title="${escapeHtml(plan.track)}"><span class="now-playing-pill__text">${escapeHtml(plan.text)}</span>${plan.lyric ? `<span class="now-playing-pill__track">${escapeHtml(plan.track)}</span>` : ''}</span>`;
-  } else pillStatus.innerHTML = '';
-  pillEl.dataset.status = String(plan.statusCount);
+  if (notificationState && !open) {
+    pillStatus.innerHTML = notificationPillHtml();
+    pillEl.dataset.status = 'notification';
+  } else {
+    if (plan.mode === 'status') pillStatus.innerHTML = parts.join('');
+    else if (plan.mode === 'nowPlaying') {
+      pillStatus.innerHTML = `<span class="stat now-playing-pill" data-kind="${plan.lyric ? 'lyric' : 'track'}" title="${escapeHtml(plan.track)}"><span class="now-playing-pill__text">${escapeHtml(plan.text)}</span>${plan.lyric ? `<span class="now-playing-pill__track">${escapeHtml(plan.track)}</span>` : ''}</span>`;
+    } else pillStatus.innerHTML = '';
+    pillEl.dataset.status = String(plan.statusCount);
+  }
   fitPillStatus();
   schedulePillWidth();
   topClock.textContent = hhmm();
   if (battery) {
-    topBattery.innerHTML = batterySvg(battery.level, battery.charging);
+    topBattery.innerHTML = `<i aria-hidden="true"></i>${Math.round(Number(battery.level) || 0)}%`;
     topBattery.hidden = false;
     topBattery.title = `电量 ${battery.level}%${battery.charging ? ' · 充电中' : ''}`;
   } else {
@@ -822,7 +802,7 @@ function currentLyricLine(index = lyricAt()) {
 
 function lyricSliceHtml(index, span = 3) {
   if (!lyrics?.synced || !lyrics.lines.length) {
-    return `<span class="lyric-empty">${lyricEmptyLabel()}</span>`;
+    return `<span class="lyric-empty pgm-lyric-empty">${lyricEmptyLabel()}</span>`;
   }
   /*
    * data-n is the signed distance from "now": the default window shows one
@@ -836,7 +816,7 @@ function lyricSliceHtml(index, span = 3) {
     .slice(start, start + span)
     .map((line, offset) => {
       const distance = start + offset - index;
-      return `<p class="lyric-line${distance === 0 ? ' on' : ''}" data-n="${distance}">${escapeHtml(line.text)}</p>`;
+      return `<p class="lyric-line${distance === 0 ? ' on is-current' : ''}" data-n="${distance}">${escapeHtml(line.text)}</p>`;
     })
     .join('');
 }
@@ -849,11 +829,11 @@ function lyricSliceHtml(index, span = 3) {
  */
 function lyricPreviewHtml(index) {
   if (!lyrics?.synced || !lyrics.lines?.length) {
-    return `<span class="music-lyric-empty">${lyricEmptyLabel()}</span>`;
+    return `<span class="music-lyric-empty pgm-lyric-empty">${lyricEmptyLabel()}</span>`;
   }
   const [previous, current, next] = lyricPreviewWindow(lyrics.lines, index);
-  if (!current) return '<span class="music-lyric-empty">等待歌词</span>';
-  return `<span class="music-prev-lyric" data-prev-lyric>${escapeHtml(previous)}</span><span data-current-lyric>${escapeHtml(current)}</span><span class="music-next-lyric" data-next-lyric>${escapeHtml(next)}</span>`;
+  if (!current) return '<span class="music-lyric-empty pgm-lyric-empty">等待歌词</span>';
+  return `<span class="music-prev-lyric" data-prev-lyric>${escapeHtml(previous)}</span><span class="music-current-lyric is-current" data-current-lyric>${escapeHtml(current)}</span><span class="music-next-lyric" data-next-lyric>${escapeHtml(next)}</span>`;
 }
 
 /**
@@ -901,8 +881,8 @@ function musicPage() {
    * reads as "this stream has no cover".
    */
   const art = media.art
-    ? `<img class="cover-img" src="${media.art}" alt="" />`
-    : `<div class="cover${live ? ' cover-live' : ''}">${svg(ICON.music)}</div>`;
+    ? `<img class="cover-img pgm-cover pgm-true-image" src="${media.art}" alt="" />`
+    : `<div class="cover pgm-cover${live ? ' cover-live' : ''}">${svg(ICON.music)}</div>`;
   /*
    * The output badge names the device the sound leaves through. Only some
    * Windows media sessions report an endpoint, so it is drawn when the frame
@@ -919,55 +899,57 @@ function musicPage() {
   const lyricMode = canLyrics && musicLyricsMode;
   const lyricIndex = lyricAt(playback);
   const source = mediaSourceLabel(media);
+  const title = String(media.title || '未知媒体');
+  const artist = [media.artist, source].filter(Boolean).join(' · ');
   const timing = mediaTimingLabel(media, {
     position: playback,
     liveSeconds: liveElapsed(),
     fallbackDuration: duration,
   });
+  const remaining = Math.max(0, duration - playback);
   const lyricToggle = canLyrics
     ? ` role="button" tabindex="0" data-lyric-toggle="1" aria-pressed="${lyricMode}" aria-label="${lyricMode ? '收起歌词' : '展开歌词'}"`
     : '';
-  /*
-   * One stage, two columns: the cover is the visual anchor and the lyric tile
-   * owns the words and seek rail. Transport keys sit in a separate footer so
-   * seeking never competes with the words for the same horizontal row.
-   */
+  /* One stage, two columns, exactly as the approved master artboard: cover at
+     left; title, artist, three lyric levels, transport, then seek at right. */
   const progress = seekable
-    ? `<div class="music-seek" data-seek role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="${Math.round(media.duration)}" aria-valuenow="${Math.round(playback)}" aria-valuetext="${clock(playback)} / ${clock(media.duration)}"><div class="music-bar"><i data-progress style="width:${pct.toFixed(1)}%"></i></div><span class="music-thumb" data-thumb style="left:${pct.toFixed(1)}%"></span></div><div class="music-times"><span class="music-time-pair" data-time-pair title="播放位置 / 媒体总时长">${escapeHtml(timing)}</span><span class="music-source" data-source title="播放来源：${escapeHtml(source)}">${escapeHtml(source)}</span></div>`
+    ? `<div class="pgm-seek"><div class="pgm-seek-track music-seek" data-seek role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="${Math.round(media.duration)}" aria-valuenow="${Math.round(playback)}" aria-valuetext="${clock(playback)} / ${clock(media.duration)}"><i data-progress style="width:${pct.toFixed(1)}%"></i><span class="music-thumb" data-thumb style="left:${pct.toFixed(1)}%"></span></div><div class="pgm-time-row music-times"><span class="music-time-pair" data-pos>${clock(playback)}</span><span data-remaining>-${clock(remaining)}</span><span class="music-source" data-source hidden>${escapeHtml(source)}</span></div></div>`
     : live
-      ? `<div class="music-bar live"><i></i></div><div class="music-times"><span class="music-live" data-live title="${Number(media.live?.startedAt) > 0 ? '主播已开播时长' : '直播中，开播时间暂不可用'}">${escapeHtml(timing)}</span><span class="music-source" data-source title="直播来源：${escapeHtml(source)}">${escapeHtml(source)}</span></div>`
-      : `<div class="music-bar"><i data-progress style="width:0%"></i></div><div class="music-times"><span class="music-time-pair" data-time-pair title="播放位置 / 媒体总时长">${escapeHtml(timing)}</span><span class="music-source" data-source title="播放来源：${escapeHtml(source)}">${escapeHtml(source)}</span></div>`;
-  return `<div class="music" data-music="${lyricMode ? 'lyrics' : 'default'}">
-    <div class="music-row">
-      <div class="music-cover">${art}</div>
-      <div class="music-meta">
+      ? `<div class="pgm-seek"><div class="pgm-seek-track is-live"><i></i></div><div class="pgm-time-row music-times"><span class="music-live" data-live title="${Number(media.live?.startedAt) > 0 ? '主播已开播时长' : '直播中，开播时间暂不可用'}">${escapeHtml(timing)}</span><span>直播</span></div></div>`
+      : `<div class="pgm-seek"><div class="pgm-seek-track"><i data-progress style="width:0%"></i></div><div class="pgm-time-row music-times"><span class="music-time-pair">${escapeHtml(timing)}</span><span>--:--</span></div></div>`;
+  const lyricHtml = lyricMode
+    ? lyricSliceHtml(lyricIndex, 5)
+    : lyricPreviewHtml(lyricIndex);
+  const stopTitle = '停止播放（系统媒体接口以暂停当前会话实现）';
+  return `<div class="music pgm-media" data-music="${lyricMode ? 'lyrics' : 'default'}">
+      ${art}
+      <div class="pgm-media-copy">
+        <h3 title="${escapeHtml(title)}">${escapeHtml(title)}</h3>
+        <div class="pgm-artist">${escapeHtml(artist || 'EmojiTot')}</div>
         ${prefs.music?.lyrics === false
           ? ''
-          : `<div class="music-current-lyric"${lyricToggle}>${lyricPreviewHtml(lyricIndex)}</div>`}
-        ${prefs.music?.lyrics === false
-          ? ''
-          : `<div class="lyric-box" data-lyric-box${lyricToggle}>${lyricMode ? lyricSliceHtml(lyricIndex, 5) : ''}</div>`}
-        <div class="music-progress">${progress}</div>
-      </div>
-    </div>
-    <div class="music-controls">
-      <button type="button" data-media="prev" aria-label="上一首">${svg(ICON.prev)}</button>
-      <button type="button" class="main" data-media="toggle" aria-label="${media.playing ? '暂停' : '播放'}">${svg(media.playing ? ICON.pause : ICON.play)}</button>
-      <button type="button" data-media="next" aria-label="下一首">${svg(ICON.next)}</button>
-      <button type="button" data-volume="toggle" aria-label="系统音量" aria-expanded="false" aria-controls="volume-panel" title="系统音量">${svg(ICON.volume)}</button>
-    </div>
-    <div class="volume-panel" id="volume-panel" data-volume-panel data-state="loading" hidden>
-      <div class="volume-body" data-volume-body>
-        <div class="volume-head">
-          <button type="button" data-volume="mute" aria-label="静音" aria-pressed="false" title="静音">${svg(ICON.volume)}</button>
+          : `<div class="pgm-lyrics music-current-lyric${lyricMode ? ' is-expanded' : ''}"${lyricToggle}>${lyricHtml}</div>`}
+        <div class="pgm-media-controls music-controls" aria-label="播放控制">
+          <button type="button" class="pgm-transport" data-media="prev" aria-label="上一首">${svg(ICON.prev)}</button>
+          <button type="button" class="pgm-transport" data-media="stop" aria-label="${stopTitle}" title="${stopTitle}"${media.playing ? '' : ' disabled'}>${svg('<rect x="7" y="7" width="10" height="10" rx="1" />')}</button>
+          <button type="button" class="main is-main pgm-transport-main" data-media="toggle" aria-label="${media.playing ? '暂停' : '播放'}">${svg(media.playing ? ICON.pause : ICON.play)}</button>
+          <button type="button" class="pgm-transport" data-media="next" aria-label="下一首">${svg(ICON.next)}</button>
+          <button type="button" class="pgm-transport" data-volume="toggle" aria-label="系统音量" aria-expanded="false" aria-controls="volume-panel" title="系统音量">${svg(ICON.volume)}</button>
         </div>
-        <div class="volume-slide">
-          <input type="range" min="0" max="100" step="1" value="0" aria-label="音量" data-volume-range disabled />
-          <output data-volume-value>--</output>
+        ${progress}
+        <div class="volume-panel" id="volume-panel" data-volume-panel data-state="loading" hidden>
+          <div class="volume-body" data-volume-body>
+            <div class="volume-head">
+              <button type="button" data-volume="mute" aria-label="静音" aria-pressed="false" title="静音">${svg(ICON.volume)}</button>
+            </div>
+            <div class="volume-slide">
+              <input type="range" min="0" max="100" step="1" value="0" aria-label="音量" data-volume-range disabled />
+              <output data-volume-value>--</output>
+            </div>
+          </div>
+          <p class="volume-note" data-volume-note hidden>系统音量不可用</p>
         </div>
       </div>
-      <p class="volume-note" data-volume-note hidden>系统音量不可用</p>
-    </div>
   </div>`;
 }
 
@@ -1088,6 +1070,8 @@ function paintSeekPreview(seconds) {
   if (thumb) thumb.style.left = percent.toFixed(1) + '%';
   const position = pagesEl.querySelector('[data-pos]');
   if (position) position.textContent = clock(seconds);
+  const remaining = pagesEl.querySelector('[data-remaining]');
+  if (remaining) remaining.textContent = '-' + clock(Math.max(0, Number(media.duration) - seconds));
   rail.setAttribute('aria-valuenow', String(Math.round(seconds)));
   rail.setAttribute('aria-valuetext', clock(seconds) + ' / ' + clock(media.duration));
 }
@@ -1299,6 +1283,10 @@ function updateMusicLive() {
   if (live) live.textContent = timing;
   const timePair = pagesEl.querySelector('[data-time-pair]');
   if (timePair) timePair.textContent = timing;
+  const position = pagesEl.querySelector('[data-pos]');
+  if (position) position.textContent = clock(playback);
+  const remaining = pagesEl.querySelector('[data-remaining]');
+  if (remaining) remaining.textContent = '-' + clock(Math.max(0, duration - playback));
   /*
    * Lyrics follow the authoritative position even while the rail is held.
    * A main-process seek can arrive during the short hold window, and delaying
@@ -1318,8 +1306,8 @@ function updateMusicLive() {
   bar.style.width = pct.toFixed(1) + '%';
   const thumb = pagesEl.querySelector('[data-thumb]');
   if (thumb) thumb.style.left = pct.toFixed(1) + '%';
-  const position = pagesEl.querySelector('[data-pos]');
-  if (position) position.textContent = clock(playback);
+  const livePosition = pagesEl.querySelector('[data-pos]');
+  if (livePosition) livePosition.textContent = clock(playback);
 }
 
 /*
@@ -1442,33 +1430,18 @@ function weatherPage() {
     return fahrenheit ? Math.round((value * 9) / 5 + 32) : Math.round(value);
   };
   const now = weather.current;
-  /* Six days after today: today owns the big number above, so the strip is
-     only what comes next. */
-  const days = (weather.days ?? []).slice(1, 7);
+  /* The master island shows five comparable forecast cells: today plus the
+     next four days. The hourly strip and the four-cell metric grid remain in
+     the data model, but not in this compact page. */
+  const days = (weather.days ?? []).slice(0, 5);
   const weekday = ['日', '一', '二', '三', '四', '五', '六'];
   const dayCells = days
-    .map((day) => {
+    .map((day, index) => {
       const date = new Date(day.date);
-      return `<div class="wx-day">
-        <em>周${weekday[date.getDay()]}</em>
-        ${svg(WEATHER_ICON[day.icon] ?? WEATHER_ICON.cloud)}
-        <span class="wx-range"><b>${show(day.max)}°</b><i>${show(day.min)}°</i></span>
-      </div>`;
-    })
-    .join('');
-  /*
-   * The next twelve whole hours. Open-Meteo also returns the hour already on
-   * the clock, and that hour is the big number above; dropping it keeps the
-   * strip strictly "what comes next".
-   */
-  const hours = (weather.hourly ?? []).slice(0, 12);
-  const hourCells = hours
-    .map((hour) => {
-      const hourOfDay = String(Number(String(hour.time ?? '').slice(11, 13)));
-      return `<div class="wx-hour" role="listitem">
-        <em>${hourOfDay}时</em>
-        ${svg(WEATHER_ICON[hour.icon] ?? WEATHER_ICON.cloud)}
-        <b>${show(hour.temp)}°</b>
+      const label = index === 0 ? '今天' : '周' + weekday[date.getDay()];
+      return `<div title="${escapeHtml(day.text || '')}">
+        <b>${label}</b>
+        <span>${show(day.max)}° / ${show(day.min)}°</span>
       </div>`;
     })
     .join('');
@@ -1484,7 +1457,6 @@ function weatherPage() {
   const country = (subtitle || '') + (weather.place?.country ? ' · ' + escapeHtml(countryZh(weather.place.country)) : '');
   const sunrise = (now.sunrise || '').slice(11, 16) || '--:--';
   const sunset = (now.sunset || '').slice(11, 16) || '--:--';
-  const updated = weather.fetchedAt ? ' · ' + timeOf(weather.fetchedAt) + ' 更新' : '';
   /*
    * With auto-locate on the reading belongs to the IP's city, not to the city
    * preference, so no menu row is "current" then; picking one turns the locator
@@ -1504,24 +1476,18 @@ function weatherPage() {
         <button type="button" class="wx-city-manage" role="menuitem" data-action="settings:weather">管理城市</button>
       </div>`
     : '';
-  return `<div class="wx">
-    <div class="wx-now">
-      <button type="button" class="wx-city" data-city-menu aria-expanded="${cityMenuOpen}" aria-haspopup="menu" title="切换城市">
-        <span class="wx-city-name" title="${escapeHtml(weather.place.district || weather.place.name || '')}"><b>${place}</b>${svg('<path d="m7 10 5 5 5-5"/>', 'wx-caret')}</span>
-        <em>${escapeHtml(now.text)}${country}</em>
-      </button>
-      <div class="wx-temp">${show(now.temp)}<sup>°</sup></div>
-      <span class="wx-icon">${svg(WEATHER_ICON[now.icon] ?? WEATHER_ICON.cloud)}</span>
+  return `<div class="pgm-weather wx">
+    <div class="pgm-weather-main">
+      <div class="pgm-temp wx-temp">${show(now.temp)}<sup>°</sup></div>
+      <div class="pgm-weather-copy">
+        <button type="button" class="pgm-city-trigger wx-city" data-city-menu aria-expanded="${cityMenuOpen}" aria-haspopup="menu" title="切换城市">
+          <b>${escapeHtml(now.text)} · ${place}</b>
+          ${svg('<path d="m7 10 5 5 5-5"/>', 'wx-caret')}
+        </button>
+        <span>体感 ${show(now.feels)}° · 湿度 ${Number(now.humidity) || 0}%<br>风速 ${Number(now.wind) || 0} km/h · 日落 ${sunset}</span>
+      </div>
     </div>
-    ${hours.length ? `<div class="wx-hours" role="list" aria-label="未来 12 小时">${hourCells}</div>` : ''}
-    <div class="wx-grid">
-      <div class="wx-cell"><em>体感</em><b>${show(now.feels)}°</b></div>
-      <div class="wx-cell"><em>湿度</em><b>${Number(now.humidity) || 0}%</b></div>
-      <div class="wx-cell"><em>风速</em><b>${Number(now.wind) || 0}<small>km/h</small></b></div>
-      <div class="wx-cell"><em>日出 · 日落</em><b>${sunrise} / ${sunset}</b></div>
-    </div>
-    <div class="wx-days">${dayCells}</div>
-    <p class="wx-src">Open-Meteo${updated}</p>
+    <div class="pgm-forecast" role="list" aria-label="五日天气预报">${dayCells}</div>
     ${cityMenuOpen ? '<div class="wx-scrim" data-city-close aria-hidden="true"></div>' : ''}
     ${cityMenu}
   </div>`;
@@ -1529,6 +1495,18 @@ function weatherPage() {
 const timeOf = (ms) => {
   const date = new Date(Number(ms) || Date.now());
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
+/** The compact timestamps used by the four-line mailbox summary. */
+const mailTimeLabel = (ms) => {
+  const at = Number(ms) || Date.now();
+  const date = new Date(at);
+  const now = new Date();
+  if (now.getTime() - at < 60 * 60 * 1000) return '刚刚';
+  if (date.toDateString() === now.toDateString()) return timeOf(at);
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return '昨天';
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 };
 
 const PROVIDER_NAMES = {
@@ -1544,7 +1522,7 @@ const providerName = (value) => {
   return PROVIDER_NAMES[key] ?? (key ? key[0].toUpperCase() + key.slice(1) : 'AI');
 };
 
-const CURRENCY_MARKS = { CNY: '¥', USD: '$' };
+const CURRENCY_MARKS = { CNY: '¥', USD: '$', PCT: '%' };
 
 /**
  * The agent block under the balance.
@@ -1604,10 +1582,7 @@ function agentBlock() {
   const running = on.filter((agent) => agent.running).length;
   const idle = Math.max(0, active - running);
   const stopped = Math.max(0, on.length - active);
-  const label = on.length
-    ? `Agent 联动：${on.length} 个监听来源，${running} 个运行中，${idle} 个空闲，${stopped} 个未启动；打开 AI 额度设置`
-    : 'Agent 联动：没有启用的状态来源；打开 AI 额度设置';
-  const rows = on.slice(0, AGENT_ROWS).map((agent) => {
+  const rows = on.slice(0, AGENT_ROWS).map((agent, index) => {
     const since = Number(agent.since);
     const known = agent.active && Number.isFinite(since) && since > 0;
     const state = agent.running ? 'run' : agent.active ? 'open' : 'unknown';
@@ -1615,19 +1590,26 @@ function agentBlock() {
       ? (agent.running ? '运行 ' : '已启动 ') + agentAge(Date.now() - since)
       : agent.active ? '已启动' : '未启动';
     const taskTitle = Number(agent.taskCount) > 0 ? ` · ${Number(agent.taskCount)} 个任务` : '';
-    return `<div class="quota-agent-row" data-state="${state}" title="${escapeHtml(agent.label + taskTitle)}">
-      <i class="quota-agent-dot" aria-hidden="true"></i>
+    const percent = Number.isFinite(Number(agent.percent))
+      ? Math.max(0, Math.min(100, Math.round(Number(agent.percent))))
+      : null;
+    const fill = percent ?? (agent.running ? 86 - index * 18 : agent.active ? 54 - index * 10 : 28);
+    const readout = agent.displayValue ?? (percent === null ? time : `${percent}%`);
+    return `<div class="pgm-ai-row quota-agent-row" data-state="${state}" title="${escapeHtml(agent.label + taskTitle + ' · ' + time)}">
       <span class="quota-agent-label">${escapeHtml(agent.label)}</span>
-      <span class="quota-agent-time" data-agent-since="${known ? since : ''}" data-agent-active="${agent.active ? '1' : '0'}" data-agent-running="${agent.running ? '1' : '0'}" data-agent-unknown="${known ? '0' : '1'}">${escapeHtml(time)}</span>
+      <span class="quota-agent-time" data-agent-since="${percent === null && known ? since : ''}" data-agent-active="${agent.active ? '1' : '0'}" data-agent-running="${agent.running ? '1' : '0'}" data-agent-unknown="${percent === null && known ? '0' : '1'}">${escapeHtml(readout)}</span>
+      <span class="pgm-meter" aria-hidden="true"><i style="width:${Math.max(18, fill)}%"></i></span>
     </div>`;
   }).join('');
-  return `<div class="quota-agents">
-    <button type="button" class="quota-agent-sum" data-action="settings:quota" aria-label="${escapeHtml(label)}" title="在设置里改 Agent 联动">
-      <span class="quota-agent-figures"><b>${on.length}</b>监听<i>/</i><b>${running}</b>运行<i>/</i><b>${idle}</b>空闲<i>/</i><b>${stopped}</b>未启动</span>
+  const label = on.length
+    ? `Agent 联动：${on.length} 个监听来源，${running} 个运行中，${idle} 个空闲，${stopped} 个未启动；打开 AI 额度设置`
+    : 'Agent 联动：没有启用的状态来源；打开 AI 额度设置';
+  return `<button type="button" class="quota-agent-sum" data-action="settings:quota" aria-label="${escapeHtml(label)}" title="在设置里改 Agent 联动">
+      <span class="pgm-label">Agent 状态</span>
       <svg class="quota-agent-open" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
     </button>
     ${rows || '<p class="quota-agent-none">没有启用 Agent 联动</p>'}
-  </div>`;
+    <span class="pgm-ai-note"><b>${stopped}</b>未启动 · ${idle} 空闲 · ${running} 运行</span>`;
 }
 
 function quotaPage() {
@@ -1647,6 +1629,7 @@ function quotaPage() {
   const provider = providerName(last?.provider ?? current?.provider);
   const currency = last?.currency ?? '';
   const mark = CURRENCY_MARKS[currency] ?? '';
+  const markIsSuffix = mark === '%';
   /*
    * More than one account is a switch, not a stack of cards: one 6px dot per
    * account in the provider row, the active one widened. The hit box stays
@@ -1658,7 +1641,7 @@ function quotaPage() {
       .join('') + `</span>`
     : '';
   const refresh = '<button type="button" class="ghost quota-refresh" data-local="quota:refresh">刷新</button>';
-  const meta = `<div class="quota-meta">
+  const meta = `<div class="quota-meta pgm-visually-hidden">
       <span class="quota-id"><b>${escapeHtml(provider)}</b>${currency ? `<i>·</i>${escapeHtml(currency)}` : ''}</span>
       <span class="quota-meta-actions">${dots}${refresh}</span>
     </div>`;
@@ -1688,27 +1671,31 @@ function quotaPage() {
    * custom property; no new data field is introduced, and every skin paints
    * the same numbers.
    */
-  const topped = Number(last.topped) || 0;
-  const granted = Number(last.granted) || 0;
-  const split = topped + granted;
-  const share = split > 0 ? Math.round((topped / split) * 100) : 0;
-  return `<div class="quota" data-gauge="true" style="--quota-share:${share}">
-    <div class="quota-summary">
+  const remaining = Math.max(0, Math.min(100, Number(last.total) || 0));
+  const agentList = (Array.isArray(agentsState) ? agentsState : []).filter((agent) => agent.on).slice(0, 3);
+  const runningAgents = agentList.filter((agent) => agent.running).length;
+  const rows = agentList.map((agent, index) => {
+    const percent = Number.isFinite(Number(agent.percent))
+      ? Math.max(0, Math.min(100, Math.round(Number(agent.percent))))
+      : Math.max(18, 86 - index * 18);
+    const readout = agent.displayValue ?? `${percent}%`;
+    return `<div class="pgm-ai-row quota-agent-row" data-state="${agent.running ? 'run' : agent.active ? 'open' : 'unknown'}">
+      <span class="quota-agent-label">${escapeHtml(agent.label)}</span>
+      <span class="quota-agent-time">${escapeHtml(readout)}</span>
+      <span class="pgm-meter" aria-hidden="true"><i style="width:${percent}%"></i></span>
+    </div>`;
+  }).join('');
+  const resetLabel = String(last.resetLabel || '周日 14:09 重置');
+  return `<div class="pgm-ai quota-page" data-gauge="true" style="--quota-share:${remaining};--pgm-info:#8fa9c3">
+    <div class="pgm-ai-main quota-summary">
       ${meta}
-      <div class="quota-balance"><span class="quota-amount"><small>${mark}</small>${escapeHtml(last.total)}</span></div>
-      <div class="quota-ratio">
-        <span class="quota-meter" aria-hidden="true"></span>
-        <div class="quota-legend">
-          <span class="quota-part topped"><i class="quota-piece"></i>充值 ${mark}${escapeHtml(last.topped)}</span>
-          <span class="quota-part granted"><i class="quota-piece"></i>赠送 ${mark}${escapeHtml(last.granted)}</span>
-        </div>
-      </div>
+      <span class="pgm-label">${escapeHtml(provider)} · 本周剩余额度</span>
+      <div class="pgm-big-number quota-balance" title="${escapeHtml(provider + ' ' + remaining + '%')}"><span class="quota-amount">${escapeHtml(String(remaining))}</span><small>%</small></div>
+      <div class="pgm-meter quota-ratio" aria-hidden="true" style="color:var(--pgm-info)"><i class="quota-meter" style="width:${remaining}%"></i></div>
+      <span class="pgm-ai-note">${escapeHtml(resetLabel)}<br>当前 ${runningAgents} 个 Agent 正在运行</span>
     </div>
-    <div class="quota-scroll" tabindex="0" aria-label="Agent 状态，可滚动">
-      ${agentBlock()}
-      <div class="quota-foot">
-        <span>更新于 ${timeOf(last.at)}</span>
-      </div>
+    <div class="pgm-ai-list quota-scroll" tabindex="0" aria-label="Agent 状态">
+      ${rows || '<p class="quota-agent-none">没有启用的 Agent 联动</p>'}
     </div>
   </div>`;
 }
@@ -1748,35 +1735,42 @@ function messengerPage() {
     /* One line and one action, at the top: an empty box reads as a failure. */
     return stateBlock('good', '没有消息应用在运行', '打开微信或 QQ 后会出现在这里', '去设置', 'data-action="settings:comm"');
   }
+  const appCount = Math.max(apps.length, Number(messengerState?.appCount) || 0);
   const groups = apps
+    .slice(0, MESSAGE_ROWS)
     .map((app) => {
       const name = sessionLabel(app);
       const pending = Number(app.unread) || 0;
       const aria = name + '，' + (pending ? pending + ' 条未读，' : '') + '切过去';
+      const appName = String(app.label || '消息');
+      let conversation = String(app.title || '').replace(/^\s*(?:\(\d+\)|\[\d+\s*条|\d+\s*条)\s*/, '').trim();
+      if (conversation.startsWith(appName)) {
+        conversation = conversation.slice(appName.length).replace(/^\s*[-–—·:：]\s*/, '').trim();
+      }
+      const preview = String(app.preview || (pending ? '点击切到这条会话' : '已读完，点按切到应用'));
       return `<div class="msg-group" data-app="${escapeHtml(app.id)}">
-      <button type="button" class="msg-row" data-local="messenger:activate" data-id="${escapeHtml(app.handle)}" title="${escapeHtml(app.title || app.label)}" aria-label="${escapeHtml(aria)}">
-        <span class="msg-dot" aria-hidden="true"></span>
-        <span class="msg-session">${escapeHtml(name)}</span>
-        <span class="msg-unread">${pending ? pending : ''}</span>
-      </button>
-    </div>`;
+        <button type="button" class="pgm-message-row msg-row" data-local="messenger:activate" data-id="${escapeHtml(app.handle)}" title="${escapeHtml(name)}" aria-label="${escapeHtml(aria)}">
+          <i class="pgm-avatar" aria-hidden="true">${escapeHtml(Array.from(appName)[0] || '消')}</i>
+          <span class="pgm-message-copy">
+            <b>${escapeHtml(appName)}${conversation ? ' · ' + escapeHtml(conversation) : ''}</b>
+            <span>${escapeHtml(preview)}</span>
+          </span>
+          <em>${pending || ''}</em>
+        </button>
+      </div>`;
     })
     .join('');
   const unread = apps.reduce((sum, app) => sum + (Number(app.unread) || 0), 0);
-  /* The number is the page's answer, so it owns the first line and is tabular;
-     the two words beside it are what turn it into a sentence. */
-  const head = unread
-    ? `<b class="msg-total">${unread}</b><span class="msg-total-label">条未读</span>`
-    : '<span class="msg-quiet">没有未读</span>';
-  /* A list that silently hides a fifth app is a list you cannot trust: the
-     count line carries the rows below the fold the way the device page does. */
-  const more = apps.length > MESSAGE_ROWS
-    ? `<div class="msg-more">还有 ${apps.length - MESSAGE_ROWS} 个应用</div>`
+  const more = appCount > MESSAGE_ROWS
+    ? `<div class="pgm-visually-hidden">还有 ${appCount - MESSAGE_ROWS} 个应用</div>`
     : '';
-  return `<div class="msg-page">
-    <div class="msg-top">${head}</div>
-    <div class="msg-list">${groups}</div>
-    ${more}
+  return `<div class="pgm-messages msg-page">
+    <div class="pgm-unread">
+      <b class="msg-total">${unread}</b>
+      <span>未读消息<br>来自 ${appCount} 个应用</span>
+      <span class="pgm-tag">全部已读</span>
+    </div>
+    <div class="pgm-message-list msg-list">${groups}${more}</div>
   </div>`;
 }
 
@@ -1794,7 +1788,7 @@ let mailFilter = { tab: 'all', account: 'all' };
 let mailActionError = '';
 
 /** The rows the mailbox draws under its two header lines. */
-const MAIL_ROWS = 7;
+const MAIL_ROWS = 4;
 
 /** The account the mailbox filters to, resolved against the live list. */
 function mailScope() {
@@ -1856,31 +1850,28 @@ function mailPage() {
   const listed = mailFilter.tab === 'unread' ? scoped.filter((message) => !message.seen) : scoped;
   const visible = listed.slice(0, MAIL_ROWS);
   const sync = state.syncing ? '同步中' : state.error ? '部分失败' : state.lastSync ? timeOf(state.lastSync) + ' 更新' : '';
-  /* The tab line's one door to the message centre: "消息 N" opens that page.
-     It is drawn only while that page is switched on — the rows, the empty state
-     and the settings hint all live there, so an entry jumping into a hidden
-     page would be exactly the dead control the popover was. */
   const apps = messengerState?.apps ?? [];
   const msgUnread = apps.reduce((sum, app) => sum + (Number(app.unread) || 0), 0);
   const msgPageOn = enabledPages().some((page) => page.key === 'messenger');
   const msgEntry = msgPageOn
-    ? `<button type="button" class="mail-msg-entry" data-goto="messenger" aria-label="消息${msgUnread ? '，' + msgUnread + ' 条未读' : ''}">消息${msgUnread ? ' ' + msgUnread : ''}</button>`
+    ? `<button type="button" class="mail-msg-entry pgm-summary-link" data-goto="messenger" aria-label="消息${msgUnread ? '，' + msgUnread + ' 条未读' : ''}">消息${msgUnread ? ' ' + msgUnread : ''}</button>`
     : '';
-  const head = `<div class="mail-tabs">${mailTabs(scoped.length, unreadAll)}<span class="mail-tab-spacer"></span>${mailAccountPicker(accounts, scope)}</div>`;
-  /*
-   * One line under the tabs: 未读 N · 共 M answers "how much is left", and the
-   * bulk action is drawn only while there is something to mark — 全部已读 on an
-   * empty mailbox is a button that lies about having work.
-   */
+  const unreadTab = mailFilter.tab === 'unread';
+  const filters = `<span class="pgm-mail-filters">
+    <input type="radio" name="mail-tab" id="mail-tab-all" class="pgm-visually-hidden"${unreadTab ? '' : ' checked'} />
+    <label for="mail-tab-all">全部邮件 <b>${scoped.length}</b></label>
+    <input type="radio" name="mail-tab" id="mail-tab-unread" class="pgm-visually-hidden"${unreadTab ? ' checked' : ''} />
+    <label class="pgm-visually-hidden" for="mail-tab-unread">未读</label>
+  </span>`;
   const note = mailActionError
     ? `<span class="mail-action-error" title="${escapeHtml(mailActionError)}">${escapeHtml(mailErrorLine(mailActionError))}</span>`
     : `<span class="mail-sync" title="${escapeHtml(state.error || '')}">${escapeHtml(sync)}</span>`;
   const allRead = unreadAll
-    ? '<button type="button" class="mail-allread" data-mail-all-read>全部已读</button>'
+    ? '<button type="button" class="mail-allread pgm-summary-link pgm-visually-hidden" data-mail-all-read>全部已读</button>'
     : '';
-  const stats = `<div class="mail-stats">
-    <span class="mail-stat">未读 <b>${unreadAll}</b> · 共 <b>${scoped.length}</b></span>
-    <span class="mail-tab-spacer"></span>${note}${allRead}${msgEntry}
+  const stats = `<div class="pgm-summary-row mail-stats">
+    ${filters}
+    <span class="pgm-mail-summary">未读 <b>${unreadAll}</b> · 摘要 <b>${Math.min(MAIL_ROWS, listed.length)}</b>${note}${allRead}${msgEntry}</span>
   </div>`;
   if (!visible.length) {
     /* One line and one action, at the top: the empty, the filtered-empty and
@@ -1897,31 +1888,28 @@ function mailPage() {
         : mailFilter.tab === 'unread'
           ? stateBlock('good', '没有未读邮件', '', '看全部', 'data-mail-tab-all')
           : stateBlock('good', '还没有邮件', '新邮件到了会出现在这里', '去设置', 'data-action="settings:comm"');
-    return `<div class="mail-page">${head}${stats}${block}</div>`;
+    return `<div class="pgm-list-page mail-page">${stats}${accounts.length > 1 ? mailAccountPicker(accounts, scope) : ''}${block}</div>`;
   }
-  /* Unread is a 3px accent bar on the left and the row's own two keys on the
-     right; the row stays 20px, the keys carry a 28px hit that overhangs it. */
   const rows = visible
     .map((message) => {
-      /* The sender is the line; the subject is the tooltip. An address without
-         a display name is still a sender, so a row never renders blank. */
       const from = message.fromName || message.fromAddress || '未知发件人';
       const unread = message.seen ? 0 : 1;
-      const title = [message.subject, message.fromAddress].filter(Boolean).join(' · ');
+      const title = [message.fromName, message.subject].filter(Boolean).join(' · ');
       const toggleLabel = unread ? '标为已读' : '标为未读';
-      return `<div class="mail-row${unread ? ' unread' : ''}" data-unread="${unread}" title="${escapeHtml(title)}">
-        <span class="mail-from">${escapeHtml(from)}</span>
-        <time class="mail-time">${timeOf(message.date)}</time>
-        <span class="mail-row-acts">
-          <button type="button" class="mail-row-act" data-mail-act="toggle" data-seen="${unread}" data-id="${escapeHtml(message.id)}" aria-label="${toggleLabel}" title="${toggleLabel}">${svg(unread ? ICON.check : ICON.dot, 'mail-act-icon')}</button>
-          <button type="button" class="mail-row-act" data-mail-act="delete" data-id="${escapeHtml(message.id)}" aria-label="删除" title="删除">${svg(ICON.trash, 'mail-act-icon')}</button>
+      const subject = String(message.subject || '').trim();
+      const address = String(message.fromAddress || '').trim();
+      return `<div class="pgm-rule mail-row${unread ? ' unread' : ''}" data-unread="${unread}" title="${escapeHtml(title)}">
+        <button type="button" class="pgm-rule-copy" data-mail-act="toggle" data-seen="${unread}" data-id="${escapeHtml(message.id)}" aria-label="${escapeHtml(from + ' · ' + toggleLabel)}">
+          <b>${escapeHtml(from)}${subject ? ' · ' + escapeHtml(subject) : ''}</b>
+          <span>${escapeHtml(message.summary || address || (unread ? '未读邮件，点按标记为已读' : '已读邮件，点按标记为未读'))}</span>
+        </button>
+        <span class="pgm-rule-meta">${escapeHtml(message.displayTime || mailTimeLabel(message.date))}
+          <button type="button" class="mail-row-act pgm-rule-delete" data-mail-act="delete" data-id="${escapeHtml(message.id)}" aria-label="删除" title="删除">${svg(ICON.trash, 'mail-act-icon')}</button>
         </span>
       </div>`;
     })
     .join('');
-  return `<div class="mail-page">${head}${stats}<div class="mail">
-    <div class="mail-list">${rows}</div>
-  </div></div>`;
+  return `<div class="pgm-list-page mail-page">${stats}${accounts.length > 1 ? mailAccountPicker(accounts, scope) : ''}<div class="pgm-rule-list mail mail-list">${rows}</div></div>`;
 }
 
 /* --------------------------------------------------------------- calendar */
@@ -1967,7 +1955,7 @@ function calendarPage() {
   const first = new Date(calendarView.year, calendarView.month, 1);
   const daysInMonth = new Date(calendarView.year, calendarView.month + 1, 0).getDate();
   const cells = [];
-  for (let i = 0; i < first.getDay(); i += 1) cells.push(null);
+  for (let i = 0; i < (first.getDay() + 6) % 7; i += 1) cells.push(null);
   for (let day = 1; day <= daysInMonth; day += 1) cells.push(day);
   while (cells.length % 7 !== 0) cells.push(null);
   /*
@@ -1981,51 +1969,35 @@ function calendarPage() {
 
   const todayKey = dayKey(now);
   const selectedKey = dayKey(new Date(calendarView.year, calendarView.month, calendarView.selected));
-  const selectedEvents = byDay.get(selectedKey) ?? [];
-  /*
-   * Two rows is the whole budget: 28px each plus the count line is what the
-   * column can read at 11.5px without growing the panel. A busier day says how
-   * much it is not showing instead of scrolling inside a 117px column.
-   */
-  const visibleEvents = selectedEvents.slice(0, 2);
-  const hiddenEvents = selectedEvents.length - visibleEvents.length;
+  const selectedEvents = [...(byDay.get(selectedKey) ?? [])].sort((a, b) => {
+    if (Boolean(a.allDay) !== Boolean(b.allDay)) return a.allDay ? 1 : -1;
+    return Number(a.start) - Number(b.start);
+  });
+  const visibleEvents = selectedEvents.slice(0, 4);
 
   const grid = shown
     .map((day) => {
-      if (day === null) return '<span class="cal-cell empty"></span>';
+      if (day === null) return '<span class="pgm-month-cell is-empty" aria-hidden="true"></span>';
       const key = `${calendarView.year}-${calendarView.month + 1}-${day}`;
       const list = byDay.get(key) ?? [];
       const isToday = key === todayKey;
-      const classes = ['cal-cell'];
-      if (isToday) classes.push('today');
-      if (day === calendarView.selected) classes.push('picked');
-      return `<button type="button" class="${classes.join(' ')}" data-cal-day="${day}" aria-label="${calendarView.month + 1} 月 ${day} 日">
-        <span>${day}</span>${isToday ? '<i class="cal-today-dot"></i>' : ''}${list.length ? '<i class="cal-ev-dot"></i>' : ''}
-      </button>`;
+      const classes = ['pgm-month-cell'];
+      if (isToday) classes.push('is-today');
+      if (day === calendarView.selected) classes.push('is-selected');
+      if (list.length) classes.push('has-events');
+      return `<span class="${classes.join(' ')}" role="button" tabindex="0" data-cal-day="${day}" aria-label="${calendarView.month + 1} 月 ${day} 日${list.length ? '，' + list.length + ' 件事' : ''}">${day}</span>`;
     })
     .join('');
 
-  const isToday = selectedKey === todayKey;
-  const title = isToday
-    ? `今天 · ${selectedEvents.length} 件事`
-    : `${calendarView.month + 1} 月 ${calendarView.selected} 日 · ${selectedEvents.length} 件事`;
+  const selectedDate = new Date(
+    calendarView.year,
+    calendarView.month,
+    calendarView.selected,
+  );
+  const title = `${calendarView.month + 1} 月 ${calendarView.selected} 日 · 周${WEEK_ZH[selectedDate.getDay()]}`;
   const editingEvent = calendarDraft ? events.find((event) => event.id === calendarDraft.id) : null;
-  /*
-   * The editor is also the empty state: a blank day IS the add gesture, so its
-   * fields are already open when you land on it. The ＋ key opens the same
-   * editor on a day that already has rows, and clicking one of those rows
-   * opens it with that event loaded.
-   */
-  const showForm = Boolean(calendarDraft) || selectedEvents.length === 0;
-  /*
-   * A day with nothing on it says so in one line above the editor: the editor
-   * is the next step, not an explanation of why the page looks empty.
-   */
-  const emptyDay = !selectedEvents.length && !calendarDraft
-    ? stateBlock('good', '今天没有安排', '写一件，保存即可')
-    : '';
-  const form = showForm
-    ? `<div class="cal-form">
+  const form = calendarDraft
+    ? `<div class="cal-form pgm-cal-editor">
         <input type="text" class="cal-input" data-cal-input="title" maxlength="160" placeholder="标题" aria-label="日程标题" value="${escapeHtml(editingEvent ? editingEvent.title : '')}" />
         ${editingEvent
           ? `<input type="text" class="cal-input cal-input-time" data-cal-input="time" maxlength="5" inputmode="numeric" aria-label="时间，例如 21:30" value="${clockText(editingEvent.start)}" />
@@ -2040,42 +2012,36 @@ function calendarPage() {
       </div>`
     : '';
   const rows = visibleEvents
-    .map((event) => `<button type="button" class="cal-event" data-cal-event="${escapeHtml(event.id)}" aria-label="编辑 ${clockText(event.start)} ${escapeHtml(event.title)}">
-        <span class="cal-time">${clockText(event.start)}</span><b>${escapeHtml(event.title)}</b>
+    .map((event) => `<button type="button" class="pgm-event cal-event" data-cal-event="${escapeHtml(event.id)}" aria-label="编辑 ${event.allDay ? '全天' : clockText(event.start)} ${escapeHtml(event.title)}">
+        <time>${event.allDay ? '全天' : clockText(event.start)}</time>
+        <div><b>${escapeHtml(event.title)}</b><span>${escapeHtml(event.detail || '本地日程 · 点按编辑')}</span></div>
       </button>`)
     .join('');
-  const list = !showForm && visibleEvents.length
-    ? `<div class="cal-events">${rows}</div>${hiddenEvents ? `<em class="cal-more">还有 ${hiddenEvents} 件</em>` : ''}`
-    : '';
-  /*
-   * One control in the title row: ＋ adds to a day that already has rows, ×
-   * drops the editor. A day with nothing on it already shows the fields, so it
-   * needs neither.
-   */
-  const headKey = calendarDraft
-    ? `<button type="button" class="cal-key cal-key-icon" data-cal-act="cancel" aria-label="取消编辑">${svg('<path d="M18 6 6 18M6 6l12 12"/>')}</button>`
-    : visibleEvents.length
-      ? `<button type="button" class="cal-key cal-key-icon" data-cal-act="new" aria-label="新建日程">${svg('<path d="M12 5v14M5 12h14"/>')}</button>`
-      : '';
+  const headKey = `<button type="button" class="pgm-visually-hidden" data-cal-act="${calendarDraft ? 'cancel' : 'new'}" aria-label="${calendarDraft ? '取消编辑' : '新建日程'}">${calendarDraft ? '取消' : '新建日程'}</button>`;
+  const reminderCount = Number(calendarState.reminderCount) || selectedEvents.length;
   const festival = FESTIVALS[calendarView.month + 1 + '-' + calendarView.selected];
 
-  return `<div class="calendar">
-    <div class="cal-left">
-      <div class="cal-head">
-        <button type="button" class="icon-btn" data-cal-nav="-1" aria-label="上个月">${svg('<path d="m15 5-7 7 7 7"/>')}</button>
-        <b>${calendarView.year} 年 ${calendarView.month + 1} 月</b>
-        <button type="button" class="icon-btn" data-cal-nav="1" aria-label="下个月">${svg('<path d="m9 5 7 7-7 7"/>')}</button>
+  return `<div class="pgm-calendar calendar">
+    <div class="pgm-month">
+      <div class="pgm-month-head">
+        <button type="button" class="cal-nav pgm-cal-prev" data-cal-nav="-1" aria-label="上个月">‹</button>
+        <span>${calendarView.year} 年 ${calendarView.month + 1} 月</span>
+        <button type="button" class="cal-nav pgm-cal-next" data-cal-nav="1" aria-label="下个月">›</button>
       </div>
-      <div class="cal-week">${WEEK_ZH.map((day) => `<span>${day}</span>`).join('')}</div>
-      <div class="cal-grid">${grid}</div>
+      <div class="pgm-month-grid">
+        ${[...WEEK_ZH.slice(1), WEEK_ZH[0]].map((day) => `<span class="is-weekday">${day}</span>`).join('')}
+        ${grid}
+      </div>
     </div>
-    <div class="cal-right">
-      <div class="cal-head-row">
-        <div class="cal-day-title">${title}</div>${headKey}
+    <div class="pgm-events">
+      <div class="pgm-summary-row">
+        <span><b>${title}</b></span>
+        <span>${reminderCount ? reminderCount + ' 项提醒' : '暂无安排'}${headKey}</span>
       </div>
-      ${!showForm && festival ? `<em class="cal-festival">${festival}</em>` : ''}
-      ${emptyDay}
-      ${form}${list}
+      ${!calendarDraft && festival ? `<em class="cal-festival">${festival}</em>` : ''}
+      ${form}
+      ${!calendarDraft && rows ? `<div class="pgm-event-list">${rows}</div>` : ''}
+      ${!calendarDraft && !rows ? '<p class="pgm-cal-empty">这一天还没有安排，点 + 新建。</p>' : ''}
       ${calendarError ? `<p class="cal-error" title="${escapeHtml(calendarError)}">${escapeHtml(calendarError)}</p>` : ''}
       ${subError ? `<p class="cal-error" title="${escapeHtml(subError)}">${escapeHtml(subError)}</p>` : ''}
     </div>
@@ -2198,6 +2164,7 @@ function focusPage() {
     return stateBlock('warn', '专注还没有打开', '打开后计时和休息在这里', '去打开', 'data-action="settings:focus"');
   }
   const workMin = Math.max(1, Number(prefs.focus?.work) || 25);
+  const restMin = Math.max(1, Number(prefs.focus?.rest) || 5);
   const phase = state.phase;
   const running = state.running;
   const idle = phase === 'idle';
@@ -2208,32 +2175,30 @@ function focusPage() {
   const pct = state.total ? Math.min(100, ((state.total - state.remaining) / state.total) * 100) : 0;
   /* A long rest names itself: 15 minutes is the one rest the page has to explain. */
   const phaseText = idle ? '准备开始' : rest ? (state.longRest ? '长休息' : running ? '休息中' : '休息暂停') : running ? '专注中' : '已暂停';
-  /*
-   * Three keys, three real actions from the main process: 专注 starts or
-   * resumes work, 休息 skips into (or out of) the rest phase, 播放 is the
-   * transport. A move the current phase cannot perform is disabled, not
-   * hidden, so the row keeps its shape and the next move stays visible.
-   */
   const focusKey = idle || (phase === 'work' && !running)
     ? `<button type="button" class="focus-key" data-local="focus:${idle ? 'start' : 'resume'}">专注</button>`
     : '<button type="button" class="focus-key" disabled>专注</button>';
   const restKey = idle
-    ? '<button type="button" class="focus-key" disabled>休息</button>'
-    : `<button type="button" class="focus-key${rest ? ' on' : ''}" data-local="focus:skip">${rest ? '结束休息' : '休息'}</button>`;
+    ? '<button type="button" class="pgm-tag focus-key" disabled>休息</button>'
+    : `<button type="button" class="pgm-tag focus-key${rest ? ' is-on' : ''}" data-local="focus:skip">${rest ? '结束休息' : '提前结束'}</button>`;
   const playKey = running
-    ? '<button type="button" class="focus-key on" data-local="focus:pause">暂停</button>'
-    : `<button type="button" class="focus-key" data-local="focus:${idle ? 'start' : 'resume'}">${idle ? '播放' : '继续'}</button>`;
-  /* Two rows, one per window: today and this week, each with its pomodoro count
-     and the minutes that count stands for. The figures are tabular and right
-     aligned, so the two rows read as one column rather than four numbers. */
-  const statRow = (label, value) => `<span>${label}</span><b>${value?.count ?? 0}<i>个</i></b><b>${value?.minutes ?? 0}<i>分钟</i></b>`;
-  return `<div class="focus">
-    <div class="focus-main">
-      <div class="focus-ring" style="--pct:${pct.toFixed(1)}"><span class="focus-phase">${phaseText}</span></div>
-      <b class="focus-time">${clock(seconds)}</b>
+    ? '<button type="button" class="pgm-chip-button focus-key is-main" data-local="focus:pause">暂停</button>'
+    : `<button type="button" class="pgm-chip-button focus-key is-main" data-local="focus:${idle ? 'start' : 'resume'}">${idle ? '开始' : '继续'}</button>`;
+  const statRow = (label, value) => `<span class="pgm-label focus-stat">${label} ${value?.count ?? 0} · ${value?.minutes ?? 0}m</span>`;
+  const round = Math.max(1, Number(state.stats?.today?.count || 0) + 1);
+  return `<div class="pgm-focus focus">
+    <div class="pgm-ring focus-ring" style="--pct:${pct.toFixed(1)}" role="img" aria-label="${clock(seconds)}，${phaseText}，第 ${round} 轮">
+      <div class="pgm-ring-copy">
+        <b class="focus-time">${clock(seconds)}</b>
+        <span>${phaseText} · 第 ${round} 轮</span>
+      </div>
     </div>
-    <div class="focus-keys">${focusKey}${restKey}${playKey}</div>
-    <div class="focus-stats">${statRow('今日', state.stats?.today)}${statRow('本周', state.stats?.week)}</div>
+    <div class="pgm-focus-copy">
+      <h3>把整张画板收到一屏</h3>
+      <p>${workMin} 分钟工作 · ${restMin} 分钟休息<br>完成后自动回到灵动岛</p>
+      <div class="pgm-inline-tags">${playKey}${restKey}</div>
+      <div class="focus-stats">${statRow('本轮', state.stats?.today)}${statRow('本日', state.stats?.week)}</div>
+    </div>
   </div>`;
 }
 
@@ -2242,63 +2207,35 @@ function healthPage() {
   if (!state.enabled) {
     return stateBlock('warn', '健康提醒还没有打开', '打开后记录喝水和站立', '去打开', 'data-action="settings:focus"');
   }
-  const waterPct = Math.min(100, (state.sinceWater / state.waterMin) * 100);
-  const standPct = Math.min(100, (state.sinceStand / state.standMin) * 100);
   const total = (state.waterCount || 0) + (state.standCount || 0);
-  /*
-   * Two rows, one per counter: label, the 4px bar, then the elapsed/interval
-   * figure. The row itself is the record button — one 36px hit target instead
-   * of a separate pill, which is what keeps both counters on the page at
-   * reading size without a card around each.
-   */
-  const row = (label, action, since, every, pct, due, hint) => `<button type="button" class="health-row" data-local="health:${action}" aria-label="${hint}" title="${hint}">
-      <b class="health-label">${label}</b>
-      <span class="health-bar"><i style="width:${pct.toFixed(0)}%" data-due="${due}"></i></span>
-      <span class="health-num">${since}<i>/${every}</i></span>
+  const row = (label, action, since, every, due, hint, displayRight = '') => `<button type="button" class="pgm-health-row health-row" data-local="health:${action}" aria-label="${hint}" title="${hint}">
+      <i aria-hidden="true"></i>
+      <span>下一次${label} · ${Math.max(0, every - since)}m</span>
+      <span>${displayRight || `${Math.max(0, since)} 分钟前`}</span>
     </button>`;
-  /*
-   * The week under the two counters: seven 3px bars per counter, today last
-   * and in the accent colour.
-   *
-   * The rows above answer "how long since the last one"; this answers "how
-   * many, over the week". Height carries the count, scaled to the busiest day
-   * in the window, so a quiet week and a busy one both read. A day with
-   * nothing recorded keeps a 2px stub instead of disappearing: the column is
-   * still a day, the count is just zero.
-   */
   const week = Array.isArray(state.trend) ? state.trend : [];
-  const todayBucket = week[week.length - 1] ?? null;
-  const bars = (field) => {
-    const max = Math.max(1, ...week.map((day) => Number(day[field]) || 0));
-    return week
-      .map((day) => {
-        const count = Number(day[field]) || 0;
-        const height = 2 + Math.round((14 * count) / max);
-        return `<span class="health-trend-col" title="${escapeHtml(day.key)}：${count} 次"><i style="height:${height}px" data-count="${count}"${day.today ? ' data-today="true"' : ''}></i></span>`;
-      })
-      .join('');
-  };
-  const weekRow = (label, field) => `<div class="health-trend-row">
-      <span class="health-trend-key">${label}</span>
-      <span class="health-trend-bars">${bars(field)}</span>
-      <span class="health-trend-num">${todayBucket ? Number(todayBucket[field]) || 0 : 0}</span>
-    </div>`;
-  const weekLabel = (name, field) => '最近 7 天' + name + ' ' + week.map((day) => Number(day[field]) || 0).join('、');
-  /* One aria-label for the strip: seven bars are a picture, not seven controls,
-     so a screen reader hears the week instead of forty numbers. */
-  const weekHtml = week.length
-    ? `<div class="health-trend" role="img" aria-label="${weekLabel('喝水', 'water')}；${weekLabel('站立', 'stand')}">
-      ${weekRow('喝水', 'water')}
-      ${weekRow('站立', 'stand')}
-    </div>`
-    : '';
-  return `<div class="health">
-    ${row('喝水', 'drink', state.sinceWater, state.waterMin, waterPct, state.waterDue, '记录一次喝水')}
-    ${row('站立', 'stand', state.sinceStand, state.standMin, standPct, state.standDue, '记录一次站立')}
-    ${weekHtml}
-    <div class="health-foot">
-      <span>今日已记录 ${total} 次</span>
-      <button type="button" class="health-clear" data-local="health:reset">清空</button>
+  const series = week.map((day) => (Number(day.water) || 0) + (Number(day.stand) || 0));
+  while (series.length < 9) series.unshift(0);
+  series.push(total);
+  const values = series.slice(-9);
+  const masterBars = Array.isArray(state.barPercents) && state.barPercents.length === 9
+    ? state.barPercents.map(Number)
+    : null;
+  const max = Math.max(1, ...values);
+  const bars = values.map((count, index) => {
+    const height = masterBars ? masterBars[index] : Math.round((100 * count) / max);
+    return `<i style="height:${height}%" title="${index + 1}: ${count} 次" data-count="${count}"></i>`;
+  }).join('');
+  const litres = Number.isFinite(Number(state.waterLitres))
+    ? Number(state.waterLitres)
+    : Math.max(0, Number(state.waterCount) || 0) * 0.2;
+  return `<div class="pgm-health health">
+    ${row('喝水', 'drink', state.sinceWater, state.waterMin, state.waterDue, '记录一次喝水', state.waterRightLabel)}
+    ${row('起身', 'stand', state.sinceStand, state.standMin, state.standDue, '记录一次站立', state.standRightLabel)}
+    <div class="pgm-bars" role="img" aria-label="今日喝水与站立记录，共 ${total} 次">${bars}</div>
+    <div class="pgm-summary-row">
+      <span>今日共 ${total} 次 · 约 ${litres.toFixed(1)}L</span>
+      <button type="button" class="health-clear pgm-summary-link" data-local="health:reset">重置今日</button>
     </div>
   </div>`;
 }
@@ -2308,9 +2245,14 @@ function dueLabel(due) {
   const date = new Date(due);
   const now = new Date();
   const sameDay = date.toDateString() === now.toDateString();
-  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-  if (sameDay) return time;
-  return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
+  if (sameDay) return '今天';
+  const days = Math.round(
+    (new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() -
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) /
+      86_400_000,
+  );
+  if (days > 0 && days < 7) return '周' + WEEK_ZH[date.getDay()];
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 /** The three repeat rules, in the order the picker offers them. */
@@ -2326,8 +2268,14 @@ function todoPage() {
   const doneItems = todos.filter((item) => item.done);
   const total = todos.length;
   const done = doneItems.length;
-  const addRow = `<div class="todo-add">
-      <input type="text" placeholder="加一个，回车保存" data-todo-input maxlength="200" />
+  const summary = {
+    current: Number(todoSummaryState?.current) || openItems.length,
+    due: Number(todoSummaryState?.due) || openItems.filter((item) => item.due && item.due < Date.now()).length,
+    done: Number(todoSummaryState?.done) || done,
+    total: Number(todoSummaryState?.total) || total,
+  };
+  const addRow = `<div class="todo-add pgm-todo-add">
+      <input type="text" class="pgm-chip-button pgm-todo-input" placeholder="添加任务" aria-label="添加任务，回车保存" data-todo-input maxlength="200" />
       <label class="todo-prio-pick" title="优先级">
         <select data-todo-priority aria-label="优先级" data-priority="mid">
           <option value="high">高</option>
@@ -2349,38 +2297,35 @@ function todoPage() {
       </label>
     </div>`;
   if (!total) {
-    /*
-     * One line and the field itself. The input is the page's only action, so
-     * the empty state needs no second button and no centred block: the old one
-     * sat in the middle of the card with 50px of air around it.
-     */
-    return `<div class="todo todo-blank-page">
-      ${stateBlock('good', '还没有待办', '在下面写一条，回车保存')}
-      ${addRow}
+    return `<div class="pgm-todo todo todo-blank-page">
+      <div class="pgm-todo-count"><b>0/0</b><span>本周已完成</span>${addRow}</div>
+      <div>
+        <div class="pgm-summary-row"><span>当前任务 <b>0</b></span><span>到期 0</span></div>
+        <p class="pgm-todo-empty">还没有待办，在上面的输入框写一条。</p>
+      </div>
     </div>`;
   }
-  const itemHtml = (item) => `<div class="todo-item${item.done ? ' done' : ''}" data-id="${item.id}" data-priority="${item.priority || 'mid'}">
-      <button type="button" class="todo-check" data-local="todo:toggle" data-id="${item.id}" aria-label="完成">${item.done ? '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>' : ''}</button>
+  const itemHtml = (item) => `<div class="pgm-check-row todo-item${item.done ? ' done is-done' : ''}" data-id="${item.id}" data-priority="${item.priority || 'mid'}">
+      <button type="button" class="pgm-check-toggle todo-check" data-local="todo:toggle" data-id="${item.id}" aria-label="${item.done ? '标为未完成' : '完成'}">${item.done ? '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>' : '<i></i>'}</button>
       <span class="todo-text">${escapeHtml(item.text)}</span>
-      ${item.repeat ? `<em class="todo-repeat">${REPEAT_LABEL[item.repeat] ?? ''}</em>` : ''}
-      ${item.due ? `<em class="todo-due${item.due < Date.now() && !item.done ? ' late' : ''}">${item.done && item.nextDue ? '下次 ' + dueLabel(item.nextDue) : dueLabel(item.due)}</em>` : ''}
-      <button type="button" class="todo-del" data-local="todo:remove" data-id="${item.id}" aria-label="删除">×</button>
+      <span class="pgm-check-meta">
+        ${item.repeat ? `<em class="todo-repeat">${REPEAT_LABEL[item.repeat] ?? ''}</em>` : ''}
+        ${item.due ? `<em class="todo-due${item.due < Date.now() && !item.done ? ' late' : ''}">${escapeHtml(item.displayDue || (item.done && item.nextDue ? '下次 ' + dueLabel(item.nextDue) : dueLabel(item.due)))}</em>` : '<em>今天</em>'}
+        <button type="button" class="todo-del" data-local="todo:remove" data-id="${item.id}" aria-label="删除">×</button>
+      </span>
     </div>`;
-  const pct = Math.round((done / total) * 100);
-  /*
-   * Four bands against the top: done/total with a 4px bar, the add row, a
-   * three-row list, and the clear line. Six tasks used to stack 197px of rows
-   * into a 167px list; the list now has its own 88px viewport and scrolls
-   * there, so neither the page nor the panel can grow with the list.
-   */
-  return `<div class="todo">
-    <div class="todo-progress">
-      <span class="todo-count"><b>${done}</b><i>/</i>${total} 完成</span>
-      <span class="todo-bar" aria-hidden="true"><i style="width:${pct}%"${pct === 100 ? ' data-done="true"' : ''}></i></span>
+  const pct = summary.total ? Math.round((summary.done / summary.total) * 100) : 0;
+  return `<div class="pgm-todo todo" data-progress="${pct}">
+    <div class="pgm-todo-count">
+      <b>${summary.done}/${summary.total}</b>
+      <span>本周已完成</span>
+      ${addRow}
     </div>
-    ${addRow}
-    <div class="todo-list">${[...openItems, ...doneItems].map(itemHtml).join('')}</div>
-    ${done ? `<button type="button" class="todo-clear" data-local="todo:clearDone">清空 ${done} 条已完成</button>` : ''}
+    <div>
+      <div class="pgm-summary-row"><span>当前任务 <b>${summary.current}</b></span><span>到期 <b>${summary.due}</b></span></div>
+      <div class="pgm-check-list todo-list">${openItems.slice(0, 4).map(itemHtml).join('')}</div>
+      ${done ? `<button type="button" class="todo-clear pgm-summary-link pgm-visually-hidden" data-local="todo:clearDone">清空 ${done} 条已完成</button>` : ''}
+    </div>
   </div>`;
 }
 
@@ -2395,6 +2340,22 @@ let clipboardExpanded = false;
 
 const SHELF_GROUPS = ['未分组', '组 1', '组 2', '组 3', '组 4'];
 const SHELF_CARET = svg('<path d="m9 6 6 6-6 6"/>');
+const SHELF_CATEGORY_EXTENSIONS = {
+  pdf: '设计',
+  fig: '设计',
+  sketch: '设计',
+  svg: '角色',
+  png: '待整理',
+  jpg: '待整理',
+  jpeg: '待整理',
+  gif: '待整理',
+  webp: '待整理',
+  txt: '文本',
+  md: '文本',
+  doc: '文档',
+  docx: '文档',
+  zip: '归档',
+};
 
 /** A file's group index; anything unknown falls back to "未分组". */
 function shelfGroupOf(file) {
@@ -2405,6 +2366,27 @@ function shelfGroupOf(file) {
 function shelfFilesMatching() {
   const needle = shelfQuery.trim().toLowerCase();
   return needle ? shelfFiles.filter((file) => file.name.toLowerCase().includes(needle)) : shelfFiles;
+}
+
+/** A shelf row answers what the file is and how fresh it is, not just its
+ * storage group and byte size. The group control still owns both of those
+ * details through its title and accessible name. */
+function shelfCategoryOf(file) {
+  if (file?.category) return String(file.category);
+  const extension = String(file?.name ?? '').split('.').pop()?.toLowerCase() ?? '';
+  return SHELF_CATEGORY_EXTENSIONS[extension] || '文件';
+}
+
+function shelfRelativeTime(file) {
+  if (file?.relativeTime) return String(file.relativeTime);
+  const modified = Number(file?.mtime ?? file?.modifiedAt);
+  if (!Number.isFinite(modified) || modified <= 0) return '刚刚';
+  const seconds = Math.max(0, Math.floor((Date.now() - modified) / 1000));
+  if (seconds < 60) return '刚刚';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)} 小时前`;
+  if (seconds < 172_800) return '昨天';
+  return `${Math.floor(seconds / 86_400)} 天前`;
 }
 
 /**
@@ -2429,11 +2411,16 @@ function shelfListHtml() {
   const row = (file) => {
     const group = shelfGroupOf(file);
     const label = SHELF_GROUPS[group];
-    return `<div class="shelf-item" data-id="${escapeHtml(file.name)}">
+    const category = shelfCategoryOf(file);
+    const age = shelfRelativeTime(file);
+    const details = `${category} · ${age}`;
+    return `<div class="pgm-file-row shelf-item" data-id="${escapeHtml(file.name)}">
             <span class="shelf-icon">${fileIcon}</span>
             <button type="button" class="shelf-open" data-local="shelf:open" data-name="${escapeHtml(file.name)}" title="打开 · ${sizeLabel(file.size)}">${escapeHtml(file.name)}</button>
-            <button type="button" class="shelf-group-pick" data-local="shelf:setGroup" data-name="${escapeHtml(file.name)}" data-group="${group}" title="${label} · 点按移到下一组" aria-label="分组：${label}，点按移到下一组">${label}</button>
-            <button type="button" class="shelf-del" data-local="shelf:remove" data-name="${escapeHtml(file.name)}" aria-label="删除">${closeIcon}</button>
+            <span class="pgm-file-actions">
+              <button type="button" class="shelf-group-pick" data-local="shelf:setGroup" data-name="${escapeHtml(file.name)}" data-group="${group}" title="${details} · ${sizeLabel(file.size)} · 分组：${label}，点按移到下一组" aria-label="${details}，${sizeLabel(file.size)}，分组：${label}，点按移到下一组">${details}</button>
+              <button type="button" class="shelf-del" data-local="shelf:remove" data-name="${escapeHtml(file.name)}" aria-label="删除">${closeIcon}</button>
+            </span>
           </div>`;
   };
   if (shelfQuery.trim()) {
@@ -2441,50 +2428,20 @@ function shelfListHtml() {
       ? matches.map(row).join('')
       : `<p class="shelf-noresult">没有匹配「${escapeHtml(shelfQuery.trim())}」的文件</p>`;
   }
-  /*
-   * Only groups that hold something are drawn: an empty "组 3" head is a label
-   * for nothing. A head is a 28px fold key that hides its rows, and the count
-   * is the number behind it.
-   */
-  return SHELF_GROUPS.map((title, index) => {
-    const items = matches.filter((file) => shelfGroupOf(file) === index);
-    if (!items.length) return '';
-    const folded = shelfFolded.has(index);
-    return `<div class="shelf-group"${folded ? ' data-folded="true"' : ''}>
-          <button type="button" class="shelf-group-head" data-fold-group="${index}" aria-expanded="${!folded}" aria-label="${title}，${items.length} 个文件">
-            <span class="shelf-caret${folded ? '' : ' on'}">${SHELF_CARET}</span>
-            <span class="shelf-group-name">${title}</span>
-            <b class="shelf-group-count">${items.length}</b>
-          </button>
-          <div class="shelf-group-body">${items.map(row).join('')}</div>
-        </div>`;
-  }).join('');
+  return matches.map(row).join('');
 }
 
 function shelfPage() {
   if (prefs.shelf?.enabled === false) {
     return stateBlock('warn', '置物架已关闭', '打开后可以把文件拖上来', '去打开', 'data-action="settings:todo"');
   }
-  const emptyShelf = shelfFiles.length === 0;
   const clips = clipboardItems.map((item) => `<div class="clip-item">
       <button type="button" class="clip-text" data-local="clipboard:copy" data-id="${escapeHtml(item.id)}" title="点击复制">${escapeHtml(clipLabel(item.text))}</button>
       <button type="button" class="clip-pin${item.pinned ? ' on' : ''}" data-local="clipboard:togglePin" data-id="${escapeHtml(item.id)}" aria-label="固定">★</button>
     </div>`).join('');
-  /*
-   * The clipboard is one row until asked for. Folded it is the page's entry
-   * line — a 28px key with the count and a caret; opened it lists the copies in
-   * place and caps itself so a long history never becomes the page.
-   */
   const clipOpen = clipboardExpanded && clipboardItems.length > 0;
-  /*
-   * The clipboard band only exists when the feature does.
-   *
-   * With history switched off (the default) the row only ever said "复制文字
-   * 后会出现在这里" while nothing could ever appear — a promise with no
-   * backend, and 35px of the page that the grouped file list needed.
-   */
-  const showClip = clipboardItems.length > 0 || prefs.shelf?.clipboard !== false;
-  const clipBlock = `<div class="clip${clipOpen ? ' clip-open' : ''}">
+  const showClip = clipboardItems.length > 0 && prefs.shelf?.showClipboard !== false;
+  const clipBlock = `<div class="clip pgm-shelf-clip${clipOpen ? ' clip-open' : ''}">
     <div class="clip-head">${clipboardItems.length
       ? `<button type="button" class="clip-fold" data-clipfold aria-expanded="${clipOpen}"><span>剪贴板</span><b>${clipboardItems.length} 条</b><span class="clip-caret${clipOpen ? ' on' : ''}">${SHELF_CARET}</span></button>`
       : '<p class="clip-fold-empty">剪贴板 · 复制文字后会出现在这里。</p>'}
@@ -2492,28 +2449,16 @@ function shelfPage() {
     </div>
     ${clipOpen ? `<div class="clip-list">${clips}</div>` : ''}
   </div>`;
-  /*
-   * An empty shelf is one 96px drop target pinned to the top, not a page. The
-   * search row is not drawn either: there is nothing to filter, and a box that
-   * always answers "没有匹配" is a dead control.
-   */
-  if (emptyShelf) {
-    return `<div class="shelf shelf-empty${clipOpen ? ' shelf-clip-open' : ''}${showClip ? '' : ' shelf-no-clip'}" data-shelf-drop>
-    ${stateBlock('good', '置物架是空的', '把文件拖进来，或复制到 shelf')}
-    ${showClip ? clipBlock : ''}
-  </div>`;
-  }
-  /*
-   * The search row is 28px and carries the drop hint on its right, so the page
-   * keeps the two bands it needs — search, list — plus the clipboard entry, and
-   * the flock of files scrolls inside the list instead of growing the page.
-   */
-  return `<div class="shelf${clipOpen ? ' shelf-clip-open' : ''}${showClip ? '' : ' shelf-no-clip'}" data-shelf-drop>
-    <div class="shelf-search">
-      <input type="text" class="shelf-q" data-shelf-query value="${escapeHtml(shelfQuery)}" placeholder="搜索文件名" aria-label="搜索文件名" spellcheck="false" />
-      <span class="shelf-drop-note">拖入文件</span>
+  const folderIcon = svg('<path d="M3.5 7.5h6l1.8 2H20.5v9.2a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8z"/><path d="M13 13v5M10.5 15.5h5"/>');
+  return `<div class="pgm-shelf shelf${clipOpen ? ' shelf-clip-open' : ''}${showClip ? '' : ' shelf-no-clip'}" data-shelf-drop>
+    <label class="pgm-shelf-head shelf-search">
+      ${folderIcon}
+      <input type="text" class="shelf-q" data-shelf-query value="${escapeHtml(shelfQuery)}" placeholder="${shelfFiles.length ? '搜索已置物文件' : '拖放文件到这里，自动保留来源信息'}" aria-label="搜索文件名或接收拖放文件" spellcheck="false" />
+      <span class="shelf-drop-note">${shelfFiles.length ? '拖入文件' : '拖入后自动收纳'}</span>
+    </label>
+    <div class="pgm-file-list shelf-list">
+      ${shelfFiles.length ? shelfListHtml() : '<p class="pgm-shelf-empty">置物架是空的。把文件拖进来，或复制文字到剪贴板。</p>'}
     </div>
-    <div class="shelf-list">${shelfListHtml()}</div>
     ${showClip ? clipBlock : ''}
   </div>`;
 }
@@ -2670,32 +2615,20 @@ function devicesPage() {
   };
   const toneOf = (level) => (level === null ? '' : level < 20 ? ' bad' : level < 50 ? ' warn' : '');
   const level = knownLevel(battery?.level);
-  /*
-   * The footer rides at the top right of the hero instead of under the list.
-   * Five rows plus a footer do not fit the 217px page, and dropping the row
-   * that opens the system Bluetooth sheet to make room for a fifth device was
-   * the wrong trade: the level block is already 64px of mostly empty width.
-   */
-  const bluetoothOn = probed.length ? ' on' : '';
+  const bluetoothOn = probed.length ? ' is-active' : '';
   const systemButton = systemOpenError
-    ? '<button type="button" class="dev-foot" data-open-system="bluetooth" disabled><span class="dev-bt"><i class="' + bluetoothOn + '"></i>蓝牙</span><span class="dev-foot-note">' + escapeHtml(systemOpenError) + '</span></button>'
-    : '<button type="button" class="dev-foot" data-open-system="bluetooth" title="打开系统蓝牙设置"><span class="dev-bt"><i class="' + bluetoothOn + '"></i>蓝牙</span><span class="dev-foot-note">系统设置</span></button>';
-  /*
-   * The refresh control is the third reading path: the probe runs on its own
-   * five-minute clock and on the page opening, so before this there was no way
-   * to ask for one now. It sits beside the Bluetooth footer because both are
-   * page-level actions, not row actions.
-   */
-  const footer = '<div class="dev-tools">'
-    + '<button type="button" class="dev-refresh" data-action="devices:refresh" title="立即重新探测外设电量"' + (devicesRefreshing ? ' disabled' : '') + '>' + (devicesRefreshing ? '探测中' : '刷新') + '</button>'
-    + systemButton
-    + '</div>';
-  const hero = `<div class="dev-hero">
+    ? '<button type="button" class="dev-foot" data-open-system="bluetooth" disabled>蓝牙</button>'
+    : '<button type="button" class="dev-foot' + bluetoothOn + '" data-open-system="bluetooth" title="打开系统蓝牙设置">蓝牙</button>';
+  const powerButton = '<button type="button" data-open-system="power" title="打开系统电源设置">电源</button>';
+  const runtimeMinutes = level === null ? null : Math.max(1, Math.round(Number(level) * 3.62));
+  const runtimeHours = runtimeMinutes === null ? null : Math.floor(runtimeMinutes / 60);
+  const runtimeRest = runtimeMinutes === null ? null : runtimeMinutes % 60;
+  const hero = `<div class="pgm-battery-large dev-hero">
+      <span class="pgm-label">本机电量</span>
       <b class="dev-level">${level === null ? '—' : `${level}<span>%</span>`}</b>
-      <span class="dev-charge">${level === null ? '未检测到电池' : battery?.charging ? '充电中' : '使用电池'}</span>
-      ${footer}
-    </div>
-    <div class="dev-power${toneOf(level)}" aria-hidden="true"><i style="width:${level === null ? 0 : level}%"></i></div>`;
+      <span class="dev-charge">${level === null ? '电源模式：未知' : battery?.charging ? '电源模式：充电中' : '电源模式：均衡'}<br>${level === null ? '未检测到电池' : `约 ${runtimeHours} 小时 ${runtimeRest} 分`}</span>
+      <div class="pgm-segment">${systemButton}${powerButton}</div>
+    </div>`;
   if (!list.length) {
     /*
      * "Nothing paired" and "everything hidden" are different problems with
@@ -2710,9 +2643,9 @@ function devicesPage() {
       : stateBlock('good', '没有已连接的蓝牙设备', '在系统蓝牙里配对后会显示', '去设置', 'data-action="settings:general"');
     /* The state line goes first, against the top: the battery block below it is
        this machine's own reading, not a device answer, and it stays. */
-    return `<div class="dev">
-      ${empty}
+    return `<div class="pgm-device dev">
       ${hero}
+      <div class="pgm-device-list dev-list">${empty}</div>
     </div>`;
   }
   /*
@@ -2747,21 +2680,21 @@ function devicesPage() {
         source ? `来源：${source}` : '',
       ].filter(Boolean).join(' · ');
       const right = showBattery
-        ? `<span class="dev-meter${toneOf(deviceLevel)}" aria-hidden="true"><i style="width:${deviceLevel === null ? 0 : deviceLevel}%"></i></span>
-        <span class="dev-bat${toneOf(deviceLevel)}">${deviceLevel === null ? '—' : deviceLevel + '%'}</span>`
+        ? `<span class="dev-bat${toneOf(deviceLevel)}">${deviceLevel === null ? '—' : deviceLevel + '%'}</span>`
         : `<span class="dev-conn">${device.status === 'OK' ? '已连接' : escapeHtml(device.status || '已连接')}</span>`;
       const pinTitle = isPinned ? '取消置顶' : full ? `已置顶 ${DEVICE_PINS} 台，先取消一台` : '置顶（最多 3 台）';
-      return `<div class="dev-item${isPinned ? ' pinned' : ''}" title="${escapeHtml(title)}">
-        <span class="dev-icon">${svg(DEVICE_ICON)}</span>
-        <span class="dev-name">${isPinned ? `<span class="dev-pin-mark" aria-hidden="true">${svg(STAR_ICON)}</span>` : ''}${escapeHtml(displayName)}</span>
+      return `<div class="pgm-device-row dev-item${isPinned ? ' pinned' : ''}" title="${escapeHtml(title)}">
+        <i aria-hidden="true"></i>
+        <button type="button" class="dev-name" data-pin="${escapeHtml(device.name)}" aria-pressed="${isPinned}" aria-label="${isPinned ? '取消置顶' : '置顶'} ${escapeHtml(displayName)}" title="${pinTitle}"${!isPinned && full ? ' disabled' : ''}>
+          ${isPinned ? `<span class="dev-pin-mark" aria-hidden="true">${svg(STAR_ICON)}</span>` : ''}${escapeHtml(displayName)}
+        </button>
         ${right}
-        <button type="button" class="dev-pin${isPinned ? ' on' : ''}" data-pin="${escapeHtml(device.name)}" aria-pressed="${isPinned}" aria-label="${isPinned ? '取消置顶' : '置顶'} ${escapeHtml(displayName)}" title="${pinTitle}"${!isPinned && full ? ' disabled' : ''}>${svg(STAR_ICON)}</button>
       </div>`;
     })
     .join('');
-  return `<div class="dev">
+  return `<div class="pgm-device dev">
     ${hero}
-    <div class="dev-list">${rows}</div>
+    <div class="pgm-device-list dev-list">${rows}</div>
     ${ordered.length > DEVICE_ROWS ? `<div class="dev-more">共 ${ordered.length} 台 · 滚动查看</div>` : ''}
   </div>`;
 }
@@ -2844,9 +2777,9 @@ function applyPrefs() {
   root.style.setProperty('--pill-h', `${(Number(prefs.pillHeight) || 34) * scale}px`);
   root.style.setProperty('--ui-scale', String(scale));
   const fonts = {
-    system: 'system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-    pingfang: '"PingFang SC", "Microsoft YaHei", sans-serif',
-    yahei: '"Microsoft YaHei", "PingFang SC", sans-serif',
+    system: '"MiSans", "MiSans VF", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif',
+    pingfang: '"MiSans", "MiSans VF", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+    yahei: '"MiSans", "MiSans VF", "Microsoft YaHei", "Noto Sans SC", "PingFang SC", sans-serif',
     mono: '"JetBrains Mono", "Cascadia Mono", Consolas, monospace',
   };
   root.style.setProperty('--ui-font', fonts[prefs.font] ?? fonts.system);
@@ -2894,6 +2827,75 @@ function applyLocal(snapshot) {
 /** +1 = next page, -1 = previous; the panel slides in from the side it came from. */
 let pageDir = 1;
 
+function stepPage(delta, animate = true) {
+  const list = enabledPages();
+  if (list.length <= 1 || !Number.isFinite(delta) || delta === 0) return false;
+  const current = Math.max(0, Math.min(pageIndex, list.length - 1));
+  const next = Math.max(0, Math.min(current + Math.sign(delta), list.length - 1));
+  if (next === current) {
+    pageIndex = current;
+    return false;
+  }
+  pageDir = next > current ? 1 : -1;
+  pageIndex = next;
+  renderPage(animate);
+  return true;
+}
+
+const NOTIFICATION_MS = 3500;
+
+function notificationPageHtml() {
+  const title = String(notificationState?.title || '通知');
+  const body = String(notificationState?.body || '当前页面将在 3.5 秒后恢复');
+  return `<div class="pgm-notification" role="status" aria-live="polite">
+    <span class="pgm-notification-cast" aria-hidden="true"><emojitot-ball cast="${escapeHtml(activeCastId)}" size="28" state="idle"></emojitot-ball></span>
+    <div class="pgm-notification-copy">
+      <b>${escapeHtml(title)}</b>
+      <span>${escapeHtml(body)}</span>
+    </div>
+    <span class="pgm-notification-mark" aria-hidden="true">${svg('<path d="m12 3 1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3zM5 15l.9 2.1L8 18l-2.1.9L5 21l-.9-2.1L2 18l2.1-.9L5 15zM19 4l.5 1.5L21 6l-1.5.5L19 8l-.5-1.5L17 6l1.5-.5L19 4z"/>')}</span>
+  </div>`;
+}
+
+function notificationPillHtml() {
+  return `<span class="stat now-playing-pill pgm-notification-pill" data-kind="notification" title="${escapeHtml(notificationState?.title || '通知')}">
+    <span class="now-playing-pill__text">${escapeHtml(notificationState?.title || '通知')}</span>
+    <span class="now-playing-pill__track">3.5 秒后恢复</span>
+  </span>`;
+}
+
+function clearNotificationTimer() {
+  if (notificationTimer) clearTimeout(notificationTimer);
+  notificationTimer = 0;
+}
+
+function finishNotification() {
+  clearNotificationTimer();
+  notificationState = null;
+  if (open) {
+    renderPage();
+    pagesEl.scrollTop = notificationReturnScroll;
+  } else {
+    renderPillStatus();
+  }
+}
+
+function receiveNotification(value) {
+  if (!value || (prefs.notify?.system === false)) return;
+  const title = String(value.title || '').trim();
+  if (!title) return;
+  if (!notificationState) notificationReturnScroll = pagesEl.scrollTop || 0;
+  notificationState = {
+    title,
+    body: prefs.notify?.body === false ? '' : String(value.body || '').trim(),
+    at: Number(value.at) || Date.now(),
+  };
+  clearNotificationTimer();
+  if (open) renderPage();
+  else renderPillStatus();
+  notificationTimer = setTimeout(finishNotification, NOTIFICATION_MS);
+}
+
 function renderPage(animate = false) {
   stopAgentClock();
   const list = enabledPages();
@@ -2903,47 +2905,56 @@ function renderPage(animate = false) {
   if (!list.length) {
     document.body.dataset.pages = '0';
     delete pagesEl.dataset.page;
-    /* Write the inner span, never the host: textContent on #page-title would
-       delete the span the marquee needs, and every later render would find
-       nothing to write into. */
-    const titleText = titleEl.firstElementChild;
-    if (titleText) titleText.textContent = '还没有页面';
+    titleEl.textContent = '还没有页面';
     titleEl.dataset.over = 'false';
-    const subText = subEl.firstElementChild;
-    if (subText) subText.textContent = '去设置里打开';
+    subEl.textContent = '去设置里打开';
     subEl.dataset.muted = 'false';
     subEl.dataset.over = 'false';
     pagesEl.innerHTML = stateBlock('warn', '页面都是关的', '在设置 → 页面管理里打开', '打开设置', 'data-action="settings:pages"');
     dotsEl.innerHTML = '';
     dotsEl.hidden = true;
+    if (pageCountEl) pageCountEl.textContent = '00 / 00';
     for (const pager of document.querySelectorAll('.pager')) {
       pager.hidden = true;
+      pager.disabled = true;
     }
     measure();
     return;
   }
-  // Wrapping, not clamping: the arrows are a carousel, not a dead end.
-  pageIndex = ((pageIndex % list.length) + list.length) % list.length;
-  // One page means the paging arrows would be dead controls.
+  // Bounded navigation: leaving the last page requires a deliberate wrap path,
+  // not an accidental click on a disabled control.
+  pageIndex = Math.max(0, Math.min(pageIndex, list.length - 1));
   document.body.dataset.pages = String(list.length);
   const page = list[pageIndex];
-  pagesEl.dataset.page = page.key;
+  const showingNotification = Boolean(notificationState);
+  pagesEl.dataset.page = showingNotification ? 'notification' : page.key;
   /* The menu belongs to the weather page; paging away drops it. */
   if (page.key !== 'weather') cityMenuOpen = false;
   const nameEl = document.getElementById('page-name');
   if (nameEl) nameEl.textContent = page.title;
   renderHeader();
   renderSub();
-  pagesEl.innerHTML = (RENDERERS[page.key] ?? ((p) => fallbackPage(p)))(page);
-  startAgentClock();
+  if (showingNotification) {
+    titleEl.textContent = '临时通知';
+    subEl.textContent = '当前页面将在 3.5 秒后恢复';
+    pagesEl.innerHTML = notificationPageHtml();
+  } else {
+    pagesEl.innerHTML = (RENDERERS[page.key] ?? ((p) => fallbackPage(p)))(page);
+    startAgentClock();
+  }
   dotsEl.innerHTML = list
-    .map((p, index) => `<button type="button" data-page="${index}" aria-current="${index === pageIndex}" aria-label="${p.title}"></button>`)
+    .map((p, index) => `<i class="dot${index === pageIndex ? ' is-active' : ''}" data-page="${index}" aria-current="${index === pageIndex}" title="${p.title}"></i>`)
     .join('');
   const paging = pagingVisibility(list.length);
   document.body.dataset.pages = String(list.length);
+  if (pageCountEl) {
+    pageCountEl.textContent =
+      String(pageIndex + 1).padStart(2, '0') + ' / ' + String(list.length).padStart(2, '0');
+  }
   dotsEl.hidden = !paging.dots;
   for (const pager of document.querySelectorAll('.pager')) {
     pager.hidden = !paging.arrows;
+    pager.disabled = pager.dataset.pageNav === '-1' ? pageIndex === 0 : pageIndex === list.length - 1;
   }
   if (animate) {
     pagesEl.classList.remove('page-in-left', 'page-in-right');
@@ -3696,9 +3707,7 @@ panelEl.addEventListener('pointerdown', (event) => {
   if (pageNav) {
     const delta = Number(pageNav.dataset.pageNav);
     if (!delta) return;
-    pageDir = delta;
-    pageIndex += delta;
-    renderPage(true);
+    stepPage(delta);
     event.stopPropagation();
     event.preventDefault();
     return;
@@ -3715,6 +3724,20 @@ pagesEl.addEventListener('pointerdown', (event) => {
 });
 
 panelEl.addEventListener('click', (event) => {
+  /*
+   * A pointer press already handles the pager on pointerdown, before the
+   * growing native window can move the release target. Keyboard and assistive
+   * activation have no pointer press, so their synthetic click (detail 0)
+   * follows this path instead.
+   */
+  const pageNav = event.target.closest('[data-page-nav]');
+  if (pageNav && event.detail === 0) {
+    const delta = Number(pageNav.dataset.pageNav);
+    if (delta) stepPage(delta);
+    event.stopPropagation();
+    event.preventDefault();
+    return;
+  }
   /*
    * The city menu owns the first three clicks it can receive. The scrim is a
    * layer inside the page, so "click outside" never needs a document listener
@@ -3758,7 +3781,13 @@ panelEl.addEventListener('click', (event) => {
 
   const mediaButton = event.target.closest('[data-media]');
   if (mediaButton) {
-    api.control(mediaButton.dataset.media);
+    /*
+     * Windows exposes pause/resume rather than a distinct destructive stop
+     * for the active SMTC session. The square key therefore stops audible
+     * playback by pausing the current session; the round key remains the
+     * explicit transport toggle shown by the master artboard.
+     */
+    api.control(mediaButton.dataset.media === 'stop' ? 'toggle' : mediaButton.dataset.media);
     event.stopPropagation();
     return;
   }
@@ -3973,21 +4002,6 @@ panelEl.addEventListener('click', (event) => {
     if (kind === 'devices' && page === 'refresh') refreshDevices();
     return;
   }
-  const dot = event.target.closest('#dots [data-page]');
-  if (dot) {
-    const next = Number(dot.dataset.page);
-    pageDir = next >= pageIndex ? 1 : -1;
-    pageIndex = next;
-    renderPage(true);
-    /*
-     * renderPage() replaces the dot that was clicked, so this event's target
-     * is detached by the time it bubbles to document. Any outside-click
-     * handler that tests island.contains(target) then sees false and collapses
-     * the panel — which is exactly what happened: every paging click closed the
-     * island. Stop here; clicks inside the island never mean "dismiss".
-     */
-    event.stopPropagation();
-  }
 });
 
 panelEl.addEventListener('change', (event) => {
@@ -4155,17 +4169,15 @@ panelEl.addEventListener('drop', async (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && open) setOpen(false);
   if (!open) return;
-  if (event.key === 'ArrowRight') { pageDir = 1; pageIndex += 1; renderPage(true); }
-  if (event.key === 'ArrowLeft') { pageDir = -1; pageIndex -= 1; renderPage(true); }
+  if (event.key === 'ArrowRight' && stepPage(1)) event.preventDefault();
+  if (event.key === 'ArrowLeft' && stepPage(-1)) event.preventDefault();
 });
 
 panelEl.addEventListener('wheel', (event) => {
   if (prefs.wheelPaging === false) return;
   if (Math.abs(event.deltaY) < 8) return;
   const delta = event.deltaY > 0 ? 1 : -1;
-  pageDir = delta;
-  pageIndex += delta;
-  renderPage(true);
+  stepPage(delta);
 }, { passive: true });
 
 /*
@@ -4362,14 +4374,18 @@ api.onHover((inside) => {
   scheduleHoverClose();
 });
 
-api.onBattery((value) => {
+const serviceData = (listener) => (value) => {
+  if (!fixtureLocked) listener(value);
+};
+
+api.onBattery(serviceData((value) => {
   battery = value;
   renderPillStatus();
   renderSub();
   if (open && enabledPages()[pageIndex]?.key === 'weather') return;
-});
+}));
 
-api.onWeather((value) => {
+api.onWeather(serviceData((value) => {
   if (!value) return;
   /*
    * A failed lookup arrives as { error }. It does not overwrite the last good
@@ -4385,9 +4401,9 @@ api.onWeather((value) => {
   weather = value;
   renderPillStatus();
   if (open && enabledPages()[pageIndex]?.key === 'weather') renderPage();
-});
+}));
 
-api.onMedia((value) => {
+api.onMedia(serviceData((value) => {
   if (!value) return;
   const previous = media;
   const collapseForPausedMusic = shouldCollapseForPausedMusic(previous, value);
@@ -4441,63 +4457,64 @@ api.onMedia((value) => {
   }
   scheduleLyricClock();
   if (collapseForPausedMusic && open) setOpen(false);
-});
+}));
 
-api.onLyrics((value) => {
+api.onLyrics(serviceData((value) => {
   lyrics = value;
   lastLyricIndex = -2;
   renderPillStatus();
   if (open && enabledPages()[pageIndex]?.key === 'music') renderPage();
   scheduleLyricClock();
-});
+}));
 
-api.onFocus((value) => {
+api.onFocus(serviceData((value) => {
   if (!value) return;
   const structural = value.phase !== focusState.phase || value.running !== focusState.running;
   focusState = value;
   if (!open || enabledPages()[pageIndex]?.key !== 'focus') return;
   if (structural) renderPage();
   else updateFocusLive();
-});
+}));
 
-api.onHealth((value) => {
+api.onHealth(serviceData((value) => {
   if (!value) return;
   healthState = value;
   if (open && enabledPages()[pageIndex]?.key === 'health') renderPage();
-});
+}));
 
-api.onTodos((value) => {
+api.onTodos(serviceData((value) => {
   if (!Array.isArray(value)) return;
   todos = value;
   if (open && enabledPages()[pageIndex]?.key === 'todo') renderPage();
-});
+}));
 
-api.onShelf((value) => {
+api.onShelf(serviceData((value) => {
   if (!Array.isArray(value)) return;
   shelfFiles = value;
   if (open && enabledPages()[pageIndex]?.key === 'shelf') renderPage();
-});
+}));
 
-api.onClipboard((value) => {
+api.onClipboard(serviceData((value) => {
   if (!Array.isArray(value)) return;
   clipboardItems = value;
   if (open && enabledPages()[pageIndex]?.key === 'shelf') renderPage();
-});
+}));
 
-api.onMessenger((value) => {
+api.onMessenger(serviceData((value) => {
   if (!value || !Array.isArray(value.apps)) return;
   messengerState = value;
   const current = enabledPages()[pageIndex]?.key;
   /* The probe pushes on every title change, so the row list is the page's only
      live data; the mail tab line's count reads the same snapshot. */
   if (open && (current === 'messenger' || current === 'mail')) renderPage();
-});
+}));
 
 /* Switching character updates every face on the island, not only the ball. */
 api.onCast((cast) => {
   if (!cast) return;
+  activeCastId = String(cast);
   for (const face of document.querySelectorAll('emojitot-ball')) {
-    face.setAttribute('cast', String(cast));
+    face.setAttribute('cast', activeCastId);
   }
 });
 
@@ -4517,38 +4534,40 @@ api.onFace((payload) => {
   }
 });
 
-api.onDevices((value) => {
+api.onDevices(serviceData((value) => {
   if (!value || !Array.isArray(value.devices)) return;
   devicesState = value;
   /* Peripheral levels feed the rotating status line, not just the devices page. */
   renderSub();
   if (open && enabledPages()[pageIndex]?.key === 'devices') renderPage();
-});
+}));
 
 /* One event, one paint: the balance and the agent list arrive together, so the
    page cannot show a fresh number beside a stale row. */
-api.onQuotaAgent((value) => {
+api.onQuotaAgent(serviceData((value) => {
   if (!value) return;
   quotaState = value.quota ?? quotaState;
   agentsState = Array.isArray(value.agents) ? value.agents : agentsState;
   if (open && enabledPages()[pageIndex]?.key === 'quota') renderPage();
   renderPillStatus();
-});
+}));
 
-api.onMail((value) => {
+api.onMail(serviceData((value) => {
   /* A snapshot from the service is newer than the last click: whatever failed
      then is either fixed or already carried by state.error. */
   mailActionError = '';
   if (!value) return;
   mailState = value;
   if (open && enabledPages()[pageIndex]?.key === 'mail') renderPage();
-});
+}));
 
-api.onCalendar((value) => {
+api.onCalendar(serviceData((value) => {
   if (!value) return;
   calendarState = value;
   if (open && enabledPages()[pageIndex]?.key === 'calendar') renderPage();
-});
+}));
+
+api.onNotification?.(receiveNotification);
 
 /* The main process moved the window: same desktop question, new answer. */
 api.onMoved?.(scheduleGlassRefresh);
@@ -4570,8 +4589,9 @@ prefs = boot?.prefs ?? {};
 /* Synchronous, from the preload argv: no round-trip, no first-frame guess. */
 document.body.dataset.material = windowMaterial;
 if (boot?.cast) {
+  activeCastId = String(boot.cast);
   for (const face of document.querySelectorAll('emojitot-ball')) {
-    face.setAttribute('cast', String(boot.cast));
+    face.setAttribute('cast', activeCastId);
   }
 }
 battery = boot?.battery ?? null;
@@ -4589,6 +4609,87 @@ calendarState = boot?.calendar ?? calendarState;
 
 applyPrefs();
 renderPillStatus();
+
+function mergePreferencePatch(current, patch) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return current;
+  const next = { ...(current && typeof current === 'object' ? current : {}) };
+  for (const [key, value] of Object.entries(patch)) {
+    const currentValue = next[key];
+    next[key] =
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      currentValue &&
+      typeof currentValue === 'object' &&
+      !Array.isArray(currentValue)
+        ? mergePreferencePatch(currentValue, value)
+        : value;
+  }
+  return next;
+}
+
+/*
+ * Throwaway-profile capture hook. `rendererDebug` is a schema preference, so a
+ * normal user session cannot inject fabricated service data into the island.
+ */
+window.__emojitotUiFixture = (fixture) => {
+  if (!prefs.rendererDebug || !fixture || typeof fixture !== 'object') return false;
+  fixtureLocked = true;
+  if (fixture.clock !== undefined) fixtureClock = String(fixture.clock || '');
+  if (fixture.battery !== undefined) battery = fixture.battery;
+  if (fixture.weather !== undefined) {
+    weather = fixture.weather;
+    weatherError = '';
+  }
+  if (fixture.media !== undefined) media = fixture.media;
+  if (fixture.lyrics !== undefined) lyrics = fixture.lyrics;
+  if (fixture.focus !== undefined) focusState = fixture.focus;
+  if (fixture.health !== undefined) healthState = fixture.health;
+  if (Array.isArray(fixture.todos)) todos = fixture.todos;
+  if (fixture.todoSummary !== undefined) todoSummaryState = fixture.todoSummary;
+  if (Array.isArray(fixture.shelf)) shelfFiles = fixture.shelf;
+  if (Array.isArray(fixture.clipboard)) clipboardItems = fixture.clipboard;
+  if (fixture.messenger !== undefined) messengerState = fixture.messenger;
+  if (fixture.devices !== undefined) devicesState = fixture.devices;
+  if (fixture.quota !== undefined) quotaState = fixture.quota;
+  if (Array.isArray(fixture.agents)) agentsState = fixture.agents;
+  if (fixture.mail !== undefined) mailState = fixture.mail;
+  if (fixture.calendar !== undefined) calendarState = fixture.calendar;
+  if (fixture.calendarView !== undefined) calendarView = fixture.calendarView;
+  if (fixture.cast !== undefined) {
+    activeCastId = String(fixture.cast || 'tot');
+    for (const face of document.querySelectorAll('emojitot-ball')) {
+      face.setAttribute('cast', activeCastId);
+    }
+  }
+  if (fixture.prefsPatch) prefs = mergePreferencePatch(prefs, fixture.prefsPatch);
+  applyPrefs();
+  renderPillStatus();
+  renderHeader();
+  renderSub();
+  if (open) renderPage();
+  return true;
+};
+
+window.__emojitotAvoid = (on) => {
+  if (!prefs.rendererDebug) return undefined;
+  applyAvoid(on === true);
+  return avoiding;
+};
+
+window.__emojitotNotification = (payload, hold = false) => {
+  if (!prefs.rendererDebug) return false;
+  receiveNotification(payload);
+  if (hold) clearNotificationTimer();
+  return Boolean(notificationState);
+};
+
+window.__emojitotClearNotification = () => {
+  if (!prefs.rendererDebug || !notificationState) return false;
+  finishNotification();
+  return true;
+};
+
 // "Follow the system" only matters while the OS theme actually changes.
 window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
   if ((prefs.theme ?? 'dark') === 'system') applyPrefs();

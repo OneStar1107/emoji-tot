@@ -1,9 +1,9 @@
 # 界面测量 / UI audit
 
-一条命令，把岛和设置窗的布局契约重新量一遍。它替代了此前每轮临时写在 `.agents/` 里的 CDP 脚本：当前同样的 11 + 15 页、同样的阈值，换一轮开发不用重写。
+一条命令，把岛和设置窗的布局契约重新量一遍。它替代了此前每轮临时写在 `.agents/` 里的 CDP 脚本：当前同样的 11 + 16 页、同样的阈值，换一轮开发不用重写。
 
 ```powershell
-pnpm ui:audit                  # 默认一轮：11 个岛页 + 15 个设置页
+pnpm ui:audit                  # 默认一轮：11 个岛页 + 16 个设置页
 pnpm ui:audit -- --stress      # 压力轮：等宽字体 + 字重 600 + 缩放 140%（可与 --skin/--skins 组合）
 pnpm ui:audit -- --json        # stdout 只有一份 JSON，适合接 CI
 pnpm ui:audit -- --port 9580   # 指定 CDP 端口
@@ -30,7 +30,7 @@ pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：三套皮肤�
 | 设置窗（每页） | 被裁文字 | 同岛，但以 `#content` 为边界；纵向滚动是设置窗的正常行为，不算裁切 |
 | 设置窗（每页） | 控件高度 | 同上，< 20px |
 
-另有一项对账：页数取自 `src/shared/schema.js` 的 `PAGE_MANIFEST`（当前 11）和 `SETTINGS_NAV`（当前 15），实际页数取自运行中的 DOM（`#dots button`、`#rail .rail-item`）。两边对不上时报告 `page-count`，防止某一页没渲染出来却悄悄少测一页。
+另有一项对账：页数取自 `src/shared/schema.js` 的 `PAGE_MANIFEST`（当前 11）和 `SETTINGS_NAV`（当前 16），实际页数取自运行中的 DOM（`#dots button`、`#rail .rail-item`）。两边对不上时报告 `page-count`，防止某一页没渲染出来却悄悄少测一页。
 
 测量时临时 profile 会打开全部页面（`devices` 默认是关的），并关掉动画与自动避让，保证量到的是布局而不是过渡帧。
 
@@ -39,7 +39,7 @@ pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：三套皮肤�
 岛有三套皮肤：`frost`（界面名 Liquid Glass，当前是半透明实色）、`solid`（实色）、`plain`（极简）。皮肤改变的是填充、字体与装饰，`.pages` 的 260px 盒高不变；但同一页在 frost 下守得住，不代表在另外两套版下也守得住。所以每套皮肤都要把 11 个岛页重新量一遍。
 
 - `--skin <key>`：把皮肤写进临时 profile 的 `prefs.json`，再启动应用，只测这一套。
-- `--skins all`：按 `frost → solid → plain` 依次起三次应用，每套量 11 个岛页。设置窗 15 页只在第一套（frost）量一次：`skin` 只作用于岛窗口（`island.js applyPrefs() → body[data-skin]`），设置窗不套皮肤、布局完全相同，重新量三遍只会得到三份一样的数字。报告里每个被跳过的设置窗都会注明这一点。
+- `--skins all`：按 `frost → solid → plain` 依次起三次应用，每套量 11 个岛页。设置窗 16 页只在第一套（frost）量一次：`skin` 只作用于岛窗口（`island.js applyPrefs() → body[data-skin]`），设置窗不套皮肤、布局完全相同，重新量三遍只会得到三份一样的数字。报告里每个被跳过的设置窗都会注明这一点。
 
 启动后脚本会读 `document.body.dataset.skin`，和预期不一致就把这一轮判失败：未知皮肤值会静默回退到 frost，报告若还挂着 solid 的标题，量到的就是另一套布局。
 
@@ -49,8 +49,8 @@ pnpm ui:audit -- --skins all --stress  # 皮肤 × 压力矩阵：三套皮肤�
 
 - 想要默认轮的基线，分开跑 `pnpm ui:audit -- --skins all`；矩阵只回答「压力下每套皮肤还守不守得住」。
 - 每轮仍然先把皮肤写进临时 profile 的 `prefs.json`，启动后核对 `body[data-skin]`；没生效就判这一轮失败，避免用 frost 的数字顶着 solid 的标题。
-- 设置窗 15 页照旧只在第一套（frost）量一次；这一轮本身也带压力 prefs（`settings.js` 的 `zoom`、字体与字重同样来自 prefs），所以量到的是「frost @ stress」。设置窗不套皮肤，换另外两套皮肤重测只会拿到同一份数字。
-- 人读模式每一轮的标题是 `== solid @ stress · mono / 600 / 140%`，总表标题是 `Skins @ stress`，最后一行是 `PASS 3 skins @ stress · 33 island pages · 15 settings pages`。
+- 设置窗 16 页照旧只在第一套（frost）量一次；这一轮本身也带压力 prefs（`settings.js` 的 `zoom`、字体与字重同样来自 prefs），所以量到的是「frost @ stress」。设置窗不套皮肤，换另外两套皮肤重测只会拿到同一份数字。
+- 人读模式每一轮的标题是 `== solid @ stress · mono / 600 / 140%`，总表标题是 `Skins @ stress`，最后一行是 `PASS 3 skins @ stress · 33 island pages · 16 settings pages`。
 - `--json` 下 `passes[]` 与 `skins.<key>` 每项都多一个 `stress`（矩阵模式为 `true`），`notes` 会多一条「every skin pass ran at mono / 600 / 140%」。
 - `--skin <一套> --stress` 也合法：只跑那一套的压力轮；设置窗仍只在那一轮量一次，同样带压力 prefs。
 

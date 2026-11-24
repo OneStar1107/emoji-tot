@@ -18,6 +18,7 @@ docs/shots/
 .superpowers/
 apps/desktop/.build-number
 apps/desktop/build-info.json
+apps/desktop/.ui-capture/
 
 # Browser acceptance leaves a Chrome profile behind.
 .chrome-check/
