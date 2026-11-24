@@ -45,6 +45,13 @@ describe('renderCharacter', () => {
     expect(renderCharacter({ body: 'circle', color: 'black', state: 'idle', size: 240 })).toContain('width="240"');
   });
 
+  it('keeps every sticker body free of the upper-left corner glare', () => {
+    for (const body of BODY_IDS) {
+      const svg = renderCharacter({ body, color: 'black', state: 'idle', size: 64, style: 'sticker' });
+      expect(svg).not.toContain('transform="rotate(-28');
+    }
+  });
+
   it('refuses an unknown body by name', () => {
     expect(() => renderCharacter({ body: 'nope', color: 'black', state: 'idle', size: 64 })).toThrow(
       /Unknown body "nope"/,
