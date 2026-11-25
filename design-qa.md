@@ -30,20 +30,20 @@
 ## 对照对象
 
 - 用户缺陷参照：
-  - `C:\Users\hyx11\AppData\Local\Temp\codex-clipboard-457025cd-2ba4-4b7b-b089-78eaf8a54551.png`
+  - `<本机临时目录>/codex-clipboard-457025cd-2ba4-4b7b-b089-78eaf8a54551.png`
   - 2560 × 1598 px，旧版四栏画板，用于定位红框中的裁切缺陷。
 - 当前视觉真值：
-  - `C:\Users\hyx11\.codex\visualizations\2026\11\24\01a20af5-3034-71d3-b9f2-f2324ff75e5d\polar-graphite-master.html`
-  - `E:\项目\EmojiTot\apps\desktop\.ui-capture\master-r2-1440.png`
+  - `<本机 Codex 可视化目录>/2026\11\24\01a20af5-3034-71d3-b9f2-f2324ff75e5d\polar-graphite-master.html`
+  - `apps\desktop\.ui-capture\master-r2-1440.png`
   - 主画板 1440 × 7200 px；有效深色画板区域约 1024 px 宽，1440 px 页面其余区域为查看器留白。
 - 当前实现（1:1 最终基线）：
-  - `E:\项目\EmojiTot\apps\desktop\.ui-capture\final-dark\`
-  - `E:\项目\EmojiTot\apps\desktop\.ui-capture\final-light\`
-  - `E:\项目\EmojiTot\apps\desktop\.ui-capture\current-source-dark\`
-  - `E:\项目\EmojiTot\apps\desktop\.ui-capture\current-source-light\`
+  - `apps\desktop\.ui-capture\final-dark\`
+  - `apps\desktop\.ui-capture\final-light\`
+  - `apps\desktop\.ui-capture\current-source-dark\`
+  - `apps\desktop\.ui-capture\current-source-light\`
 - 已作废（1.5×、布局过期，仅作历史存档，不得用于对照）：
-  - `E:\项目\EmojiTot\apps\desktop\.ui-capture\after-clipping-final\`
-  - `E:\项目\EmojiTot\apps\desktop\.ui-capture\after-clipping-final-light\`
+  - `apps\desktop\.ui-capture\after-clipping-final\`
+  - `apps\desktop\.ui-capture\after-clipping-final-light\`
 
 ## 尺寸、密度与归一化
 
