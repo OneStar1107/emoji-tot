@@ -2,7 +2,7 @@
 
 > **这是什么**：系统里有什么、在哪实现、状态如何、依赖什么、哪些不能乱动。给用户看全貌，给后续 AI 看事实起点。
 > **功能合同**（每个功能必须怎么表现、验收条件、当前到哪一步）在 [../FEATURE-BASELINE.md](../FEATURE-BASELINE.md)。
-> **核对基准**：HEAD `bb435d1`（tag `v0.8.20.26`），核对时间 2026-11-25 18:05（Asia/Hong_Kong）。
+> **核对基准**：HEAD `bb435d1`（tag `v0.8.20.26`），核对时间 2026-11-25 19:00（Asia/Hong_Kong）；真机闸门结果同日实测。
 > **边界**：本目录记录的是本项目当前事实，不是规则来源；行为规则在仓库 `AGENTS.md` 与用户级 `~/.agents/AGENTS.md`。本目录也不取代 PRD、设计规范、测试与 Git 历史。
 
 ## 0. 怎么用、怎么维护
@@ -171,7 +171,12 @@ EmojiTot（Electron 45，只发布 Windows）
 | 偏好矩阵 | `node scripts/settings-audit.mjs --check` | ✅ 81 个偏好路径与文档一致 |
 | 文档数字同步 | `node scripts/sync-docs.mjs --check` | ❌ 5 处过期（见 §9.1） |
 | 文档事实一致性 | `node scripts/docs-consistency.mjs` | ❌ 4 处（README 下载链接指向 v0.8.20.18） |
-| UI 测量 / 真机冒烟 / 站点构建 / 依赖审计 / 敏感扫描 | `pnpm ui:audit`、`pnpm smoke:desktop`、`pnpm check:gallery`、`pnpm audit:ci`、`pnpm scan` | 本轮**未运行**（需要真机窗口/网络；不要当成通过） |
+| UI 测量审计 | `node apps/desktop/scripts/ui-audit.mjs --exe release/win-unpacked/EmojiTot.exe --json` | ✅ 11 岛页 + 16 设置页，0 违规（岛 88 / 设置 326 个文本节点） |
+| 真窗口冒烟 | `pnpm smoke:desktop` | ✅ 36/36（真 Electron + CDP：二次启动、固定 1080×760、示意控件 aria-hidden、11 页管理） |
+| 站点浏览器验收 | `pnpm check:gallery` | ✅ 32/32（真 Chrome：四路由、15 角色/61 表情、焦点、375px、interval 清理） |
+| 静态渲染 | `pnpm preview` | ✅ 51/51 id、61/61 face，0 失败 |
+| 依赖审计 | `pnpm audit:ci` | ✅ No known vulnerabilities |
+| 敏感扫描 | `pnpm scan` | ✅ 文本规则 0 FAIL；23 张大图 WARN 未逐张人工复核 |
 
 结论：**代码测试全绿，文档闸门红**。`pnpm check` 因此当前不能通过，卡在 `docs:check`。
 
@@ -183,6 +188,7 @@ EmojiTot（Electron 45，只发布 Windows）
 - 事实：`sync-docs --check` 报告 `README.md`、`README.en.md`、`docs/ARCHITECTURE.md` 的 `settingsPages` 仍是 15，实际 16（`SETTINGS_NAV` 三组 6+4+6）。
 - 影响：`pnpm check` 红；README 的下载按钮指向旧版。
 - 修法：补 `0.8.20.26` 的 RELEASE-NOTES 条目 → `pnpm docs:sync` → 复跑 `pnpm docs:check`。是否已在 GitHub 发布该 Release 本机未验证，发布前需确认，否则链接会死。
+- 真机复核（2026-11-25）：点击「稍后」「打开下载页」、按 Esc 均无反应，卡片保持打开；主进程 stderr 输出 `[ipc] refused update:open from update — frame`。
 
 ### 9.2 文档与实现对不上的旧描述
 
@@ -201,7 +207,7 @@ EmojiTot（Electron 45，只发布 Windows）
 - 跨语言长文本：`design-qa.md` 明确只覆盖中文 + 暗/浅色；其他语言未验证。
 - 窄屏：产品定位固定尺寸，无 320px 级布局，未验证也不需要。
 - 站点线上：本地 `pnpm preview` 不等于 gh-pages 线上状态；本轮未访问线上。
-- 本轮未跑：`ui:audit`、`smoke:desktop`、`check:gallery`、`audit:ci`、`scan`。
+- 以上 8 项闸门本轮均已跑；仍未验证：跨语言长文本、混合 DPI、线上 gh-pages、23 张 WARN 截图。
 
 ## 10. 改动时同步清单
 

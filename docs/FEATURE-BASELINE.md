@@ -116,7 +116,7 @@
 | 首次引导 | 待验证 | `onboardingDone!==true` 才开；跳过只写 done，完成才写形态/皮肤（白名单） | SURF-17/18/19 |
 | 更新检查 | 已确认 | GitHub latest，正式版且版本更高才通知；8s 超时、6h 周期、忽略 draft/prerelease | RUNTIME-24、SURF-20 |
 | 更新卡出现与去重 | 已确认 | payload 只留 version + ≤2 条 notes；每次运行只弹一次；24h 内不弹；URL 是常量 | SURF-20 |
-| 更新卡「稍后」 | 待验证 | 应写 `snoozeUntil = now + 24h` 并关窗 | SURF-21 |
+| 更新卡「稍后」 | 待验证 | 应写 `snoozeUntil = now + 24h` 并关窗；真机点按无反应（同一 P0） | SURF-21 |
 | 更新卡三个出口 | **开发中（P0）** | 「稍后」「打开下载页」「Esc」全部被 IPC 守卫以 frame 理由拒绝，无任何副作用 | SURF-22、§4-1 |
 | 测试注入 | 实验性 | `EMOJITOT_UPDATE_TEST` 注入固定 0.6.6 卡片；因上一条只能验证「卡片出现」 | SURF-24 |
 
@@ -176,7 +176,7 @@
 
 | # | 级别 | 现象 | 根因（证据） | 用户影响 | 修法 | 回归缺口 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | **P0** | 更新卡「稍后」「打开下载页」「Esc」全部无反应 | `src/main/ipc-frame.js:1-6` 的 FRAME 没有 `update`；`frameMatches('update',…)` 恒 false，`ipc-guard.js:77-81` 以 frame 理由拒绝三个通道 | 卡片只能 Alt+F4，且 `snoozeUntil` 永不写入（下次启动仍可能弹） | 仿 `onboarding.js:36` 在 update 模块补 FRAME.update 正则；补 ipc-frame 用例 | `test/ipc-frame.test.mjs` 只覆盖 island / tray |
+| 1 | **P0** | 更新卡「稍后」「打开下载页」「Esc」全部无反应 | `src/main/ipc-frame.js:1-6` 的 FRAME 没有 `update`；`frameMatches('update',…)` 恒 false，`ipc-guard.js:77-81` 以 frame 理由拒绝三个通道 | 真机实测（2026-11-25）：点「稍后」「打开下载页」、按 Esc 均无反应，卡片保持打开，主进程日志 `[ipc] refused update:open from update — frame`；`snoozeUntil` 永不写入（下次启动仍可能弹），只能 Alt+F4 | 仿 `onboarding.js:36` 在 update 模块补 FRAME.update 正则；补 ipc-frame 用例 | `test/ipc-frame.test.mjs` 只覆盖 island / tray |
 | 2 | P1 | 设置中心 10 个页面、60 处控件是示意，不写盘 | `settings.js:287-302` 的 visual* 家族，显式 aria-hidden + data-decorative | 页面看起来可配，实际点了没反应 | 逐页接线，或页首标明「即将支持」 | 无测试区分「占位」与「真控件」 |
 | 3 | P1 | 81 条偏好里 43 条没有入口（含岛宽 / 胶囊高 / 顶部间距 / 状态组件排序 / 默认页 / 避让开关） | 设置页只有装饰字段；`settings.js:549` 兜底 12 与 DEFAULTS 的 8 不一致 | 用户改不动岛宽等核心外观 | 优先补 layout 页三滑块 + 页面管理里的状态组件行 | settings-audit 只查「谁读」，不查「谁写」 |
 | 4 | P1 | 四个整块功能失去入口：界面语言、四套方案、状态组件开关/排序、避让应用清单 | `settings.js` 中 residencyCard / preset 分支 / avoid 选择器都没有渲染点；测试只断言源码字符串 | 已宣称的能力拿不到 | 补渲染点；把「源码字符串」测试换成渲染级测试 | `status-order.test.mjs:131-146` 一类的假保护 |
@@ -210,26 +210,32 @@
 
 ## 6. 验收怎么跑
 
-**本轮已跑（2026-11-25 18:05，HEAD `bb435d1`）**
+**已跑（2026-11-25 18:05–19:00，HEAD `bb435d1`）**
 
 | 命令 | 结果 |
 | --- | --- |
 | `cd apps/desktop && node --test` | ✅ 565 passed / 149 suites / 0 failed |
 | `cd packages/protocol && npx vitest run` | ✅ 34 passed |
 | `cd packages/core && npx vitest run` | ✅ 27 passed |
+| `pnpm smoke:desktop`（真 Electron + CDP） | ✅ 36/36；含二次启动、1080×760、示意控件 aria-hidden、11 页管理 |
+| `node apps/desktop/scripts/ui-audit.mjs --exe release/win-unpacked/EmojiTot.exe --json` | ✅ 11 岛页 + 16 设置页，0 违规（88 / 326 个文本节点） |
+| `node apps/gallery/scripts/preview.mjs` | ✅ 51/51 id、61/61 face，0 失败 |
+| `pnpm check:gallery`（真 Chrome） | ✅ 32/32；四路由、焦点、375px、interval 清理 |
 | `node scripts/settings-audit.mjs --check` | ✅ 81 个偏好路径一致 |
+| `pnpm audit:ci` | ✅ No known vulnerabilities |
+| `pnpm scan` | ✅ 文本规则 0 FAIL；23 张大图 WARN 未逐张复核 |
 | `node scripts/sync-docs.mjs --check` | ❌ 5 处过期（§4-7） |
 | `node scripts/docs-consistency.mjs` | ❌ 4 处（README 下载链接） |
 
-**本轮未跑，不要当成通过**
+**仍未验证（不要当成通过）**
 
-| 命令 | 覆盖什么 | 为什么需要它 |
-| --- | --- | --- |
-| `pnpm ui:audit` | 11 岛页 × 皮肤 + 16 设置页的文字边界、越界、几何稳定性 | 本基线里所有「视觉/布局」结论的复核入口 |
-| `pnpm smoke:desktop` | 真窗口：沙箱、尺寸、二次启动、设置窗几何 | 跑 node --test 不会开窗口 |
-| `pnpm check:gallery` | 真 Chrome 走查四页、焦点、375px、interval 清理 | 站点全部验收压在这里 |
-| `pnpm preview` | Node 里渲染全部协议 id 与表情 | 静态渲染回归 |
-| `pnpm audit:ci` / `pnpm scan` | 依赖漏洞 / 隐私扫描 | 发版前必跑 |
+| 项 | 为什么还没算过 |
+| --- | --- |
+| 跨语言长文本 | `design-qa.md` 只覆盖中文 + 暗/浅色；英文/其他语言未走查 |
+| 混合 DPI / 多显示器 | `ui-audit` 只在当前主屏与缩放跑过一次 |
+| 线上站点 | 本地 `check:gallery` 不等于已部署的 gh-pages |
+| 23 张 WARN 大图 | 文本扫描已 PASS，但截图里是否含桌面/窗口名/路径需人工逐张看 |
+| 签名产物 | 本机无证书时签名被跳过，产物签名状态未核对 |
 
 ## 7. 维护规则
 
