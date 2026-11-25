@@ -2,6 +2,8 @@
 
 四个包，一条从「两个数字」到「一个 SVG」的路。
 
+> 当前系统的事实清单（窗口、页面、功能状态、实现位置与红线）见 [baseline/README.md](baseline/README.md)；逐功能的合同与失效登记见 [FEATURE-BASELINE.md](FEATURE-BASELINE.md)。
+
 ```
 apps/desktop      Electron 桌面端：球窗口、灵动岛、设置中心、托盘
 apps/gallery      四页站点：控制台 / 表情馆 / 场景 / 文档

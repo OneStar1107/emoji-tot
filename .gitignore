@@ -16,6 +16,7 @@ docs/shots/
 .release-notes.md
 .dsh-meow/
 .superpowers/
+.dsh/
 apps/desktop/.build-number
 apps/desktop/build-info.json
 apps/desktop/.ui-capture/
