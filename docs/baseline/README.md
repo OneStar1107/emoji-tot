@@ -2,6 +2,7 @@
 
 > **这是什么**：系统里有什么、在哪实现、状态如何、依赖什么、哪些不能乱动。给用户看全貌，给后续 AI 看事实起点。
 > **功能合同**（每个功能必须怎么表现、验收条件、当前到哪一步）在 [../FEATURE-BASELINE.md](../FEATURE-BASELINE.md)。
+> **可视化工作台**：同一批事实的离线 HTML（可搜索、筛选、缩放）在 [atlas/project-atlas.html](atlas/project-atlas.html)。
 > **核对基准**：HEAD `bb435d1`（tag `v0.8.20.26`），核对时间 2026-11-25 19:00（Asia/Hong_Kong）；真机闸门结果同日实测。
 > **边界**：本目录记录的是本项目当前事实，不是规则来源；行为规则在仓库 `AGENTS.md` 与用户级 `~/.agents/AGENTS.md`。本目录也不取代 PRD、设计规范、测试与 Git 历史。
 

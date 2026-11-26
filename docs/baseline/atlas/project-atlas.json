@@ -1,0 +1,6344 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-11-26T09:18:09.557Z",
+  "project": {
+    "name": "EmojiTot 全站工作台",
+    "summary": "Windows 桌面宠物：桌面球 + 顶部灵动岛（11 个功能页）+ 16 页设置中心 + 托盘/引导/更新卡 + 四视图站点；本工作台把页面、功能合同、依赖与验收证据放在一张图上。",
+    "stage": "基准已建立，正在补接线与修 P0",
+    "reviewMode": "I",
+    "changeDepth": "relayout"
+  },
+  "coverage": {
+    "auditedPages": 39,
+    "totalPages": 39,
+    "auditedFeatures": 113,
+    "totalFeatures": 113,
+    "auditedStates": 43,
+    "backendEndpoints": 0,
+    "frontendCalls": 0,
+    "linkedFlows": 0,
+    "limitations": [
+      "本工作台收 94 条用户功能行；完整 171 条工程合同在 docs/FEATURE-BASELINE.md。",
+      "页面截图来自 docs/screenshots 的历史验收图，不是本次新拍。",
+      "Electron 应用没有 HTTP 后端；接口层显示为 IPC / 服务依赖。",
+      "reviewMode I / changeDepth relayout 描述的是信息呈现方式，不代表要改 EmojiTot 产品界面。"
+    ]
+  },
+  "modules": [
+    {
+      "id": "MOD-RUNTIME",
+      "name": "运行时与窗口",
+      "summary": "Electron 主进程、六窗生命周期、IPC 守门、存储与发布链。",
+      "status": "confirmed"
+    },
+    {
+      "id": "MOD-ISLAND",
+      "name": "灵动岛",
+      "summary": "顶部岛体、11 个功能页、5 个状态组件、翻页与自动避让。",
+      "status": "confirmed"
+    },
+    {
+      "id": "MOD-SETTINGS",
+      "name": "设置中心",
+      "summary": "16 页设置、唯一 schema、即时写盘与敏感值边界。",
+      "status": "in_progress"
+    },
+    {
+      "id": "MOD-SURF",
+      "name": "球 / 托盘 / 引导 / 更新卡",
+      "summary": "桌面球、托盘面板、首次引导与更新卡的交互闭环。",
+      "status": "in_progress"
+    },
+    {
+      "id": "MOD-ENGINE",
+      "name": "引擎与协议",
+      "summary": "确定性 SVG 渲染、运动运行时与两位情绪协议仲裁。",
+      "status": "confirmed"
+    },
+    {
+      "id": "MOD-WEB",
+      "name": "站点",
+      "summary": "四视图站点：控制台、表情馆、场景、文档。",
+      "status": "confirmed"
+    }
+  ],
+  "resources": [
+    {
+      "id": "RES-PREFS",
+      "name": "存储",
+      "kind": "resource",
+      "summary": "用户偏好、状态与缓存文件；唯一写入收口。",
+      "status": "confirmed"
+    },
+    {
+      "id": "RES-SCHEMA",
+      "name": "数据合同",
+      "kind": "resource",
+      "summary": "shared/schema.js 的 DEFAULTS / CONSUMERS / 三张 manifest。",
+      "status": "confirmed"
+    },
+    {
+      "id": "RES-IPC-GUARD",
+      "name": "安全",
+      "kind": "resource",
+      "summary": "IPC 四层守门：角色 → frame → 字节 → 形状。",
+      "status": "confirmed"
+    },
+    {
+      "id": "RES-FACE-BUS",
+      "name": "服务",
+      "kind": "resource",
+      "summary": "主进程唯一的「脸」仲裁与广播。",
+      "status": "confirmed"
+    },
+    {
+      "id": "RES-SERVICES",
+      "name": "服务",
+      "kind": "resource",
+      "summary": "28 个 JS 常驻服务 + 18 个 PowerShell 探针。",
+      "status": "confirmed"
+    },
+    {
+      "id": "RES-SECRETS",
+      "name": "安全",
+      "kind": "resource",
+      "summary": "safeStorage 加解密，明文只存在主进程内存。",
+      "status": "confirmed"
+    },
+    {
+      "id": "RES-CORE",
+      "name": "库",
+      "kind": "resource",
+      "summary": "packages/core 确定性渲染与运动运行时。",
+      "status": "confirmed"
+    },
+    {
+      "id": "RES-PROTOCOL",
+      "name": "库",
+      "kind": "resource",
+      "summary": "packages/protocol 两位 id、段回退与仲裁。",
+      "status": "confirmed"
+    },
+    {
+      "id": "RES-UPDATE-CHECK",
+      "name": "服务",
+      "kind": "resource",
+      "summary": "GitHub latest 检查与 6h 周期。",
+      "status": "confirmed"
+    },
+    {
+      "id": "RES-SCAN",
+      "name": "安全",
+      "kind": "resource",
+      "summary": "敏感信息扫描与截图人工复核闸门。",
+      "status": "confirmed"
+    }
+  ],
+  "pages": [
+    {
+      "id": "PAGE-BALL",
+      "moduleId": "MOD-SURF",
+      "title": "桌面球",
+      "route": "desktop:ball",
+      "surfaceType": "window",
+      "status": "confirmed",
+      "summary": "常驻桌面的双形态宠物球：拖拽、停靠、半隐、气泡与情绪脸。",
+      "entryPoints": [
+        "启动应用且 displayMode 含 ball",
+        "托盘「显示桌面球」"
+      ],
+      "states": [
+        {
+          "name": "悬浮",
+          "status": "confirmed",
+          "image": "docs/screenshots/pet.png"
+        },
+        {
+          "name": "贴边半隐",
+          "status": "confirmed",
+          "image": "docs/screenshots/pet-docked.png"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": "createBallWindow"
+        }
+      ],
+      "featureIds": [
+        "FEAT-001",
+        "FEAT-002",
+        "FEAT-003",
+        "FEAT-004",
+        "FEAT-005",
+        "FEAT-006",
+        "FEAT-007",
+        "FEAT-008",
+        "FEAT-009",
+        "FEAT-010",
+        "FEAT-087",
+        "FEAT-088",
+        "FEAT-089",
+        "FEAT-090",
+        "FEAT-091",
+        "FEAT-092",
+        "FEAT-093",
+        "FEAT-094",
+        "FEAT-095",
+        "FEAT-096",
+        "FEAT-101",
+        "FEAT-102",
+        "FEAT-103",
+        "FEAT-104",
+        "FEAT-105",
+        "FEAT-106",
+        "FEAT-107",
+        "FEAT-108",
+        "FEAT-109",
+        "FEAT-110",
+        "FEAT-111",
+        "FEAT-112",
+        "FEAT-113"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISLAND",
+      "moduleId": "MOD-ISLAND",
+      "title": "灵动岛",
+      "route": "desktop:island",
+      "surfaceType": "window",
+      "status": "confirmed",
+      "summary": "屏幕顶部常驻的灵动岛：展开、收起、翻页、点击穿透与自动避让。",
+      "entryPoints": [
+        "启动应用且 displayMode 含 island",
+        "Alt+Shift+T 切换显隐"
+      ],
+      "states": [
+        {
+          "name": "展开",
+          "status": "confirmed",
+          "image": "docs/screenshots/island-open-frost.png"
+        },
+        {
+          "name": "收起胶囊",
+          "status": "confirmed",
+          "image": "docs/screenshots/island-folded-frost.png"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": "createIslandWindow"
+        },
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "syncSize"
+        }
+      ],
+      "featureIds": [
+        "FEAT-011",
+        "FEAT-012",
+        "FEAT-013",
+        "FEAT-014",
+        "FEAT-015",
+        "FEAT-027",
+        "FEAT-028",
+        "FEAT-029",
+        "FEAT-032",
+        "FEAT-033",
+        "FEAT-087",
+        "FEAT-088",
+        "FEAT-089",
+        "FEAT-090",
+        "FEAT-091",
+        "FEAT-092",
+        "FEAT-093",
+        "FEAT-094",
+        "FEAT-095",
+        "FEAT-096",
+        "FEAT-101",
+        "FEAT-102",
+        "FEAT-103",
+        "FEAT-104",
+        "FEAT-105",
+        "FEAT-106",
+        "FEAT-107",
+        "FEAT-108",
+        "FEAT-109",
+        "FEAT-110",
+        "FEAT-111",
+        "FEAT-112",
+        "FEAT-113"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-MUSIC",
+      "moduleId": "MOD-ISLAND",
+      "title": "媒体页",
+      "route": "#/island/music",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "媒体页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-016",
+        "FEAT-030",
+        "FEAT-031"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-WEATHER",
+      "moduleId": "MOD-ISLAND",
+      "title": "天气页",
+      "route": "#/island/weather",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "天气页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-017"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-QUOTA",
+      "moduleId": "MOD-ISLAND",
+      "title": "AI 工作台页",
+      "route": "#/island/quota",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "AI 工作台页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-018"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-MAIL",
+      "moduleId": "MOD-ISLAND",
+      "title": "邮箱页",
+      "route": "#/island/mail",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "邮箱页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-019"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-FOCUS",
+      "moduleId": "MOD-ISLAND",
+      "title": "专注页",
+      "route": "#/island/focus",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "专注页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-020"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-TODO",
+      "moduleId": "MOD-ISLAND",
+      "title": "待办页",
+      "route": "#/island/todo",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "待办页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-021"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-HEALTH",
+      "moduleId": "MOD-ISLAND",
+      "title": "健康页",
+      "route": "#/island/health",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "健康页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-022"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-SHELF",
+      "moduleId": "MOD-ISLAND",
+      "title": "置物架页",
+      "route": "#/island/shelf",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "置物架页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-023"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-DEVICES",
+      "moduleId": "MOD-ISLAND",
+      "title": "设备页",
+      "route": "#/island/devices",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "设备页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-024"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-CALENDAR",
+      "moduleId": "MOD-ISLAND",
+      "title": "日程页",
+      "route": "#/island/calendar",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "日程页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-025"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ISL-MESSENGER",
+      "moduleId": "MOD-ISLAND",
+      "title": "消息页",
+      "route": "#/island/messenger",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "消息页的内容区，固定 260px 高视口内排版，参与翻页与状态组件。",
+      "entryPoints": [
+        "岛展开后翻页",
+        "岛内左右键 / 滚轮"
+      ],
+      "states": [
+        {
+          "name": "主态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": "renderPage"
+        }
+      ],
+      "featureIds": [
+        "FEAT-026"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SETTINGS",
+      "moduleId": "MOD-SETTINGS",
+      "title": "设置中心",
+      "route": "desktop:settings",
+      "surfaceType": "window",
+      "status": "confirmed",
+      "summary": "1080×760 固定窗，三列布局，16 个设置页；改动即时写盘。",
+      "entryPoints": [
+        "托盘菜单「设置…」",
+        "岛齿轮",
+        "引导完成"
+      ],
+      "states": [
+        {
+          "name": "默认页",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": "openSettings"
+        },
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034",
+        "FEAT-035",
+        "FEAT-036",
+        "FEAT-037",
+        "FEAT-038",
+        "FEAT-045",
+        "FEAT-046",
+        "FEAT-047",
+        "FEAT-048",
+        "FEAT-049",
+        "FEAT-050",
+        "FEAT-051",
+        "FEAT-052",
+        "FEAT-053"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-GENERAL",
+      "moduleId": "MOD-SETTINGS",
+      "title": "常规",
+      "route": "desktop:settings#general",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "常规设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-APPEARANCE",
+      "moduleId": "MOD-SETTINGS",
+      "title": "外观",
+      "route": "desktop:settings#appearance",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "外观设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-043",
+        "FEAT-044"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-LAYOUT",
+      "moduleId": "MOD-SETTINGS",
+      "title": "尺寸与位置",
+      "route": "desktop:settings#layout",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "尺寸与位置设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-BEHAVIOR",
+      "moduleId": "MOD-SETTINGS",
+      "title": "隐藏与交互",
+      "route": "desktop:settings#behavior",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "隐藏与交互设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-CAST",
+      "moduleId": "MOD-SETTINGS",
+      "title": "角色与表情",
+      "route": "desktop:settings#cast",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "角色与表情设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-042"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-PAGES",
+      "moduleId": "MOD-SETTINGS",
+      "title": "页面管理",
+      "route": "desktop:settings#pages",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "页面管理设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-039",
+        "FEAT-040"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-MUSIC",
+      "moduleId": "MOD-SETTINGS",
+      "title": "媒体与歌词",
+      "route": "desktop:settings#music",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "媒体与歌词设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-FOCUS",
+      "moduleId": "MOD-SETTINGS",
+      "title": "专注与饮水",
+      "route": "desktop:settings#focus",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "专注与饮水设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-TODO",
+      "moduleId": "MOD-SETTINGS",
+      "title": "待办与置物",
+      "route": "desktop:settings#todo",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "待办与置物设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-COMM",
+      "moduleId": "MOD-SETTINGS",
+      "title": "通知 / 邮箱 / 日程",
+      "route": "desktop:settings#comm",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "通知 / 邮箱 / 日程设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-QUOTA",
+      "moduleId": "MOD-SETTINGS",
+      "title": "AI 额度",
+      "route": "desktop:settings#quota",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "AI 额度设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-WEATHER",
+      "moduleId": "MOD-SETTINGS",
+      "title": "天气",
+      "route": "desktop:settings#weather",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "天气设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-DEVICES",
+      "moduleId": "MOD-SETTINGS",
+      "title": "设备",
+      "route": "desktop:settings#devices",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "设备设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-041"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-TRAY",
+      "moduleId": "MOD-SETTINGS",
+      "title": "系统托盘图标",
+      "route": "desktop:settings#tray",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "系统托盘图标设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-PLUGINS",
+      "moduleId": "MOD-SETTINGS",
+      "title": "插件",
+      "route": "desktop:settings#plugins",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "插件设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-SET-ABOUT",
+      "moduleId": "MOD-SETTINGS",
+      "title": "关于",
+      "route": "desktop:settings#about",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "关于设置页；部分字段为视觉示意，见功能基准 §4。",
+      "entryPoints": [
+        "设置中心左栏导航"
+      ],
+      "states": [
+        {
+          "name": "默认态",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-034"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-TRAY",
+      "moduleId": "MOD-SURF",
+      "title": "托盘面板",
+      "route": "desktop:tray",
+      "surfaceType": "panel",
+      "status": "confirmed",
+      "summary": "自绘 200×164 面板：角色、形态、常用开关与设置入口；键盘可达。",
+      "entryPoints": [
+        "点击托盘图标"
+      ],
+      "states": [
+        {
+          "name": "面板打开",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/tray-panel.js",
+          "symbol": "showTrayPanel"
+        },
+        {
+          "path": "apps/desktop/src/renderer/tray.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-054",
+        "FEAT-055",
+        "FEAT-056",
+        "FEAT-057"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ONBOARDING",
+      "moduleId": "MOD-SURF",
+      "title": "首次引导",
+      "route": "desktop:onboarding",
+      "surfaceType": "window",
+      "status": "confirmed",
+      "summary": "首次启动两页引导，可跳过；完成后写形态与皮肤。",
+      "entryPoints": [
+        "首次启动且 onboardingDone !== true"
+      ],
+      "states": [
+        {
+          "name": "第 1 页",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/onboarding.js",
+          "symbol": "openOnboarding"
+        }
+      ],
+      "featureIds": [
+        "FEAT-058"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-UPDATE",
+      "moduleId": "MOD-SURF",
+      "title": "更新卡",
+      "route": "desktop:update",
+      "surfaceType": "window",
+      "status": "in_progress",
+      "summary": "320×200 深色更新卡：版本与两条要点，「稍后」「打开下载页」。",
+      "entryPoints": [
+        "检测到更高正式版"
+      ],
+      "states": [
+        {
+          "name": "卡片出现",
+          "status": "confirmed"
+        },
+        {
+          "name": "三个出口无反应（P0）",
+          "status": "in_progress"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/update-prompt.js",
+          "symbol": "notifyAvailable"
+        },
+        {
+          "path": "apps/desktop/src/renderer/update.js",
+          "symbol": "render"
+        }
+      ],
+      "featureIds": [
+        "FEAT-059",
+        "FEAT-060",
+        "FEAT-061",
+        "FEAT-062",
+        "FEAT-063"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-WEB-CONSOLE",
+      "moduleId": "MOD-WEB",
+      "title": "站点控制台",
+      "route": "#/console",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "角色舞台、代码卡、尺寸与抽屉；实时表情运行时。",
+      "entryPoints": [
+        "站点默认路由",
+        "导航 Console"
+      ],
+      "states": [
+        {
+          "name": "默认表情",
+          "status": "confirmed",
+          "image": "docs/screenshots/console.png"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/gallery/src/console.ts",
+          "symbol": "mountConsole"
+        }
+      ],
+      "featureIds": [
+        "FEAT-064",
+        "FEAT-065",
+        "FEAT-066",
+        "FEAT-067",
+        "FEAT-072"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-WEB-GALLERY",
+      "moduleId": "MOD-WEB",
+      "title": "表情馆",
+      "route": "#/gallery",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "15 角色 / 61 表情墙，过滤、灯箱与焦点归还。",
+      "entryPoints": [
+        "导航 Gallery"
+      ],
+      "states": [
+        {
+          "name": "表情墙",
+          "status": "confirmed",
+          "image": "docs/screenshots/gallery-dark.png"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/gallery/src/wall.ts",
+          "symbol": "mountWall"
+        }
+      ],
+      "featureIds": [
+        "FEAT-068"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-WEB-SCENE",
+      "moduleId": "MOD-WEB",
+      "title": "场景仲裁",
+      "route": "#/scene",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "九个会话争一张脸，优先级与历史可视化。",
+      "entryPoints": [
+        "导航 Scene"
+      ],
+      "states": [
+        {
+          "name": "仲裁进行中",
+          "status": "confirmed",
+          "image": "docs/screenshots/scene.png"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/gallery/src/scene.ts",
+          "symbol": "mountScene"
+        }
+      ],
+      "featureIds": [
+        "FEAT-069"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-WEB-DOCS",
+      "moduleId": "MOD-WEB",
+      "title": "协议文档",
+      "route": "#/docs",
+      "surfaceType": "page",
+      "status": "confirmed",
+      "summary": "九节文档、协议表、TOC 高亮与三个实时骨架。",
+      "entryPoints": [
+        "导航 Docs"
+      ],
+      "states": [
+        {
+          "name": "文档首页",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "apps/gallery/src/docs.ts",
+          "symbol": "mountDocs"
+        }
+      ],
+      "featureIds": [
+        "FEAT-070",
+        "FEAT-071"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-ENGINE",
+      "moduleId": "MOD-ENGINE",
+      "title": "核心引擎（无窗口）",
+      "route": "packages/core",
+      "surfaceType": "library",
+      "status": "confirmed",
+      "summary": "确定性 SVG 渲染与运动运行时；51 个协议 id、61 张脸。",
+      "entryPoints": [
+        "主进程 / 站点调用 renderFace"
+      ],
+      "states": [
+        {
+          "name": "静态渲染",
+          "status": "confirmed"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": "renderFace"
+        },
+        {
+          "path": "packages/core/src/runtime.ts",
+          "symbol": "mountFace"
+        }
+      ],
+      "featureIds": [
+        "FEAT-073",
+        "FEAT-074",
+        "FEAT-075",
+        "FEAT-076",
+        "FEAT-077",
+        "FEAT-078",
+        "FEAT-079",
+        "FEAT-080",
+        "FEAT-081",
+        "FEAT-082",
+        "FEAT-083",
+        "FEAT-084",
+        "FEAT-085",
+        "FEAT-086"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "PAGE-RELEASE",
+      "moduleId": "MOD-RUNTIME",
+      "title": "发布链（CLI）",
+      "route": "scripts",
+      "surfaceType": "pipeline",
+      "status": "in_progress",
+      "summary": "版本闸门、文档同步、隐私扫描、electron-builder 双产物与 tag/Release。",
+      "entryPoints": [
+        "pnpm check",
+        "pnpm release"
+      ],
+      "states": [
+        {
+          "name": "闸门全绿",
+          "status": "in_progress"
+        },
+        {
+          "name": "文档闸门红",
+          "status": "unverified"
+        }
+      ],
+      "implementation": [
+        {
+          "path": "scripts/check-version.mjs",
+          "symbol": "checkVersion"
+        },
+        {
+          "path": "scripts/sync-docs.mjs",
+          "symbol": "syncDocs"
+        }
+      ],
+      "featureIds": [
+        "FEAT-097",
+        "FEAT-098",
+        "FEAT-099",
+        "FEAT-100"
+      ],
+      "dependencies": []
+    }
+  ],
+  "features": [
+    {
+      "id": "FEAT-001",
+      "moduleId": "MOD-SURF",
+      "name": "球窗口常驻、三态形态",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "任何 `displayMode` 都先建窗口",
+          "island 只 hide，ball/both 用 showInactive",
+          "切形态不重建"
+        ],
+        "outcome": "任何 `displayMode` 都先建窗口；island 只 hide，ball/both 用 showInactive；切形态不重建",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-002",
+      "moduleId": "MOD-SURF",
+      "name": "球尺寸与留白",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "窗口 = 球 + 208（16 动画边距 + 88 气泡空间 × 2 边）",
+          "五档 64/88/120/160/220",
+          "球 clamp 48–240"
+        ],
+        "outcome": "窗口 = 球 + 208（16 动画边距 + 88 气泡空间 × 2 边）；五档 64/88/120/160/220；球 clamp 48–240",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-003",
+      "moduleId": "MOD-SURF",
+      "name": "位置恢复与落点",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "启动用 `prefs.position`，否则主屏右下距边 8",
+          "未贴边才写回"
+        ],
+        "outcome": "启动用 `prefs.position`，否则主屏右下距边 8；未贴边才写回",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-004",
+      "moduleId": "MOD-SURF",
+      "name": "点击穿透",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "光标到球心 ≤ dim/2 才接收输入",
+          "拖拽期间一律不穿透"
+        ],
+        "outcome": "光标到球心 ≤ dim/2 才接收输入；拖拽期间一律不穿透",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-005",
+      "moduleId": "MOD-SURF",
+      "name": "拖拽与「戳一下」",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "超过 4px 才算拖拽；主进程 16ms 跟手且宽高固定；小于 4px 释放",
+          "随机 bounce/spin/burst"
+        ],
+        "outcome": "超过 4px 才算拖拽；主进程 16ms 跟手且宽高固定；小于 4px 释放 → 随机 bounce/spin/burst",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-006",
+      "moduleId": "MOD-SURF",
+      "name": "拖到边缘停靠",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "距工作区边 ≤ 8px 停靠左/右",
+          "否则清贴边态",
+          "`ui-check.mjs` 有端到端记录"
+        ],
+        "outcome": "距工作区边 ≤ 8px 停靠左/右；否则清贴边态；`ui-check.mjs` 有端到端记录",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-007",
+      "moduleId": "MOD-SURF",
+      "name": "半隐与悬停展开",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "停靠只留 0.5×dim 在屏内",
+          "必须先离开过一次才允许再次展开"
+        ],
+        "outcome": "停靠只留 0.5×dim 在屏内；必须先离开过一次才允许再次展开",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-008",
+      "moduleId": "MOD-SURF",
+      "name": "气泡",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "只在贴边时出现",
+          "文本 = KAOMOJI，无映射则隐藏",
+          "3400ms 自动隐藏",
+          "aria-live=polite"
+        ],
+        "outcome": "只在贴边时出现；文本 = KAOMOJI，无映射则隐藏；3400ms 自动隐藏；aria-live=polite",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-009",
+      "moduleId": "MOD-SURF",
+      "name": "减少动态",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "在「桌面球」中使用「减少动态」"
+        ],
+        "outcome": "`reduceMotion` 或 `motion=false` 时加 paused，呼吸/跳动停止但换脸照常",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-010",
+      "moduleId": "MOD-SURF",
+      "name": "角色切换同步",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL"
+      ],
+      "contract": {
+        "entry": "桌面球",
+        "actions": [
+          "在「桌面球」中使用「角色切换同步」"
+        ],
+        "outcome": "`cast:changed` 同时更新球、托盘图标、tooltip，并重播招牌表情",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-011",
+      "moduleId": "MOD-ISLAND",
+      "name": "窗口几何与尺寸上报",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "窗口 = 页面实测 box + 左右 32 / 上下 36",
+          "box 夹 120–720 × 28–640",
+          "水平居中、贴工作区顶"
+        ],
+        "outcome": "窗口 = 页面实测 box + 左右 32 / 上下 36；box 夹 120–720 × 28–640；水平居中、贴工作区顶",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-012",
+      "moduleId": "MOD-ISLAND",
+      "name": "点击穿透（自适应轮询）",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "指针距画面 ≤180px",
+          "25ms、≤700px",
+          "120ms、更远",
+          "250ms；命中用画出来的矩形；收起时一律穿透"
+        ],
+        "outcome": "指针距画面 ≤180px → 25ms、≤700px → 120ms、更远 → 250ms；命中用画出来的矩形；收起时一律穿透",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-013",
+      "moduleId": "MOD-ISLAND",
+      "name": "展开与收起",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "只认落在画面上的左键",
+          "Esc 与失焦受 `blurCollapse` 控制",
+          "没有「点外部收起」处理器"
+        ],
+        "outcome": "只认落在画面上的左键；Esc 与失焦受 `blurCollapse` 控制；没有「点外部收起」处理器",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-014",
+      "moduleId": "MOD-ISLAND",
+      "name": "悬停展开 / 自动收起",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "进入后 `hoverOpenDelay`（默认 100ms，上限 800）展开",
+          "`hoverAutoHide` 时 `hoverCloseDelay`（默认 120ms）收起"
+        ],
+        "outcome": "进入后 `hoverOpenDelay`（默认 100ms，上限 800）展开；`hoverAutoHide` 时 `hoverCloseDelay`（默认 120ms）收起",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-015",
+      "moduleId": "MOD-ISLAND",
+      "name": "翻页（按钮 / 键盘 / 滚轮）",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "首尾不循环；←/",
+          "翻页；滚轮只看 deltaY 且 ≥8px，**无节流锁**（§4-9）"
+        ],
+        "outcome": "首尾不循环；←/→ 翻页；滚轮只看 deltaY 且 ≥8px，**无节流锁**（§4-9）",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-016",
+      "moduleId": "MOD-ISLAND",
+      "name": "媒体页",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISL-MUSIC"
+      ],
+      "contract": {
+        "entry": "媒体页",
+        "actions": [
+          "封面 + 三行歌词 + 进度轨（可 seek ±5s）+ 传输键",
+          "有 duration 才可 seek，提交后 900ms 抑制回写"
+        ],
+        "outcome": "封面 + 三行歌词 + 进度轨（可 seek ±5s）+ 传输键；有 duration 才可 seek，提交后 900ms 抑制回写",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "媒体页",
+        "afterLocation": "媒体页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-017",
+      "moduleId": "MOD-ISLAND",
+      "name": "天气页",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISL-WEATHER"
+      ],
+      "contract": {
+        "entry": "天气页",
+        "actions": [
+          "当前温度 + 五日预报",
+          "失败保留上次读数",
+          "城市菜单写 city 并关自动定位"
+        ],
+        "outcome": "当前温度 + 五日预报；失败保留上次读数；城市菜单写 city 并关自动定位",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "天气页",
+        "afterLocation": "天气页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-018",
+      "moduleId": "MOD-ISLAND",
+      "name": "AI 工作台页",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISL-QUOTA"
+      ],
+      "contract": {
+        "entry": "AI 工作台页",
+        "actions": [
+          "余额/账号切换/Agent 三行",
+          "「查不到」与「0」分开画"
+        ],
+        "outcome": "余额/账号切换/Agent 三行；「查不到」与「0」分开画",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "AI 工作台页",
+        "afterLocation": "AI 工作台页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-019",
+      "moduleId": "MOD-ISLAND",
+      "name": "邮箱页",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ISL-MAIL"
+      ],
+      "contract": {
+        "entry": "邮箱页",
+        "actions": [
+          "4 行上限",
+          "未读数取账号答复",
+          "「全部已读」按账号范围批量写",
+          "失败不乐观更新"
+        ],
+        "outcome": "4 行上限；未读数取账号答复；「全部已读」按账号范围批量写；失败不乐观更新",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "邮箱页",
+        "afterLocation": "邮箱页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-020",
+      "moduleId": "MOD-ISLAND",
+      "name": "专注页",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISL-FOCUS"
+      ],
+      "contract": {
+        "entry": "专注页",
+        "actions": [
+          "在「专注页」中使用「专注页」"
+        ],
+        "outcome": "96px 环 + 计时 + 三键 + 本轮/本日",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "专注页",
+        "afterLocation": "专注页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-021",
+      "moduleId": "MOD-ISLAND",
+      "name": "待办页",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ISL-TODO"
+      ],
+      "contract": {
+        "entry": "待办页",
+        "actions": [
+          "在「待办页」中使用「待办页」"
+        ],
+        "outcome": "清单/添加/优先级/重复/完成态",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "待办页",
+        "afterLocation": "待办页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-022",
+      "moduleId": "MOD-ISLAND",
+      "name": "健康页",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ISL-HEALTH"
+      ],
+      "contract": {
+        "entry": "健康页",
+        "actions": [
+          "在「健康页」中使用「健康页」"
+        ],
+        "outcome": "喝水/久坐两行 + 9 天柱图",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "健康页",
+        "afterLocation": "健康页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-023",
+      "moduleId": "MOD-ISLAND",
+      "name": "置物架页",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ISL-SHELF"
+      ],
+      "contract": {
+        "entry": "置物架页",
+        "actions": [
+          "在「置物架页」中使用「置物架页」"
+        ],
+        "outcome": "拖入文件、搜索、分组折叠、剪贴板块",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "置物架页",
+        "afterLocation": "置物架页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-024",
+      "moduleId": "MOD-ISLAND",
+      "name": "设备页",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISL-DEVICES"
+      ],
+      "contract": {
+        "entry": "设备页",
+        "actions": [
+          "5 行设备/电量条/置顶★/刷新/系统蓝牙",
+          "名字是唯一身份"
+        ],
+        "outcome": "5 行设备/电量条/置顶★/刷新/系统蓝牙；名字是唯一身份",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设备页",
+        "afterLocation": "设备页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-025",
+      "moduleId": "MOD-ISLAND",
+      "name": "日程页",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ISL-CALENDAR"
+      ],
+      "contract": {
+        "entry": "日程页",
+        "actions": [
+          "在「日程页」中使用「日程页」"
+        ],
+        "outcome": "7×5 月历 + 当日行 + 内联编辑（保存/删除）",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "日程页",
+        "afterLocation": "日程页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-026",
+      "moduleId": "MOD-ISLAND",
+      "name": "消息页",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISL-MESSENGER"
+      ],
+      "contract": {
+        "entry": "消息页",
+        "actions": [
+          "在「消息页」中使用「消息页」"
+        ],
+        "outcome": "五个消息应用 4 行会话切换",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "消息页",
+        "afterLocation": "消息页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-027",
+      "moduleId": "MOD-ISLAND",
+      "name": "状态组件（电量/时间/温度/余额/颜文字）",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "按 `statusItems` 顺序",
+          "无读数不画占位",
+          "超宽只切整组件并补省略号",
+          "颜文字要有真实读数才出现"
+        ],
+        "outcome": "按 `statusItems` 顺序；无读数不画占位；超宽只切整组件并补省略号；颜文字要有真实读数才出现",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-028",
+      "moduleId": "MOD-ISLAND",
+      "name": "胶囊三态",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "播放",
+          "歌词 + 歌名；无播放但有读数",
+          "状态行；都没有",
+          "只有脸；文字槽固定不随歌词伸缩"
+        ],
+        "outcome": "播放 → 歌词 + 歌名；无播放但有读数 → 状态行；都没有 → 只有脸；文字槽固定不随歌词伸缩",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-029",
+      "moduleId": "MOD-ISLAND",
+      "name": "暂停交还 + 恢复按钮",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "只有「播放",
+          "暂停」触发；恢复按钮空闲 `music.pausedHideMin`（0=永不）；悬停/聚焦重新计时"
+        ],
+        "outcome": "只有「播放→暂停」触发；恢复按钮空闲 `music.pausedHideMin`（0=永不）；悬停/聚焦重新计时",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-030",
+      "moduleId": "MOD-ISLAND",
+      "name": "歌词同步",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISL-MUSIC"
+      ],
+      "contract": {
+        "entry": "媒体页",
+        "actions": [
+          "位置 = 采样 + Δt×rate（夹 0.25–4）",
+          "二分查行",
+          "offset 默认 0.35s",
+          "暂停不排下一句"
+        ],
+        "outcome": "位置 = 采样 + Δt×rate（夹 0.25–4）；二分查行；offset 默认 0.35s；暂停不排下一句",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "媒体页",
+        "afterLocation": "媒体页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-031",
+      "moduleId": "MOD-ISLAND",
+      "name": "直播识别",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISL-MUSIC"
+      ],
+      "contract": {
+        "entry": "媒体页",
+        "actions": [
+          "以 provider 元数据/标题为证据，不把「没有时长」当直播",
+          "无起点显示「直播中」，有则 HH:MM:SS"
+        ],
+        "outcome": "以 provider 元数据/标题为证据，不把「没有时长」当直播；无起点显示「直播中」，有则 HH:MM:SS",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "媒体页",
+        "afterLocation": "媒体页",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-032",
+      "moduleId": "MOD-ISLAND",
+      "name": "通知插页",
+      "status": "in_progress",
+      "stage": "开发中",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "设计为 3.5s 临时插页并恢复滚动位置",
+          "**当前无 IPC/preload 通道**，只有 `capture-ui.mjs` 调试钩子能触发"
+        ],
+        "outcome": "设计为 3.5s 临时插页并恢复滚动位置；**当前无 IPC/preload 通道**，只有 `capture-ui.mjs` 调试钩子能触发",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-033",
+      "moduleId": "MOD-ISLAND",
+      "name": "自动避让横条",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "灵动岛",
+        "actions": [
+          "避让且未展开时收成 6px 高、宽 max(48, 岛宽/3) 的 slit",
+          "展开优先",
+          "收起期不上报 box"
+        ],
+        "outcome": "避让且未展开时收成 6px 高、宽 max(48, 岛宽/3) 的 slit；展开优先；收起期不上报 box",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "灵动岛",
+        "afterLocation": "灵动岛",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/island.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-034",
+      "moduleId": "MOD-SETTINGS",
+      "name": "窗口几何",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-SETTINGS",
+        "PAGE-SET-GENERAL",
+        "PAGE-SET-LAYOUT",
+        "PAGE-SET-BEHAVIOR",
+        "PAGE-SET-MUSIC",
+        "PAGE-SET-FOCUS",
+        "PAGE-SET-TODO",
+        "PAGE-SET-COMM",
+        "PAGE-SET-QUOTA",
+        "PAGE-SET-WEATHER",
+        "PAGE-SET-TRAY",
+        "PAGE-SET-PLUGINS",
+        "PAGE-SET-ABOUT"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "1080×760 固定，`resizable:false`、`maximizable:false`",
+          "三列 212 / 1fr / 276"
+        ],
+        "outcome": "1080×760 固定，`resizable:false`、`maximizable:false`；三列 212 / 1fr / 276",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-035",
+      "moduleId": "MOD-SETTINGS",
+      "name": "打开定位 / 单例 / 关窗不退出",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "已开则 show+focus+goto",
+          "关窗只关窗，退出只走托盘或 `app:quit`"
+        ],
+        "outcome": "已开则 show+focus+goto；关窗只关窗，退出只走托盘或 `app:quit`",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-036",
+      "moduleId": "MOD-SETTINGS",
+      "name": "即时写盘、无保存按钮",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "控件",
+          "`settings:patch`",
+          "`writePrefs`",
+          "回包整体重绘 + 广播"
+        ],
+        "outcome": "控件 → `settings:patch` → `writePrefs` → 回包整体重绘 + 广播",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-037",
+      "moduleId": "MOD-SETTINGS",
+      "name": "未知键与非法值丢弃",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "`filterPatch` 只接受 schema 拥有的键",
+          "skin 只允许三值"
+        ],
+        "outcome": "`filterPatch` 只接受 schema 拥有的键；skin 只允许三值",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-038",
+      "moduleId": "MOD-SETTINGS",
+      "name": "改动跨窗口同步",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "在「设置中心」中使用「改动跨窗口同步」"
+        ],
+        "outcome": "`settings:changed` 推给设置/岛/球",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-039",
+      "moduleId": "MOD-SETTINGS",
+      "name": "页面开关 → 服务启停",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-SET-PAGES"
+      ],
+      "contract": {
+        "entry": "页面管理",
+        "actions": [
+          "在「页面管理」中使用「页面开关 → 服务启停」"
+        ],
+        "outcome": "服务集 = 已开页面 + 状态组件所需，再被 `focus/health/todo/shelf` 等开关扣减",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "页面管理",
+        "afterLocation": "页面管理",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-040",
+      "moduleId": "MOD-SETTINGS",
+      "name": "页面排序（拖拽 + 键盘）",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-SET-PAGES"
+      ],
+      "contract": {
+        "entry": "页面管理",
+        "actions": [
+          "dragend 读 DOM 顺序写 pageOrder",
+          "↑↓ 写完焦点回原位"
+        ],
+        "outcome": "dragend 读 DOM 顺序写 pageOrder；↑↓ 写完焦点回原位",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "页面管理",
+        "afterLocation": "页面管理",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-041",
+      "moduleId": "MOD-SETTINGS",
+      "name": "设备页活数据 / 显隐 / 顺序",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-SET-DEVICES"
+      ],
+      "contract": {
+        "entry": "设备",
+        "actions": [
+          "进页才起探针",
+          "显隐与顺序只发名字走窄通道，不整组覆盖"
+        ],
+        "outcome": "进页才起探针；显隐与顺序只发名字走窄通道，不整组覆盖",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设备",
+        "afterLocation": "设备",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-042",
+      "moduleId": "MOD-SETTINGS",
+      "name": "角色切换",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-SET-CAST"
+      ],
+      "contract": {
+        "entry": "角色与表情",
+        "actions": [
+          "在「角色与表情」中使用「角色切换」"
+        ],
+        "outcome": "15 张卡经 `settings:action`，未知 id 归一 `tot`",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "角色与表情",
+        "afterLocation": "角色与表情",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-043",
+      "moduleId": "MOD-SETTINGS",
+      "name": "主题 / 皮肤",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-SET-APPEARANCE"
+      ],
+      "contract": {
+        "entry": "外观",
+        "actions": [
+          "`theme`、`skin` 即时生效",
+          "`data-theme` 与 `data-skin` 驱动"
+        ],
+        "outcome": "`theme`、`skin` 即时生效；`data-theme` 与 `data-skin` 驱动",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "外观",
+        "afterLocation": "外观",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-044",
+      "moduleId": "MOD-SETTINGS",
+      "name": "圆角 / 界面缩放",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-SET-APPEARANCE"
+      ],
+      "contract": {
+        "entry": "外观",
+        "actions": [
+          "`radius` 12–30、`uiScale` 80–140",
+          "只由 HTML 属性限值，无二次钳制"
+        ],
+        "outcome": "`radius` 12–30、`uiScale` 80–140；只由 HTML 属性限值，无二次钳制",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "外观",
+        "afterLocation": "外观",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/renderer/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-045",
+      "moduleId": "MOD-SETTINGS",
+      "name": "敏感值只在主进程",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "渲染进程没有任何 secrets 通道",
+          "`v1:` / `plain:` 前缀语义不可改"
+        ],
+        "outcome": "渲染进程没有任何 secrets 通道；`v1:` / `plain:` 前缀语义不可改",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-046",
+      "moduleId": "MOD-SETTINGS",
+      "name": "「恢复界面」",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "一次写回 25 个键",
+          "不动 pages/statusItems/pageOrder/账号"
+        ],
+        "outcome": "一次写回 25 个键；不动 pages/statusItems/pageOrder/账号",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-047",
+      "moduleId": "MOD-SETTINGS",
+      "name": "自定义下拉键盘",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "↑↓、Home、End、Enter、Space、Esc、Tab 键盘操作",
+          "popover 顶层不被裁"
+        ],
+        "outcome": "↑↓、Home、End、Enter、Space、Esc、Tab 键盘操作；popover 顶层不被裁",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-048",
+      "moduleId": "MOD-SETTINGS",
+      "name": "界面语言切换",
+      "status": "deprecated",
+      "stage": "已废弃",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "在「设置中心」中使用「界面语言切换」"
+        ],
+        "outcome": "`prefs.lang` 与词典都在，但**没有任何控件写它**",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-049",
+      "moduleId": "MOD-SETTINGS",
+      "name": "四套快速方案",
+      "status": "deprecated",
+      "stage": "已废弃",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "在「设置中心」中使用「四套快速方案」"
+        ],
+        "outcome": "`PRESET_MANIFEST` 与 `presetPatch` 都在，点击分支存在，**无渲染点**",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-050",
+      "moduleId": "MOD-SETTINGS",
+      "name": "胶囊状态组件开关 / 排序",
+      "status": "deprecated",
+      "stage": "已废弃",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "`residencyCard()` 定义后从未被调用",
+          "测试只断言源码字符串存在"
+        ],
+        "outcome": "`residencyCard()` 定义后从未被调用；测试只断言源码字符串存在",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-051",
+      "moduleId": "MOD-SETTINGS",
+      "name": "自动避让应用清单",
+      "status": "deprecated",
+      "stage": "已废弃",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "在「设置中心」中使用「自动避让应用清单」"
+        ],
+        "outcome": "选择器与窄通道都在，**无渲染点**输出 `avoid-add`",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-052",
+      "moduleId": "MOD-SETTINGS",
+      "name": "60 处示意控件",
+      "status": "in_progress",
+      "stage": "开发中",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "`aria-hidden` + `data-decorative` + title=「示意控件」，明确不写盘",
+          "覆盖 10 个页面"
+        ],
+        "outcome": "`aria-hidden` + `data-decorative` + title=「示意控件」，明确不写盘；覆盖 10 个页面",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-053",
+      "moduleId": "MOD-SETTINGS",
+      "name": "81 条偏好里 43 条无入口",
+      "status": "in_progress",
+      "stage": "开发中",
+      "pageIds": [
+        "PAGE-SETTINGS"
+      ],
+      "contract": {
+        "entry": "设置中心",
+        "actions": [
+          "含 `islandWidth` / `pillHeight` / `islandTopGap` / `statusItems` / `defaultPage` / `avoidEnabled` 等",
+          "岛宽等用户改不动"
+        ],
+        "outcome": "含 `islandWidth` / `pillHeight` / `islandTopGap` / `statusItems` / `defaultPage` / `avoidEnabled` 等；岛宽等用户改不动",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "设置中心",
+        "afterLocation": "设置中心",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/settings.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-054",
+      "moduleId": "MOD-SURF",
+      "name": "托盘面板定位",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-TRAY"
+      ],
+      "contract": {
+        "entry": "托盘面板",
+        "actions": [
+          "图标中心对齐并夹紧工作区",
+          "优先有余量一侧",
+          "无锚点落右下 12px",
+          "7 个用例"
+        ],
+        "outcome": "图标中心对齐并夹紧工作区；优先有余量一侧；无锚点落右下 12px；7 个用例",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "托盘面板",
+        "afterLocation": "托盘面板",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/tray-panel.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-055",
+      "moduleId": "MOD-SURF",
+      "name": "托盘面板开关 / 内容 / 键盘",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-TRAY"
+      ],
+      "contract": {
+        "entry": "托盘面板",
+        "actions": [
+          "左/右键都 toggle",
+          "刚关 250ms 内点击算关",
+          "blur 200ms 宽限",
+          "↑↓ 环绕、Enter、Esc"
+        ],
+        "outcome": "左/右键都 toggle；刚关 250ms 内点击算关；blur 200ms 宽限；↑↓ 环绕、Enter、Esc",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "托盘面板",
+        "afterLocation": "托盘面板",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/tray-panel.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-056",
+      "moduleId": "MOD-SURF",
+      "name": "托盘图标与置顶",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-TRAY"
+      ],
+      "contract": {
+        "entry": "托盘面板",
+        "actions": [
+          "图标用当前角色 SVG，失败回落资源 PNG",
+          "置顶写 `pinned` 并换层"
+        ],
+        "outcome": "图标用当前角色 SVG，失败回落资源 PNG；置顶写 `pinned` 并换层",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "托盘面板",
+        "afterLocation": "托盘面板",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/tray-panel.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-057",
+      "moduleId": "MOD-SURF",
+      "name": "全局快捷键",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-TRAY"
+      ],
+      "contract": {
+        "entry": "托盘面板",
+        "actions": [
+          "`Alt+Shift+T` 切岛显隐",
+          "`hotkey=false` 不注册"
+        ],
+        "outcome": "`Alt+Shift+T` 切岛显隐；`hotkey=false` 不注册",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "托盘面板",
+        "afterLocation": "托盘面板",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/tray-panel.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-058",
+      "moduleId": "MOD-SURF",
+      "name": "首次引导",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ONBOARDING"
+      ],
+      "contract": {
+        "entry": "首次引导",
+        "actions": [
+          "`onboardingDone!==true` 才开",
+          "跳过只写 done，完成才写形态/皮肤（白名单）"
+        ],
+        "outcome": "`onboardingDone!==true` 才开；跳过只写 done，完成才写形态/皮肤（白名单）",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "首次引导",
+        "afterLocation": "首次引导",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/onboarding.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-059",
+      "moduleId": "MOD-SURF",
+      "name": "更新检查",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-UPDATE"
+      ],
+      "contract": {
+        "entry": "更新卡",
+        "actions": [
+          "GitHub latest，正式版且版本更高才通知",
+          "8s 超时、6h 周期、忽略 draft/prerelease"
+        ],
+        "outcome": "GitHub latest，正式版且版本更高才通知；8s 超时、6h 周期、忽略 draft/prerelease",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "更新卡",
+        "afterLocation": "更新卡",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/update-prompt.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-060",
+      "moduleId": "MOD-SURF",
+      "name": "更新卡出现与去重",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-UPDATE"
+      ],
+      "contract": {
+        "entry": "更新卡",
+        "actions": [
+          "payload 只留 version + ≤2 条 notes",
+          "每次运行只弹一次",
+          "24h 内不弹",
+          "URL 是常量"
+        ],
+        "outcome": "payload 只留 version + ≤2 条 notes；每次运行只弹一次；24h 内不弹；URL 是常量",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "更新卡",
+        "afterLocation": "更新卡",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/update-prompt.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-061",
+      "moduleId": "MOD-SURF",
+      "name": "更新卡「稍后」",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-UPDATE"
+      ],
+      "contract": {
+        "entry": "更新卡",
+        "actions": [
+          "应写 `snoozeUntil = now + 24h` 并关窗",
+          "真机点按无反应（同一 P0）"
+        ],
+        "outcome": "应写 `snoozeUntil = now + 24h` 并关窗；真机点按无反应（同一 P0）",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "更新卡",
+        "afterLocation": "更新卡",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/update-prompt.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-062",
+      "moduleId": "MOD-SURF",
+      "name": "更新卡三个出口",
+      "status": "in_progress",
+      "stage": "开发中",
+      "pageIds": [
+        "PAGE-UPDATE"
+      ],
+      "contract": {
+        "entry": "更新卡",
+        "actions": [
+          "在「更新卡」中使用「更新卡三个出口」"
+        ],
+        "outcome": "「稍后」「打开下载页」「Esc」全部被 IPC 守卫以 frame 理由拒绝，无任何副作用",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "更新卡",
+        "afterLocation": "更新卡",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/update-prompt.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-063",
+      "moduleId": "MOD-SURF",
+      "name": "测试注入",
+      "status": "experimental",
+      "stage": "实验性",
+      "pageIds": [
+        "PAGE-UPDATE"
+      ],
+      "contract": {
+        "entry": "更新卡",
+        "actions": [
+          "`EMOJITOT_UPDATE_TEST` 注入固定 0.6.6 卡片",
+          "因上一条只能验证「卡片出现」"
+        ],
+        "outcome": "`EMOJITOT_UPDATE_TEST` 注入固定 0.6.6 卡片；因上一条只能验证「卡片出现」",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "更新卡",
+        "afterLocation": "更新卡",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main/update-prompt.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-064",
+      "moduleId": "MOD-WEB",
+      "name": "四视图 hash 路由",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-WEB-CONSOLE"
+      ],
+      "contract": {
+        "entry": "站点控制台",
+        "actions": [
+          "console/gallery/scene/docs",
+          "未知路由落 console",
+          "只认 `?state=`"
+        ],
+        "outcome": "console/gallery/scene/docs；未知路由落 console；只认 `?state=`",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "站点控制台",
+        "afterLocation": "站点控制台",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/gallery/src/console.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-065",
+      "moduleId": "MOD-WEB",
+      "name": "视图先销毁再新建",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-WEB-CONSOLE"
+      ],
+      "contract": {
+        "entry": "站点控制台",
+        "actions": [
+          "旧视图 dispose 后替换",
+          "20 次切换后活跃 interval = 0"
+        ],
+        "outcome": "旧视图 dispose 后替换；20 次切换后活跃 interval = 0",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "站点控制台",
+        "afterLocation": "站点控制台",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/gallery/src/console.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-066",
+      "moduleId": "MOD-WEB",
+      "name": "语言 / 明暗",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-WEB-CONSOLE"
+      ],
+      "contract": {
+        "entry": "站点控制台",
+        "actions": [
+          "写 localStorage + html lang + 重渲染",
+          "默认 dark，显式 '0' 才 light"
+        ],
+        "outcome": "写 localStorage + html lang + 重渲染；默认 dark，显式 '0' 才 light",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "站点控制台",
+        "afterLocation": "站点控制台",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/gallery/src/console.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-067",
+      "moduleId": "MOD-WEB",
+      "name": "控制台（代码卡 / 尺寸 / 抽屉）",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-WEB-CONSOLE"
+      ],
+      "contract": {
+        "entry": "站点控制台",
+        "actions": [
+          "代码卡与舞台同源",
+          "换表情不重建运行时",
+          "抽屉写同一 `look`"
+        ],
+        "outcome": "代码卡与舞台同源；换表情不重建运行时；抽屉写同一 `look`",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "站点控制台",
+        "afterLocation": "站点控制台",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/gallery/src/console.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-068",
+      "moduleId": "MOD-WEB",
+      "name": "表情馆",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-WEB-GALLERY"
+      ],
+      "contract": {
+        "entry": "表情馆",
+        "actions": [
+          "双 tab、4 过滤、计数、灯箱 ←",
+          "/Esc 焦点归还"
+        ],
+        "outcome": "双 tab、4 过滤、计数、灯箱 ←→/Esc 焦点归还",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "表情馆",
+        "afterLocation": "表情馆",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/gallery/src/wall.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-069",
+      "moduleId": "MOD-WEB",
+      "name": "场景",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-WEB-SCENE"
+      ],
+      "contract": {
+        "entry": "场景仲裁",
+        "actions": [
+          "九会话单脸仲裁",
+          "历史 ≤5",
+          "reset 后 owner 变 — 但历史保留"
+        ],
+        "outcome": "九会话单脸仲裁；历史 ≤5；reset 后 owner 变 — 但历史保留",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "场景仲裁",
+        "afterLocation": "场景仲裁",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/gallery/src/scene.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-070",
+      "moduleId": "MOD-WEB",
+      "name": "文档页",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-WEB-DOCS"
+      ],
+      "contract": {
+        "entry": "协议文档",
+        "actions": [
+          "在「协议文档」中使用「文档页」"
+        ],
+        "outcome": "九节 + TOC 高亮 + 3 个实时骨架 + 375px",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "协议文档",
+        "afterLocation": "协议文档",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/gallery/src/docs.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-071",
+      "moduleId": "MOD-WEB",
+      "name": "文档协议表交互",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-WEB-DOCS"
+      ],
+      "contract": {
+        "entry": "协议文档",
+        "actions": [
+          "在「协议文档」中使用「文档协议表交互」"
+        ],
+        "outcome": "三组 details、hover 预览缓存、点击复制、1200ms 回原值",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "协议文档",
+        "afterLocation": "协议文档",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/gallery/src/docs.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-072",
+      "moduleId": "MOD-WEB",
+      "name": "CSP / 零网络",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-WEB-CONSOLE"
+      ],
+      "contract": {
+        "entry": "站点控制台",
+        "actions": [
+          "`default-src 'self'`",
+          "无 fetch/XHR/WebSocket",
+          "**无断言**"
+        ],
+        "outcome": "`default-src 'self'`；无 fetch/XHR/WebSocket；**无断言**",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "站点控制台",
+        "afterLocation": "站点控制台",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/gallery/src/console.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-073",
+      "moduleId": "MOD-ENGINE",
+      "name": "渲染是纯函数",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "同入参两次输出逐字节相同",
+          "不读时钟、不碰 DOM"
+        ],
+        "outcome": "同入参两次输出逐字节相同；不读时钟、不碰 DOM",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-074",
+      "moduleId": "MOD-ENGINE",
+      "name": "角色词汇",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "在「核心引擎（无窗口）」中使用「角色词汇」"
+        ],
+        "outcome": "15 身体 / 12 配色 / 26 特征 + none / 61 表情 / 15 人阵容（一人最多一特征）",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-075",
+      "moduleId": "MOD-ENGINE",
+      "name": "叠放顺序",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "表面在脸下、表头特征在脸上",
+          "**没有断言**，写反测试不会红"
+        ],
+        "outcome": "表面在脸下、表头特征在脸上；**没有断言**，写反测试不会红",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-076",
+      "moduleId": "MOD-ENGINE",
+      "name": "墨色规则",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "亮度小于 0.55 用白墨，否则 #1F1F1F",
+          "无断言"
+        ],
+        "outcome": "亮度小于 0.55 用白墨，否则 #1F1F1F；无断言",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-077",
+      "moduleId": "MOD-ENGINE",
+      "name": "7 种 finish",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "只有 sticker（桌面默认）与 flat 进过界面",
+          "其余 5 种无 UI、无测试"
+        ],
+        "outcome": "只有 sticker（桌面默认）与 flat 进过界面；其余 5 种无 UI、无测试",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-078",
+      "moduleId": "MOD-ENGINE",
+      "name": "运行时挂载",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "innerHTML 渲染后替换 live-face + 信号层 + 粒子层",
+          "挂载失败抛错"
+        ],
+        "outcome": "innerHTML 渲染后替换 live-face + 信号层 + 粒子层；挂载失败抛错",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-079",
+      "moduleId": "MOD-ENGINE",
+      "name": "销毁契约",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "在「核心引擎（无窗口）」中使用「销毁契约」"
+        ],
+        "outcome": "取消 RAF、移除 3 个监听、清粒子、删 dataset、清空 root",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-080",
+      "moduleId": "MOD-ENGINE",
+      "name": "16 顶点眼型",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "10 种拓扑顶点数恒为 16，可同编号插值",
+          "长度不一致抛错"
+        ],
+        "outcome": "10 种拓扑顶点数恒为 16，可同编号插值；长度不一致抛错",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-081",
+      "moduleId": "MOD-ENGINE",
+      "name": "弹簧边界",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "dt 夹 0.5s，子步 ≤1/120s",
+          "非有限值吸附 target"
+        ],
+        "outcome": "dt 夹 0.5s，子步 ≤1/120s；非有限值吸附 target",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-082",
+      "moduleId": "MOD-ENGINE",
+      "name": "两位 id 与段回退",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "只接受 0–99；未知 id 按十年段落回退；60–99 无段",
+          "idle"
+        ],
+        "outcome": "只接受 0–99；未知 id 按十年段落回退；60–99 无段 → idle",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-083",
+      "moduleId": "MOD-ENGINE",
+      "name": "事件 vs 条件",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "在「核心引擎（无窗口）」中使用「事件 vs 条件」"
+        ],
+        "outcome": "10 个 oneshot id 是事件，其余是条件",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-084",
+      "moduleId": "MOD-ENGINE",
+      "name": "仲裁",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "39 项优先级",
+          "停留 900ms",
+          "更紧急立即打断",
+          "headless 不上屏"
+        ],
+        "outcome": "39 项优先级；停留 900ms；更紧急立即打断；headless 不上屏；TTL 120s",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-085",
+      "moduleId": "MOD-ENGINE",
+      "name": "事件桥",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "initial '`02`'",
+          "读不懂发 error 且不改屏幕",
+          "dispose 清三类监听"
+        ],
+        "outcome": "initial '`02`'；读不懂发 error 且不改屏幕；dispose 清三类监听",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-086",
+      "moduleId": "MOD-ENGINE",
+      "name": "信号层 / 一次性动作 / 眼型轮转",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-ENGINE"
+      ],
+      "contract": {
+        "entry": "核心引擎（无窗口）",
+        "actions": [
+          "五种信号、spin/bounce/burst、按 eyeHold 轮转",
+          "全部无断言"
+        ],
+        "outcome": "五种信号、spin/bounce/burst、按 eyeHold 轮转；全部无断言",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "核心引擎（无窗口）",
+        "afterLocation": "核心引擎（无窗口）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "packages/core/src/render.ts",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-087",
+      "moduleId": "MOD-RUNTIME",
+      "name": "单实例 / 启动次序 / 三态",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "抢锁失败即退出",
+          "二次启动按 prefs 恢复形态",
+          "启动顺序固定"
+        ],
+        "outcome": "抢锁失败即退出；二次启动按 prefs 恢复形态；启动顺序固定",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-088",
+      "moduleId": "MOD-RUNTIME",
+      "name": "IPC 守门",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "角色",
+          "frame",
+          "字节（默认 64KB，shelf 8MB）",
+          "形状；拒绝返回 null"
+        ],
+        "outcome": "角色 → frame → 字节（默认 64KB，shelf 8MB）→ 形状；拒绝返回 null",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-089",
+      "moduleId": "MOD-RUNTIME",
+      "name": "单一「脸」所有权",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "只有主进程 `faceBus` 决定表情并广播",
+          "渲染层不得上报"
+        ],
+        "outcome": "只有主进程 `faceBus` 决定表情并广播；渲染层不得上报",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-090",
+      "moduleId": "MOD-RUNTIME",
+      "name": "情绪优先级与停留",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "manual > agent > media > idle",
+          "上台至少 2000ms",
+          "同脸换源不重置"
+        ],
+        "outcome": "manual > agent > media > idle；上台至少 2000ms；同脸换源不重置",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-091",
+      "moduleId": "MOD-RUNTIME",
+      "name": "Agent 联动",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "每秒 stat 三个状态文件",
+          "只有 running 进仲裁",
+          "过期只当回执"
+        ],
+        "outcome": "每秒 stat 三个状态文件；只有 running 进仲裁；过期只当回执",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-092",
+      "moduleId": "MOD-RUNTIME",
+      "name": "服务计划",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "页面/状态组件决定服务集",
+          "已启用的不重启",
+          "不支持的平台跳过"
+        ],
+        "outcome": "页面/状态组件决定服务集；已启用的不重启；不支持的平台跳过",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-093",
+      "moduleId": "MOD-RUNTIME",
+      "name": "全屏隐藏 / 自动避让",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "连续两样本确认全屏才藏",
+          "避让由常驻脚本判定"
+        ],
+        "outcome": "连续两样本确认全屏才藏；避让由常驻脚本判定",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-094",
+      "moduleId": "MOD-RUNTIME",
+      "name": "退出清理",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「退出清理」"
+        ],
+        "outcome": "before-quit 停表、注销快捷键、killWatchers、逐服务 stop、unwatch state",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-095",
+      "moduleId": "MOD-RUNTIME",
+      "name": "存储原子写",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "临时文件 + fsync + rename",
+          "失败保留旧文件"
+        ],
+        "outcome": "临时文件 + fsync + rename；失败保留旧文件",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-096",
+      "moduleId": "MOD-RUNTIME",
+      "name": "安全加固",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "禁 GPU 加速/窗口/跨源导航/webview",
+          "六窗沙箱三件套"
+        ],
+        "outcome": "禁 GPU 加速/窗口/跨源导航/webview；六窗沙箱三件套",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-097",
+      "moduleId": "MOD-RUNTIME",
+      "name": "四段版本号与产物",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-RELEASE"
+      ],
+      "contract": {
+        "entry": "发布链（CLI）",
+        "actions": [
+          "三段 + 构建位",
+          "Setup/Portable 命名固定",
+          "便携靠追加启动器"
+        ],
+        "outcome": "三段 + 构建位；Setup/Portable 命名固定；便携靠追加启动器",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "发布链（CLI）",
+        "afterLocation": "发布链（CLI）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "scripts/check-version.mjs",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-098",
+      "moduleId": "MOD-RUNTIME",
+      "name": "签名策略",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-RELEASE"
+      ],
+      "contract": {
+        "entry": "发布链（CLI）",
+        "actions": [
+          "无证书跳过并 warn",
+          "只对本地证书补签"
+        ],
+        "outcome": "无证书跳过并 warn；只对本地证书补签",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "发布链（CLI）",
+        "afterLocation": "发布链（CLI）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "scripts/check-version.mjs",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-099",
+      "moduleId": "MOD-RUNTIME",
+      "name": "隐私扫描 / 文档闸门",
+      "status": "confirmed",
+      "stage": "已验收",
+      "pageIds": [
+        "PAGE-RELEASE"
+      ],
+      "contract": {
+        "entry": "发布链（CLI）",
+        "actions": [
+          "`pnpm scan` FAIL 阻断",
+          "docs/settings 闸门"
+        ],
+        "outcome": "`pnpm scan` FAIL 阻断；docs/settings 闸门",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "发布链（CLI）",
+        "afterLocation": "发布链（CLI）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "scripts/check-version.mjs",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-100",
+      "moduleId": "MOD-RUNTIME",
+      "name": "版本纪律闸门",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-RELEASE"
+      ],
+      "contract": {
+        "entry": "发布链（CLI）",
+        "actions": [
+          "当前版本必须严格大于最近 tag，且 notes 条目数达标",
+          "**当前按设计必失败**（§4-8）"
+        ],
+        "outcome": "当前版本必须严格大于最近 tag，且 notes 条目数达标；**当前按设计必失败**（§4-8）",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "发布链（CLI）",
+        "afterLocation": "发布链（CLI）",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "scripts/check-version.mjs",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-101",
+      "moduleId": "MOD-RUNTIME",
+      "name": "#",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「#」"
+        ],
+        "outcome": "现象",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-102",
+      "moduleId": "MOD-RUNTIME",
+      "name": "1",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「1」"
+        ],
+        "outcome": "更新卡「稍后」「打开下载页」「Esc」全部无反应",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-103",
+      "moduleId": "MOD-RUNTIME",
+      "name": "2",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「2」"
+        ],
+        "outcome": "设置中心 10 个页面、60 处控件是示意，不写盘",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-104",
+      "moduleId": "MOD-RUNTIME",
+      "name": "3",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「3」"
+        ],
+        "outcome": "81 条偏好里 43 条没有入口（含岛宽 / 胶囊高 / 顶部间距 / 状态组件排序 / 默认页 / 避让开关）",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-105",
+      "moduleId": "MOD-RUNTIME",
+      "name": "4",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「4」"
+        ],
+        "outcome": "四个整块功能失去入口：界面语言、四套方案、状态组件开关/排序、避让应用清单",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-106",
+      "moduleId": "MOD-RUNTIME",
+      "name": "5",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「5」"
+        ],
+        "outcome": "岛通知插页不出现",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-107",
+      "moduleId": "MOD-RUNTIME",
+      "name": "6",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「6」"
+        ],
+        "outcome": "设备无法置顶",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-108",
+      "moduleId": "MOD-RUNTIME",
+      "name": "7",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「7」"
+        ],
+        "outcome": "文档闸门红：sync-docs --check 5 处、docs-consistency 4 处",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-109",
+      "moduleId": "MOD-RUNTIME",
+      "name": "8",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「8」"
+        ],
+        "outcome": "`pnpm version:check` 必失败",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-110",
+      "moduleId": "MOD-RUNTIME",
+      "name": "9",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「9」"
+        ],
+        "outcome": "一次滚轮手势可能连翻多页",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-111",
+      "moduleId": "MOD-RUNTIME",
+      "name": "10",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「10」"
+        ],
+        "outcome": "从托盘改「置顶」，设置窗可能显示旧值",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-112",
+      "moduleId": "MOD-RUNTIME",
+      "name": "11",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「11」"
+        ],
+        "outcome": "设置·设备页在无数据时显示 4 台虚构设备",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    },
+    {
+      "id": "FEAT-113",
+      "moduleId": "MOD-RUNTIME",
+      "name": "12",
+      "status": "unverified",
+      "stage": "待验证",
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND"
+      ],
+      "contract": {
+        "entry": "桌面球 / 灵动岛",
+        "actions": [
+          "在「桌面球」中使用「12」"
+        ],
+        "outcome": "引导取初值失败后点「完成」会把形态/皮肤写回默认",
+        "data": "数据副作用以 FEATURE-BASELINE.md §3 与 baseline 对应 §6 合同为准。",
+        "states": [
+          "合同主态"
+        ],
+        "dependencies": [],
+        "locked": [
+          "判定条件、时序、文案与数据副作用不得偏离 FEATURE-BASELINE.md"
+        ]
+      },
+      "parity": {
+        "status": "retained",
+        "beforeLocation": "桌面球",
+        "afterLocation": "桌面球",
+        "evidence": "EV-BASELINE",
+        "reason": "本次只建立工作台，不放宽或改变任何行为"
+      },
+      "implementation": [
+        {
+          "path": "apps/desktop/src/main.js",
+          "symbol": ""
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "FLOW-EXPAND",
+      "name": "岛展开 → 翻页 → 收起",
+      "status": "confirmed",
+      "steps": [
+        "指针进入岛命中区",
+        "展开并请求页面 box",
+        "翻页或等待",
+        "Esc/失焦按 blurCollapse 收起"
+      ],
+      "pageIds": [
+        "PAGE-ISLAND",
+        "PAGE-ISL-MUSIC"
+      ]
+    },
+    {
+      "id": "FLOW-PAGE-DATA",
+      "name": "岛页读取服务数据",
+      "status": "confirmed",
+      "steps": [
+        "页面启用",
+        "服务计划拉起服务",
+        "页面渲染读数",
+        "失败保留上次读数"
+      ],
+      "pageIds": [
+        "PAGE-ISLAND",
+        "PAGE-ISL-WEATHER",
+        "PAGE-ISL-DEVICES"
+      ]
+    },
+    {
+      "id": "FLOW-SETTINGS",
+      "name": "改设置 → 写盘 → 广播",
+      "status": "in_progress",
+      "steps": [
+        "进入设置页",
+        "操作控件",
+        "settings:patch + filterPatch",
+        "写盘并广播",
+        "回包整体重绘"
+      ],
+      "pageIds": [
+        "PAGE-SETTINGS",
+        "PAGE-SET-PAGES"
+      ],
+      "blocker": "60 处示意控件与 43 条无入口偏好未接。"
+    },
+    {
+      "id": "FLOW-FACE",
+      "name": "表情从主进程同步到三处",
+      "status": "confirmed",
+      "steps": [
+        "人工/Agent/媒体事件",
+        "faceBus 仲裁",
+        "face:apply 广播",
+        "球、岛、托盘同步"
+      ],
+      "pageIds": [
+        "PAGE-BALL",
+        "PAGE-ISLAND",
+        "PAGE-SET-CAST"
+      ]
+    },
+    {
+      "id": "FLOW-BALL",
+      "name": "拖拽 → 停靠 → 半隐 → 悬停展开",
+      "status": "unverified",
+      "steps": [
+        "按下并移动 >4px",
+        "主进程 16ms 跟手",
+        "距边 ≤8px 停靠",
+        "离开一次后半隐可悬停"
+      ],
+      "pageIds": [
+        "PAGE-BALL"
+      ]
+    },
+    {
+      "id": "FLOW-ONBOARD",
+      "name": "首次启动引导",
+      "status": "unverified",
+      "steps": [
+        "onboardingDone 非 true",
+        "两页引导",
+        "跳过只写 done / 完成写形态与皮肤"
+      ],
+      "pageIds": [
+        "PAGE-ONBOARDING",
+        "PAGE-SETTINGS"
+      ]
+    },
+    {
+      "id": "FLOW-UPDATE",
+      "name": "更新检查 → 卡片 → 稍后",
+      "status": "in_progress",
+      "steps": [
+        "GitHub latest 检查",
+        "版本更高则弹卡",
+        "点「稍后」应写 24h snooze",
+        "关闭卡片"
+      ],
+      "pageIds": [
+        "PAGE-UPDATE"
+      ],
+      "blocker": "P0：三个出口被 IPC frame 守卫拒绝。"
+    },
+    {
+      "id": "FLOW-RELEASE",
+      "name": "发版闸门",
+      "status": "in_progress",
+      "steps": [
+        "pnpm check 全绿",
+        "scan 清零",
+        "electron-builder 双产物",
+        "tag + Release",
+        "真机装验"
+      ],
+      "pageIds": [
+        "PAGE-RELEASE"
+      ],
+      "blocker": "docs:check 红、version:check 必失败。"
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "DEP-01",
+      "from": "PAGE-SETTINGS",
+      "to": "RES-SCHEMA",
+      "kind": "data",
+      "description": "设置页只通过 schema 写偏好，未知键被 filterPatch 丢弃。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-02",
+      "from": "PAGE-SETTINGS",
+      "to": "RES-PREFS",
+      "kind": "storage",
+      "description": "即时写盘到 prefs.json，原子写。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-03",
+      "from": "PAGE-ISLAND",
+      "to": "RES-PREFS",
+      "kind": "storage",
+      "description": "岛读取页面开关、皮肤与尺寸偏好。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-04",
+      "from": "PAGE-BALL",
+      "to": "RES-FACE-BUS",
+      "kind": "service",
+      "description": "球只消费 face:apply，不自产情绪。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-05",
+      "from": "PAGE-ISLAND",
+      "to": "RES-FACE-BUS",
+      "kind": "service",
+      "description": "岛脸与球共用主进程仲裁结果。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-06",
+      "from": "PAGE-SETTINGS",
+      "to": "RES-SECRETS",
+      "kind": "security",
+      "description": "AI key、邮箱授权码、日历 URL 只在主进程解密。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-07",
+      "from": "PAGE-ISL-MUSIC",
+      "to": "RES-SERVICES",
+      "kind": "service",
+      "description": "媒体页数据来自 media / lyrics 服务。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-08",
+      "from": "PAGE-ISL-WEATHER",
+      "to": "RES-SERVICES",
+      "kind": "service",
+      "description": "天气页来自 weather 服务与定位缓存。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-09",
+      "from": "PAGE-ISL-DEVICES",
+      "to": "RES-SERVICES",
+      "kind": "service",
+      "description": "设备页来自 devices 探针。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-10",
+      "from": "PAGE-UPDATE",
+      "to": "RES-UPDATE-CHECK",
+      "kind": "service",
+      "description": "更新卡由 update-check 通知。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-11",
+      "from": "PAGE-ENGINE",
+      "to": "RES-CORE",
+      "kind": "library",
+      "description": "渲染与运行时来自 packages/core。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-12",
+      "from": "PAGE-ENGINE",
+      "to": "RES-PROTOCOL",
+      "kind": "library",
+      "description": "协议解析、仲裁与通道来自 packages/protocol。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-13",
+      "from": "PAGE-SET-PAGES",
+      "to": "RES-SERVICES",
+      "kind": "service",
+      "description": "页面开关决定后台服务启停。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-14",
+      "from": "PAGE-RELEASE",
+      "to": "RES-SCAN",
+      "kind": "security",
+      "description": "发版前 scan FAIL 必须清零。",
+      "status": "confirmed"
+    },
+    {
+      "id": "DEP-15",
+      "from": "PAGE-SETTINGS",
+      "to": "RES-IPC-GUARD",
+      "kind": "security",
+      "description": "所有设置写入走守门通道。",
+      "status": "confirmed"
+    }
+  ],
+  "changes": [
+    {
+      "id": "CHG-UPDATE-P0",
+      "title": "修更新卡三个出口",
+      "status": "pending",
+      "why": "P0：稍后/打开下载页/Esc 全被 frame 守卫拒绝。",
+      "risk": "误放宽 frame 规则会削弱六窗沙箱。",
+      "acceptance": "三出口可用、snoozeUntil 写入、补 ipc-frame 用例。",
+      "pages": [
+        "PAGE-UPDATE"
+      ],
+      "features": [
+        "FEAT-062"
+      ]
+    },
+    {
+      "id": "CHG-SETTINGS-WIRE",
+      "title": "设置页接线与去掉示意控件",
+      "status": "pending",
+      "why": "60 处示意控件、43 条偏好无入口。",
+      "risk": "一次性接完会扩大改动面；需逐页对照。",
+      "acceptance": "岛宽/胶囊高/顶部间距可写，示意控件清零或标明即将支持。",
+      "pages": [
+        "PAGE-SETTINGS",
+        "PAGE-SET-PAGES",
+        "PAGE-SET-LAYOUT"
+      ],
+      "features": [
+        "FEAT-052"
+      ]
+    },
+    {
+      "id": "CHG-DOCS-SYNC",
+      "title": "补 0.8.20.26 notes 并同步文档",
+      "status": "pending",
+      "why": "docs:check 红：5 处过期 + 4 处不一致。",
+      "risk": "README 下载链接指错版本会让用户下到旧包。",
+      "acceptance": "docs:sync 与 docs-consistency 全绿，README 指 .26。",
+      "pages": [
+        "PAGE-RELEASE"
+      ],
+      "features": [
+        "FEAT-099"
+      ]
+    }
+  ],
+  "comparisons": [],
+  "glossary": [
+    {
+      "term": "灵动岛",
+      "aliases": [],
+      "explanation": "屏幕顶部常驻的岛形窗口，展开后显示 11 个功能页，收起后只剩胶囊或一颗脸。",
+      "scope": "桌面形态"
+    },
+    {
+      "term": "胶囊",
+      "aliases": [],
+      "explanation": "岛收起后的横向小条，显示脸、状态行或歌词；高度由 pillHeight 决定。",
+      "scope": "桌面形态"
+    },
+    {
+      "term": "主进程",
+      "aliases": [],
+      "explanation": "Electron 中负责建窗、守门、读写文件与仲裁表情的后台进程。",
+      "scope": "架构"
+    },
+    {
+      "term": "渲染层",
+      "aliases": [],
+      "explanation": "窗口里真正画界面的一段网页代码，只能通过 preload 暴露的接口做事。",
+      "scope": "架构"
+    },
+    {
+      "term": "preload",
+      "aliases": [],
+      "explanation": "窗口打开前先运行、用来准备安全接口的一段程序；每个窗口各一个。",
+      "scope": "架构"
+    },
+    {
+      "term": "IPC 守门",
+      "aliases": [],
+      "explanation": "所有窗口与主进程通信前必须通过的检查：角色、frame、字节上限、形状。",
+      "scope": "安全"
+    },
+    {
+      "term": "schema",
+      "aliases": [],
+      "explanation": "唯一的一份偏好定义，列出默认值、读写者与控件归属；新键必须同时登记。",
+      "scope": "数据"
+    },
+    {
+      "term": "face-bus",
+      "aliases": [],
+      "explanation": "主进程里唯一决定「现在这张脸是什么」的仲裁器，其他窗口只接收结果。",
+      "scope": "表情"
+    },
+    {
+      "term": "合同",
+      "aliases": [],
+      "explanation": "一条可验收的功能约定：判定条件、时序、文案或数据副作用，至少写清两条。",
+      "scope": "验收"
+    },
+    {
+      "term": "状态口径",
+      "aliases": [],
+      "explanation": "已确认 / 开发中 / 待验证 / 实验性 / 已废弃，每种都要求对应证据。",
+      "scope": "验收"
+    },
+    {
+      "term": "四段版本号",
+      "aliases": [],
+      "explanation": "0.<系列>.<大版本>.<小修>；package.json 只放前三段，第四段进 buildVersion 与 tag。",
+      "scope": "发布"
+    },
+    {
+      "term": "asarUnpack",
+      "aliases": [],
+      "explanation": "打包时把 PowerShell 脚本等需要真实路径的文件解到 app.asar 之外。",
+      "scope": "发布"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV-BASELINE",
+      "type": "doc",
+      "label": "全站基准与功能合同（本轮事实来源）",
+      "location": "docs/baseline/README.md · docs/FEATURE-BASELINE.md",
+      "status": "confirmed"
+    },
+    {
+      "id": "EV-TESTS",
+      "type": "test",
+      "label": "桌面单测 565 / protocol 34 / core 27",
+      "location": "apps/desktop · packages/protocol · packages/core",
+      "status": "confirmed"
+    },
+    {
+      "id": "EV-SMOKE",
+      "type": "test",
+      "label": "真窗口冒烟 36/36",
+      "location": "apps/desktop/scripts/window-smoke.mjs",
+      "status": "confirmed"
+    },
+    {
+      "id": "EV-UIAUDIT",
+      "type": "test",
+      "label": "UI 审计 11 岛页 + 16 设置页 0 违规",
+      "location": "apps/desktop/scripts/ui-audit.mjs",
+      "status": "confirmed"
+    },
+    {
+      "id": "EV-PREVIEW",
+      "type": "test",
+      "label": "静态渲染 51/51 id、61/61 face",
+      "location": "out/preview.html",
+      "status": "confirmed"
+    },
+    {
+      "id": "EV-GALLERY",
+      "type": "test",
+      "label": "站点浏览器验收 32/32",
+      "location": "apps/gallery/scripts/browser-check.mjs",
+      "status": "confirmed"
+    },
+    {
+      "id": "EV-SETTINGS-AUDIT",
+      "type": "test",
+      "label": "81 条偏好路径与文档一致",
+      "location": "scripts/settings-audit.mjs",
+      "status": "confirmed"
+    },
+    {
+      "id": "EV-AUDIT",
+      "type": "test",
+      "label": "依赖审计无已知漏洞",
+      "location": "pnpm audit:ci",
+      "status": "confirmed"
+    },
+    {
+      "id": "EV-SCAN",
+      "type": "test",
+      "label": "敏感扫描文本规则 0 FAIL",
+      "location": "scripts/scan-sensitive.mjs",
+      "status": "confirmed"
+    },
+    {
+      "id": "EV-DOCS-RED",
+      "type": "doc",
+      "label": "sync-docs --check 5 处过期",
+      "location": "docs/RELEASE-NOTES.md · README",
+      "status": "unverified"
+    },
+    {
+      "id": "EV-CONSISTENCY",
+      "type": "doc",
+      "label": "docs-consistency 4 处不一致",
+      "location": "README 下载链接 · settingsPages",
+      "status": "unverified"
+    },
+    {
+      "id": "EV-UPDATE-P0",
+      "type": "test",
+      "label": "真机：三出口无反应 + IPC 拒绝日志",
+      "location": "docs/FEATURE-BASELINE.md §4-1",
+      "status": "in_progress"
+    }
+  ],
+  "handoff": {
+    "goal": "让后续会话一眼看清 EmojiTot 有什么、在哪、哪些只能看不能用、下一步做什么。",
+    "lastVerified": "ccc21b4（本地）· tag v0.8.20.26 · HEAD bb435d1",
+    "preserve": [
+      "表情只在主进程产生",
+      "IPC 必须过四层守门",
+      "岛尺寸单源",
+      "命中区=画出来的矩形",
+      "偏好只有一个 schema",
+      "站点零外部请求"
+    ],
+    "unverified": [
+      "跨语言长文本",
+      "混合 DPI / 多显示器",
+      "线上 gh-pages",
+      "23 张 WARN 大图",
+      "签名产物"
+    ],
+    "nextStep": [
+      "修 update FRAME 并补 ipc-frame 用例",
+      "设置页先接岛宽/胶囊高/顶部间距",
+      "补 .26 notes 后跑 pnpm docs:sync"
+    ],
+    "risks": [
+      "P0 更新卡三出口失效",
+      "60 处示意控件让设置页看起来可配",
+      "文档闸门红导致 pnpm check 不能作为发版信号"
+    ],
+    "evidence": [
+      "docs/baseline/README.md",
+      "docs/FEATURE-BASELINE.md",
+      "docs/baseline/atlas/project-atlas.html"
+    ],
+    "nextSessionPrompt": "先读 docs/baseline/README.md 与 docs/FEATURE-BASELINE.md，再看 docs/baseline/atlas/project-atlas.html；当前先修更新卡 P0（FRAME 缺 update），不要动已确认的 IPC/尺寸/表情合同。"
+  }
+}
