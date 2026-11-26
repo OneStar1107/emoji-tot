@@ -25,7 +25,11 @@ apps/desktop/.ui-capture/
 .chrome-check/
 *.orig
 
-# scratch workspace: screenshots, one-off scripts, subagent evidence
+# Per-run layout measurements are local QA evidence, not release assets.
+docs/baseline/atlas/captures/island-layout-metrics.json
+docs/baseline/atlas/captures/settings-layout-metrics.json
+
+# Scratch workspace: screenshots, one-off scripts, and subagent evidence.
 .agents/
 build/cert/
 

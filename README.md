@@ -39,8 +39,8 @@
 <!--downloads:start-->
 | 文件 | 适合 |
 | --- | --- |
-| [EmojiTot.Setup.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.20.18/EmojiTot.Setup.exe) | 安装版，装完从开始菜单启动 |
-| [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.20.18/EmojiTot.Portable.exe) | 便携版，双击即用，不写注册表 |
+| [EmojiTot.Setup.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.20.26/EmojiTot.Setup.exe) | 安装版，装完从开始菜单启动 |
+| [EmojiTot.Portable.exe](https://github.com/OneStar1107/emoji-tot/releases/download/v0.8.20.26/EmojiTot.Portable.exe) | 便携版，双击即用，不写注册表 |
 <!--downloads:end-->
 
 Windows x64 · 本机自签名（其他电脑首次运行仍可能出现 SmartScreen「未知发布者」，可点「仍要运行」）· [全部版本](https://github.com/OneStar1107/emoji-tot/releases) · 当前 <!--facts:version-->0.8.20<!--/facts-->
@@ -68,7 +68,7 @@ Electron 45 的运行时本身不能从中文路径启动。开发脚本、安�
 2. **<!--facts:islandPages-->11<!--/facts--> 个功能页**：媒体、天气、专注、待办、健康、置物架、AI 工作台、邮箱、日程、设备、消息，左右翻页，空态给一句话加一个动作。
 3. **一个引擎**：<!--facts:cast-->15<!--/facts--> 个角色、<!--facts:faceStates-->61<!--/facts--> 个表情全部由 SVG 手写轮廓算出来，零图片资源，桌面端与站点共用同一套。
 4. **两位数协议**：AI 侧（DeepSeek Harness / Claude Code / Codex）只发一个 id，宿主把它变成表情；接不认识的也退回本段，不白屏 —— `%APPDATA%/EmojiTot/state.json` 一个文件就是全部接口。
-5. **设置中心**：<!--facts:settingsPages-->15<!--/facts--> 页、四种快速方案，改动即写进 `prefs.json`，没有保存按钮。
+5. **设置中心**：<!--facts:settingsPages-->16<!--/facts--> 页、四种快速方案，改动即写进 `prefs.json`，没有保存按钮。
 
 ## 数据与隐私
 

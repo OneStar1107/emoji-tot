@@ -1,0 +1,482 @@
+{
+  "schemaVersion": "1.0",
+  "enabled": true,
+  "autoCapture": true,
+  "mode": "real-app",
+  "outputDirectory": "docs/baseline/atlas/captures",
+  "probe": {
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "scripts/atlas-capture-probe.ps1"
+    ],
+    "timeoutMs": 15000
+  },
+  "versionSource": {
+    "path": "apps/desktop/package.json",
+    "field": "version"
+  },
+  "groups": [
+    {
+      "id": "island",
+      "label": "灵动岛与功能页",
+      "sources": [
+        "apps/desktop/scripts/capture-ui.mjs",
+        "apps/desktop/scripts/copy-vendor.mjs",
+        "apps/desktop/scripts/electron-runtime.mjs",
+        "apps/desktop/src/main/island.js",
+        "apps/desktop/src/preload-island.js",
+        "apps/desktop/src/renderer/faces.js",
+        "apps/desktop/src/renderer/island-fixtures.mjs",
+        "apps/desktop/src/renderer/island-header.mjs",
+        "apps/desktop/src/renderer/island-motion.mjs",
+        "apps/desktop/src/renderer/island-pill.mjs",
+        "apps/desktop/src/renderer/island.css",
+        "apps/desktop/src/renderer/island.html",
+        "apps/desktop/src/renderer/island.js",
+        "apps/desktop/src/renderer/lyric-clock.mjs",
+        "apps/desktop/src/renderer/media-controls.mjs",
+        "apps/desktop/src/renderer/polar-graphite-parity.css",
+        "apps/desktop/src/renderer/polar-graphite.css",
+        "apps/desktop/src/renderer/vendor/core",
+        "packages/core/dist"
+      ],
+      "command": [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "pnpm --filter @emojitot/desktop capture:ui -- --out {output}"
+      ],
+      "timeoutMs": 240000,
+      "outputs": [
+        {
+          "file": "island-collapsed.png",
+          "pageIds": ["PAGE-ISLAND"],
+          "label": "灵动岛收起状态",
+          "state": "collapsed",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-01-music.png",
+          "pageIds": ["PAGE-ISL-MUSIC"],
+          "label": "媒体页",
+          "state": "music",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-02-weather.png",
+          "pageIds": ["PAGE-ISL-WEATHER"],
+          "label": "天气页",
+          "state": "weather",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-03-quota.png",
+          "pageIds": ["PAGE-ISL-QUOTA"],
+          "label": "AI 工作台页",
+          "state": "quota",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-04-mail.png",
+          "pageIds": ["PAGE-ISL-MAIL"],
+          "label": "邮箱页",
+          "state": "mail",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-05-focus.png",
+          "pageIds": ["PAGE-ISL-FOCUS"],
+          "label": "专注页",
+          "state": "focus",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-06-todo.png",
+          "pageIds": ["PAGE-ISL-TODO"],
+          "label": "待办页",
+          "state": "todo",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-07-health.png",
+          "pageIds": ["PAGE-ISL-HEALTH"],
+          "label": "健康页",
+          "state": "health",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-08-shelf.png",
+          "pageIds": ["PAGE-ISL-SHELF"],
+          "label": "置物架页",
+          "state": "shelf",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-09-devices.png",
+          "pageIds": ["PAGE-ISL-DEVICES"],
+          "label": "设备页",
+          "state": "devices",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-10-calendar.png",
+          "pageIds": ["PAGE-ISL-CALENDAR"],
+          "label": "日程页",
+          "state": "calendar",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-11-messenger.png",
+          "pageIds": ["PAGE-ISL-MESSENGER"],
+          "label": "消息页",
+          "state": "messenger",
+          "viewport": { "width": 420, "height": 310 }
+        },
+        {
+          "file": "island-notification.png",
+          "pageIds": ["PAGE-ISLAND"],
+          "label": "通知状态",
+          "state": "notification",
+          "viewport": { "width": 420, "height": 310 }
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "label": "设置中心",
+      "sources": [
+        "apps/desktop/scripts/capture-ui.mjs",
+        "apps/desktop/scripts/copy-vendor.mjs",
+        "apps/desktop/scripts/electron-runtime.mjs",
+        "apps/desktop/src/main/settings.js",
+        "apps/desktop/src/preload-settings.js",
+        "apps/desktop/src/renderer/faces.js",
+        "apps/desktop/src/renderer/i18n.js",
+        "apps/desktop/src/renderer/island-pill.mjs",
+        "apps/desktop/src/renderer/polar-graphite-parity.css",
+        "apps/desktop/src/renderer/polar-graphite.css",
+        "apps/desktop/src/renderer/settings.css",
+        "apps/desktop/src/renderer/settings.html",
+        "apps/desktop/src/renderer/settings.js",
+        "apps/desktop/src/renderer/vendor/core",
+        "packages/core/dist"
+      ],
+      "command": [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "pnpm --filter @emojitot/desktop capture:ui -- --out {output}"
+      ],
+      "timeoutMs": 240000,
+      "outputs": [
+        {
+          "file": "settings-01-general.png",
+          "pageIds": ["PAGE-SET-GENERAL", "PAGE-SETTINGS"],
+          "label": "常规",
+          "state": "general",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-02-appearance.png",
+          "pageIds": ["PAGE-SET-APPEARANCE"],
+          "label": "外观",
+          "state": "appearance",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-03-layout.png",
+          "pageIds": ["PAGE-SET-LAYOUT"],
+          "label": "尺寸与位置",
+          "state": "layout",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-04-behavior.png",
+          "pageIds": ["PAGE-SET-BEHAVIOR"],
+          "label": "隐藏与交互",
+          "state": "behavior",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-05-cast.png",
+          "pageIds": ["PAGE-SET-CAST"],
+          "label": "角色与表情",
+          "state": "cast",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-06-pages.png",
+          "pageIds": ["PAGE-SET-PAGES"],
+          "label": "页面管理",
+          "state": "pages",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-07-music.png",
+          "pageIds": ["PAGE-SET-MUSIC"],
+          "label": "媒体与歌词",
+          "state": "music",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-08-focus.png",
+          "pageIds": ["PAGE-SET-FOCUS"],
+          "label": "专注与饮水",
+          "state": "focus",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-09-todo.png",
+          "pageIds": ["PAGE-SET-TODO"],
+          "label": "待办与置物",
+          "state": "todo",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-10-comm.png",
+          "pageIds": ["PAGE-SET-COMM"],
+          "label": "通知、邮箱与日程",
+          "state": "comm",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-11-quota.png",
+          "pageIds": ["PAGE-SET-QUOTA"],
+          "label": "AI 额度",
+          "state": "quota",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-12-weather.png",
+          "pageIds": ["PAGE-SET-WEATHER"],
+          "label": "天气",
+          "state": "weather",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-13-devices.png",
+          "pageIds": ["PAGE-SET-DEVICES"],
+          "label": "设备",
+          "state": "devices",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-14-tray.png",
+          "pageIds": ["PAGE-SET-TRAY"],
+          "label": "系统托盘图标",
+          "state": "tray",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-15-plugins.png",
+          "pageIds": ["PAGE-SET-PLUGINS"],
+          "label": "插件",
+          "state": "plugins",
+          "viewport": { "width": 1080, "height": 760 }
+        },
+        {
+          "file": "settings-16-about.png",
+          "pageIds": ["PAGE-SET-ABOUT"],
+          "label": "关于",
+          "state": "about",
+          "viewport": { "width": 1080, "height": 760 }
+        }
+      ]
+    },
+    {
+      "id": "desktop-ball",
+      "label": "桌面球",
+      "sources": [
+        "apps/desktop/scripts/capture-ui.mjs",
+        "apps/desktop/scripts/copy-vendor.mjs",
+        "apps/desktop/scripts/electron-runtime.mjs",
+        "apps/desktop/src/main.js",
+        "apps/desktop/src/preload.js",
+        "apps/desktop/src/renderer/index.html",
+        "apps/desktop/src/renderer/renderer.js",
+        "apps/desktop/src/renderer/style.css",
+        "apps/desktop/src/renderer/vendor/core",
+        "packages/core/dist"
+      ],
+      "command": [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "pnpm --filter @emojitot/desktop capture:ui -- --out {output}"
+      ],
+      "timeoutMs": 240000,
+      "outputs": [
+        {
+          "file": "desktop-ball.png",
+          "pageIds": ["PAGE-BALL"],
+          "label": "桌面球",
+          "state": "ball",
+          "viewport": { "width": 328, "height": 328 }
+        }
+      ]
+    },
+    {
+      "id": "desktop-tray",
+      "label": "托盘面板",
+      "sources": [
+        "apps/desktop/scripts/capture-ui.mjs",
+        "apps/desktop/scripts/copy-vendor.mjs",
+        "apps/desktop/scripts/electron-runtime.mjs",
+        "apps/desktop/src/main.js",
+        "apps/desktop/src/main/tray-menu.js",
+        "apps/desktop/src/main/tray-panel.js",
+        "apps/desktop/src/preload-tray.js",
+        "apps/desktop/src/renderer/tray.css",
+        "apps/desktop/src/renderer/tray.html",
+        "apps/desktop/src/renderer/tray.js",
+        "apps/desktop/src/renderer/vendor/core",
+        "packages/core/dist"
+      ],
+      "command": [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "pnpm --filter @emojitot/desktop capture:ui -- --out {output}"
+      ],
+      "timeoutMs": 240000,
+      "outputs": [
+        {
+          "file": "desktop-tray.png",
+          "pageIds": ["PAGE-TRAY"],
+          "label": "托盘面板",
+          "state": "open",
+          "viewport": { "width": 200, "height": 164 }
+        }
+      ]
+    },
+    {
+      "id": "desktop-update",
+      "label": "更新卡",
+      "sources": [
+        "apps/desktop/scripts/capture-ui.mjs",
+        "apps/desktop/scripts/copy-vendor.mjs",
+        "apps/desktop/scripts/electron-runtime.mjs",
+        "apps/desktop/src/main.js",
+        "apps/desktop/src/main/update-prompt.js",
+        "apps/desktop/src/preload-update.js",
+        "apps/desktop/src/renderer/update.css",
+        "apps/desktop/src/renderer/update.html",
+        "apps/desktop/src/renderer/update.js"
+      ],
+      "command": [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "pnpm --filter @emojitot/desktop capture:ui -- --out {output}"
+      ],
+      "timeoutMs": 240000,
+      "outputs": [
+        {
+          "file": "desktop-update.png",
+          "pageIds": ["PAGE-UPDATE"],
+          "label": "更新卡",
+          "state": "available",
+          "viewport": { "width": 320, "height": 200 }
+        }
+      ]
+    },
+    {
+      "id": "onboarding",
+      "label": "首次引导",
+      "sources": [
+        "apps/desktop/scripts/capture-ui.mjs",
+        "apps/desktop/scripts/copy-vendor.mjs",
+        "apps/desktop/scripts/electron-runtime.mjs",
+        "apps/desktop/src/main/onboarding.js",
+        "apps/desktop/src/preload-onboarding.js",
+        "apps/desktop/src/renderer/faces.js",
+        "apps/desktop/src/renderer/onboarding-polar.css",
+        "apps/desktop/src/renderer/onboarding.css",
+        "apps/desktop/src/renderer/onboarding.html",
+        "apps/desktop/src/renderer/onboarding.js",
+        "apps/desktop/src/renderer/polar-graphite-parity.css",
+        "apps/desktop/src/renderer/polar-graphite.css",
+        "apps/desktop/src/renderer/vendor/core",
+        "packages/core/dist"
+      ],
+      "command": [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "pnpm --filter @emojitot/desktop capture:ui -- --out {output}"
+      ],
+      "timeoutMs": 240000,
+      "outputs": [
+        {
+          "file": "onboarding-01-welcome.png",
+          "pageIds": ["PAGE-ONBOARDING"],
+          "label": "欢迎页",
+          "state": "welcome",
+          "viewport": { "width": 780, "height": 630 }
+        },
+        {
+          "file": "onboarding-02-setup.png",
+          "pageIds": ["PAGE-ONBOARDING"],
+          "label": "显示与外观设置页",
+          "state": "setup",
+          "viewport": { "width": 780, "height": 630 }
+        }
+      ]
+    },
+    {
+      "id": "web-gallery",
+      "label": "表情馆站点",
+      "sources": [
+        "apps/gallery/index.html",
+        "apps/gallery/package.json",
+        "apps/gallery/public",
+        "apps/gallery/scripts/browser-check.mjs",
+        "apps/gallery/src",
+        "apps/gallery/vite.config.ts",
+        "packages/core/dist",
+        "packages/protocol"
+      ],
+      "command": [
+        "cmd.exe",
+        "/d",
+        "/c",
+        "pnpm --filter @emojitot/gallery capture:atlas -- --out {output}"
+      ],
+      "timeoutMs": 300000,
+      "outputs": [
+        {
+          "file": "gallery-console.png",
+          "pageIds": ["PAGE-WEB-CONSOLE"],
+          "label": "站点控制台",
+          "state": "console",
+          "viewport": { "width": 1280, "height": 900 }
+        },
+        {
+          "file": "gallery-faces.png",
+          "pageIds": ["PAGE-WEB-GALLERY"],
+          "label": "表情馆",
+          "state": "gallery",
+          "viewport": { "width": 1280, "height": 900 }
+        },
+        {
+          "file": "gallery-scene.png",
+          "pageIds": ["PAGE-WEB-SCENE"],
+          "label": "场景仲裁",
+          "state": "scene",
+          "viewport": { "width": 1280, "height": 900 }
+        },
+        {
+          "file": "gallery-docs.png",
+          "pageIds": ["PAGE-WEB-DOCS"],
+          "label": "协议文档",
+          "state": "docs",
+          "viewport": { "width": 1280, "height": 900 }
+        }
+      ]
+    }
+  ]
+}

@@ -65,6 +65,15 @@ export function emailAllowed(address) {
   return /^noreply@/i.test(normalized) || /@example\.(com|org)$/i.test(normalized);
 }
 
+export function parseReleaseCandidates(output) {
+  return [...new Set(
+    String(output)
+      .split('\0')
+      .filter(Boolean)
+      .map((file) => file.replaceAll('\\', '/')),
+  )];
+}
+
 const textRules = [
   { id: 'email', test: (line) => /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(line), email: true },
   { id: 'phone', test: (line) => /(^|[^\d])1[3-9]\d{9}([^\d]|$)/.test(line), allow: /0{8,}|1234567890/ },
@@ -201,16 +210,22 @@ function scanAuthors() {
 }
 
 function main() {
-  const files = execSync('git ls-files', { encoding: 'utf8' })
-    .split('\n')
-    .filter((file) => file && !SKIP_DIR.test(file));
+  // Include tracked, staged, and untracked-but-not-ignored files. A first
+  // upload can contain new screenshots and manifests that `git ls-files`
+  // alone cannot see; the release scan must inspect what could actually leave
+  // this computer, not only paths already in the index.
+  const files = parseReleaseCandidates(
+    execSync('git ls-files --cached --others --exclude-standard -z', {
+      encoding: 'utf8',
+    }),
+  ).filter((file) => !SKIP_DIR.test(file));
 
   const findings = scanText(files);
   const large = scanImages(files);
   const unreviewed = scanDesktopScreenshots(files);
   const authors = scanAuthors();
 
-  console.log('scanned ' + files.length + ' tracked files');
+  console.log('scanned ' + files.length + ' release-candidate files');
   console.log('');
 
   console.log('FAIL (must remove before publishing): ' + (findings.length + unreviewed.length));

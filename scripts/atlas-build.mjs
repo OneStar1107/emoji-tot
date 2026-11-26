@@ -19,6 +19,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const atlasPath = path.join(root, 'docs/baseline/atlas/project-atlas.json');
 const srcRoot = path.join(root, 'apps/desktop/src');
 const checkOnly = process.argv.includes('--check');
+const EXPECTED_CURATED = {
+  pages: 39,
+  features: 113,
+  dependencies: 15,
+  ipcChannels: 91,
+  ipcLinked: 87,
+  ipcBackendOnly: 4,
+  ipcPush: 29
+};
 
 const rel = (p) => path.relative(root, p).split(path.sep).join('/');
 const read = (p) => fs.readFileSync(p, 'utf8');
@@ -451,21 +460,21 @@ if (contracts.some((c) => c.status === 'backend_only')) {
   const orphans = contracts.filter((c) => c.status === 'backend_only').map((c) => c.channel);
   changes.push({
     id: 'CHG-IPC-ORPHANS',
-    title: '处理只有主进程侧的 IPC 通道',
+    title: '核查静态扫描未发现调用方的 IPC 通道',
     type: '工作台审计发现',
     status: 'planned',
-    summary: '有 ' + orphans.length + ' 条 IPC 在主进程登记了 handler，但没有任何 preload 暴露或渲染层调用。',
+    summary: '有 ' + orphans.length + ' 条 IPC 在主进程登记了 handler，当前静态扫描未发现 preload 或渲染层调用方；不能据此认定它们是死通道。',
     pages: ['PAGE-ISLAND'],
     features: [],
     before: '当前：' + orphans.join('、') + ' 只有主进程一侧。',
-    after: '验收：确认用途后补调用方，或删掉死通道并在 ipc-frame 白名单同步。',
-    why: '没有调用方的通道是看不见的接口面，既不能被验证，也会让后续审计误判。',
-    risk: '误删仍在用的通道会让灵动岛显隐控制失效；必须先确认真机是否使用。',
-    acceptance: '每条通道要么有调用方和用例，要么在合同与白名单里标明已移除。',
-    implementation: [['入口', 'IPC 注册', 'apps/desktop/src/main/island.js'], ['对象', '死通道', orphans.join('、')], ['风险', '不可用时', '先在真机确认，再删除'], ['验收', '完成后', 'pnpm check + smoke:desktop 通过']],
-    verification: ['真机确认四条通道无调用方', '删除后 ipc-frame / 用例同步更新', 'smoke:desktop 通过'],
-    annotations: [['1', '发现', '工作台扫描到只有主进程侧'], ['2', '确认', '真机行为'], ['3', '证据', '用例与冒烟']],
-    preview: { before: { variant: 'dashboard', eyebrow: '当前', title: '4 条通道没有调用方', nav: ['灵动岛'], metrics: [['通道', String(orphans.length)], ['调用方', '0'], ['状态', '待确认']], rows: orphans, progress: 20 }, after: { variant: 'dashboard', eyebrow: '处理后', title: '每条通道都有归属', nav: ['灵动岛'], metrics: [['保留', '有用例'], ['移除', '同步白名单'], ['验证', 'smoke']], rows: ['补调用方', '或删除', '同步用例'], progress: 86 } }
+    after: '验收：记录静态证据，完成真机、历史和动态调用核查，再由明确产品决定保留、补文档或移除。',
+    why: '静态扫描未发现调用方不等于没有调用方；通道可能来自动态调用、兼容保留、真机路径或外部消费者。',
+    risk: '误删仍可能通过动态调用或真机路径使用的通道，会让灵动岛显隐控制失效。',
+    acceptance: '每条通道都有核查记录；保留则记录用途与证据，移除则必须取得明确批准并同步 ipc-frame 白名单、用例与冒烟验证。',
+    implementation: [['入口', 'IPC 注册', 'apps/desktop/src/main/island.js'], ['对象', '待核查通道', orphans.join('、')], ['风险', '静态未检测到', '不能等同死代码'], ['验收', '核查完成后', '记录证据并取得移除批准']],
+    verification: ['记录静态扫描未发现调用方的证据', '核对真机、历史与动态调用路径', '仅在产品明确批准后更新白名单并运行 pnpm check + smoke:desktop'],
+    annotations: [['1', '发现', '静态扫描只看到主进程侧'], ['2', '核查', '真机、历史与动态调用'], ['3', '决定', '保留或获准后移除']],
+    preview: { before: { variant: 'dashboard', eyebrow: '当前静态证据', title: '4 条通道的调用方待核查', nav: ['灵动岛'], metrics: [['静态调用方', '未检测到'], ['结论', '待核查'], ['删除', '未批准']], rows: orphans, progress: 20 }, after: { variant: 'dashboard', eyebrow: '证据完整后', title: '每条通道都有可追溯决定', nav: ['灵动岛'], metrics: [['核查', '运行时 + 历史'], ['决定', '保留 / 补文档 / 移除'], ['验证', '合同 + 冒烟']], rows: ['保留现状', '记录证据', '明确批准后变更'], progress: 86 } }
   });
 }
 const blueprint = buildBlueprint({ pages, features, dependencies: base.dependencies, contracts, changes });
@@ -477,7 +486,7 @@ const pushes = contracts.filter((c) => c.direction === 'push').length;
 const states = pages.reduce((n, p) => n + (p.states || []).length, 0);
 
 const out = {
-  schemaVersion: '2.3',
+  schemaVersion: '2.3.0',
   generatedAt: new Date().toISOString(),
   generator: 'scripts/atlas-build.mjs',
   project: base.project,
@@ -498,7 +507,7 @@ const out = {
       'EmojiTot 是 Electron 应用，没有 HTTP 后端；接口层这里是 IPC 通道（渲染层 → preload → ipc-guard → 主进程）。',
       '前端调用/已接通的分母只统计 IPC 通道；不把 Electron 的 IPC 伪装成 HTTP 接口。',
       '静态命中只证明代码里有这条通道，不证明真机运行时一定成功；正数覆盖见 coverage，运行证据见 docs/baseline 与发版记录。',
-      '页面截图在 docs/screenshots/（历史真机验收图），工作台用结构预览而不是新拍图。'
+      '页面截图由 capture-manifest.json 驱动的真机采集流程写入 docs/baseline/atlas/captures/；未变化且证据仍有效的页面复用缓存，发生变化或采集失败的页面保留上一张有效图并明确标记，无法通过真机证据覆盖的页面才使用显式标注的结构预览。'
     ]
   },
   modules: base.modules,
@@ -519,8 +528,13 @@ const serialized = JSON.stringify(out) + '\n';
 const problems = [];
 if (pages.length !== base.pages.length) problems.push('页面数量被改变：' + pages.length + ' != ' + base.pages.length);
 if (features.length !== base.features.length) problems.push('功能数量被改变：' + features.length + ' != ' + base.features.length);
-if (!contracts.length) problems.push('没有扫描到任何 IPC 通道');
-if (!ipcLinked) problems.push('没有任何已接通 IPC 通道，链路统计不可信');
+if (pages.length !== EXPECTED_CURATED.pages) problems.push('页面基准完整性失败：' + pages.length + ' != ' + EXPECTED_CURATED.pages);
+if (features.length !== EXPECTED_CURATED.features) problems.push('功能基准完整性失败：' + features.length + ' != ' + EXPECTED_CURATED.features);
+if (base.dependencies.length !== EXPECTED_CURATED.dependencies) problems.push('依赖基准完整性失败：' + base.dependencies.length + ' != ' + EXPECTED_CURATED.dependencies);
+if (contracts.length !== EXPECTED_CURATED.ipcChannels) problems.push('IPC 通道完整性失败：' + contracts.length + ' != ' + EXPECTED_CURATED.ipcChannels);
+if (ipcLinked !== EXPECTED_CURATED.ipcLinked) problems.push('已接通 IPC 完整性失败：' + ipcLinked + ' != ' + EXPECTED_CURATED.ipcLinked);
+if (ipcBackendOnly !== EXPECTED_CURATED.ipcBackendOnly) problems.push('仅主进程 IPC 完整性失败：' + ipcBackendOnly + ' != ' + EXPECTED_CURATED.ipcBackendOnly);
+if (pushes !== EXPECTED_CURATED.ipcPush) problems.push('IPC 推送通道完整性失败：' + pushes + ' != ' + EXPECTED_CURATED.ipcPush);
 if (/undefined/.test(serialized)) {
   const at = serialized.indexOf('undefined');
   problems.push('生成物里出现 undefined：…' + serialized.slice(Math.max(0, at - 160), at + 80).replace(/\s+/g, ' ') + '…');

@@ -61,13 +61,22 @@ if (!existsSync(electron)) {
 mkdirSync(outputDir, { recursive: true });
 writeFileSync(
   join(profileDir, 'prefs.json'),
-  JSON.stringify({ avoidEnabled: false, rendererDebug: true, theme }, null, 2),
+  JSON.stringify({
+    avoidEnabled: false,
+    displayMode: 'both',
+    rendererDebug: true,
+    theme,
+    trayIcon: true,
+  }, null, 2),
   'utf8',
 );
 
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 delete env.ELECTRON_NO_ATTACH_CONSOLE;
+// The update card has a first-class test injection, so the capture uses the
+// real BrowserWindow and renderer without adding a network request.
+env.EMOJITOT_UPDATE_TEST = '1';
 
 const app = spawn(
   electron,
@@ -275,6 +284,26 @@ try {
   );
   await normalizeCaptureDensity(browser, islandSession, 420, 310);
 
+  const ballTarget = await findTarget(browser, 'index.html');
+  const ballSession = (await browser.send(
+    'Target.attachToTarget',
+    { targetId: ballTarget.targetId, flatten: true },
+  )).sessionId;
+  await browser.send('Runtime.enable', {}, ballSession);
+  await waitFor(
+    browser,
+    ballSession,
+    "document.readyState === 'complete' && !!document.getElementById('pet')",
+    'ball readiness',
+  );
+  await normalizeCaptureDensity(browser, ballSession, 328, 328);
+  await capture(
+    browser,
+    ballSession,
+    'desktop-ball',
+    'JSON.stringify({ x: 0, y: 0, width: innerWidth, height: innerHeight })',
+  );
+
   const onboardingTarget = await findTarget(browser, 'onboarding.html');
   const onboardingSession = (await browser.send(
     'Target.attachToTarget',
@@ -472,6 +501,54 @@ try {
     'JSON.stringify((() => { const r = document.getElementById("panel").getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })())',
   );
   await evaluate(browser, islandSession, 'window.__emojitotClearNotification()');
+
+  const menuOpened = await evaluate(
+    browser,
+    ballSession,
+    '(() => document.getElementById("pet").dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, button: 2, clientX: innerWidth / 2, clientY: innerHeight / 2 })))()',
+  );
+  if (menuOpened !== true) {
+    throw new Error('The ball renderer did not dispatch its context-menu event.');
+  }
+  const trayTarget = await findTarget(browser, 'tray.html');
+  const traySession = (await browser.send(
+    'Target.attachToTarget',
+    { targetId: trayTarget.targetId, flatten: true },
+  )).sessionId;
+  await browser.send('Runtime.enable', {}, traySession);
+  await waitFor(
+    browser,
+    traySession,
+    "document.readyState === 'complete' && document.querySelectorAll('#items [role]').length === 3",
+    'tray panel readiness',
+  );
+  await normalizeCaptureDensity(browser, traySession, 200, 164);
+  await capture(
+    browser,
+    traySession,
+    'desktop-tray',
+    'JSON.stringify({ x: 0, y: 0, width: innerWidth, height: innerHeight })',
+  );
+
+  const updateTarget = await findTarget(browser, 'update.html');
+  const updateSession = (await browser.send(
+    'Target.attachToTarget',
+    { targetId: updateTarget.targetId, flatten: true },
+  )).sessionId;
+  await browser.send('Runtime.enable', {}, updateSession);
+  await waitFor(
+    browser,
+    updateSession,
+    "document.readyState === 'complete' && document.getElementById('update-version')?.textContent.trim().length > 0",
+    'update card readiness',
+  );
+  await normalizeCaptureDensity(browser, updateSession, 320, 200);
+  await capture(
+    browser,
+    updateSession,
+    'desktop-update',
+    'JSON.stringify({ x: 0, y: 0, width: innerWidth, height: innerHeight })',
+  );
 
   await evaluate(browser, islandSession, 'window.islandAPI.openSettings()');
   const settingsTarget = await findTarget(browser, 'settings.html');

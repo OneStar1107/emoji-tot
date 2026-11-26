@@ -9,10 +9,11 @@
  */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { createServer as createNetServer } from 'node:net';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { extname, join } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -34,9 +35,24 @@ if (!CHROME) {
   console.log('SKIP browser acceptance: Chrome/Chromium not found; set CHROME_BIN to run it.');
   process.exit(process.env.CHROME_REQUIRED === '1' ? 1 : 0);
 }
-const PORT = 9333;
-const SITE = 'http://127.0.0.1:4173/emoji-tot/';
+async function findFreePort() {
+  const probe = createNetServer();
+  await new Promise((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', resolve);
+  });
+  const address = probe.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  await new Promise((resolve) => probe.close(resolve));
+  if (!port) throw new Error('could not allocate a free browser-check port');
+  return port;
+}
+
 const CHROME_PROFILE = mkdtempSync(join(tmpdir(), 'emoji-tot-chrome-'));
+const outputIndex = process.argv.indexOf('--out');
+const CAPTURE_DIR = outputIndex >= 0 && process.argv[outputIndex + 1]
+  ? resolve(process.argv[outputIndex + 1])
+  : '';
 
 const results = [];
 const ok = (name, pass, detail = '') => {
@@ -138,7 +154,12 @@ const preview = createServer(async (request, response) => {
     response.end('not found');
   }
 });
-await new Promise((resolve) => preview.listen(4173, '127.0.0.1', resolve));
+await new Promise((resolve) => preview.listen(0, '127.0.0.1', resolve));
+const previewAddress = preview.address();
+const PREVIEW_PORT = typeof previewAddress === 'object' && previewAddress ? previewAddress.port : 0;
+if (!PREVIEW_PORT) throw new Error('preview server did not allocate a port');
+const SITE = `http://127.0.0.1:${PREVIEW_PORT}/emoji-tot/`;
+const CDP_PORT = await findFreePort();
 /*
  * Chrome gets 30s and, if it never opens the debugging port, one relaunch.
  *
@@ -147,7 +168,7 @@ await new Promise((resolve) => preview.listen(4173, '127.0.0.1', resolve));
  * live one costs a second. The single 15s attempt that used to be here is what
  * failed as "chrome did not start" on a run whose every other step passed.
  */
-const CDP_VERSION = 'http://127.0.0.1:' + PORT + '/json/version';
+const CDP_VERSION = 'http://127.0.0.1:' + CDP_PORT + '/json/version';
 function launchChrome() {
   const child = start(CHROME, [
     '--headless=new',
@@ -155,7 +176,7 @@ function launchChrome() {
     '--no-first-run',
     '--no-default-browser-check',
     '--user-data-dir=' + CHROME_PROFILE,
-    '--remote-debugging-port=' + PORT,
+    '--remote-debugging-port=' + CDP_PORT,
     '--window-size=1280,900',
     'about:blank',
   ]);
@@ -183,7 +204,7 @@ try {
   ok('headless Chrome is up', ready);
   if (!ready) throw new Error('chrome did not start');
 
-  const targets = await (await fetch('http://127.0.0.1:' + PORT + '/json/list')).json();
+  const targets = await (await fetch('http://127.0.0.1:' + CDP_PORT + '/json/list')).json();
   const page = targets.find((target) => target.type === 'page');
   cdp = await Cdp.attach(page.webSocketDebuggerUrl);
   await cdp.send('Page.enable');
@@ -213,6 +234,33 @@ try {
     await sleep(350);
     return cdp.evaluate("document.getElementById('view').children.length + ':' + (document.getElementById('view').textContent || '').slice(0, 40)");
   };
+
+  if (CAPTURE_DIR) {
+    mkdirSync(CAPTURE_DIR, { recursive: true });
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 1280,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    for (const [route, file] of [
+      ['#/console', 'gallery-console.png'],
+      ['#/gallery', 'gallery-faces.png'],
+      ['#/scene', 'gallery-scene.png'],
+      ['#/docs', 'gallery-docs.png'],
+    ]) {
+      await renderRoute(route);
+      await sleep(500);
+      const shot = await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+        captureBeyondViewport: false,
+      });
+      const target = join(CAPTURE_DIR, file);
+      writeFileSync(target, Buffer.from(shot.data, 'base64'));
+      console.log('  SHOT  ' + target);
+    }
+  }
 
   for (const route of ['#/console', '#/gallery', '#/scene', '#/docs']) {
     const state = await renderRoute(route);
